@@ -3413,12 +3413,6 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
-  // membership/item-id.mjs
-  var SLUG_MAX = 120;
-  var ITEM_ID_MAX = 128;
-  var SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
-  var ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
-
   // client-ui/src/content-types.mjs
   var LEGACY_TYPE_ALIASES = Object.freeze({
     product: "project"
@@ -3775,244 +3769,6 @@ ${listStyleProseCss(".doc-blocks")}
     return { page: at3, pages, start, end: Math.min(n, start + size), size };
   }
 
-  // client-ui/src/publish-diff.mjs
-  var IGNORED_FIELDS = Object.freeze(/* @__PURE__ */ new Set([
-    "updatedAt",
-    "publishedAt",
-    "status",
-    "encryptedBody",
-    "encryptedSkill",
-    "contributors",
-    "redirectFrom",
-    "author"
-  ]));
-  function reassignmentChange({ from, to } = {}) {
-    if (!to) return null;
-    const label = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
-    return { kind: "field", key: "author", label: "Author", was: from ? label(from) : "unchanged", now: label(to) };
-  }
-  var FIELD_ORDER = Object.freeze([
-    "title",
-    "slug",
-    "author",
-    "visibility",
-    "layout",
-    "excerpt",
-    "shortDescription",
-    "categories",
-    "tags",
-    "coverImage",
-    "coverAlt",
-    "video",
-    "featured",
-    "publicStub",
-    "pricing",
-    "pricingUrl",
-    "links",
-    "gallery",
-    "galleryStyle",
-    "sidebarPosition",
-    "bannerPreset",
-    "canonicalUrl"
-  ]);
-  var FIELD_LABELS = Object.freeze({
-    title: "Title",
-    slug: "Permalink",
-    author: "Author",
-    visibility: "Visibility",
-    layout: "Layout",
-    excerpt: "Excerpt",
-    shortDescription: "Short description",
-    categories: "Category",
-    tags: "Tags",
-    coverImage: "Cover image",
-    coverAlt: "Cover image alt text",
-    video: "Video",
-    featured: "Featured",
-    publicStub: "Public stub",
-    pricing: "Pricing",
-    pricingUrl: "Pricing link",
-    links: "Links",
-    gallery: "Gallery",
-    galleryStyle: "Gallery layout",
-    sidebarPosition: "Sidebar position",
-    bannerPreset: "Banner style",
-    canonicalUrl: "Canonical URL"
-  });
-  function fieldLabel(key) {
-    if (FIELD_LABELS[key]) return FIELD_LABELS[key];
-    const s = String(key || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim().toLowerCase();
-    return s ? s[0].toUpperCase() + s.slice(1) : "";
-  }
-  var BLOCK_NOUNS = {
-    paragraph: "Paragraph",
-    heading: "Heading",
-    code: "Code block",
-    quote: "Quote",
-    list: "List",
-    table: "Table",
-    image: "Image",
-    embed: "Embed",
-    callout: "Callout",
-    members: "Members-only divider"
-  };
-  var blockNoun = (type) => BLOCK_NOUNS[type] || "Block";
-  function normalize(v2) {
-    if (v2 == null) return "";
-    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? "" : v2.toISOString();
-    if (Array.isArray(v2)) return JSON.stringify(v2.map((x) => normalize(x)));
-    if (typeof v2 === "object") {
-      return JSON.stringify(Object.keys(v2).sort().map((k) => [k, normalize(v2[k])]));
-    }
-    if (typeof v2 === "boolean") return v2 ? "true" : "";
-    return String(v2).trim();
-  }
-  function sameValue(a, b) {
-    return normalize(a) === normalize(b);
-  }
-  function formatValue(v2, { max = 120, empty = "empty" } = {}) {
-    if (v2 == null || v2 === "") return empty;
-    if (typeof v2 === "boolean") return v2 ? "yes" : "no";
-    if (Array.isArray(v2)) {
-      const parts = v2.map((x) => x && typeof x === "object" ? JSON.stringify(x) : String(x)).filter((s2) => s2 !== "");
-      return parts.length ? truncate(parts.join(", "), max) : empty;
-    }
-    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? empty : v2.toISOString().slice(0, 10);
-    if (typeof v2 === "object") return truncate(JSON.stringify(v2), max);
-    const s = String(v2).replace(/\s+/g, " ").trim();
-    return s ? truncate(s, max) : empty;
-  }
-  function truncate(s, max = 120) {
-    const str6 = String(s ?? "");
-    return str6.length > max ? `${str6.slice(0, max - 1).trimEnd()}…` : str6;
-  }
-  function snippet(md, max = 120) {
-    const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
-    return truncate(first.replace(/\s+/g, " "), max);
-  }
-  function frontmatterChanges(live = {}, draft = {}) {
-    const a = live && typeof live === "object" ? live : {};
-    const b = draft && typeof draft === "object" ? draft : {};
-    const keys = [.../* @__PURE__ */ new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !IGNORED_FIELDS.has(k));
-    const rank = (k) => {
-      const i = FIELD_ORDER.indexOf(k);
-      return i === -1 ? FIELD_ORDER.length : i;
-    };
-    keys.sort((x, y2) => rank(x) - rank(y2) || (x < y2 ? -1 : x > y2 ? 1 : 0));
-    const out = [];
-    for (const key of keys) {
-      if (sameValue(a[key], b[key])) continue;
-      out.push({ kind: "field", key, label: fieldLabel(key), was: a[key], now: b[key] });
-    }
-    return out;
-  }
-  var DIFF_CELL_CAP = 25e4;
-  function blockChanges(liveBody, draftBody) {
-    const A2 = parseBlocks(liveBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
-    const B2 = parseBlocks(draftBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
-    let head = 0;
-    while (head < A2.length && head < B2.length && A2[head].md === B2[head].md) head++;
-    let tail = 0;
-    while (tail < A2.length - head && tail < B2.length - head && A2[A2.length - 1 - tail].md === B2[B2.length - 1 - tail].md) tail++;
-    const a = A2.slice(head, A2.length - tail);
-    const b = B2.slice(head, B2.length - tail);
-    if (!a.length && !b.length) return [];
-    if (a.length * b.length > DIFF_CELL_CAP) {
-      return [{
-        kind: "block",
-        op: "coarse",
-        index: head,
-        type: "paragraph",
-        now: `${b.length} blocks`,
-        was: `${a.length} blocks`
-      }];
-    }
-    const script = editScript(a, b);
-    const items = [];
-    for (let i = 0; i < script.length; i++) {
-      const s = script[i];
-      if (s.op === "keep") continue;
-      const next = script[i + 1];
-      if (s.op === "remove" && next && next.op === "add") {
-        items.push({ kind: "block", op: "changed", index: head + next.bi, type: b[next.bi].type, now: b[next.bi].md, was: a[s.ai].md });
-        i++;
-        continue;
-      }
-      if (s.op === "add") {
-        items.push({ kind: "block", op: "added", index: head + s.bi, type: b[s.bi].type, now: b[s.bi].md, was: null });
-        continue;
-      }
-      items.push({ kind: "block", op: "removed", index: head + s.bi, type: a[s.ai].type, now: null, was: a[s.ai].md });
-    }
-    return items;
-  }
-  function editScript(a, b) {
-    const n = a.length;
-    const m = b.length;
-    const L2 = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-    for (let i2 = n - 1; i2 >= 0; i2--) {
-      for (let j3 = m - 1; j3 >= 0; j3--) {
-        L2[i2][j3] = a[i2].md === b[j3].md ? L2[i2 + 1][j3 + 1] + 1 : Math.max(L2[i2 + 1][j3], L2[i2][j3 + 1]);
-      }
-    }
-    const out = [];
-    let i = 0;
-    let j2 = 0;
-    while (i < n && j2 < m) {
-      if (a[i].md === b[j2].md) {
-        out.push({ op: "keep", ai: i, bi: j2 });
-        i++;
-        j2++;
-        continue;
-      }
-      if (L2[i + 1][j2] >= L2[i][j2 + 1]) {
-        out.push({ op: "remove", ai: i, bi: j2 });
-        i++;
-      } else {
-        out.push({ op: "add", ai: i, bi: j2 });
-        j2++;
-      }
-    }
-    while (i < n) {
-      out.push({ op: "remove", ai: i, bi: j2 });
-      i++;
-    }
-    while (j2 < m) {
-      out.push({ op: "add", ai: i, bi: j2 });
-      j2++;
-    }
-    return out;
-  }
-  function publishChanges({ live, draft, liveNote, draftNote, reassign } = {}) {
-    const d = draft || {};
-    if (!live) {
-      return { isNew: true, items: [], blockCount: parseBlocks(d.body ?? "").length };
-    }
-    const liveKeys = Object.keys(live.frontmatter || {}).filter((k) => !IGNORED_FIELDS.has(k));
-    const draftKeys = Object.keys(d.frontmatter || {}).filter((k) => !IGNORED_FIELDS.has(k));
-    const metaUnread = liveKeys.length > 0 && draftKeys.length === 0;
-    const items = metaUnread ? [] : [...frontmatterChanges(live.frontmatter, d.frontmatter)];
-    const moved = reassignmentChange(reassign || {});
-    if (moved) items.unshift(moved);
-    const noteWas = typeof liveNote === "string" ? liveNote : null;
-    const noteNow = typeof draftNote === "string" ? draftNote : null;
-    if ((noteWas != null || noteNow != null) && !sameValue(noteWas ?? "", noteNow ?? "")) {
-      items.push({ kind: "note", label: "From-the-author note", was: noteWas ?? "", now: noteNow ?? "" });
-    }
-    items.push(...blockChanges(live.body, d.body));
-    return { isNew: false, metaUnread, items, blockCount: parseBlocks(d.body ?? "").length };
-  }
-  function changeLabel(item) {
-    if (!item) return "";
-    if (item.kind === "field") return `${item.label} changed`;
-    if (item.kind === "note") return `${item.label} changed`;
-    const noun = blockNoun(item.type);
-    if (item.op === "coarse") return "The body changed substantially";
-    if (item.op === "added") return `${noun} added`;
-    if (item.op === "removed") return `${noun} removed`;
-    return `${noun} edited`;
-  }
-
   // client-ui/src/one-click-public-core.mjs
   var ONE_CLICK_STATES = Object.freeze(["hidden", "available", "already-public"]);
   function oneClickPublicView({ isSuperadmin = false, visibility = null, itemPath = null } = {}) {
@@ -4093,44 +3849,6 @@ ${listStyleProseCss(".doc-blocks")}
     const media = list.find((s) => s && s.title === "Media") || null;
     const rest = list.filter((s) => s !== media);
     return { media, rest };
-  }
-
-  // client-ui/src/form.mjs
-  function coerceValue(kind2, raw) {
-    switch (kind2) {
-      case "boolean":
-        return Boolean(raw);
-      case "number": {
-        const n = Number(raw);
-        return Number.isFinite(n) ? n : void 0;
-      }
-      case "array":
-        return String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      case "json": {
-        const t = String(raw ?? "").trim();
-        return t ? JSON.parse(t) : void 0;
-      }
-      default: {
-        const t = String(raw ?? "").trim();
-        return t === "" ? void 0 : t;
-      }
-    }
-  }
-  function gatherInput(fields, getRaw) {
-    const input = {};
-    for (const f of fields ?? []) {
-      const raw = getRaw(f.key, f.kind);
-      let val;
-      try {
-        val = coerceValue(f.kind, raw);
-      } catch (err) {
-        throw new Error(`field "${f.key}": ${err.message}`);
-      }
-      if (val === void 0) continue;
-      if (Array.isArray(val) && val.length === 0) continue;
-      input[f.key] = val;
-    }
-    return input;
   }
 
   // client-ui/src/embed-lightbox.mjs
@@ -6749,95 +6467,6 @@ ${listStyleProseCss(".doc-blocks")}
   [data-skill-only][hidden], [data-main-opt][hidden] { display:none !important; }
 `;
 
-  // src/lib/banner-presets.mjs
-  var BANNER_PRESETS = [
-    { key: "green", label: "Green", from: "#1f9e5f", to: "#25232b" },
-    { key: "amber", label: "Amber", from: "#b57616", to: "#25232b" },
-    { key: "ink", label: "Ink", from: "#393542", to: "#25232b" },
-    // today's existing default hero, unchanged
-    { key: "wordpress", label: "WordPress", from: "#5a8de0", to: "#25232b" },
-    { key: "ide-plugins", label: "IDE Plugins", from: "#9277d4", to: "#25232b" },
-    { key: "mods", label: "Mods", from: "#d8a847", to: "#25232b" },
-    { key: "utilities", label: "Utilities", from: "#3bb0a4", to: "#25232b" },
-    { key: "chrome-extensions", label: "Chrome Extensions", from: "#e0584a", to: "#25232b" }
-  ];
-  var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
-
-  // src/lib/project-page.mjs
-  function detectLinkSource(url) {
-    if (!url) return null;
-    let u;
-    try {
-      u = new URL(url);
-    } catch {
-      return null;
-    }
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "wordpress.org") return "wordpress";
-    if (host === "github.com") return "github";
-    return null;
-  }
-
-  // client-ui/src/gallery.mjs
-  function galleryRowsFromValue(value) {
-    let arr = [];
-    if (Array.isArray(value)) arr = value;
-    else if (typeof value === "string" && value.trim()) {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) arr = parsed;
-      } catch {
-        arr = [];
-      }
-    }
-    const rows = [];
-    for (const entry of arr) {
-      if (!entry) continue;
-      if (typeof entry === "string") {
-        rows.push({ src: entry, caption: "" });
-        continue;
-      }
-      if (typeof entry === "object" && entry.src) {
-        rows.push({ src: String(entry.src), caption: typeof entry.caption === "string" ? entry.caption : "" });
-      }
-    }
-    return rows;
-  }
-  function galleryValueFromRows(rows) {
-    const out = [];
-    for (const row of rows ?? []) {
-      const src = String(row && row.src || "").trim();
-      if (!src) continue;
-      const caption = String(row && row.caption || "").trim();
-      out.push(caption ? { src, caption } : src);
-    }
-    return out;
-  }
-  function moveGalleryRow(rows, from, to) {
-    const out = Array.isArray(rows) ? rows.slice() : [];
-    const n = out.length;
-    if (!Number.isInteger(from) || !Number.isInteger(to)) return out;
-    if (from < 0 || from >= n) return out;
-    const dest = Math.max(0, Math.min(n - 1, to));
-    if (dest === from) return out;
-    const [item] = out.splice(from, 1);
-    out.splice(dest, 0, item);
-    return out;
-  }
-  function uniqueImageName(name, taken) {
-    const used = taken instanceof Set ? taken : new Set(taken || []);
-    const raw = String(name || "").trim() || "image";
-    if (!used.has(raw)) return raw;
-    const dot = raw.lastIndexOf(".");
-    const base = dot > 0 ? raw.slice(0, dot) : raw;
-    const ext = dot > 0 ? raw.slice(dot) : "";
-    for (let i = 1; i < 1e4; i += 1) {
-      const candidate = `${base}-${i}${ext}`;
-      if (!used.has(candidate)) return candidate;
-    }
-    return `${base}-${Date.now()}${ext}`;
-  }
-
   // membership/tiers.mjs
   var TIER = Object.freeze({
     none: "none",
@@ -6900,6 +6529,12 @@ ${listStyleProseCss(".doc-blocks")}
     const c = normalizeCouponCode(id || code);
     return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
   }
+
+  // membership/item-id.mjs
+  var SLUG_MAX = 120;
+  var ITEM_ID_MAX = 128;
+  var SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
+  var ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
 
   // membership/prepared-listings-shared.mjs
   var LISTING_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
@@ -7292,7 +6927,7 @@ ${listStyleProseCss(".doc-blocks")}
     return isListingId(editor?._prepared?.id) ? preparedClient(editor.client, editor._prepared.id) : editor?.client;
   }
 
-  // client-ui/src/elements/gbti-content-editor.mjs
+  // client-ui/src/elements/editor-icons.mjs
   var _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   var DOC = _svg('<path d="M7 3h7l4 4v14H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13.5 3.2V7.5H18M9 12.5h6M9 16h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>');
   var EYE = _svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>');
@@ -7319,43 +6954,8 @@ ${listStyleProseCss(".doc-blocks")}
   var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S2} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S2} stroke-width="1.8" stroke-linecap="round"/>`);
   var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
-  var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]), prompt: /* @__PURE__ */ new Set(["kind"]) };
-  var STAT_DEFS = [
-    { key: "discussions", label: "Discussions" },
-    { key: "revisions", label: "Live revisions", title: "Commits on the main branch that touched this item" },
-    { key: "contributions", label: "Contributions", title: "Members credited as contributors on this item" }
-  ];
-  var TYPE_LABEL = { post: "Article", project: "Project", prompt: "Prompt", profile: "Profile" };
-  var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
-  var RAIL_SCHEMA = {
-    post: [
-      { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
-      // sow-179: its own section, not folded into Details or Media, since it governs how BOTH read together.
-      // "Article layout" rather than "Layout" for the section title -- the field's own label is "Layout", and
-      // stacking the same word as both the section header and the field label directly below it read redundant.
-      { title: "Article layout", open: true, keys: ["layout"] },
-      { title: "Media", open: false, keys: ["coverImage", "coverAlt"] }
-    ],
-    project: [
-      { title: "Details", open: true, keys: ["visibility", "shortDescription", "categories", "tags"] },
-      // The three values the project page prints in its rail spec block (Version, Requires, Works with). version and
-      // platforms were form fields listed in no section, so they were hidden-submitted with no control to see or
-      // change them, the same gap sow-174 closed for the gallery. requires was not a form field at all, so a save
-      // dropped it outright.
-      { title: "Specs", open: true, keys: ["version", "requires", "platforms"] },
-      { title: "Layout", open: true, keys: ["sidebarPosition"] },
-      { title: "Pricing", open: true, keys: ["pricing", "pricingUrl"] },
-      { title: "Links", open: true, keys: ["links"] },
-      { title: "Media", open: true, keys: ["icon", "featuredImage", "banner"] },
-      // sow-174: gallery/galleryStyle existed in the schema + form-fields already but were never listed in any
-      // section, so they were silently hidden-submitted with no control to see or change them. New section.
-      { title: "Gallery", open: false, keys: ["gallery", "galleryStyle"] }
-    ],
-    prompt: [
-      { title: "Details", open: true, keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
-      { title: "Media", open: false, keys: ["image"] }
-    ]
-  };
+
+  // client-ui/src/elements/editor-cheatsheet.mjs
   var _lines = (a) => a.join("\n");
   var MEM_MARKER = "<!-- members-only -->";
   var MD_CHEAT = {
@@ -7459,213 +7059,9 @@ ${listStyleProseCss(".doc-blocks")}
       ])
     }
   };
-  var GbtiContentEditor = class extends GbtiElement {
-    constructor() {
-      super();
-      this.type = this.getAttribute("type") || "post";
-      this.fields = [];
-      this.preset = null;
-    }
-    /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
-    // SOW-112: the item's pre-rename slugs, derived from canonical-URL-shaped redirectFrom entries. An inline
-    // copy of aliasSlugsOf (canonical: src/lib/content-index.mjs); client-ui does not import src/lib.
-    aliasSlugs() {
-      const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
-      const out = [];
-      for (const e of list) {
-        const m = /^\/(articles|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || "").trim());
-        if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
-      }
-      return out;
-    }
-    // sow-326: decline a client-broadcast re-render while there are unsaved edits. See base.mjs for why this
-    // exists; the guard is deliberately no broader than _dirty, which is false at wiring time and true only on
-    // real author input, so a late client still re-renders an editor nobody has touched.
-    skipClientRender() {
-      return this._dirty === true;
-    }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
-      this.type = type || this.type;
-      this._prepared = preparedFromLoad(prepared);
-      this._prepStash = null;
-      this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null, skillFile: typeof skillFile === "string" ? skillFile : null };
-      this.itemPath = path || null;
-      this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
-      this.itemStore = store2;
-      this.staged = Boolean(staged);
-      this._slugVal = null;
-      this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
-      if (this.isConnected) this.render();
-    }
-    // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
-    // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
-    // via jsDelivr over GitHub (the built site only serves the /_astro/-optimized variant, whose path the editor does
-    // not have). This is why resolveAsset alone produced a broken `gbti.network/./images/...` url. Falls back safely.
-    resolveCover(value) {
-      return this._stagedSrc && this._stagedSrc[value] || resolveContentAsset(value, this.itemPath);
-    }
-    /**
-     * The draft this editor is editing, as the `<type>:<slug>` token the staged-image store scopes its keys by
-     * (the SAME identity membership/member-drafts.mjs keys a draft record with). Without it in the key, two
-     * unpublished drafts that both staged a `cover.png` overwrote each other and the wrong picture published.
-     *
-     * Read off the live controls rather than through gather(), which can THROW on a field that fails to coerce
-     * (sow-268) and would turn a picked image into a dead control with no message. Null when there is no slug
-     * yet, which the client refuses on: a draft with no permalink cannot be saved either.
-     */
-    get itemToken() {
-      const slug = String(this._slugVal ?? (this.$('[data-key="slug"]')?.value || this.presetStr(this.preset?.input?.slug) || "")).trim();
-      return this.type && slug ? `${this.type}:${slug}` : null;
-    }
-    // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
-    // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
-    // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
-    // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
-    // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
-    async _rehydrateStaged() {
-      const paths = [
-        ...this.$$('[data-key][data-kind="image"]').map((el) => el.value),
-        ...this.$$(".galrow .gr-src").map((el) => el.value),
-        ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
-      ];
-      const item = this.itemToken;
-      const found = await loadStagedImages(paths, (name) => imageClientFor(this)?.getStagedImage?.(name, item), this._stagedSrc || {});
-      if (!Object.keys(found).length) return;
-      Object.assign(this._stagedSrc ||= {}, found);
-      this.$$("[data-cover]").forEach((c) => {
-        const val = c.querySelector('[data-key][data-kind="image"]')?.value || "";
-        const cf = found[val] && c.querySelector("[data-coverframe]");
-        if (cf) cf.innerHTML = this._coverFrameInner(this.resolveCover(val));
-      });
-      this.$$(".galrow").forEach((row) => this._refreshGalleryThumb(row));
-    }
-    async render() {
-      if (!this.client) return;
-      try {
-        const res = await this.client.formFields({ type: this.type });
-        this.fields = res?.fields ?? [];
-      } catch {
-        this.fields = [];
-      }
-      let membership = "unknown";
-      let canStage = true;
-      let authorFolder = "";
-      try {
-        const st2 = await this.client.status();
-        membership = st2?.membership ?? "unknown";
-        this._paidTier = st2?.paidTier ?? null;
-        canStage = this.itemScope !== "house" && (membership === "unknown" || st2?.canStageDrafts === true);
-        authorFolder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase();
-        this._statusRole = st2?.role ?? null;
-      } catch {
-        membership = "unknown";
-      }
-      const blocked = membership !== "paid" && membership !== "unknown";
-      const p = this.preset?.input ?? {};
-      const getValPreset = (k) => this.presetStr(p[k]);
-      let authorMembers = null;
-      if (this.itemPath) {
-        try {
-          const t = await this.client.authorTargets?.();
-          if (t && Array.isArray(t.members)) authorMembers = t.members;
-        } catch {
-        }
-      }
-      this._isSuperadmin = authorMembers != null;
-      const ownerSelValue = authorSelectValue({
-        itemPath: this.itemPath,
-        author: this.presetStr(p.author),
-        pendingTarget: this._pendingAuthorTarget
-      });
-      this._ownerSelInitial = "";
-      const headerKeys = /* @__PURE__ */ new Set(["title", "slug"]);
-      const docSecKeys = DOC_SECTION_KEYS[this.type] || /* @__PURE__ */ new Set();
-      const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
-      const schemaKeys = new Set(schema.flatMap((s) => s.keys));
-      const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
-      const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub" && f.key !== "bannerPreset");
-      const renderSection = (sec, { open = sec.open, cls = "" } = {}) => {
-        let inner = sec.keys.map((key) => {
-          const f = fieldByKey.get(key);
-          let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : "";
-          if (sec.title === "Details" && key === "shortDescription") html = this.permalinkFieldHtml() + html;
-          return html;
-        }).join("");
-        if (!inner) return "";
-        if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc2(this.type)}" ref="${esc2(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
-        const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";
-        const hintHtml = hint ? `<span class="rsec-sum">${esc2(hint)}</span>` : "";
-        return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc2(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
-      };
-      const { media: mediaSec, rest: railSecs } = splitRailSections(schema);
-      const sectionsHtml = railSecs.map((sec) => renderSection(sec)).join("");
-      const mediaHtml = mediaSec ? renderSection(mediaSec, { open: true, cls: "rsec-media" }) : "";
-      const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
-      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
-      const isPub = String(p.status || "").toLowerCase() === "published";
-      const isPrompt = this.type === "prompt";
-      const kind2 = normalizeKind(p.kind);
-      const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
-      const status = editorStatus({ staged: this.staged, status: p.status, publishedAt: p.publishedAt });
-      const fmtD = (d) => {
-        if (!d) return "";
-        const t = new Date(d);
-        return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10);
-      };
-      const liveLabel = this.staged ? "Staged draft · not published" : isPub ? fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : "Live" : "Draft";
-      const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : "";
-      const cheat = this.cheatData();
-      const slug = this.presetStr(p.slug) || "";
-      const videoField = fieldByKey.get("video");
-      const videoSection = docSecKeys.has("video") && videoField ? `
-             <section class="docsec" id="secVideo">
-               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the project page</span></div>
-               <input class="inp" data-key="video" data-kind="${esc2(videoField.kind || "text")}" type="text" value="${esc2(this.presetStr(p.video) || "")}" placeholder="https://youtube.com/watch?v=…" />
-             </section>` : "";
-      const showAuthorNote = AUTHOR_NOTE_TYPES.has(this.type);
-      const authorSection = showAuthorNote ? `
-             <section class="docsec" id="secAuthorNote">
-               <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
-               <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || "gbti")}</span>
-                 <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
-             </section>` : "";
-      const discussionSection = isPub && slug && ["post", "project", "prompt"].includes(this.type) ? `
-             <section class="docsec" id="secDiscussion">
-               <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
-               <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc2(this.type)}" data-gbti-target-slug="${esc2(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc2(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
-             </section>` : "";
-      const docSections = videoSection + authorSection + discussionSection;
-      const ownerFieldHtml = authorMembers ? (() => {
-        const opt = (value, label, selected) => `<option value="${esc2(value)}"${selected ? " selected" : ""}>${esc2(label)}</option>`;
-        const real = [{ value: "house", label: "House / GBTI Network" }].concat(authorMembers.map((m) => ({ value: `member:${m.username}`, label: m.username })));
-        const known = real.some((o) => o.value === ownerSelValue);
-        this._ownerSelInitial = known ? ownerSelValue : "";
-        const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
-        const ocp = oneClickPublicView({
-          isSuperadmin: true,
-          // reached only when authorMembers resolved, i.e. the caller is a superadmin
-          visibility: this.presetStr(this.preset?.input?.visibility),
-          itemPath: this.itemPath
-        });
-        const ocpHtml = ocp === "available" ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
-             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>` : ocp === "already-public" ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>` : "";
-        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
-      })() : "";
-      const showStats = isPub && slug && ["post", "project", "prompt"].includes(this.type);
-      const railFootHtml = showStats ? `
-             <section class="rcard rcard-activity">
-               <div class="rcard-h"><span class="rcard-t">Activity</span></div>
-               <div class="rcard-b">
-                 <div class="rail-stats">${STAT_DEFS.map((s) => {
-        const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc2(s.title)}"` : ""}>${esc2(s.label)}</span>`;
-        return s.key === "discussions" && discussionSection ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>` : `<div class="rstat">${inner}</div>`;
-      }).join("")}</div>
-                 <p class="rail-foot-note">Live once published.</p>
-               </div>
-             </section>` : "";
-      const prep = await preparedParts(this);
-      this.set(
-        this.css(EDITOR_SURFACE + (this.type === "prompt" ? SKILL_EDITOR_CSS : "") + PREPARED_CSS + `
+
+  // client-ui/src/elements/content-editor-css.mjs
+  var CONTENT_EDITOR_CSS = `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         /* sow-184 (design 3a): pin the action toolbar so Publish / Save draft / Preview never scroll off. It pins
            to the editor's scroll container; a solid --s-app background + a hairline let the document scroll under it.
@@ -7975,217 +7371,63 @@ ${listStyleProseCss(".doc-blocks")}
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
         button.rstat-link { font:inherit; background:none; border:none; padding:0; cursor:pointer; text-align:inherit; }
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
-      `) + // sow-326: the banner is a FLAG, not a comparison. This element holds no copy of the committed file
-        // (it is filled from readDraft alone), so "ahead of the live edge" was an unearned directional claim,
-        // and the repository had already disproved it: a staged record can be BEHIND main, which is exactly
-        // what src/lib/workbench-client-core.mjs records as having let six publishes overwrite a corrected
-        // date. Say only what is known. The em dash also went, per the writing conventions.
-        // sow-327: the banner states that something is unpublished; the control answers WHICH. It renders for
-        // every staged draft, including one that has never been published: there is nothing to compare that
-        // against, and the panel says exactly that ("all N blocks of it are new") rather than listing every
-        // block as an addition.
-        `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
-         <div class="edhead">
-           <span class="etype">${esc2(this.type)}</span>
-           <span class="edhead-sp"></span>
-           <span class="savechip" id="savechip"></span>
-           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc2(this.itemPath)}</code>` : ""}
-           ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
-           ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
-           ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
-           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub && !this.staged ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind2}</span>` : ""}`}</button>
-           ${prep.toolbar}
-         </div>
-         <div class="edgrid">
-           <article class="doc">
-             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to save your work privately; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
-             <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc2(this.presetStr(p.title) || "")}</div>
-             ${(() => {
-          const slugVal = `<span class="slug-val locked">${esc2(this.presetStr(p.slug) || "")}</span>`;
-          const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
-          return `<div class="doc-slug"><span class="slug-base">${esc2(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc2(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc2(localLabel)}</span>` : ""}</span></div>`;
-        })()}
-             ${isPrompt ? kindSectionHtml(kind2) + skillSectionsHtml({ kind: kind2, skillFile: this.preset?.skillFile || "" }) : ""}
-             <div class="doc-view-row">
-               <div class="doc-view" id="docview">
-                 <button type="button" class="on" data-view="visual">${DOC} Visual</button>
-                 <button type="button" data-view="markdown">${CODE} Markdown</button>
-               </div>
-               <button class="ebtn dv-cheat" id="mdref" type="button" title="Markdown cheatsheet" hidden>${BOOK} <span class="lbl">Cheatsheet</span></button>
-             </div>
-             <section class="docsec" id="secMain">
-               <div class="docsec-h">${DOC} ${isPrompt ? mainHeadingHtml(kind2) : "Main content"}</div>
-               <gbti-doc-editor id="body"></gbti-doc-editor>
-             </section>${docSections}
-             <div class="docmd-wrap" id="docmdwrap" hidden>
-               <div class="docmd-bar">${CODE} <span>Body as markdown</span><span class="docmd-note">Edits here update the visual editor</span></div>
-               <textarea class="docmd" id="docmd" spellcheck="false" aria-label="Body as markdown"></textarea>
-             </div>
-             <div id="out" class="muted"></div>
-             <div hidden>${hiddenHtml}</div>
-           </article>
-           ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ""}
-           <aside class="rail">
-             ${prep.rail}
-             <section class="rcard rcard-status">
-               <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc2(status.label)}</span></div>
-               <div class="rcard-b">
-                 <div class="strow"><span class="sk">Type</span><span class="sv">${esc2(this.typeLabel())}</span></div>
-                 ${status.publishedLabel ? `<div class="strow"><span class="sk">Published</span><span class="sv mono">${esc2(status.publishedLabel)}</span></div>` : ""}
-                 <p class="rcard-note">Type is set at creation and can't be changed here.</p>
-               </div>
-             </section>
-             ${ownerFieldHtml}
-             ${sectionsHtml}
-             ${railFootHtml}
-           </aside>
-         </div>
-         <div class="mdRefModal" id="mdrefmodal">
-           <div class="mr-scrim" data-mrclose></div>
-           <div class="mr-panel">
-             <div class="mr-head"><div><h3>Markdown cheatsheet</h3><p>How to write ${esc2(cheat.label.toLowerCase())} content in markdown: the standard elements plus the GBTI-specific blocks.</p></div><button class="mm-x" type="button" data-mrclose title="Close">${X}</button></div>
-             <div class="mr-scroll">
-               <p class="mr-blurb">${esc2(cheat.blurb)}</p>
-               <div class="mr-legend"><b>GBTI blocks</b><div class="mr-leg-grid">${cheat.directives.map(([d, t]) => `<code>${esc2(d)}</code><span>${esc2(t)}</span>`).join("")}</div></div>
-               <pre class="mr-code">${esc2(cheat.body)}</pre>
-             </div>
-           </div>
-         </div>`
-      );
-      this.on("#mdref", "click", () => this.$("#mdrefmodal")?.classList.add("show"));
-      this.$$("[data-mrclose]").forEach((el) => el.addEventListener("click", () => this.$("#mdrefmodal")?.classList.remove("show")));
-      if (!this._escWired) {
-        this._escWired = true;
-        document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") this.$("#mdrefmodal")?.classList.remove("show");
-        });
+      `;
+
+  // client-ui/src/form.mjs
+  function coerceValue(kind2, raw) {
+    switch (kind2) {
+      case "boolean":
+        return Boolean(raw);
+      case "number": {
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : void 0;
       }
-      if (this.itemPath) {
-        this.on("#copyid", "click", () => this.copyContentId());
-        this.on("#mcpid", "click", () => this.copyContentId());
+      case "array":
+        return String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      case "json": {
+        const t = String(raw ?? "").trim();
+        return t ? JSON.parse(t) : void 0;
       }
-      this._wirePermalinkField();
-      this.on("#statdiscuss", "click", () => this.$("#secDiscussion")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-      this.on("#viewpub", "click", () => {
-        const u = this.publicUrl();
-        if (u) window.open(u, "_blank", "noopener");
-      });
-      this.$$("#docview [data-view]").forEach((b) => b.addEventListener("click", () => this.setDocView(b.dataset.view)));
-      this.on("#docmd", "input", () => {
-        clearTimeout(this._mdTimer);
-        this._mdTimer = setTimeout(() => this._applyMarkdownEdit(), 250);
-      });
-      this.on("#draft", "click", () => this.doDraft());
-      this.on("#preview", "click", () => this.doPreview());
-      this.on("#publish", "click", () => this.doPublish());
-      this.on("#makepublic", "click", () => this._makePublic());
-      this._changesOpen = false;
-      this.on("#whatchanged", "click", () => this._toggleChanges());
-      this._dirty = false;
-      if (!this._dirtyRootWired) {
-        this._dirtyRootWired = true;
-        this.root.addEventListener("input", () => this._markDirty());
-        this.root.addEventListener("change", () => this._markDirty());
+      default: {
+        const t = String(raw ?? "").trim();
+        return t === "" ? void 0 : t;
       }
-      this.$("#body")?.addEventListener("block-change", () => this._markDirty());
-      this.$(".rail")?.addEventListener("click", (e) => {
-        if (e.target.closest("button:not([data-frame]), [data-rm]") && !e.target.closest("summary")) this._markDirty();
-      });
-      this._bindHeader();
-      this._wireRail();
-      this._wireLinks();
-      this._wireGallery();
-      wirePrepared(this);
-      if (this.type === "prompt") wireSkillEditor(this);
-      const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : "";
-      if (introSlug) {
-        const staged = typeof this.preset?.authorNote === "string" ? this.preset.authorNote : null;
-        const ta0 = this.$("#authornote");
-        if (ta0 && !ta0.value && staged) ta0.value = staged;
-        if (staged == null) {
-          const noteOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
-          const noteAuthor = noteOwner.startsWith("member:") ? noteOwner.slice(7) : null;
-          this.client?.getComment?.({ id: `intro-${introSlug}`, ...noteAuthor ? { author: noteAuthor } : {} }).then((c) => {
-            const ta = this.$("#authornote");
-            if (ta && !ta.value && c?.body) ta.value = c.body;
-            if (typeof c?.body === "string") this._liveAuthorNote = c.body;
-          }).catch(() => {
-          });
-        }
-      }
-      if (showStats) {
-        const setStat = (key, n) => {
-          const el = this.$(`[data-statn="${key}"]`);
-          if (el && n != null) el.textContent = String(n);
-        };
-        const failStat = (key, why) => {
-          const el = this.$(`[data-statn="${key}"]`);
-          if (el) {
-            el.textContent = "n/a";
-            el.title = why;
-          }
-        };
-        const credited = this.preset?.input?.contributors;
-        setStat("contributions", Array.isArray(credited) ? credited.length : 0);
-        this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() }).then((res) => setStat("discussions", (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== "members" || c.encryptedBody)).length)).catch(() => setStat("discussions", 0));
-        if (typeof this.client?.itemStats === "function") {
-          this.client.itemStats({ type: this.type, slug, path: this.itemPath }).then((st2) => {
-            if (st2 && st2.revisions != null) setStat("revisions", st2.revisions);
-            else failStat("revisions", "The revision count is not available for this item");
-          }).catch((err) => failStat("revisions", err?.message ? `Could not read revisions: ${err.message}` : "Could not read revisions"));
-        } else {
-          failStat("revisions", "This host does not read revision history");
-        }
-      }
-      this.$$("[data-cover]").forEach((c) => {
-        const file = c.querySelector("[data-cover-file]");
-        c.querySelector("[data-cover-pick]")?.addEventListener("click", () => file?.click());
-        c.querySelector("[data-cover-reuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { cover: c }));
-        file?.addEventListener("change", (e) => this.doCoverImage(e.target.files?.[0], c));
-        c.querySelector("[data-cover-clear]")?.addEventListener("click", () => this.clearCover(c));
-        c.querySelectorAll("[data-frame]").forEach((fb) => fb.addEventListener("click", () => {
-          c.querySelectorAll("[data-frame]").forEach((b) => b.classList.toggle("on", b === fb));
-          const cf = c.querySelector("[data-coverframe]");
-          if (cf) cf.className = "coverframe " + (fb.dataset.frame === "hero" ? "hero" : "card4");
-        }));
-      });
-      this.$$("[data-swatches]").forEach((row) => {
-        const cover = row.closest("[data-cover]");
-        const hidden = row.querySelector('[data-key="bannerPreset"]');
-        row.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
-          row.querySelectorAll("[data-preset]").forEach((b) => b.classList.toggle("on", b === btn));
-          if (hidden) hidden.value = btn.dataset.preset;
-          if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
-          if (cover) this.clearCover(cover);
-        }));
-      });
-      this.$$("[data-gscards]").forEach((row) => {
-        const hidden = row.querySelector('input[type="hidden"]');
-        row.querySelectorAll("[data-gs]").forEach((btn) => btn.addEventListener("click", () => {
-          row.querySelectorAll("[data-gs]").forEach((b) => b.classList.toggle("on", b === btn));
-          if (hidden) hidden.value = btn.dataset.gs;
-          const gsKey = hidden?.dataset?.key;
-          if (gsKey && this.preset?.input) this.preset.input[gsKey] = btn.dataset.gs;
-        }));
-      });
-      const be = this.$("#body");
-      if (be && this._prepared?.id) be.client = imageClientFor(this);
-      if (be) {
-        be.itemPath = this.itemPath;
-        be.item = this.itemToken;
-        be.value = this.preset?.body ?? "";
-      }
-      const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
-      for (const dep of deps) {
-        const el = this.$(`[data-key="${dep}"]`);
-        if (el) {
-          el.addEventListener("input", () => this.syncConditional());
-          el.addEventListener("change", () => this.syncConditional());
-        }
-      }
-      this._rehydrateStaged().catch(() => {
-      });
     }
+  }
+  function gatherInput(fields, getRaw) {
+    const input = {};
+    for (const f of fields ?? []) {
+      const raw = getRaw(f.key, f.kind);
+      let val;
+      try {
+        val = coerceValue(f.kind, raw);
+      } catch (err) {
+        throw new Error(`field "${f.key}": ${err.message}`);
+      }
+      if (val === void 0) continue;
+      if (Array.isArray(val) && val.length === 0) continue;
+      input[f.key] = val;
+    }
+    return input;
+  }
+
+  // src/lib/banner-presets.mjs
+  var BANNER_PRESETS = [
+    { key: "green", label: "Green", from: "#1f9e5f", to: "#25232b" },
+    { key: "amber", label: "Amber", from: "#b57616", to: "#25232b" },
+    { key: "ink", label: "Ink", from: "#393542", to: "#25232b" },
+    // today's existing default hero, unchanged
+    { key: "wordpress", label: "WordPress", from: "#5a8de0", to: "#25232b" },
+    { key: "ide-plugins", label: "IDE Plugins", from: "#9277d4", to: "#25232b" },
+    { key: "mods", label: "Mods", from: "#d8a847", to: "#25232b" },
+    { key: "utilities", label: "Utilities", from: "#3bb0a4", to: "#25232b" },
+    { key: "chrome-extensions", label: "Chrome Extensions", from: "#e0584a", to: "#25232b" }
+  ];
+  var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
+
+  // client-ui/src/elements/editor-fields.mjs
+  var TYPE_LABEL = { post: "Article", project: "Project", prompt: "Prompt", profile: "Profile" };
+  var withEditorFields = (Base2) => class extends Base2 {
     fieldHtml(f, value, visible = true) {
       const v2 = value == null ? "" : Array.isArray(value) ? value.join(", ") : value instanceof Date ? Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10) : typeof value === "object" ? JSON.stringify(value) : String(value);
       const label = `<label>${esc2(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}${f.hint ? ` <span class="hint">· ${esc2(f.hint)}</span>` : ""}</label>`;
@@ -8304,6 +7546,264 @@ ${listStyleProseCss(".doc-blocks")}
       const mono = f.kind === "date" || f.key === "slug";
       return wrap(`${label}<input class="inp${mono ? " mono" : ""}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc2(v2)}" placeholder="${esc2(f.placeholder || "")}" />`);
     }
+    _presetBool(key) {
+      return !!this.preset?.input?.[key];
+    }
+    typeLabel() {
+      return TYPE_LABEL[this.type] || this.type;
+    }
+    // SOW-062 P6: keep the status dot color tracking the select value.
+    syncStatusDots() {
+      this.$$("[data-statuspill]").forEach((p) => {
+        const sel = this.$('[data-key="status"]');
+        const val = sel ? sel.value : p.querySelector("[data-statustxt]")?.textContent || "";
+        const txt = p.querySelector("[data-statustxt]");
+        if (txt) txt.textContent = val;
+        const d = p.querySelector(".d");
+        if (d) d.style.background = val === "published" ? "var(--s-green)" : "var(--s-fg-mute)";
+      });
+    }
+    // SOW-062 P6: wire the rail controls (chips add/remove, toggles, the visibility switch, status dots). Each writes
+    // back to its hidden [data-key] input so gather()/gatherInput read the same values (no server contract change).
+    _wireRail() {
+      this.$$("[data-chips]").forEach((box) => {
+        const persist = () => {
+          const h = this.$(`input[data-key="${box.dataset.chips}"]`);
+          if (h) h.value = [...box.querySelectorAll(".chip2")].map((c) => c.textContent.trim()).join(", ");
+        };
+        box.addEventListener("keydown", (e) => {
+          const inp = e.target.closest("input");
+          if (!inp) return;
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            const val = inp.value.trim().replace(/,$/, "");
+            if (!val) return;
+            const accent = box.dataset.accent === "true";
+            const chip = document.createElement("span");
+            chip.className = `chip2 ${accent ? "" : "chip-neutral"}`;
+            chip.innerHTML = `${esc2(val)}<span class="x" data-rm>${X}</span>`;
+            inp.before(chip);
+            inp.value = "";
+            persist();
+          }
+        });
+        box.addEventListener("click", (e) => {
+          const rm = e.target.closest(".chip2 .x");
+          if (rm) {
+            rm.closest(".chip2").remove();
+            persist();
+          }
+        });
+      });
+      this.$("[data-cat-picker]")?.addEventListener("change", (e) => {
+        const h = this.$('input[data-key="categories"]');
+        if (h) h.value = (e.detail?.path || []).join(", ");
+        this._markDirty();
+      });
+      this.$$(".tgl[data-k]").forEach((tg) => tg.addEventListener("click", () => {
+        const on = tg.classList.toggle("on");
+        tg.setAttribute("aria-checked", on);
+        const cb = this.$(`input[data-key="${tg.dataset.k}"]`);
+        if (cb) cb.checked = on;
+      }));
+      this.$$("[data-visswitch]").forEach((sw) => sw.querySelectorAll(".vs-opt").forEach((opt) => opt.addEventListener("click", () => {
+        const vis = opt.dataset.vis;
+        sw.dataset.active = vis;
+        sw.querySelectorAll(".vs-opt").forEach((o) => o.classList.toggle("on", o.dataset.vis === vis));
+        const h = this.$('input[data-key="visibility"]');
+        if (h) h.value = vis;
+        const stub = this.$("[data-stubwrap]");
+        if (stub) stub.hidden = vis !== "members";
+      })));
+      this.$$('[data-key="status"]').forEach((sel) => sel.addEventListener("change", () => this.syncStatusDots()));
+      this.syncStatusDots();
+    }
+    /** Format a value the way fieldHtml does, so showIf can read preset values before the DOM exists. */
+    presetStr(value) {
+      return value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
+    }
+    /** Evaluate a field's `showIf` against a (key)=>string value reader. No showIf => always visible. */
+    fieldVisible(f, getVal) {
+      const s = f.showIf;
+      if (!s) return true;
+      return matchesShowIf(s, getVal(s.field));
+    }
+    /** Recompute conditional fields from the live DOM and toggle their wrappers. */
+    syncConditional() {
+      const getVal = (k) => {
+        const el = this.$(`[data-key="${k}"]`);
+        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+      };
+      for (const f of this.fields) {
+        if (!f.showIf) continue;
+        const wrap = this.$(`.fld[data-fkey="${f.key}"]`);
+        if (wrap) wrap.hidden = !this.fieldVisible(f, getVal);
+      }
+    }
+    /** Read raw value for a field key from the rendered inputs (DOM side of the pure gatherInput). */
+    rawGetter() {
+      return (key, kind2) => {
+        const el = this.$(`[data-key="${key}"]`);
+        if (!el) return void 0;
+        if (kind2 === "boolean") return el.checked;
+        return el.value;
+      };
+    }
+    // SOW-062 P6: two-way bind the inline document header (title/tagline/slug contenteditables) to their hidden
+    // [data-key] meta inputs, so gather() -- which reads [data-key] -- stays the single source of truth for publish.
+    _bindHeader() {
+      this.$$("[data-header]").forEach((el) => {
+        const input = this.$(`[data-key="${el.dataset.header}"]`);
+        if (!input) return;
+        const sync = () => {
+          input.value = el.textContent.trim();
+        };
+        el.addEventListener("input", sync);
+        el.addEventListener("blur", sync);
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") e.preventDefault();
+        });
+        el.addEventListener("paste", (e) => {
+          e.preventDefault();
+          const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+          if (typeof document !== "undefined") document.execCommand("insertText", false, t.replace(/\s+/g, " ").trim());
+        });
+        sync();
+      });
+    }
+    gather() {
+      this.$$("[data-header]").forEach((el) => {
+        const i = this.$(`[data-key="${el.dataset.header}"]`);
+        if (i) i.value = el.textContent.trim();
+      });
+      const getVal = (k) => {
+        const el = this.$(`[data-key="${k}"]`);
+        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+      };
+      const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
+      const skillFile = this.type === "prompt" ? skillFileFrom(this.root) : void 0;
+      return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "", ...skillFile !== void 0 ? { skillFile } : {} };
+    }
+    // SOW-112 v2 (owner-directed): the permalink is a NORMAL editable field in the Details rail, above Short
+    // description. Changing it stages like any other edit (Save draft), and the actual rename (move + redirect)
+    // happens at the PUBLISH event — no separate rename action, no dialogs.
+    permalinkFieldHtml() {
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
+      const existing = Boolean(this.itemPath);
+      const val = this._slugVal ?? loaded;
+      const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc2(typePath)}/${esc2(loaded)}/ becomes /${esc2(typePath)}/${esc2(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
+      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc2(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc2(val)}" /></div>${note}</div>`;
+    }
+    _wirePermalinkField() {
+      const input = this.$("#slugfield");
+      if (!input) return;
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
+      input.addEventListener("input", () => {
+        const v2 = String(input.value || "").trim().toLowerCase();
+        this._slugVal = v2;
+        const mirror = this.$('[data-key="slug"]');
+        if (mirror) mirror.value = v2;
+        const inline3 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline3) inline3.textContent = v2;
+        const note = input.closest(".fld")?.querySelector(".urlprev");
+        if (note && this.itemPath) {
+          note.textContent = v2 && v2 !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v2}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
+        }
+      });
+    }
+  };
+  function normTok(s) {
+    return String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+  function matchesShowIf(showIf, raw) {
+    if (!showIf) return true;
+    if (Array.isArray(showIf.includesModel)) {
+      const models = showIf.includesModel.map(normTok).filter(Boolean);
+      const parts = String(raw ?? "").split(",").map(normTok).filter(Boolean);
+      return parts.some((p) => models.some((m) => p.includes(m)));
+    }
+    return true;
+  }
+
+  // src/lib/project-page.mjs
+  function detectLinkSource(url) {
+    if (!url) return null;
+    let u;
+    try {
+      u = new URL(url);
+    } catch {
+      return null;
+    }
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "wordpress.org") return "wordpress";
+    if (host === "github.com") return "github";
+    return null;
+  }
+
+  // client-ui/src/gallery.mjs
+  function galleryRowsFromValue(value) {
+    let arr = [];
+    if (Array.isArray(value)) arr = value;
+    else if (typeof value === "string" && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) arr = parsed;
+      } catch {
+        arr = [];
+      }
+    }
+    const rows = [];
+    for (const entry of arr) {
+      if (!entry) continue;
+      if (typeof entry === "string") {
+        rows.push({ src: entry, caption: "" });
+        continue;
+      }
+      if (typeof entry === "object" && entry.src) {
+        rows.push({ src: String(entry.src), caption: typeof entry.caption === "string" ? entry.caption : "" });
+      }
+    }
+    return rows;
+  }
+  function galleryValueFromRows(rows) {
+    const out = [];
+    for (const row of rows ?? []) {
+      const src = String(row && row.src || "").trim();
+      if (!src) continue;
+      const caption = String(row && row.caption || "").trim();
+      out.push(caption ? { src, caption } : src);
+    }
+    return out;
+  }
+  function moveGalleryRow(rows, from, to) {
+    const out = Array.isArray(rows) ? rows.slice() : [];
+    const n = out.length;
+    if (!Number.isInteger(from) || !Number.isInteger(to)) return out;
+    if (from < 0 || from >= n) return out;
+    const dest = Math.max(0, Math.min(n - 1, to));
+    if (dest === from) return out;
+    const [item] = out.splice(from, 1);
+    out.splice(dest, 0, item);
+    return out;
+  }
+  function uniqueImageName(name, taken) {
+    const used = taken instanceof Set ? taken : new Set(taken || []);
+    const raw = String(name || "").trim() || "image";
+    if (!used.has(raw)) return raw;
+    const dot = raw.lastIndexOf(".");
+    const base = dot > 0 ? raw.slice(0, dot) : raw;
+    const ext = dot > 0 ? raw.slice(dot) : "";
+    for (let i = 1; i < 1e4; i += 1) {
+      const candidate = `${base}-${i}${ext}`;
+      if (!used.has(candidate)) return candidate;
+    }
+    return `${base}-${Date.now()}${ext}`;
+  }
+
+  // client-ui/src/elements/editor-rows.mjs
+  var withEditorRows = (Base2) => class extends Base2 {
     // SOW-062 P6: the project links[] editor. One row per link + an Add button + a hidden json input that gather()
     // reads (unchanged contract). _serializeLinks rebuilds the array on every edit, preserving each row's extra fields.
     _linksInner(f, value) {
@@ -8555,6 +8055,52 @@ ${listStyleProseCss(".doc-blocks")}
       });
       this.$("[data-galreuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { gallery: true }));
     }
+  };
+
+  // client-ui/src/elements/editor-media.mjs
+  var withEditorMedia = (Base2) => class extends Base2 {
+    // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
+    // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
+    // via jsDelivr over GitHub (the built site only serves the /_astro/-optimized variant, whose path the editor does
+    // not have). This is why resolveAsset alone produced a broken `gbti.network/./images/...` url. Falls back safely.
+    resolveCover(value) {
+      return this._stagedSrc && this._stagedSrc[value] || resolveContentAsset(value, this.itemPath);
+    }
+    /**
+     * The draft this editor is editing, as the `<type>:<slug>` token the staged-image store scopes its keys by
+     * (the SAME identity membership/member-drafts.mjs keys a draft record with). Without it in the key, two
+     * unpublished drafts that both staged a `cover.png` overwrote each other and the wrong picture published.
+     *
+     * Read off the live controls rather than through gather(), which can THROW on a field that fails to coerce
+     * (sow-268) and would turn a picked image into a dead control with no message. Null when there is no slug
+     * yet, which the client refuses on: a draft with no permalink cannot be saved either.
+     */
+    get itemToken() {
+      const slug = String(this._slugVal ?? (this.$('[data-key="slug"]')?.value || this.presetStr(this.preset?.input?.slug) || "")).trim();
+      return this.type && slug ? `${this.type}:${slug}` : null;
+    }
+    // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
+    // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
+    // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
+    // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
+    // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
+    async _rehydrateStaged() {
+      const paths = [
+        ...this.$$('[data-key][data-kind="image"]').map((el) => el.value),
+        ...this.$$(".galrow .gr-src").map((el) => el.value),
+        ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
+      ];
+      const item = this.itemToken;
+      const found = await loadStagedImages(paths, (name) => imageClientFor(this)?.getStagedImage?.(name, item), this._stagedSrc || {});
+      if (!Object.keys(found).length) return;
+      Object.assign(this._stagedSrc ||= {}, found);
+      this.$$("[data-cover]").forEach((c) => {
+        const val = c.querySelector('[data-key][data-kind="image"]')?.value || "";
+        const cf = found[val] && c.querySelector("[data-coverframe]");
+        if (cf) cf.innerHTML = this._coverFrameInner(this.resolveCover(val));
+      });
+      this.$$(".galrow").forEach((row) => this._refreshGalleryThumb(row));
+    }
     // sow-268 Phase 3: append one gallery row per uploaded file. Sequential (await each stage) so the website
     // host's /membership/draft-image PUTs do not race and one failure does not abort the rest. Each file gets a
     // SESSION-UNIQUE name (uniqueImageName) because stageImage uses the filename verbatim, so two files both named
@@ -8745,144 +8291,329 @@ ${listStyleProseCss(".doc-blocks")}
         if (presetInput) presetInput.value = "";
       }
     }
-    _presetBool(key) {
-      return !!this.preset?.input?.[key];
-    }
-    typeLabel() {
-      return TYPE_LABEL[this.type] || this.type;
-    }
-    // SOW-062 P6: keep the status dot color tracking the select value.
-    syncStatusDots() {
-      this.$$("[data-statuspill]").forEach((p) => {
-        const sel = this.$('[data-key="status"]');
-        const val = sel ? sel.value : p.querySelector("[data-statustxt]")?.textContent || "";
-        const txt = p.querySelector("[data-statustxt]");
-        if (txt) txt.textContent = val;
-        const d = p.querySelector(".d");
-        if (d) d.style.background = val === "published" ? "var(--s-green)" : "var(--s-fg-mute)";
-      });
-    }
-    // SOW-062 P6: wire the rail controls (chips add/remove, toggles, the visibility switch, status dots). Each writes
-    // back to its hidden [data-key] input so gather()/gatherInput read the same values (no server contract change).
-    _wireRail() {
-      this.$$("[data-chips]").forEach((box) => {
-        const persist = () => {
-          const h = this.$(`input[data-key="${box.dataset.chips}"]`);
-          if (h) h.value = [...box.querySelectorAll(".chip2")].map((c) => c.textContent.trim()).join(", ");
-        };
-        box.addEventListener("keydown", (e) => {
-          const inp = e.target.closest("input");
-          if (!inp) return;
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            const val = inp.value.trim().replace(/,$/, "");
-            if (!val) return;
-            const accent = box.dataset.accent === "true";
-            const chip = document.createElement("span");
-            chip.className = `chip2 ${accent ? "" : "chip-neutral"}`;
-            chip.innerHTML = `${esc2(val)}<span class="x" data-rm>${X}</span>`;
-            inp.before(chip);
-            inp.value = "";
-            persist();
-          }
-        });
-        box.addEventListener("click", (e) => {
-          const rm = e.target.closest(".chip2 .x");
-          if (rm) {
-            rm.closest(".chip2").remove();
-            persist();
-          }
-        });
-      });
-      this.$("[data-cat-picker]")?.addEventListener("change", (e) => {
-        const h = this.$('input[data-key="categories"]');
-        if (h) h.value = (e.detail?.path || []).join(", ");
-        this._markDirty();
-      });
-      this.$$(".tgl[data-k]").forEach((tg) => tg.addEventListener("click", () => {
-        const on = tg.classList.toggle("on");
-        tg.setAttribute("aria-checked", on);
-        const cb = this.$(`input[data-key="${tg.dataset.k}"]`);
-        if (cb) cb.checked = on;
-      }));
-      this.$$("[data-visswitch]").forEach((sw) => sw.querySelectorAll(".vs-opt").forEach((opt) => opt.addEventListener("click", () => {
-        const vis = opt.dataset.vis;
-        sw.dataset.active = vis;
-        sw.querySelectorAll(".vs-opt").forEach((o) => o.classList.toggle("on", o.dataset.vis === vis));
-        const h = this.$('input[data-key="visibility"]');
-        if (h) h.value = vis;
-        const stub = this.$("[data-stubwrap]");
-        if (stub) stub.hidden = vis !== "members";
-      })));
-      this.$$('[data-key="status"]').forEach((sel) => sel.addEventListener("change", () => this.syncStatusDots()));
-      this.syncStatusDots();
-    }
-    /** Format a value the way fieldHtml does, so showIf can read preset values before the DOM exists. */
-    presetStr(value) {
-      return value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
-    }
-    /** Evaluate a field's `showIf` against a (key)=>string value reader. No showIf => always visible. */
-    fieldVisible(f, getVal) {
-      const s = f.showIf;
-      if (!s) return true;
-      return matchesShowIf(s, getVal(s.field));
-    }
-    /** Recompute conditional fields from the live DOM and toggle their wrappers. */
-    syncConditional() {
-      const getVal = (k) => {
-        const el = this.$(`[data-key="${k}"]`);
-        return el ? el.type === "checkbox" ? el.checked : el.value : "";
-      };
-      for (const f of this.fields) {
-        if (!f.showIf) continue;
-        const wrap = this.$(`.fld[data-fkey="${f.key}"]`);
-        if (wrap) wrap.hidden = !this.fieldVisible(f, getVal);
+    async doImage(file) {
+      if (!file) return;
+      const dataBase64 = await fileToBase64(file);
+      try {
+        const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.itemToken });
+        const imgField = this.fields.find((f) => f.kind === "image");
+        const el = imgField && this.$(`[data-key="${imgField.key}"]`);
+        const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
+        if (el && !el.value && wrap && !wrap.hidden) {
+          el.value = res.path;
+          this.out(`Image staged into <code>${esc2(imgField.label || imgField.key)}</code>: <code>${esc2(res.path)}</code>`);
+        } else {
+          this.out(`Image staged: <code>${esc2(res.path)}</code> (reference it in your body)`);
+        }
+      } catch (err) {
+        const h = failHint(err);
+        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
-    /** Read raw value for a field key from the rendered inputs (DOM side of the pure gatherInput). */
-    rawGetter() {
-      return (key, kind2) => {
-        const el = this.$(`[data-key="${key}"]`);
-        if (!el) return void 0;
-        if (kind2 === "boolean") return el.checked;
-        return el.value;
-      };
+    // SOW-062 P6: the inner of the reframable cover preview -- the image (object-fit:cover) when set, else the
+    // striped "no image yet" placeholder. Used by the initial render, doCoverImage, and clearCover.
+    _coverFrameInner(url) {
+      return url ? `<img data-cimg src="${esc2(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
     }
-    // SOW-062 P6: two-way bind the inline document header (title/tagline/slug contenteditables) to their hidden
-    // [data-key] meta inputs, so gather() -- which reads [data-key] -- stays the single source of truth for publish.
-    _bindHeader() {
-      this.$$("[data-header]").forEach((el) => {
-        const input = this.$(`[data-key="${el.dataset.header}"]`);
-        if (!input) return;
-        const sync = () => {
-          input.value = el.textContent.trim();
-        };
-        el.addEventListener("input", sync);
-        el.addEventListener("blur", sync);
-        el.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") e.preventDefault();
-        });
-        el.addEventListener("paste", (e) => {
-          e.preventDefault();
-          const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
-          if (typeof document !== "undefined") document.execCommand("insertText", false, t.replace(/\s+/g, " ").trim());
-        });
-        sync();
-      });
+    // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
+    // put the returned repo path into the field's hidden input (gather() picks it up like any field).
+    async doCoverImage(file, control) {
+      if (!file || !control) return;
+      const dataUrl = await fileToDataUrl(file);
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf) {
+        cf.innerHTML = '<img data-cimg alt="" />';
+        const img = cf.querySelector("[data-cimg]");
+        if (img) img.src = dataUrl;
+      }
+      control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = "Replace image";
+      try {
+        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
+        (this._stagedSrc ||= {})[res.path] = dataUrl;
+        const el = control.querySelector('[data-key][data-kind="image"]');
+        if (el) el.value = res.path;
+        this.out(`Cover image staged: <code>${esc2(res.path)}</code>`);
+        const swatches = control.querySelector("[data-swatches]");
+        if (swatches) {
+          swatches.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("on"));
+          const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
+          if (presetInput) presetInput.value = "";
+        }
+      } catch (err) {
+        const h = failHint(err);
+        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+      }
     }
-    gather() {
-      this.$$("[data-header]").forEach((el) => {
-        const i = this.$(`[data-key="${el.dataset.header}"]`);
-        if (i) i.value = el.textContent.trim();
-      });
-      const getVal = (k) => {
-        const el = this.$(`[data-key="${k}"]`);
-        return el ? el.type === "checkbox" ? el.checked : el.value : "";
-      };
-      const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
-      const skillFile = this.type === "prompt" ? skillFileFrom(this.root) : void 0;
-      return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "", ...skillFile !== void 0 ? { skillFile } : {} };
+    clearCover(control) {
+      if (!control) return;
+      const el = control.querySelector('[data-key][data-kind="image"]');
+      if (el) el.value = "";
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf) cf.innerHTML = this._coverFrameInner("");
+      control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = "Choose image";
     }
+  };
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(new Error("could not read file"));
+      r.readAsDataURL(file);
+    });
+  }
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
+      r.onerror = () => reject(new Error("could not read file"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  // client-ui/src/publish-diff.mjs
+  var IGNORED_FIELDS = Object.freeze(/* @__PURE__ */ new Set([
+    "updatedAt",
+    "publishedAt",
+    "status",
+    "encryptedBody",
+    "encryptedSkill",
+    "contributors",
+    "redirectFrom",
+    "author"
+  ]));
+  function reassignmentChange({ from, to } = {}) {
+    if (!to) return null;
+    const label = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
+    return { kind: "field", key: "author", label: "Author", was: from ? label(from) : "unchanged", now: label(to) };
+  }
+  var FIELD_ORDER = Object.freeze([
+    "title",
+    "slug",
+    "author",
+    "visibility",
+    "layout",
+    "excerpt",
+    "shortDescription",
+    "categories",
+    "tags",
+    "coverImage",
+    "coverAlt",
+    "video",
+    "featured",
+    "publicStub",
+    "pricing",
+    "pricingUrl",
+    "links",
+    "gallery",
+    "galleryStyle",
+    "sidebarPosition",
+    "bannerPreset",
+    "canonicalUrl"
+  ]);
+  var FIELD_LABELS = Object.freeze({
+    title: "Title",
+    slug: "Permalink",
+    author: "Author",
+    visibility: "Visibility",
+    layout: "Layout",
+    excerpt: "Excerpt",
+    shortDescription: "Short description",
+    categories: "Category",
+    tags: "Tags",
+    coverImage: "Cover image",
+    coverAlt: "Cover image alt text",
+    video: "Video",
+    featured: "Featured",
+    publicStub: "Public stub",
+    pricing: "Pricing",
+    pricingUrl: "Pricing link",
+    links: "Links",
+    gallery: "Gallery",
+    galleryStyle: "Gallery layout",
+    sidebarPosition: "Sidebar position",
+    bannerPreset: "Banner style",
+    canonicalUrl: "Canonical URL"
+  });
+  function fieldLabel(key) {
+    if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+    const s = String(key || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim().toLowerCase();
+    return s ? s[0].toUpperCase() + s.slice(1) : "";
+  }
+  var BLOCK_NOUNS = {
+    paragraph: "Paragraph",
+    heading: "Heading",
+    code: "Code block",
+    quote: "Quote",
+    list: "List",
+    table: "Table",
+    image: "Image",
+    embed: "Embed",
+    callout: "Callout",
+    members: "Members-only divider"
+  };
+  var blockNoun = (type) => BLOCK_NOUNS[type] || "Block";
+  function normalize(v2) {
+    if (v2 == null) return "";
+    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? "" : v2.toISOString();
+    if (Array.isArray(v2)) return JSON.stringify(v2.map((x) => normalize(x)));
+    if (typeof v2 === "object") {
+      return JSON.stringify(Object.keys(v2).sort().map((k) => [k, normalize(v2[k])]));
+    }
+    if (typeof v2 === "boolean") return v2 ? "true" : "";
+    return String(v2).trim();
+  }
+  function sameValue(a, b) {
+    return normalize(a) === normalize(b);
+  }
+  function formatValue(v2, { max = 120, empty = "empty" } = {}) {
+    if (v2 == null || v2 === "") return empty;
+    if (typeof v2 === "boolean") return v2 ? "yes" : "no";
+    if (Array.isArray(v2)) {
+      const parts = v2.map((x) => x && typeof x === "object" ? JSON.stringify(x) : String(x)).filter((s2) => s2 !== "");
+      return parts.length ? truncate(parts.join(", "), max) : empty;
+    }
+    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? empty : v2.toISOString().slice(0, 10);
+    if (typeof v2 === "object") return truncate(JSON.stringify(v2), max);
+    const s = String(v2).replace(/\s+/g, " ").trim();
+    return s ? truncate(s, max) : empty;
+  }
+  function truncate(s, max = 120) {
+    const str6 = String(s ?? "");
+    return str6.length > max ? `${str6.slice(0, max - 1).trimEnd()}…` : str6;
+  }
+  function snippet(md, max = 120) {
+    const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
+    return truncate(first.replace(/\s+/g, " "), max);
+  }
+  function frontmatterChanges(live = {}, draft = {}) {
+    const a = live && typeof live === "object" ? live : {};
+    const b = draft && typeof draft === "object" ? draft : {};
+    const keys = [.../* @__PURE__ */ new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !IGNORED_FIELDS.has(k));
+    const rank = (k) => {
+      const i = FIELD_ORDER.indexOf(k);
+      return i === -1 ? FIELD_ORDER.length : i;
+    };
+    keys.sort((x, y2) => rank(x) - rank(y2) || (x < y2 ? -1 : x > y2 ? 1 : 0));
+    const out = [];
+    for (const key of keys) {
+      if (sameValue(a[key], b[key])) continue;
+      out.push({ kind: "field", key, label: fieldLabel(key), was: a[key], now: b[key] });
+    }
+    return out;
+  }
+  var DIFF_CELL_CAP = 25e4;
+  function blockChanges(liveBody, draftBody) {
+    const A2 = parseBlocks(liveBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
+    const B2 = parseBlocks(draftBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
+    let head = 0;
+    while (head < A2.length && head < B2.length && A2[head].md === B2[head].md) head++;
+    let tail = 0;
+    while (tail < A2.length - head && tail < B2.length - head && A2[A2.length - 1 - tail].md === B2[B2.length - 1 - tail].md) tail++;
+    const a = A2.slice(head, A2.length - tail);
+    const b = B2.slice(head, B2.length - tail);
+    if (!a.length && !b.length) return [];
+    if (a.length * b.length > DIFF_CELL_CAP) {
+      return [{
+        kind: "block",
+        op: "coarse",
+        index: head,
+        type: "paragraph",
+        now: `${b.length} blocks`,
+        was: `${a.length} blocks`
+      }];
+    }
+    const script = editScript(a, b);
+    const items = [];
+    for (let i = 0; i < script.length; i++) {
+      const s = script[i];
+      if (s.op === "keep") continue;
+      const next = script[i + 1];
+      if (s.op === "remove" && next && next.op === "add") {
+        items.push({ kind: "block", op: "changed", index: head + next.bi, type: b[next.bi].type, now: b[next.bi].md, was: a[s.ai].md });
+        i++;
+        continue;
+      }
+      if (s.op === "add") {
+        items.push({ kind: "block", op: "added", index: head + s.bi, type: b[s.bi].type, now: b[s.bi].md, was: null });
+        continue;
+      }
+      items.push({ kind: "block", op: "removed", index: head + s.bi, type: a[s.ai].type, now: null, was: a[s.ai].md });
+    }
+    return items;
+  }
+  function editScript(a, b) {
+    const n = a.length;
+    const m = b.length;
+    const L2 = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i2 = n - 1; i2 >= 0; i2--) {
+      for (let j3 = m - 1; j3 >= 0; j3--) {
+        L2[i2][j3] = a[i2].md === b[j3].md ? L2[i2 + 1][j3 + 1] + 1 : Math.max(L2[i2 + 1][j3], L2[i2][j3 + 1]);
+      }
+    }
+    const out = [];
+    let i = 0;
+    let j2 = 0;
+    while (i < n && j2 < m) {
+      if (a[i].md === b[j2].md) {
+        out.push({ op: "keep", ai: i, bi: j2 });
+        i++;
+        j2++;
+        continue;
+      }
+      if (L2[i + 1][j2] >= L2[i][j2 + 1]) {
+        out.push({ op: "remove", ai: i, bi: j2 });
+        i++;
+      } else {
+        out.push({ op: "add", ai: i, bi: j2 });
+        j2++;
+      }
+    }
+    while (i < n) {
+      out.push({ op: "remove", ai: i, bi: j2 });
+      i++;
+    }
+    while (j2 < m) {
+      out.push({ op: "add", ai: i, bi: j2 });
+      j2++;
+    }
+    return out;
+  }
+  function publishChanges({ live, draft, liveNote, draftNote, reassign } = {}) {
+    const d = draft || {};
+    if (!live) {
+      return { isNew: true, items: [], blockCount: parseBlocks(d.body ?? "").length };
+    }
+    const liveKeys = Object.keys(live.frontmatter || {}).filter((k) => !IGNORED_FIELDS.has(k));
+    const draftKeys = Object.keys(d.frontmatter || {}).filter((k) => !IGNORED_FIELDS.has(k));
+    const metaUnread = liveKeys.length > 0 && draftKeys.length === 0;
+    const items = metaUnread ? [] : [...frontmatterChanges(live.frontmatter, d.frontmatter)];
+    const moved = reassignmentChange(reassign || {});
+    if (moved) items.unshift(moved);
+    const noteWas = typeof liveNote === "string" ? liveNote : null;
+    const noteNow = typeof draftNote === "string" ? draftNote : null;
+    if ((noteWas != null || noteNow != null) && !sameValue(noteWas ?? "", noteNow ?? "")) {
+      items.push({ kind: "note", label: "From-the-author note", was: noteWas ?? "", now: noteNow ?? "" });
+    }
+    items.push(...blockChanges(live.body, d.body));
+    return { isNew: false, metaUnread, items, blockCount: parseBlocks(d.body ?? "").length };
+  }
+  function changeLabel(item) {
+    if (!item) return "";
+    if (item.kind === "field") return `${item.label} changed`;
+    if (item.kind === "note") return `${item.label} changed`;
+    const noun = blockNoun(item.type);
+    if (item.op === "coarse") return "The body changed substantially";
+    if (item.op === "added") return `${noun} added`;
+    if (item.op === "removed") return `${noun} removed`;
+    return `${noun} edited`;
+  }
+
+  // client-ui/src/elements/editor-actions.mjs
+  var withEditorActions = (Base2) => class extends Base2 {
     out(html, cls = "muted") {
       const o = this.$("#out");
       if (o) {
@@ -8890,43 +8621,9 @@ ${listStyleProseCss(".doc-blocks")}
         o.innerHTML = html;
       }
     }
-    // SOW-062 Phase 6: pick the cheatsheet content for the current type (post maps to the mockup's "article" key).
-    cheatData() {
-      const key = this.type === "post" ? "article" : this.type;
-      return MD_CHEAT[key] || MD_CHEAT.article;
-    }
     // SOW-062 Phase 6: the "content ID" the MCP server (and every /api content route) addresses is the item's
     // repo-relative path. Copy it to the clipboard so an author can hand it to their agent. Only wired when editing an
     // existing item (a new item has no path yet, so the button is not rendered).
-    // SOW-112 v2 (owner-directed): the permalink is a NORMAL editable field in the Details rail, above Short
-    // description. Changing it stages like any other edit (Save draft), and the actual rename (move + redirect)
-    // happens at the PUBLISH event — no separate rename action, no dialogs.
-    permalinkFieldHtml() {
-      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
-      const loaded = this.presetStr(this.preset?.input?.slug) || "";
-      const existing = Boolean(this.itemPath);
-      const val = this._slugVal ?? loaded;
-      const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc2(typePath)}/${esc2(loaded)}/ becomes /${esc2(typePath)}/${esc2(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
-      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc2(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc2(val)}" /></div>${note}</div>`;
-    }
-    _wirePermalinkField() {
-      const input = this.$("#slugfield");
-      if (!input) return;
-      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
-      const loaded = this.presetStr(this.preset?.input?.slug) || "";
-      input.addEventListener("input", () => {
-        const v2 = String(input.value || "").trim().toLowerCase();
-        this._slugVal = v2;
-        const mirror = this.$('[data-key="slug"]');
-        if (mirror) mirror.value = v2;
-        const inline3 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline3) inline3.textContent = v2;
-        const note = input.closest(".fld")?.querySelector(".urlprev");
-        if (note && this.itemPath) {
-          note.textContent = v2 && v2 !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v2}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
-        }
-      });
-    }
     async copyContentId() {
       const id = this.itemPath;
       if (!id) return;
@@ -9261,100 +8958,426 @@ ${listStyleProseCss(".doc-blocks")}
         restore();
       }
     }
-    async doImage(file) {
-      if (!file) return;
-      const dataBase64 = await fileToBase64(file);
+  };
+
+  // client-ui/src/elements/gbti-content-editor.mjs
+  var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]), prompt: /* @__PURE__ */ new Set(["kind"]) };
+  var STAT_DEFS = [
+    { key: "discussions", label: "Discussions" },
+    { key: "revisions", label: "Live revisions", title: "Commits on the main branch that touched this item" },
+    { key: "contributions", label: "Contributions", title: "Members credited as contributors on this item" }
+  ];
+  var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
+  var RAIL_SCHEMA = {
+    post: [
+      { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
+      // sow-179: its own section, not folded into Details or Media, since it governs how BOTH read together.
+      // "Article layout" rather than "Layout" for the section title -- the field's own label is "Layout", and
+      // stacking the same word as both the section header and the field label directly below it read redundant.
+      { title: "Article layout", open: true, keys: ["layout"] },
+      { title: "Media", open: false, keys: ["coverImage", "coverAlt"] }
+    ],
+    project: [
+      { title: "Details", open: true, keys: ["visibility", "shortDescription", "categories", "tags"] },
+      // The three values the project page prints in its rail spec block (Version, Requires, Works with). version and
+      // platforms were form fields listed in no section, so they were hidden-submitted with no control to see or
+      // change them, the same gap sow-174 closed for the gallery. requires was not a form field at all, so a save
+      // dropped it outright.
+      { title: "Specs", open: true, keys: ["version", "requires", "platforms"] },
+      { title: "Layout", open: true, keys: ["sidebarPosition"] },
+      { title: "Pricing", open: true, keys: ["pricing", "pricingUrl"] },
+      { title: "Links", open: true, keys: ["links"] },
+      { title: "Media", open: true, keys: ["icon", "featuredImage", "banner"] },
+      // sow-174: gallery/galleryStyle existed in the schema + form-fields already but were never listed in any
+      // section, so they were silently hidden-submitted with no control to see or change them. New section.
+      { title: "Gallery", open: false, keys: ["gallery", "galleryStyle"] }
+    ],
+    prompt: [
+      { title: "Details", open: true, keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
+      { title: "Media", open: false, keys: ["image"] }
+    ]
+  };
+  var GbtiContentEditor = class extends withEditorActions(withEditorMedia(withEditorRows(withEditorFields(GbtiElement)))) {
+    constructor() {
+      super();
+      this.type = this.getAttribute("type") || "post";
+      this.fields = [];
+      this.preset = null;
+    }
+    /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
+    // SOW-112: the item's pre-rename slugs, derived from canonical-URL-shaped redirectFrom entries. An inline
+    // copy of aliasSlugsOf (canonical: src/lib/content-index.mjs); client-ui does not import src/lib.
+    aliasSlugs() {
+      const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
+      const out = [];
+      for (const e of list) {
+        const m = /^\/(articles|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || "").trim());
+        if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
+      }
+      return out;
+    }
+    // sow-326: decline a client-broadcast re-render while there are unsaved edits. See base.mjs for why this
+    // exists; the guard is deliberately no broader than _dirty, which is false at wiring time and true only on
+    // real author input, so a late client still re-renders an editor nobody has touched.
+    skipClientRender() {
+      return this._dirty === true;
+    }
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
+      this.type = type || this.type;
+      this._prepared = preparedFromLoad(prepared);
+      this._prepStash = null;
+      this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null, skillFile: typeof skillFile === "string" ? skillFile : null };
+      this.itemPath = path || null;
+      this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
+      this.itemStore = store2;
+      this.staged = Boolean(staged);
+      this._slugVal = null;
+      this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
+      if (this.isConnected) this.render();
+    }
+    async render() {
+      if (!this.client) return;
       try {
-        const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.itemToken });
-        const imgField = this.fields.find((f) => f.kind === "image");
-        const el = imgField && this.$(`[data-key="${imgField.key}"]`);
-        const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
-        if (el && !el.value && wrap && !wrap.hidden) {
-          el.value = res.path;
-          this.out(`Image staged into <code>${esc2(imgField.label || imgField.key)}</code>: <code>${esc2(res.path)}</code>`);
+        const res = await this.client.formFields({ type: this.type });
+        this.fields = res?.fields ?? [];
+      } catch {
+        this.fields = [];
+      }
+      let membership = "unknown";
+      let canStage = true;
+      let authorFolder = "";
+      try {
+        const st2 = await this.client.status();
+        membership = st2?.membership ?? "unknown";
+        this._paidTier = st2?.paidTier ?? null;
+        canStage = this.itemScope !== "house" && (membership === "unknown" || st2?.canStageDrafts === true);
+        authorFolder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase();
+        this._statusRole = st2?.role ?? null;
+      } catch {
+        membership = "unknown";
+      }
+      const blocked = membership !== "paid" && membership !== "unknown";
+      const p = this.preset?.input ?? {};
+      const getValPreset = (k) => this.presetStr(p[k]);
+      let authorMembers = null;
+      if (this.itemPath) {
+        try {
+          const t = await this.client.authorTargets?.();
+          if (t && Array.isArray(t.members)) authorMembers = t.members;
+        } catch {
+        }
+      }
+      this._isSuperadmin = authorMembers != null;
+      const ownerSelValue = authorSelectValue({
+        itemPath: this.itemPath,
+        author: this.presetStr(p.author),
+        pendingTarget: this._pendingAuthorTarget
+      });
+      this._ownerSelInitial = "";
+      const headerKeys = /* @__PURE__ */ new Set(["title", "slug"]);
+      const docSecKeys = DOC_SECTION_KEYS[this.type] || /* @__PURE__ */ new Set();
+      const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
+      const schemaKeys = new Set(schema.flatMap((s) => s.keys));
+      const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
+      const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub" && f.key !== "bannerPreset");
+      const renderSection = (sec, { open = sec.open, cls = "" } = {}) => {
+        let inner = sec.keys.map((key) => {
+          const f = fieldByKey.get(key);
+          let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : "";
+          if (sec.title === "Details" && key === "shortDescription") html = this.permalinkFieldHtml() + html;
+          return html;
+        }).join("");
+        if (!inner) return "";
+        if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc2(this.type)}" ref="${esc2(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
+        const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";
+        const hintHtml = hint ? `<span class="rsec-sum">${esc2(hint)}</span>` : "";
+        return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc2(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+      };
+      const { media: mediaSec, rest: railSecs } = splitRailSections(schema);
+      const sectionsHtml = railSecs.map((sec) => renderSection(sec)).join("");
+      const mediaHtml = mediaSec ? renderSection(mediaSec, { open: true, cls: "rsec-media" }) : "";
+      const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
+      const isPub = String(p.status || "").toLowerCase() === "published";
+      const isPrompt = this.type === "prompt";
+      const kind2 = normalizeKind(p.kind);
+      const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
+      const status = editorStatus({ staged: this.staged, status: p.status, publishedAt: p.publishedAt });
+      const fmtD = (d) => {
+        if (!d) return "";
+        const t = new Date(d);
+        return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10);
+      };
+      const liveLabel = this.staged ? "Staged draft · not published" : isPub ? fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : "Live" : "Draft";
+      const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : "";
+      const cheat = this.cheatData();
+      const slug = this.presetStr(p.slug) || "";
+      const videoField = fieldByKey.get("video");
+      const videoSection = docSecKeys.has("video") && videoField ? `
+             <section class="docsec" id="secVideo">
+               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the project page</span></div>
+               <input class="inp" data-key="video" data-kind="${esc2(videoField.kind || "text")}" type="text" value="${esc2(this.presetStr(p.video) || "")}" placeholder="https://youtube.com/watch?v=…" />
+             </section>` : "";
+      const showAuthorNote = AUTHOR_NOTE_TYPES.has(this.type);
+      const authorSection = showAuthorNote ? `
+             <section class="docsec" id="secAuthorNote">
+               <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
+               <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || "gbti")}</span>
+                 <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
+             </section>` : "";
+      const discussionSection = isPub && slug && ["post", "project", "prompt"].includes(this.type) ? `
+             <section class="docsec" id="secDiscussion">
+               <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
+               <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc2(this.type)}" data-gbti-target-slug="${esc2(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc2(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
+             </section>` : "";
+      const docSections = videoSection + authorSection + discussionSection;
+      const ownerFieldHtml = authorMembers ? (() => {
+        const opt = (value, label, selected) => `<option value="${esc2(value)}"${selected ? " selected" : ""}>${esc2(label)}</option>`;
+        const real = [{ value: "house", label: "House / GBTI Network" }].concat(authorMembers.map((m) => ({ value: `member:${m.username}`, label: m.username })));
+        const known = real.some((o) => o.value === ownerSelValue);
+        this._ownerSelInitial = known ? ownerSelValue : "";
+        const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
+        const ocp = oneClickPublicView({
+          isSuperadmin: true,
+          // reached only when authorMembers resolved, i.e. the caller is a superadmin
+          visibility: this.presetStr(this.preset?.input?.visibility),
+          itemPath: this.itemPath
+        });
+        const ocpHtml = ocp === "available" ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
+             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>` : ocp === "already-public" ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>` : "";
+        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
+      })() : "";
+      const showStats = isPub && slug && ["post", "project", "prompt"].includes(this.type);
+      const railFootHtml = showStats ? `
+             <section class="rcard rcard-activity">
+               <div class="rcard-h"><span class="rcard-t">Activity</span></div>
+               <div class="rcard-b">
+                 <div class="rail-stats">${STAT_DEFS.map((s) => {
+        const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc2(s.title)}"` : ""}>${esc2(s.label)}</span>`;
+        return s.key === "discussions" && discussionSection ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>` : `<div class="rstat">${inner}</div>`;
+      }).join("")}</div>
+                 <p class="rail-foot-note">Live once published.</p>
+               </div>
+             </section>` : "";
+      const prep = await preparedParts(this);
+      this.set(
+        this.css(EDITOR_SURFACE + (this.type === "prompt" ? SKILL_EDITOR_CSS : "") + PREPARED_CSS + CONTENT_EDITOR_CSS) + // sow-326: the banner is a FLAG, not a comparison. This element holds no copy of the committed file
+        // (it is filled from readDraft alone), so "ahead of the live edge" was an unearned directional claim,
+        // and the repository had already disproved it: a staged record can be BEHIND main, which is exactly
+        // what src/lib/workbench-client-core.mjs records as having let six publishes overwrite a corrected
+        // date. Say only what is known. The em dash also went, per the writing conventions.
+        // sow-327: the banner states that something is unpublished; the control answers WHICH. It renders for
+        // every staged draft, including one that has never been published: there is nothing to compare that
+        // against, and the panel says exactly that ("all N blocks of it are new") rather than listing every
+        // block as an addition.
+        `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
+         <div class="edhead">
+           <span class="etype">${esc2(this.type)}</span>
+           <span class="edhead-sp"></span>
+           <span class="savechip" id="savechip"></span>
+           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc2(this.itemPath)}</code>` : ""}
+           ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
+           ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
+           ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
+           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub && !this.staged ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind2}</span>` : ""}`}</button>
+           ${prep.toolbar}
+         </div>
+         <div class="edgrid">
+           <article class="doc">
+             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to save your work privately; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
+             <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc2(this.presetStr(p.title) || "")}</div>
+             ${(() => {
+          const slugVal = `<span class="slug-val locked">${esc2(this.presetStr(p.slug) || "")}</span>`;
+          const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
+          return `<div class="doc-slug"><span class="slug-base">${esc2(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc2(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc2(localLabel)}</span>` : ""}</span></div>`;
+        })()}
+             ${isPrompt ? kindSectionHtml(kind2) + skillSectionsHtml({ kind: kind2, skillFile: this.preset?.skillFile || "" }) : ""}
+             <div class="doc-view-row">
+               <div class="doc-view" id="docview">
+                 <button type="button" class="on" data-view="visual">${DOC} Visual</button>
+                 <button type="button" data-view="markdown">${CODE} Markdown</button>
+               </div>
+               <button class="ebtn dv-cheat" id="mdref" type="button" title="Markdown cheatsheet" hidden>${BOOK} <span class="lbl">Cheatsheet</span></button>
+             </div>
+             <section class="docsec" id="secMain">
+               <div class="docsec-h">${DOC} ${isPrompt ? mainHeadingHtml(kind2) : "Main content"}</div>
+               <gbti-doc-editor id="body"></gbti-doc-editor>
+             </section>${docSections}
+             <div class="docmd-wrap" id="docmdwrap" hidden>
+               <div class="docmd-bar">${CODE} <span>Body as markdown</span><span class="docmd-note">Edits here update the visual editor</span></div>
+               <textarea class="docmd" id="docmd" spellcheck="false" aria-label="Body as markdown"></textarea>
+             </div>
+             <div id="out" class="muted"></div>
+             <div hidden>${hiddenHtml}</div>
+           </article>
+           ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ""}
+           <aside class="rail">
+             ${prep.rail}
+             <section class="rcard rcard-status">
+               <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc2(status.label)}</span></div>
+               <div class="rcard-b">
+                 <div class="strow"><span class="sk">Type</span><span class="sv">${esc2(this.typeLabel())}</span></div>
+                 ${status.publishedLabel ? `<div class="strow"><span class="sk">Published</span><span class="sv mono">${esc2(status.publishedLabel)}</span></div>` : ""}
+                 <p class="rcard-note">Type is set at creation and can't be changed here.</p>
+               </div>
+             </section>
+             ${ownerFieldHtml}
+             ${sectionsHtml}
+             ${railFootHtml}
+           </aside>
+         </div>
+         <div class="mdRefModal" id="mdrefmodal">
+           <div class="mr-scrim" data-mrclose></div>
+           <div class="mr-panel">
+             <div class="mr-head"><div><h3>Markdown cheatsheet</h3><p>How to write ${esc2(cheat.label.toLowerCase())} content in markdown: the standard elements plus the GBTI-specific blocks.</p></div><button class="mm-x" type="button" data-mrclose title="Close">${X}</button></div>
+             <div class="mr-scroll">
+               <p class="mr-blurb">${esc2(cheat.blurb)}</p>
+               <div class="mr-legend"><b>GBTI blocks</b><div class="mr-leg-grid">${cheat.directives.map(([d, t]) => `<code>${esc2(d)}</code><span>${esc2(t)}</span>`).join("")}</div></div>
+               <pre class="mr-code">${esc2(cheat.body)}</pre>
+             </div>
+           </div>
+         </div>`
+      );
+      this.on("#mdref", "click", () => this.$("#mdrefmodal")?.classList.add("show"));
+      this.$$("[data-mrclose]").forEach((el) => el.addEventListener("click", () => this.$("#mdrefmodal")?.classList.remove("show")));
+      if (!this._escWired) {
+        this._escWired = true;
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") this.$("#mdrefmodal")?.classList.remove("show");
+        });
+      }
+      if (this.itemPath) {
+        this.on("#copyid", "click", () => this.copyContentId());
+        this.on("#mcpid", "click", () => this.copyContentId());
+      }
+      this._wirePermalinkField();
+      this.on("#statdiscuss", "click", () => this.$("#secDiscussion")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      this.on("#viewpub", "click", () => {
+        const u = this.publicUrl();
+        if (u) window.open(u, "_blank", "noopener");
+      });
+      this.$$("#docview [data-view]").forEach((b) => b.addEventListener("click", () => this.setDocView(b.dataset.view)));
+      this.on("#docmd", "input", () => {
+        clearTimeout(this._mdTimer);
+        this._mdTimer = setTimeout(() => this._applyMarkdownEdit(), 250);
+      });
+      this.on("#draft", "click", () => this.doDraft());
+      this.on("#preview", "click", () => this.doPreview());
+      this.on("#publish", "click", () => this.doPublish());
+      this.on("#makepublic", "click", () => this._makePublic());
+      this._changesOpen = false;
+      this.on("#whatchanged", "click", () => this._toggleChanges());
+      this._dirty = false;
+      if (!this._dirtyRootWired) {
+        this._dirtyRootWired = true;
+        this.root.addEventListener("input", () => this._markDirty());
+        this.root.addEventListener("change", () => this._markDirty());
+      }
+      this.$("#body")?.addEventListener("block-change", () => this._markDirty());
+      this.$(".rail")?.addEventListener("click", (e) => {
+        if (e.target.closest("button:not([data-frame]), [data-rm]") && !e.target.closest("summary")) this._markDirty();
+      });
+      this._bindHeader();
+      this._wireRail();
+      this._wireLinks();
+      this._wireGallery();
+      wirePrepared(this);
+      if (this.type === "prompt") wireSkillEditor(this);
+      const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : "";
+      if (introSlug) {
+        const staged = typeof this.preset?.authorNote === "string" ? this.preset.authorNote : null;
+        const ta0 = this.$("#authornote");
+        if (ta0 && !ta0.value && staged) ta0.value = staged;
+        if (staged == null) {
+          const noteOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+          const noteAuthor = noteOwner.startsWith("member:") ? noteOwner.slice(7) : null;
+          this.client?.getComment?.({ id: `intro-${introSlug}`, ...noteAuthor ? { author: noteAuthor } : {} }).then((c) => {
+            const ta = this.$("#authornote");
+            if (ta && !ta.value && c?.body) ta.value = c.body;
+            if (typeof c?.body === "string") this._liveAuthorNote = c.body;
+          }).catch(() => {
+          });
+        }
+      }
+      if (showStats) {
+        const setStat = (key, n) => {
+          const el = this.$(`[data-statn="${key}"]`);
+          if (el && n != null) el.textContent = String(n);
+        };
+        const failStat = (key, why) => {
+          const el = this.$(`[data-statn="${key}"]`);
+          if (el) {
+            el.textContent = "n/a";
+            el.title = why;
+          }
+        };
+        const credited = this.preset?.input?.contributors;
+        setStat("contributions", Array.isArray(credited) ? credited.length : 0);
+        this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() }).then((res) => setStat("discussions", (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== "members" || c.encryptedBody)).length)).catch(() => setStat("discussions", 0));
+        if (typeof this.client?.itemStats === "function") {
+          this.client.itemStats({ type: this.type, slug, path: this.itemPath }).then((st2) => {
+            if (st2 && st2.revisions != null) setStat("revisions", st2.revisions);
+            else failStat("revisions", "The revision count is not available for this item");
+          }).catch((err) => failStat("revisions", err?.message ? `Could not read revisions: ${err.message}` : "Could not read revisions"));
         } else {
-          this.out(`Image staged: <code>${esc2(res.path)}</code> (reference it in your body)`);
+          failStat("revisions", "This host does not read revision history");
         }
-      } catch (err) {
-        const h = failHint(err);
-        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
-    }
-    // SOW-062 P6: the inner of the reframable cover preview -- the image (object-fit:cover) when set, else the
-    // striped "no image yet" placeholder. Used by the initial render, doCoverImage, and clearCover.
-    _coverFrameInner(url) {
-      return url ? `<img data-cimg src="${esc2(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
-    }
-    // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
-    // put the returned repo path into the field's hidden input (gather() picks it up like any field).
-    async doCoverImage(file, control) {
-      if (!file || !control) return;
-      const dataUrl = await fileToDataUrl(file);
-      const cf = control.querySelector("[data-coverframe]");
-      if (cf) {
-        cf.innerHTML = '<img data-cimg alt="" />';
-        const img = cf.querySelector("[data-cimg]");
-        if (img) img.src = dataUrl;
+      this.$$("[data-cover]").forEach((c) => {
+        const file = c.querySelector("[data-cover-file]");
+        c.querySelector("[data-cover-pick]")?.addEventListener("click", () => file?.click());
+        c.querySelector("[data-cover-reuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { cover: c }));
+        file?.addEventListener("change", (e) => this.doCoverImage(e.target.files?.[0], c));
+        c.querySelector("[data-cover-clear]")?.addEventListener("click", () => this.clearCover(c));
+        c.querySelectorAll("[data-frame]").forEach((fb) => fb.addEventListener("click", () => {
+          c.querySelectorAll("[data-frame]").forEach((b) => b.classList.toggle("on", b === fb));
+          const cf = c.querySelector("[data-coverframe]");
+          if (cf) cf.className = "coverframe " + (fb.dataset.frame === "hero" ? "hero" : "card4");
+        }));
+      });
+      this.$$("[data-swatches]").forEach((row) => {
+        const cover = row.closest("[data-cover]");
+        const hidden = row.querySelector('[data-key="bannerPreset"]');
+        row.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
+          row.querySelectorAll("[data-preset]").forEach((b) => b.classList.toggle("on", b === btn));
+          if (hidden) hidden.value = btn.dataset.preset;
+          if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
+          if (cover) this.clearCover(cover);
+        }));
+      });
+      this.$$("[data-gscards]").forEach((row) => {
+        const hidden = row.querySelector('input[type="hidden"]');
+        row.querySelectorAll("[data-gs]").forEach((btn) => btn.addEventListener("click", () => {
+          row.querySelectorAll("[data-gs]").forEach((b) => b.classList.toggle("on", b === btn));
+          if (hidden) hidden.value = btn.dataset.gs;
+          const gsKey = hidden?.dataset?.key;
+          if (gsKey && this.preset?.input) this.preset.input[gsKey] = btn.dataset.gs;
+        }));
+      });
+      const be = this.$("#body");
+      if (be && this._prepared?.id) be.client = imageClientFor(this);
+      if (be) {
+        be.itemPath = this.itemPath;
+        be.item = this.itemToken;
+        be.value = this.preset?.body ?? "";
       }
-      control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
-      const pick = control.querySelector("[data-cover-pick]");
-      if (pick) pick.textContent = "Replace image";
-      try {
-        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
-        (this._stagedSrc ||= {})[res.path] = dataUrl;
-        const el = control.querySelector('[data-key][data-kind="image"]');
-        if (el) el.value = res.path;
-        this.out(`Cover image staged: <code>${esc2(res.path)}</code>`);
-        const swatches = control.querySelector("[data-swatches]");
-        if (swatches) {
-          swatches.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("on"));
-          const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
-          if (presetInput) presetInput.value = "";
+      const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
+      for (const dep of deps) {
+        const el = this.$(`[data-key="${dep}"]`);
+        if (el) {
+          el.addEventListener("input", () => this.syncConditional());
+          el.addEventListener("change", () => this.syncConditional());
         }
-      } catch (err) {
-        const h = failHint(err);
-        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
+      this._rehydrateStaged().catch(() => {
+      });
     }
-    clearCover(control) {
-      if (!control) return;
-      const el = control.querySelector('[data-key][data-kind="image"]');
-      if (el) el.value = "";
-      const cf = control.querySelector("[data-coverframe]");
-      if (cf) cf.innerHTML = this._coverFrameInner("");
-      control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
-      const pick = control.querySelector("[data-cover-pick]");
-      if (pick) pick.textContent = "Choose image";
+    // SOW-062 Phase 6: pick the cheatsheet content for the current type (post maps to the mockup's "article" key).
+    cheatData() {
+      const key = this.type === "post" ? "article" : this.type;
+      return MD_CHEAT[key] || MD_CHEAT.article;
     }
   };
-  function normTok(s) {
-    return String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  }
-  function matchesShowIf(showIf, raw) {
-    if (!showIf) return true;
-    if (Array.isArray(showIf.includesModel)) {
-      const models = showIf.includesModel.map(normTok).filter(Boolean);
-      const parts = String(raw ?? "").split(",").map(normTok).filter(Boolean);
-      return parts.some((p) => models.some((m) => p.includes(m)));
-    }
-    return true;
-  }
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(",")[1] || "");
-      r.onerror = () => reject(new Error("could not read file"));
-      r.readAsDataURL(file);
-    });
-  }
-  function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result || ""));
-      r.onerror = () => reject(new Error("could not read file"));
-      r.readAsDataURL(file);
-    });
-  }
   define("gbti-content-editor", GbtiContentEditor);
 
   // client-ui/src/elements/gbti-content-list.mjs
@@ -24265,33 +24288,8 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-profile-editor", GbtiProfileEditor);
 
-  // client-ui/src/elements/gbti-workspace.mjs
-  var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE16 = "https://gbti.network";
-  var TABS = [
-    { id: "overview", label: "Overview" },
-    // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
-    { id: "post", label: "Articles", type: "post", authoring: true },
-    { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
-    { id: "project", label: "Projects", type: "project", authoring: true },
-    { id: "share", label: "Shares", authoring: true },
-    // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
-    { id: "profile", label: "Profile", authoring: true },
-    // sow-346: <gbti-profile-editor>, one instance kept across renders
-    // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
-    // type's list (a draft article under Articles), reached by the per-type Drafts filter.
-    { id: "prs", label: "Pull requests", superadminOnly: true },
-    // sow-404: "Only superadmins should be interested in pull requests" (owner, 2026-09-25)
-    { id: "saved", label: "Saved" },
-    // SOW-037: favorites + collections
-    { id: "subs", label: "Following" },
-    // SOW-037: follows + membership (network members + news channels)
-    { id: "earnings", label: "Earnings" }
-    // SOW-052: placeholder for referrals + rewards (SOW-007/008)
-  ];
-  var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
-  var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS39 = `
+  // client-ui/src/elements/workspace-css.mjs
+  var WORKSPACE_CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -24393,93 +24391,10 @@ ${BLOCKED_PILL_CSS}
     .tab .tbadge { margin-left:10px; }
   }
 `;
-  var GbtiWorkspace = class extends GbtiElement {
-    connectedCallback() {
-      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
-      this._cache = {};
-      this._prs = null;
-      this._pollTimer = null;
-      this._pollTries = 0;
-      this._overview = null;
-      this._editing = editingFromHash(typeof location !== "undefined" ? location.hash : "");
-      const hash = typeof location !== "undefined" ? location.hash : "";
-      this._restore = this._editing ? null : (() => {
-        const path = parseWorkspaceEdit(hash);
-        if (isProfilePath(path)) {
-          this._tab = "profile";
-          return null;
-        }
-        if (path) return { edit: path };
-        const d = parseWorkspaceDraft(hash);
-        return d ? { draft: d } : preparedRestore(hash);
-      })();
-      this._editShareId = parseWorkspaceEditShare(hash);
-      this._page = 0;
-      this._sort = sortModeFor(readStored(WORKSPACE_SORT_KEY));
-      this._statusFilter = "all";
-      this._authorFilter = "";
-      this._viewList = [];
-      this._scope = null;
-      this._scopeResolved = false;
-      super.connectedCallback?.();
-      this.shadowRoot?.addEventListener("gbti-share-list-loaded", (e) => {
-        const id = this._editShareId;
-        this._editShareId = null;
-        if (id && !e?.detail?.consumed) {
-          if (!this._scopeResolved) {
-            this._editShareId = id;
-            return;
-          }
-          if (this._canScope() && this._scopeNow() === "member") {
-            this._editShareId = id;
-            this._setScope("house", { persist: false });
-          }
-        }
-      });
-      this.shadowRoot?.addEventListener("gbti-profile-saved", (e) => {
-        this._ownProfile = { state: "found", item: { frontmatter: e.detail?.frontmatter || {} } };
-      });
-      this._loadProfile();
-      this._ensureTab(this._tab);
-      if (this._tab !== "overview") this._ensureOverview();
-      this._onHash = () => {
-        const h = typeof location !== "undefined" ? location.hash : "";
-        const plan = planHashRoute(h, { editing: !!this._editing, tab: this._tab });
-        this._editShareId = parseWorkspaceEditShare(h);
-        if (plan.action === "none" && this._editShareId && this._tab === "share" && !this._editing) {
-          this.render();
-          return;
-        }
-        if (plan.action === "exit") {
-          this._editing = null;
-          this._tab = plan.tab;
-          this._page = 0;
-          this._statusFilter = "all";
-          this.render();
-          this._ensureTab(plan.tab);
-        } else if (plan.action === "openNew") {
-          this._editing = editingFromHash(h);
-          this.render();
-        } else if (plan.action === "switchTab") {
-          this._tab = plan.tab;
-          this._page = 0;
-          this._statusFilter = "all";
-          this.render();
-          this._ensureTab(plan.tab);
-        }
-      };
-      if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
-      this._wireStorageSync();
-    }
-    disconnectedCallback() {
-      if (typeof window !== "undefined" && this._onHash) window.removeEventListener("hashchange", this._onHash);
-      try {
-        if (this._onStorage) globalThis.chrome?.storage?.onChanged?.removeListener?.(this._onStorage);
-      } catch {
-      }
-      this._clearPolls();
-      super.disconnectedCallback?.();
-    }
+
+  // client-ui/src/elements/workspace-data.mjs
+  var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
+  var withWorkspaceData = (Base2) => class extends Base2 {
     // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
     // the "needs attention" PR list. Fail-soft: every read defaults to 0/empty, never throws. Reuses _cache/_prs.
     async _ensureOverview() {
@@ -24584,46 +24499,6 @@ ${BLOCKED_PILL_CSS}
         this._earnings = null;
       }
       this.render();
-    }
-    // SOW-083 P2: render the earnings dashboard (totals + the per-source breakdown), or the empty/explainer state.
-    _renderEarnings() {
-      const e = this._earnings;
-      const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
-      const hero = `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div>`;
-      if (!e || !Array.isArray(e.entries) || e.entries.length === 0) {
-        return hero + `<p class="empty">No earnings yet. When someone joins through your invite link or via content you wrote, your share shows here: 30% when your content is the first touch, 10% when it is the last, a slice of the 5% collaboration pool, and a flat 10% lifetime commission on your invites. Distributions pay out after a 90-day hold. Copy your invite link under <a href="account.html">Settings</a>.</p>`;
-      }
-      const ps = e.payoutSetup || { connected: false, ready: false };
-      const setup = ps.ready ? "" : `<p class="empty" style="margin-bottom:12px">${ps.connected ? "Your Stripe payout account is not finished. Complete setup" : "Set up Stripe payouts"} under <a href="account.html">Settings</a> to receive your earnings.</p>`;
-      const t = e.totals || {};
-      const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc2(l)}</div></div>`;
-      const totals = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:16px;border:1px solid var(--line-2,#ddd);border-radius:var(--r,8px)">${stat(t.lifetime, "Lifetime")}${stat(t.paid, "Paid")}${stat(t.payable, "Ready")}${stat(t.held, "Accruing")}</div>`;
-      const roleLabel = { first: "First touch", last: "Last touch", invite: "Invite", collab: "Collaboration" };
-      const stateLabel = { paid: "Paid", payable: "Ready", held: "Accruing" };
-      const label = (m, k) => esc2(m[k] || String(k).replace(/\+/g, " + "));
-      const rows = e.entries.map((r) => `<tr><td style="padding:6px 8px">${label(roleLabel, r.role)}</td><td style="padding:6px 8px">${label(stateLabel, r.state)}</td><td style="padding:6px 8px;text-align:right">${money(r.amount)}</td></tr>`).join("");
-      return hero + setup + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-    async _ensureTab(id) {
-      const tab = TABS.find((t) => t.id === id);
-      if (!tab) return;
-      if (id === "overview") {
-        this._ensureOverview();
-        return;
-      }
-      if (id === "earnings") {
-        await this._loadEarnings();
-        return;
-      }
-      if (id === "saved" || id === "subs") return;
-      if (tab.type) {
-        await this._swrContent(id, tab.type);
-        this._loadDrafts(id);
-        return;
-      }
-      if (id === "prs" && this._role() === "superadmin") {
-        await this._swrPrs(id);
-      }
     }
     // SOW-145: the active scope (member until the Overview resolves it), and the scope-keyed content-cache key so
     // house + member lists of the same type never collide in this._cache or the persistent cache.
@@ -24781,15 +24656,6 @@ ${BLOCKED_PILL_CSS}
       this._renderAllPrLabels();
       this._schedulePrPoll();
     }
-    // Render every row's gate label from the CURRENT this._prs: a MERGED PR is terminal-accepted (no gate reason to
-    // show); an OPEN or CLOSED-declined PR fetches its gate status so a rejection shows its REASON (the silent-rejection
-    // fix). Patches the .gate / .why nodes in place by data-n; safe to re-run on a poll tick (no full re-render).
-    _renderAllPrLabels() {
-      for (const pr of this._prs || []) {
-        if (pr.merged === true || pr.state === "merged") this._renderPrLabel(pr, null);
-        else this._loadPrStatus(pr.number);
-      }
-    }
     async _loadPrStatus(number) {
       let status = null;
       try {
@@ -24832,6 +24698,169 @@ ${BLOCKED_PILL_CSS}
       if (this._pollTimer) {
         clearTimeout(this._pollTimer);
         this._pollTimer = null;
+      }
+    }
+  };
+
+  // client-ui/src/elements/gbti-workspace.mjs
+  var SITE16 = "https://gbti.network";
+  var TABS = [
+    { id: "overview", label: "Overview" },
+    // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
+    { id: "post", label: "Articles", type: "post", authoring: true },
+    { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
+    { id: "project", label: "Projects", type: "project", authoring: true },
+    { id: "share", label: "Shares", authoring: true },
+    // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
+    { id: "profile", label: "Profile", authoring: true },
+    // sow-346: <gbti-profile-editor>, one instance kept across renders
+    // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
+    // type's list (a draft article under Articles), reached by the per-type Drafts filter.
+    { id: "prs", label: "Pull requests", superadminOnly: true },
+    // sow-404: "Only superadmins should be interested in pull requests" (owner, 2026-09-25)
+    { id: "saved", label: "Saved" },
+    // SOW-037: favorites + collections
+    { id: "subs", label: "Following" },
+    // SOW-037: follows + membership (network members + news channels)
+    { id: "earnings", label: "Earnings" }
+    // SOW-052: placeholder for referrals + rewards (SOW-007/008)
+  ];
+  var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
+  var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
+  var GbtiWorkspace = class extends withWorkspaceData(GbtiElement) {
+    connectedCallback() {
+      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
+      this._cache = {};
+      this._prs = null;
+      this._pollTimer = null;
+      this._pollTries = 0;
+      this._overview = null;
+      this._editing = editingFromHash(typeof location !== "undefined" ? location.hash : "");
+      const hash = typeof location !== "undefined" ? location.hash : "";
+      this._restore = this._editing ? null : (() => {
+        const path = parseWorkspaceEdit(hash);
+        if (isProfilePath(path)) {
+          this._tab = "profile";
+          return null;
+        }
+        if (path) return { edit: path };
+        const d = parseWorkspaceDraft(hash);
+        return d ? { draft: d } : preparedRestore(hash);
+      })();
+      this._editShareId = parseWorkspaceEditShare(hash);
+      this._page = 0;
+      this._sort = sortModeFor(readStored(WORKSPACE_SORT_KEY));
+      this._statusFilter = "all";
+      this._authorFilter = "";
+      this._viewList = [];
+      this._scope = null;
+      this._scopeResolved = false;
+      super.connectedCallback?.();
+      this.shadowRoot?.addEventListener("gbti-share-list-loaded", (e) => {
+        const id = this._editShareId;
+        this._editShareId = null;
+        if (id && !e?.detail?.consumed) {
+          if (!this._scopeResolved) {
+            this._editShareId = id;
+            return;
+          }
+          if (this._canScope() && this._scopeNow() === "member") {
+            this._editShareId = id;
+            this._setScope("house", { persist: false });
+          }
+        }
+      });
+      this.shadowRoot?.addEventListener("gbti-profile-saved", (e) => {
+        this._ownProfile = { state: "found", item: { frontmatter: e.detail?.frontmatter || {} } };
+      });
+      this._loadProfile();
+      this._ensureTab(this._tab);
+      if (this._tab !== "overview") this._ensureOverview();
+      this._onHash = () => {
+        const h = typeof location !== "undefined" ? location.hash : "";
+        const plan = planHashRoute(h, { editing: !!this._editing, tab: this._tab });
+        this._editShareId = parseWorkspaceEditShare(h);
+        if (plan.action === "none" && this._editShareId && this._tab === "share" && !this._editing) {
+          this.render();
+          return;
+        }
+        if (plan.action === "exit") {
+          this._editing = null;
+          this._tab = plan.tab;
+          this._page = 0;
+          this._statusFilter = "all";
+          this.render();
+          this._ensureTab(plan.tab);
+        } else if (plan.action === "openNew") {
+          this._editing = editingFromHash(h);
+          this.render();
+        } else if (plan.action === "switchTab") {
+          this._tab = plan.tab;
+          this._page = 0;
+          this._statusFilter = "all";
+          this.render();
+          this._ensureTab(plan.tab);
+        }
+      };
+      if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
+      this._wireStorageSync();
+    }
+    disconnectedCallback() {
+      if (typeof window !== "undefined" && this._onHash) window.removeEventListener("hashchange", this._onHash);
+      try {
+        if (this._onStorage) globalThis.chrome?.storage?.onChanged?.removeListener?.(this._onStorage);
+      } catch {
+      }
+      this._clearPolls();
+      super.disconnectedCallback?.();
+    }
+    // SOW-083 P2: render the earnings dashboard (totals + the per-source breakdown), or the empty/explainer state.
+    _renderEarnings() {
+      const e = this._earnings;
+      const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
+      const hero = `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div>`;
+      if (!e || !Array.isArray(e.entries) || e.entries.length === 0) {
+        return hero + `<p class="empty">No earnings yet. When someone joins through your invite link or via content you wrote, your share shows here: 30% when your content is the first touch, 10% when it is the last, a slice of the 5% collaboration pool, and a flat 10% lifetime commission on your invites. Distributions pay out after a 90-day hold. Copy your invite link under <a href="account.html">Settings</a>.</p>`;
+      }
+      const ps = e.payoutSetup || { connected: false, ready: false };
+      const setup = ps.ready ? "" : `<p class="empty" style="margin-bottom:12px">${ps.connected ? "Your Stripe payout account is not finished. Complete setup" : "Set up Stripe payouts"} under <a href="account.html">Settings</a> to receive your earnings.</p>`;
+      const t = e.totals || {};
+      const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc2(l)}</div></div>`;
+      const totals = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:16px;border:1px solid var(--line-2,#ddd);border-radius:var(--r,8px)">${stat(t.lifetime, "Lifetime")}${stat(t.paid, "Paid")}${stat(t.payable, "Ready")}${stat(t.held, "Accruing")}</div>`;
+      const roleLabel = { first: "First touch", last: "Last touch", invite: "Invite", collab: "Collaboration" };
+      const stateLabel = { paid: "Paid", payable: "Ready", held: "Accruing" };
+      const label = (m, k) => esc2(m[k] || String(k).replace(/\+/g, " + "));
+      const rows = e.entries.map((r) => `<tr><td style="padding:6px 8px">${label(roleLabel, r.role)}</td><td style="padding:6px 8px">${label(stateLabel, r.state)}</td><td style="padding:6px 8px;text-align:right">${money(r.amount)}</td></tr>`).join("");
+      return hero + setup + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    async _ensureTab(id) {
+      const tab = TABS.find((t) => t.id === id);
+      if (!tab) return;
+      if (id === "overview") {
+        this._ensureOverview();
+        return;
+      }
+      if (id === "earnings") {
+        await this._loadEarnings();
+        return;
+      }
+      if (id === "saved" || id === "subs") return;
+      if (tab.type) {
+        await this._swrContent(id, tab.type);
+        this._loadDrafts(id);
+        return;
+      }
+      if (id === "prs" && this._role() === "superadmin") {
+        await this._swrPrs(id);
+      }
+    }
+    // Render every row's gate label from the CURRENT this._prs: a MERGED PR is terminal-accepted (no gate reason to
+    // show); an OPEN or CLOSED-declined PR fetches its gate status so a rejection shows its REASON (the silent-rejection
+    // fix). Patches the .gate / .why nodes in place by data-n; safe to re-run on a poll tick (no full re-render).
+    _renderAllPrLabels() {
+      for (const pr of this._prs || []) {
+        if (pr.merged === true || pr.state === "merged") this._renderPrLabel(pr, null);
+        else this._loadPrStatus(pr.number);
       }
     }
     _renderPrLabel(pr, status) {
@@ -24877,7 +24906,7 @@ ${BLOCKED_PILL_CSS}
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(WORKSPACE_CSS) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -24914,7 +24943,7 @@ ${BLOCKED_PILL_CSS}
         const badge = n ? `<span class="tbadge">${esc2(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc2(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS39) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(WORKSPACE_CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -25571,7 +25600,7 @@ ${BLOCKED_PILL_CSS}
       return {};
     }
   }
-  var CSS40 = `
+  var CSS39 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -25842,7 +25871,7 @@ ${BLOCKED_PILL_CSS}
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS40) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS39) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -25889,7 +25918,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS41 = `
+  var CSS40 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -26073,7 +26102,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS41) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -26128,7 +26157,7 @@ ${BLOCKED_PILL_CSS}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS42 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -26233,11 +26262,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS42) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -26260,7 +26289,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS42) + `
+      this.set(this.css(CSS41) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -26361,7 +26390,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS43 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -26521,12 +26550,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS43) + head + `<div data-body></div>`);
+      this.set(this.css(CSS42) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -26660,7 +26689,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS44 = `
+  var CSS43 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -26786,7 +26815,7 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS44) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS43) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
@@ -26796,7 +26825,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS45 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -26955,12 +26984,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -26979,7 +27008,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
-      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
@@ -27148,7 +27177,7 @@ ${BLOCKED_PILL_CSS}
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS46 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS45 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -27207,7 +27236,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS46 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -27733,7 +27762,7 @@ ${BLOCKED_PILL_CSS}
   var lc9 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS47 = `
+  var CSS46 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -27857,7 +27886,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS47) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -27865,7 +27894,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS47) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -27909,7 +27938,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS48 = `
+  var CSS47 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -28043,7 +28072,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS48) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -28056,7 +28085,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS48) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
