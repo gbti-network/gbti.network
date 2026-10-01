@@ -46,8 +46,8 @@ test('sow-400: still behind the one extension CTA switch, gated inside the compo
 });
 
 // sow-433 (owner, 2026-09-30, design A2 on the canvas "Homepage Extension Banner"): much bigger, an angled screenshot of
-// the extension's network feed, and a Chrome blue "Add to Chrome" with the colour Chrome logo. The dark screenshot shows
-// in both themes for now. Driven in a browser in light, dark, a laptop, a tablet and a phone before shipping.
+// the extension's network feed, and a Chrome blue "Add to Chrome" with the colour Chrome logo. Driven in a browser in
+// light, dark, a laptop, a tablet and a phone before shipping. (The screenshot follows the theme since sow-436, below.)
 const css = banner.split('<style>')[1] || '';
 
 test('sow-433: the button is Chrome blue and carries the colour Chrome logo', () => {
@@ -59,7 +59,7 @@ test('sow-433: the button is Chrome blue and carries the colour Chrome logo', ()
 
 test('sow-433: the screenshot is the shipped asset, decorative, inside the angled frame', () => {
   assert.match(banner, /import newtabShot from '\.\.\/\.\.\/assets\/extension\/newtab-network\.webp';/);
-  assert.match(bannerMarkup, /<span class="xbn-shot" aria-hidden="true">[\s\S]*?<Image class="xbn-img" src=\{newtabShot\} alt="" widths=\{\[480, 720, 1280\]\}[^>]*loading="lazy" \/>/);
+  assert.match(bannerMarkup, /<span class="xbn-shot" aria-hidden="true">[\s\S]*?<Image class="xbn-img xbn-img-dark" src=\{newtabShot\} alt="" widths=\{\[480, 720, 1280\]\}[^>]*loading="lazy" \/>/);
   assert.match(css, /\.xbn-shot \{[^}]*transform: perspective\(1800px\) rotateY\(-15deg\) rotateX\(6deg\) rotate\(-1deg\);/);
   const asset = new URL('../src/assets/extension/newtab-network.webp', import.meta.url);
   const size = readFileSync(asset).length;
@@ -97,4 +97,24 @@ test('sow-435: share pages mount the inline banner right after the discussion', 
   const share = stripComments(read('src/pages/shares/[author]/[id].astro'));
   assert.match(share, /<Comments targetType="share" targetSlug=\{slug\} author=\{d\.author\} wide=\{true\} \/>\s*(\{\})?\s*<ExtensionBanner inline \/>/, 'the banner follows the discussion (the comment between them is stripped to {})');
   assert.equal([...home.matchAll(/<ExtensionBanner\s*\/>/g)].length, 1, 'the homepage still mounts the full-width form once');
+});
+
+// sow-436 (owner, 2026-10-01, after seeing it on the canvas): light mode shows the light screenshot and dark mode the
+// dark one. Both are lazy and the hidden one is display:none, so a reader downloads only the picture for their theme.
+test('sow-436: the light screenshot is a real asset, rendered beside the dark one with the same attributes', () => {
+  assert.match(banner, /import newtabShotLight from '\.\.\/\.\.\/assets\/extension\/newtab-network-light\.webp';/);
+  const shot = /<span class="xbn-shot" aria-hidden="true">([\s\S]*?)<\/span>\s*<\/a>/.exec(bannerMarkup)?.[1] || '';
+  const attrs = ' alt="" widths={[480, 720, 1280]} sizes="(max-width: 640px) 420px, 700px" loading="lazy" />';
+  assert.ok(shot.includes(`<Image class="xbn-img xbn-img-light" src={newtabShotLight}${attrs}`), 'the light image, lazy and responsive');
+  assert.ok(shot.includes(`<Image class="xbn-img xbn-img-dark" src={newtabShot}${attrs}`), 'the dark image, the same attributes');
+  assert.equal([...shot.matchAll(/<Image /g)].length, 2, 'exactly the two screenshots in the frame');
+  const size = readFileSync(new URL('../src/assets/extension/newtab-network-light.webp', import.meta.url)).length;
+  assert.ok(size > 10_000 && size < 250_000, `the light screenshot is a real, optimized image (${size} bytes)`);
+});
+
+test('sow-436: the theme decides which screenshot shows', () => {
+  assert.match(css, /\n  \.xbn-shot :global\(\.xbn-img-dark\) \{ display: none; \}/, 'light (the default) hides the dark picture');
+  assert.match(css, /\n  :global\(\[data-theme="dark"\]\) \.xbn-shot :global\(\.xbn-img-light\) \{ display: none; \}/, 'dark hides the light picture');
+  assert.match(css, /\n  :global\(\[data-theme="dark"\]\) \.xbn-shot :global\(\.xbn-img-dark\) \{ display: block; \}/, 'and shows the dark one');
+  for (const m of css.matchAll(/@container[^{]*\{([\s\S]*?)\n  \}/g)) assert.doesNotMatch(m[1], /xbn-img/, 'no layout block touches which picture shows');
 });

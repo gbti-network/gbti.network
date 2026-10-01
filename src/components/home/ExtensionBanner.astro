@@ -13,11 +13,16 @@
 //
 // sow-433 (owner, 2026-09-30, design A2 on the canvas "Homepage Extension Banner"): much bigger, with an angled
 // screenshot of the extension's network feed on the right and a Chrome blue "Add to Chrome" carrying the colour
-// Chrome logo. The dark screenshot shows in both themes for now (owner). The wrapper, the link and the switch are
-// unchanged, because the install rule below, the sow-400 tests and the build guard all read them.
+// Chrome logo. The wrapper, the link and the switch are unchanged, because the install rule below, the sow-400 tests
+// and the build guard all read them.
+//
+// sow-436 (owner, 2026-10-01, after seeing it on the same canvas): the screenshot follows the theme. Light mode shows
+// the extension's light look and dark mode its dark look; the frame around it stays dark in both, as drawn. Both
+// images are lazy and the hidden one is display:none, so a reader only ever downloads the picture for their theme.
 import { Image } from 'astro:assets';
 import { EXTENSION } from '../../lib/extension';
 import newtabShot from '../../assets/extension/newtab-network.webp'; // the 0.5.3 store screenshot, taken as gbtilabs
+import newtabShotLight from '../../assets/extension/newtab-network-light.webp'; // the same view in light mode, sow-436
 // sow-271: this banner is pure extension ADVERTISING, so the superadmin site setting governs it. The gate lives
 // HERE rather than at the mount in index.astro so any future mount point inherits it automatically -- the failure
 // this protects against is the next promo placement being added without anyone remembering the switch exists.
@@ -66,7 +71,8 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
   </span>
   <span class="xbn-shot" aria-hidden="true">
     <span class="xbn-bar"><span class="xbn-dot"></span><span class="xbn-dot"></span><span class="xbn-dot"></span><span class="xbn-url"></span></span>
-    <Image class="xbn-img" src={newtabShot} alt="" widths={[480, 720, 1280]} sizes="(max-width: 640px) 420px, 700px" loading="lazy" />
+    <Image class="xbn-img xbn-img-light" src={newtabShotLight} alt="" widths={[480, 720, 1280]} sizes="(max-width: 640px) 420px, 700px" loading="lazy" />
+    <Image class="xbn-img xbn-img-dark" src={newtabShot} alt="" widths={[480, 720, 1280]} sizes="(max-width: 640px) 420px, 700px" loading="lazy" />
   </span>
 </a>
 </div>
@@ -203,6 +209,7 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
   .xbn-dot { width: 10px; height: 10px; border-radius: 50%; background: #4a4752; }
   .xbn-url { width: 180px; height: 18px; margin-left: 14px; border-radius: 6px; background: #1b1a20; }
   .xbn-shot :global(.xbn-img) { display: block; width: 100%; height: auto; }
+  .xbn-shot :global(.xbn-img-dark) { display: none; } /* sow-436: light mode shows the light screenshot */
 
   /* Dark mode: the near-black promo panel. The theme selector is wrapped in :global() so Astro scopes ONLY the
      trailing class; without it Astro appends the component cid to the [data-theme] compound too, which then demands
@@ -221,6 +228,8 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
   :global([data-theme="dark"]) .xbn-lead { color: rgba(243, 242, 240, 0.72); }
   :global([data-theme="dark"]) .xbn-eyebrow,
   :global([data-theme="dark"]) .xbn-note { color: #9a95a3; }
+  :global([data-theme="dark"]) .xbn-shot :global(.xbn-img-light) { display: none; }
+  :global([data-theme="dark"]) .xbn-shot :global(.xbn-img-dark) { display: block; }
 
   /* A narrow banner (a tablet, or a page column such as the share page's): a narrower text column and a smaller
      screenshot. Container queries, not media queries, so the banner follows its own width wherever it is mounted;
