@@ -97,6 +97,8 @@ tree:
         label: Responsive
       ui-ux:
         label: UI/UX
+  education:
+    label: Education
   gbti:
     label: GBTI Network
     children:
