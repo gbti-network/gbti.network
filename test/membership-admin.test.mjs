@@ -264,3 +264,20 @@ test('sow-161-style: authorizeSuperadmin with allowCookie accepts a valid supera
   assert.equal(r.ok, true);
   assert.equal(r.githubId, '1');
 });
+
+// sow-427 B0: both gates hand back the mirror they read, so a caller can name the admin (an invite's issuer, a
+// prepared listing's preparer) from the same roles section that authorized them, without a second read.
+test('sow-427: authorizeAdmin and authorizeSuperadmin return the mirror they authorized against', async () => {
+  const mirror = freshMirror({ roles: { superadmins: [{ github_id: '1', login: 'atwellpub' }], admins: [{ github_id: '2', login: 'an-admin' }], moderators: [] } });
+  const env = envWith(mirror);
+  const sa = await authorizeSuperadmin(req('sa'), env, { fetchUser, now });
+  assert.equal(sa.ok, true);
+  assert.deepEqual(sa.mirror.roles, mirror.roles);
+  const admin = await authorizeAdmin(req('admin'), env, { fetchUser, now });
+  assert.equal(admin.ok, true);
+  assert.deepEqual(admin.mirror.roles, mirror.roles);
+  // A refusal still carries nothing but its status and body.
+  const denied = await authorizeSuperadmin(req('admin'), env, { fetchUser, now });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.mirror, undefined);
+});

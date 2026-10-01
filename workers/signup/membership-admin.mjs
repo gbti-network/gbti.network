@@ -86,7 +86,10 @@ export async function authorizeAdmin(request, env, deps = {}) {
   const r = await resolveCaller(request, env, deps);
   if (!r.ok) return r;
   if (!isAdminRole(r.role)) return fail(403, 'forbidden', 'admin access is required');
-  return { ok: true, githubId: r.githubId, role: r.role };
+  // sow-427: `mirror` rides along (additive) so a caller can name the admin from the roles section it already
+  // read. Without it every production invite stored `issuedByLogin: null`, because issuerLogin reads
+  // auth.mirror and only the test double ever supplied one.
+  return { ok: true, githubId: r.githubId, role: r.role, mirror: r.mirror };
 }
 
 /**
@@ -102,7 +105,7 @@ export async function authorizeSuperadmin(request, env, deps = {}) {
   const r = await resolveCaller(request, env, deps);
   if (!r.ok) return r;
   if (r.role !== 'superadmin') return fail(403, 'forbidden', 'superadmin access is required');
-  return { ok: true, githubId: r.githubId, role: r.role };
+  return { ok: true, githubId: r.githubId, role: r.role, mirror: r.mirror }; // sow-427: mirror, as authorizeAdmin
 }
 
 /**

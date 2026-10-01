@@ -18409,6 +18409,9 @@ var ROLE2 = Object.freeze({
 });
 var PRIVILEGED_ROLES = /* @__PURE__ */ new Set([ROLE2.moderator, ROLE2.admin, ROLE2.superadmin]);
 var ADMIN_ROLES = /* @__PURE__ */ new Set([ROLE2.admin, ROLE2.superadmin]);
+function isAdminRole(role) {
+  return ADMIN_ROLES.has(role);
+}
 var idOf = (entry) => String(entry?.github_id ?? entry);
 function rolesFromParsed2(parsed) {
   const roles = /* @__PURE__ */ new Map();
@@ -18491,6 +18494,20 @@ function getStatus(ctx2) {
 async function membershipOf(ctx2) {
   const m = await (ctx2.membershipResolved ? ctx2.membershipResolved() : ctx2.membership?.());
   return m ?? "unknown";
+}
+async function requireAdmin(ctx2) {
+  const id = requireIdentity(ctx2);
+  const readText = async (p) => {
+    try {
+      return await ctx2.reader?.readFile?.(p) || "";
+    } catch {
+      return "";
+    }
+  };
+  const rolesParsed = index_vite_proxy_tmp_default.load(await readText("house/roles.yml")) || {};
+  const role = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
+  if (!isAdminRole(role)) throw new OperationError("forbidden", `this requires admin (you are ${role})`);
+  return { id, role, rolesParsed, readText };
 }
 
 // client/src/member-comment-echo-client.mjs
@@ -19578,6 +19595,54 @@ function canonicalType(type) {
   return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
 }
 
+// client/src/member-admin-client.mjs
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var AdminClientError = class extends Error {
+};
+var PreparedAdminError = class extends AdminClientError {
+  constructor(message, { status = 0, code = null, details } = {}) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+};
+async function preparedCall(url2, { token, method, body, fetch }, what) {
+  const res = await fetch(url2, {
+    method,
+    headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
+    ...body ? { body: JSON.stringify(body) } : {}
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) {
+    const list = [data?.issues, data?.missing, data?.names].find(Array.isArray);
+    throw new PreparedAdminError(
+      data?.message || data?.error || `${what} failed (${res.status})`,
+      { status: res.status, code: typeof data?.error === "string" ? data.error : null, details: list }
+    );
+  }
+  return data;
+}
+async function preparedAdminRequest({ token, signupBase, method = "GET", body = null, query = null, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new PreparedAdminError("not signed in", { status: 401, code: "unauthorized" });
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query ?? {})) if (v !== null && v !== void 0) params.set(k, String(v));
+  const qs = params.toString();
+  return preparedCall(trimBase5(signupBase) + "/membership/admin/prepared" + (qs ? "?" + qs : ""), { token, method, body, fetch }, "prepared listing request");
+}
+async function stagePreparedImage({ token, signupBase, item, name, dataBase64, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new PreparedAdminError("not signed in", { status: 401, code: "unauthorized" });
+  return preparedCall(
+    trimBase5(signupBase) + "/membership/draft-image",
+    { token, method: "POST", body: { op: "put", item, name, dataBase64 }, fetch },
+    "image staging"
+  );
+}
+
 // client/src/operations-member.mjs
 async function ogPreview2(ctx2, { url: url2, icon } = {}) {
   requireIdentity(ctx2);
@@ -19620,7 +19685,159 @@ var PRICE_ENV = Object.freeze({
 // membership/tier-gate.mjs
 var PAID_GRANT_TIERS = Object.freeze([TIER.member, TIER.creator]);
 
+// client/src/account-ops.mjs
+var SITE_BASE = globalThis.process?.env?.GBTI_SITE_BASE || "https://gbti.network";
+var BILLING_PORTAL = globalThis.process?.env?.GBTI_BILLING_PORTAL || "https://billing.stripe.com/p/login/cN23cvdQF4b0eTC000";
+
+// membership/coupons.mjs
+function normalizeCouponCode(code) {
+  return String(code ?? "").trim().toUpperCase();
+}
+
+// membership/invites.mjs
+var INVITE_STATE = Object.freeze({
+  issued: "issued",
+  redeemed: "redeemed",
+  revoked: "revoked",
+  expired: "expired",
+  claim_pending: "claim_pending",
+  // sow-427: a claim pull request is open for the prepared listing
+  claimed: "claimed",
+  // sow-427: the prepared listing was published under the claimant's name
+  unknown: "unknown"
+  // a malformed or missing record: never redeemable
+});
+var LANDER_BY_TIER = Object.freeze({
+  member: "/member-invite/",
+  creator: "/curator-invite/"
+});
+var LANDER_BY_CAMPAIGN = Object.freeze({
+  CODEABLEYEAR: "/codeable-invite/"
+});
+
+// membership/prepared-listings-shared.mjs
+var LISTING_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
+function isListingId(id) {
+  return typeof id === "string" && LISTING_ID_RE.test(id);
+}
+var PREPARED_SLUG_MAX = 64;
+var SLUG_RE2 = new RegExp(`^${SLUG_PATTERN}$`);
+var PREPARED_MAX_IMAGES = 12;
+var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
+var IMAGE_NAME_RE = /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
+function isListingImageName(name) {
+  return typeof name === "string" && name.length <= 128 && IMAGE_NAME_RE.test(name);
+}
+var LISTING_STATE = Object.freeze({
+  prepared: "prepared",
+  revoked: "revoked",
+  publishing: "publishing",
+  claimed: "claimed",
+  unknown: "unknown"
+});
+function claimLink(siteBase, code) {
+  const base2 = String(siteBase || "").replace(/\/+$/, "");
+  return `${base2}/claim/?code=${encodeURIComponent(normalizeCouponCode(code))}`;
+}
+
 // client/src/operations-admin.mjs
+async function prepareListingOp(ctx2, args = {}) {
+  await requireSuperadminLocally(ctx2, "Preparing a listing");
+  const token = ctx2.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  const req = preparedSaveRequest(args);
+  const fetch = ctx2.fetch ?? globalThis.fetch;
+  for (const img of req.images) {
+    try {
+      await stagePreparedImage({ token, signupBase: SIGNUP_BASE, item: req.stagedItem, name: img.name, dataBase64: img.dataBase64, fetch });
+    } catch (err) {
+      throw preparedOpError(err, `The image ${img.name} could not be staged`, { prefix: true });
+    }
+  }
+  let r;
+  try {
+    r = await preparedAdminRequest({ token, signupBase: SIGNUP_BASE, method: "POST", body: req.body, fetch });
+  } catch (err) {
+    throw preparedOpError(err, "The listing could not be saved");
+  }
+  const id = r?.listing?.id;
+  const code = r?.code;
+  if (!isListingId(id) || typeof code !== "string" || !code) {
+    throw new OperationError("admin-op-failed", "The network did not return the invitation. Check the invite manager before trying again.");
+  }
+  return { id, code, link: claimLink(SITE_BASE, code), state: r.listing.state ?? null, bound: r.listing.bound === true };
+}
+async function requireSuperadminLocally(ctx2, what) {
+  let role = null;
+  try {
+    ({ role } = await requireAdmin(ctx2));
+  } catch (err) {
+    if (err?.code !== "forbidden") throw err;
+  }
+  if (role !== "superadmin") throw new OperationError("forbidden", `${what} is for superadmins only.`);
+}
+var blankArg = (v) => v === void 0 || v === null || typeof v === "string" && !v.trim();
+var PREPARED_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+function preparedImageArg(img, i) {
+  const name = String(img?.name ?? "").trim().replace(/^\.\/images\//, "");
+  if (!isListingImageName(name)) {
+    throw new OperationError("bad-request", `images[${i}].name must be a lowercase png, jpg, webp or gif file name, as referenced by ./images/<name>.`);
+  }
+  const dataBase64 = String(img?.dataBase64 ?? "").replace(/^data:[^,]*;base64,/i, "").replace(/\s+/g, "");
+  if (!dataBase64) throw new OperationError("bad-request", `images[${i}] (${name}) has no dataBase64.`);
+  return { name, dataBase64 };
+}
+function preparedSaveRequest(args = {}) {
+  if (args.authorNote !== void 0) {
+    throw new OperationError("bad-request", "A prepared listing takes no author note. The recipient writes their own when they claim it.");
+  }
+  const input = args.input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new OperationError("bad-request", "input (the project frontmatter) is required.");
+  }
+  const slug = String(input.slug ?? "");
+  if (!PREPARED_SLUG_RE.test(slug) || slug.length > PREPARED_SLUG_MAX) {
+    throw new OperationError("bad-request", `input.slug is required: lowercase letters, digits and hyphens, at most ${PREPARED_SLUG_MAX} characters.`);
+  }
+  const id = blankArg(args.id) ? null : String(args.id).trim();
+  if (id !== null && !isListingId(id)) throw new OperationError("bad-request", "id must be a listing id returned by an earlier call.");
+  if (id === null) {
+    for (const key of ["recipientName", "message", "campaign"]) {
+      if (blankArg(args[key])) throw new OperationError("bad-request", `${key} is required.`);
+    }
+  }
+  const list = args.images === void 0 || args.images === null ? [] : args.images;
+  if (!Array.isArray(list)) throw new OperationError("bad-request", "images must be an array of { name, dataBase64 }.");
+  if (list.length > PREPARED_MAX_IMAGES) throw new OperationError("bad-request", `A listing holds at most ${PREPARED_MAX_IMAGES} images.`);
+  const images = list.map(preparedImageArg);
+  const seen = /* @__PURE__ */ new Set();
+  for (const { name } of images) {
+    if (seen.has(name)) throw new OperationError("bad-request", `The image ${name} is listed twice.`);
+    seen.add(name);
+  }
+  const stagedItem = `project:${slug}`;
+  const body = {
+    op: "save",
+    ...id ? { id } : {},
+    ...blankArg(args.campaign) ? {} : { campaign: String(args.campaign).trim() },
+    ...blankArg(args.recipientName) ? {} : { recipientName: String(args.recipientName) },
+    ...blankArg(args.message) ? {} : { message: String(args.message) },
+    ...args.githubLogin === void 0 ? {} : { githubLogin: args.githubLogin === null ? "" : String(args.githubLogin) },
+    draft: { type: "project", slug, frontmatter: input, body: typeof args.body === "string" ? args.body : "" },
+    stagedItem
+  };
+  return { stagedItem, images, body };
+}
+function preparedOpError(err, context, { prefix = false } = {}) {
+  if (err instanceof OperationError) return err;
+  const message = err?.message ? prefix ? `${context}: ${err.message}` : err.message : context;
+  if (err?.status === 401) return new OperationError("not-authenticated", message);
+  if (err?.status === 403) return new OperationError("forbidden", message);
+  if (err?.status === 400 && ["invalid", "unsupported_type", "bad_slug"].includes(err?.code)) {
+    return new OperationError("invalid-content", message, err.details);
+  }
+  return new OperationError("admin-op-failed", message, err?.details);
+}
 async function listPRs(ctx2) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
@@ -19962,6 +20179,32 @@ var TOOLS = [
     description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: "string" }, limit: { type: "integer" } }, ["targetType", "targetSlug"]),
     handler: (ctx2, args) => listComments(ctx2, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit })
+  },
+  // sow-427 (decision 9): the owner's agent prepares a project listing for someone who is not a member yet and
+  // gets back the invitation link, the way one was prepared by hand on 2026-09-28. Superadmin only, checked here
+  // for a useful error and again by the Worker, which is the boundary. It takes no author note on purpose: the
+  // note is the recipient's own, written when they claim (decision 4), and never ghostwritten.
+  {
+    name: "prepare_listing",
+    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes none and you must not write one for them. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
+    inputSchema: obj(
+      {
+        input: { type: "object", description: "The project frontmatter, with image fields as ./images/<name> references." },
+        body: { type: "string", description: "The project description in markdown: facts about the work." },
+        recipientName: { type: "string", description: "The name the invitation greets, at most 60 characters." },
+        message: { type: "string", description: "Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page." },
+        githubLogin: { type: "string", description: "Optional. The GitHub account of the recipient. Only that account can claim the listing or its free year." },
+        campaign: { type: "string", description: "The coupon campaign whose free year the invitation grants. It must be active." },
+        images: {
+          type: "array",
+          description: "The images the project references, each staged privately before the save.",
+          items: obj({ name: { type: "string" }, dataBase64: { type: "string" } }, ["name", "dataBase64"])
+        },
+        id: { type: "string", description: "Optional. The listing id an earlier call returned, to edit that listing." }
+      },
+      ["input", "recipientName", "message", "campaign"]
+    ),
+    handler: (ctx2, args) => prepareListingOp(ctx2, args ?? {})
   }
 ];
 function shareVisibilityArg(v) {

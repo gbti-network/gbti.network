@@ -1,0 +1,149 @@
+---
+// sow-427: the invitation dialog on the prepared-listing claim page (src/pages/claim/index.astro). It opens over the
+// listing on arrival, carries the greeting and the personal message the superadmin wrote, and then whatever the
+// person can do next: sign in, accept the free year, write their note and publish, or read why they cannot.
+//
+// A native <dialog> opened with showModal(), like every other modal on the site (DigestInvite.astro, SigninModal.astro):
+// that brings the focus trap, the inert page behind it and Escape. The page script (src/lib/claim-page.ts) opens and
+// closes it, restores focus and the scroll lock, and fills every region below. Nothing here is visitor-specific at
+// build time.
+//
+// THE FREE-YEAR LINE COMES FROM THE TIER REGISTRY, NEVER FROM THIS FILE (sow-243). tierDisplay() is read at build for
+// both paid tiers and serialized into data-tiers; the page picks the one the invitation's campaign grants, and an
+// unknown tier omits the line. So the label and the price cannot drift from house/membership-tiers.yml.
+//
+// THE MESSAGE IS TEXT. [data-claim-message] is filled with text nodes and <br> elements (claim-core messageToNodes),
+// so markup in a message is shown as the characters it is. No region of this dialog is ever given markup to parse.
+//
+// THE BOT CHECK IS ON DEMAND. The Turnstile holder carries no implicit-render class, so nothing renders until the
+// page shows a sign-in view: a signed-in member who only needs to publish never loads the widget at all.
+import { tierDisplay } from '../../lib/tiers';
+import { TURNSTILE_SITE_KEY } from '../../lib/membership';
+import { NOTE_MAX } from '../../lib/claim-core.mjs';
+
+// Only what the one line needs: the label and the annual price, per tier key.
+const tierData: Record<string, { label: string; priceAnnual: number }> = {};
+for (const [key, t] of [['member', tierDisplay('member')], ['creator', tierDisplay('creator')]] as const) {
+  if (t) tierData[key] = { label: t.label, priceAnnual: t.priceAnnual };
+}
+---
+<dialog class="cld" data-claim-dialog aria-labelledby="cld-greet" data-tiers={JSON.stringify(tierData)}>
+  {/* Initial focus goes to the panel, not the first control, so the X does not open wearing a focus ring. */}
+  <div class="cld-panel" tabindex="-1" autofocus>
+    <button type="button" class="cld-x" data-claim-close aria-label="Close">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+        <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+      </svg>
+    </button>
+    <div class="cld-scroll">
+      <p class="cld-kicker">An invitation to GBTI Network</p>
+      <h2 class="cld-greet" id="cld-greet" data-claim-greeting>Hello,</h2>
+      <div class="cld-message" data-claim-message></div>
+      <p class="cld-from" data-claim-from></p>
+
+      <section class="cld-step" data-claim-step aria-live="polite">
+        <h3 class="cld-step-title" data-claim-title></h3>
+        <p class="cld-step-text" data-claim-text></p>
+        <p class="cld-tier" data-claim-tier hidden></p>
+        <div class="cld-busy" data-claim-busy hidden><span class="cld-spin" aria-hidden="true"></span><span>Working on it</span></div>
+
+        <div class="cld-signin" data-claim-signin hidden>
+          <div class="cld-ts" data-claim-ts data-sitekey={TURNSTILE_SITE_KEY}></div>
+          <button type="button" class="btn btn-primary cld-go" data-claim-signin-go disabled>Sign in with GitHub</button>
+          <p class="cld-ts-note" data-claim-ts-note hidden>The human verification did not load, so the button stays
+            disabled. If you use a content blocker, allow challenges.cloudflare.com and reload this page.</p>
+        </div>
+
+        <form class="cld-note" data-claim-note hidden novalidate>
+          <label class="cld-note-lab" for="cld-note-text">Your note</label>
+          <textarea id="cld-note-text" data-claim-note-text rows="5" maxlength={NOTE_MAX} required
+            placeholder="A few sentences in your own words about this project."></textarea>
+          <div class="cld-note-row">
+            <span class="cld-count" data-claim-note-count aria-live="off">0 / {NOTE_MAX}</span>
+            <button type="submit" class="btn btn-primary cld-publish" data-claim-publish>Publish</button>
+          </div>
+          <p class="cld-err" data-claim-error role="alert" hidden></p>
+        </form>
+
+        <div class="cld-actions" data-claim-actions></div>
+      </section>
+
+      <div class="cld-foot">
+        <button type="button" class="cld-later" data-claim-close>Look at the listing first</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<style is:global>
+  /* GLOBAL AND `.cld`-PREFIXED: the page script builds the action buttons at runtime, and a scoped style would not
+     reach nodes Astro did not render. Every rule starts with `.cld`, so nothing leaks past the dialog. Light is the
+     default; dark follows html[data-theme] through the V3 tokens. */
+  .cld {
+    border: 0; padding: 0; margin: auto; width: calc(100% - 32px); max-width: 560px;
+    /* margin:auto + fit-content height re-centre the modal: Tailwind preflight resets the UA dialog centring. */
+    height: fit-content; max-height: calc(100dvh - 32px);
+    background: var(--paper); color: var(--fg); border-radius: var(--r-lg); box-shadow: var(--sh-lg); overflow: hidden;
+  }
+  .cld[open] { display: flex; }
+  .cld::backdrop { background: rgba(32, 30, 38, .62); backdrop-filter: blur(2px); }
+  [data-theme="dark"] .cld { background: var(--ink-2); border: 1px solid var(--line-dark); }
+  .cld-panel { position: relative; display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
+  .cld-panel:focus { outline: none; }
+  .cld-scroll { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 34px 34px 22px; }
+  @media (max-width: 480px) { .cld-scroll { padding: 28px 20px 18px; } }
+  .cld-x {
+    position: absolute; top: 10px; right: 10px; z-index: 1; display: inline-flex; padding: 7px; border: 0;
+    background: transparent; color: var(--fg-mute); cursor: pointer; border-radius: var(--r);
+  }
+  .cld-x:hover { background: var(--tint); color: var(--fg); }
+  .cld-x:focus-visible, .cld-later:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .cld-kicker { margin: 0 0 10px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--green-700); }
+  .cld-greet { margin: 0 0 12px; font-family: var(--f-display); font-weight: 600; font-size: 26px; line-height: 1.2; color: var(--fg); overflow-wrap: anywhere; }
+  .cld-message { font-size: 15.5px; line-height: 1.65; color: var(--fg-soft); overflow-wrap: anywhere; }
+  .cld-message p { margin: 0 0 12px; }
+  .cld-message p:last-child { margin-bottom: 0; }
+  .cld-from { margin: 12px 0 0; font-size: 13px; color: var(--fg-mute); }
+
+  .cld-step { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+  [data-theme="dark"] .cld-step { border-top-color: var(--line-dark); }
+  .cld-step-title { margin: 0 0 6px; font-family: var(--f-display); font-weight: 600; font-size: 19px; color: var(--fg); }
+  .cld-step-text { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--fg-soft); }
+  .cld-step-text:empty { display: none; }
+  .cld-tier { margin: 12px 0 0; padding: 10px 12px; font-size: 13.5px; line-height: 1.55; color: var(--fg);
+    background: var(--green-tint); border-radius: var(--r-sm); }
+  .cld-busy { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13.5px; color: var(--fg-mute); }
+  .cld-busy[hidden], .cld-signin[hidden], .cld-note[hidden], .cld-err[hidden], .cld-tier[hidden] { display: none !important; }
+  .cld-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--green); animation: cld-spin .9s linear infinite; }
+  @keyframes cld-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .cld-spin { animation-duration: 2.4s; } }
+
+  .cld-signin { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; }
+  .cld-signin .cld-go { width: 100%; white-space: normal; text-align: center; line-height: 1.3; }
+  .cld-signin .cld-go[disabled] { opacity: .6; cursor: not-allowed; box-shadow: none; transform: none; }
+  .cld-ts:empty { display: none; }
+  .cld-ts-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--fg-mute); }
+
+  .cld-note { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .cld-note-lab { font-size: 13px; font-weight: 600; color: var(--fg); }
+  .cld-note textarea {
+    width: 100%; min-height: 120px; resize: vertical; padding: 11px 12px; font: inherit; font-size: 15px; line-height: 1.55;
+    color: var(--fg); background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-sm);
+  }
+  [data-theme="dark"] .cld-note textarea { background: var(--paper-2); }
+  .cld-note textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint-2); }
+  .cld-note-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .cld-count { font-family: var(--f-mono); font-size: 11px; color: var(--fg-mute); }
+  .cld-publish[disabled] { opacity: .6; cursor: progress; box-shadow: none; transform: none; }
+  .cld-err { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--amber-text); }
+
+  .cld-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .cld-actions:empty { display: none; }
+  .cld-actions .btn { flex: 1 1 auto; padding: 12px 18px; font-size: 14.5px; white-space: normal; text-align: center; line-height: 1.3; }
+
+  .cld-foot { margin-top: 18px; text-align: center; }
+  .cld-later { border: 0; background: none; padding: 6px 8px; font: inherit; font-size: 13.5px; color: var(--fg-mute); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 3px; }
+  .cld-later:hover { color: var(--fg); }
+</style>

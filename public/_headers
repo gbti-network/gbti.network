@@ -51,3 +51,14 @@
 /embed/*
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'
+
+# sow-427: the prepared-listing claim page, /claim/?code=<CODE>. The code in the address is a bearer credential (it
+# shows one person's prepared listing and grants a free year), so the page sends NO Referer: not to an image or a
+# link in the listing, not to the sign-in hop, not to anything a later version adds. This rule ADDS one header and
+# leaves the site CSP alone. The video player still works: the page frames it through the same-origin /embed relay,
+# whose own document is not under this rule. Two rules, as for /embed: trailingSlash 'ignore' serves /claim too.
+/claim
+  Referrer-Policy: no-referrer
+
+/claim/*
+  Referrer-Policy: no-referrer

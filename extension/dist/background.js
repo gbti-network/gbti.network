@@ -19791,6 +19791,62 @@ function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses,
   return { roster, summary };
 }
 
+// client/src/account-ops.mjs
+var SITE_BASE = globalThis.process?.env?.GBTI_SITE_BASE || "https://gbti.network";
+var BILLING_PORTAL = globalThis.process?.env?.GBTI_BILLING_PORTAL || "https://billing.stripe.com/p/login/cN23cvdQF4b0eTC000";
+function getBilling(ctx) {
+  return {
+    portal: BILLING_PORTAL,
+    status: ctx.store?.get("status") ?? null,
+    // cached derived status, when present
+    note: "Manage your membership (update card, cancel, invoices) in the Stripe customer portal."
+  };
+}
+function getReferral(ctx) {
+  const id = ctx.identity?.();
+  const code = id?.githubId ?? null;
+  return {
+    code,
+    link: code ? `${SITE_BASE}/join?ref=${code}` : null,
+    invitePct: "10%",
+    connectOnboarding: `${SIGNUP_BASE}/referral/connect/start`,
+    terms: `${SITE_BASE}/referral-terms/`,
+    note: "Share your invite link to earn a flat 10% lifetime commission on every member who joins through it. You also earn from your published work: 30% when it is the first content that brought a member in, and 10% when it is the last. Earnings and payout status appear here once payouts are enabled."
+  };
+}
+
+// membership/invites.mjs
+var INVITE_STATE = Object.freeze({
+  issued: "issued",
+  redeemed: "redeemed",
+  revoked: "revoked",
+  expired: "expired",
+  claim_pending: "claim_pending",
+  // sow-427: a claim pull request is open for the prepared listing
+  claimed: "claimed",
+  // sow-427: the prepared listing was published under the claimant's name
+  unknown: "unknown"
+  // a malformed or missing record: never redeemable
+});
+var LANDER_BY_TIER = Object.freeze({
+  member: "/member-invite/",
+  creator: "/curator-invite/"
+});
+var LANDER_BY_CAMPAIGN = Object.freeze({
+  CODEABLEYEAR: "/codeable-invite/"
+});
+
+// membership/prepared-listings-shared.mjs
+var SLUG_RE3 = new RegExp(`^${SLUG_PATTERN}$`);
+var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
+var LISTING_STATE = Object.freeze({
+  prepared: "prepared",
+  revoked: "revoked",
+  publishing: "publishing",
+  claimed: "claimed",
+  unknown: "unknown"
+});
+
 // client/src/operations-admin.mjs
 async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
@@ -19957,30 +20013,6 @@ async function triggerAdminOp2(ctx, { action, params } = {}) {
   } catch (err) {
     throw new OperationError("admin-op-failed", err?.message || "could not trigger the operation");
   }
-}
-
-// client/src/account-ops.mjs
-var SITE_BASE = globalThis.process?.env?.GBTI_SITE_BASE || "https://gbti.network";
-var BILLING_PORTAL = globalThis.process?.env?.GBTI_BILLING_PORTAL || "https://billing.stripe.com/p/login/cN23cvdQF4b0eTC000";
-function getBilling(ctx) {
-  return {
-    portal: BILLING_PORTAL,
-    status: ctx.store?.get("status") ?? null,
-    // cached derived status, when present
-    note: "Manage your membership (update card, cancel, invoices) in the Stripe customer portal."
-  };
-}
-function getReferral(ctx) {
-  const id = ctx.identity?.();
-  const code = id?.githubId ?? null;
-  return {
-    code,
-    link: code ? `${SITE_BASE}/join?ref=${code}` : null,
-    invitePct: "10%",
-    connectOnboarding: `${SIGNUP_BASE}/referral/connect/start`,
-    terms: `${SITE_BASE}/referral-terms/`,
-    note: "Share your invite link to earn a flat 10% lifetime commission on every member who joins through it. You also earn from your published work: 30% when it is the first content that brought a member in, and 10% when it is the last. Earnings and payout status appear here once payouts are enabled."
-  };
 }
 
 // client/src/video-embed.mjs

@@ -27,6 +27,7 @@ import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow, uniqueImage
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165/sow-268: reuse an image from the member's own published items into a frontmatter field or a gallery row
 import { loadStagedImages, referencedDraftImages } from '../../../src/lib/staged-images.mjs'; // a staged (uploaded, unpublished) image reads back from the Worker store, not from the CDN
 import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
+import { PREPARED_CSS, preparedFromLoad, preparedParts, wirePrepared, imageClientFor } from '../prepared-editor.mjs'; // sow-427: prepared mode (a project for someone who is not a member yet)
 
 // SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
 const _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -207,8 +208,9 @@ class GbtiContentEditor extends GbtiElement {
   // real author input, so a late client still re-renders an editor nobody has touched.
   skipClientRender() { return this._dirty === true; }
 
-  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null, skillFile = null } = {}) {
+  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
     this.type = type || this.type;
+    this._prepared = preparedFromLoad(prepared); this._prepStash = null; // sow-427: per load, like _slugVal below
     // sow-326: `authorNote` travels with the draft now. readDraft has always returned it and BOTH hops between
     // there and here dropped the field, so this.preset.authorNote was permanently undefined, the prefill below
     // always fell through to its fallback, and the owner watched a saved note vanish on every refresh. It is
@@ -266,7 +268,7 @@ class GbtiContentEditor extends GbtiElement {
       ...referencedDraftImages(this.preset?.input || {}, this.$('#body')?.value || ''),
     ];
     const item = this.itemToken;
-    const found = await loadStagedImages(paths, (name) => this.client?.getStagedImage?.(name, item), this._stagedSrc || {});
+    const found = await loadStagedImages(paths, (name) => imageClientFor(this)?.getStagedImage?.(name, item), this._stagedSrc || {}); // sow-427: a saved listing also reads its own store
     if (!Object.keys(found).length) return;
     Object.assign((this._stagedSrc ||= {}), found);
     this.$$('[data-cover]').forEach((c) => {
@@ -301,6 +303,7 @@ class GbtiContentEditor extends GbtiElement {
       // hidden in house scope; a superadmin editing a house item Publishes (which auto-merges via SOW-108).
       canStage = this.itemScope !== 'house' && (membership === 'unknown' || st?.canStageDrafts === true);
       authorFolder = String(st?.identity?.username || st?.identity?.login || '').toLowerCase();
+      this._statusRole = st?.role ?? null; // sow-427: the prepared-mode toggle is offered to a superadmin on a new project
     } catch {
       membership = 'unknown';
     }
@@ -455,8 +458,9 @@ class GbtiContentEditor extends GbtiElement {
                  <p class="rail-foot-note">Live once published.</p>
                </div>
              </section>` : '';
+    const prep = await preparedParts(this); // sow-427: the toggle, the Prepared for card and Save listing (empty for everyone else)
     this.set(
-      this.css(EDITOR_SURFACE + (this.type === 'prompt' ? SKILL_EDITOR_CSS : '') + `
+      this.css(EDITOR_SURFACE + (this.type === 'prompt' ? SKILL_EDITOR_CSS : '') + PREPARED_CSS + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         /* sow-184 (design 3a): pin the action toolbar so Publish / Save draft / Preview never scroll off. It pins
            to the editor's scroll container; a solid --s-app background + a hairline let the document scroll under it.
@@ -788,6 +792,7 @@ class GbtiContentEditor extends GbtiElement {
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ''}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ''}
            <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${isPub && !this.staged ? ' hidden' : ''}${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind}</span>` : ''}`}</button>
+           ${prep.toolbar}
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -823,6 +828,7 @@ class GbtiContentEditor extends GbtiElement {
            </article>
            ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ''}
            <aside class="rail">
+             ${prep.rail}
              <section class="rcard rcard-status">
                <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc(status.label)}</span></div>
                <div class="rcard-b">
@@ -896,6 +902,7 @@ class GbtiContentEditor extends GbtiElement {
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
     this._wireLinks(); // SOW-062 P6: the project links[] row editor (serializes into the hidden json input)
     this._wireGallery(); // sow-268: the project gallery[] row editor (serializes into the hidden json input)
+    wirePrepared(this); // sow-427: the host class that hides Publish and the author note, the toggle, the card, Save listing
     if (this.type === 'prompt') wireSkillEditor(this); // sow-109: the Prompt or Skill cards and the Made for list
     // SOW-062 P6: prefill the from-the-author note from the existing intro-<slug> comment (existing item).
     const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : '';
@@ -1000,6 +1007,7 @@ class GbtiContentEditor extends GbtiElement {
     // sow-165: hand the body editor the item's path BEFORE its value, so a repo-relative image block
     // (`./images/x.webp`) resolves against the item folder on its first render instead of 404-ing against
     // the page url.
+    if (be && this._prepared?.id) be.client = imageClientFor(this); // sow-427: body images of a saved listing read from its store
     if (be) { be.itemPath = this.itemPath; be.item = this.itemToken; be.value = this.preset?.body ?? ''; }
 
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.

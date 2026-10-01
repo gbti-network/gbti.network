@@ -21,27 +21,13 @@ import { kickDispatch } from './checkout.mjs';
 import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: the audience rule (its own module since the fork route that shared it was retired, sow-274)
 export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
 import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
-import { parseMembersIndex, validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';
+import { validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';
+// sow-427 C1: the members-index read and the branch + commit + pull request tail live in hosted-commit.mjs, moved
+// there unchanged so the prepared-listing claim commits through the same path.
+import { readMembersIndex, commitHostedFiles } from './hosted-commit.mjs';
 import { readTopicsVocab } from './topic-suggest.mjs'; // the share category must be a real topic
 import { queueableItems } from '../../membership/editorial-queue.mjs';
 import { TIER, meetsTier } from '../../membership/tiers.mjs';
-
-const GH = 'https://api.github.com';
-const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
-
-/** Standard base64 of a UTF-8 string, chunked (btoa on a spread blows the stack at ~100KB). */
-function b64utf8(s) {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-async function ghJson(fetchImpl, url, init) {
-  const res = await fetchImpl(url, init);
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
-}
 
 /**
  * sow-301: is this file set ENTIRELY comments in the caller's own folder?
@@ -109,11 +95,9 @@ export async function membershipAuthor(request, env, deps = {}) {
   try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
 
   // Resolve the member's folder from the LIVE members-index on canonical main (what the gate reads).
-  const idx = await ghJson(fetchImpl, `${GH}/repos/${upstream}/contents/house/members-index.yml?ref=main`, { headers: GH_HEADERS(instToken) });
-  if (!idx.res.ok) return { status: 502, body: { error: 'index_unavailable', message: 'could not read the member index' } };
-  let indexText = '';
-  try { indexText = atob(String(idx.data?.content || '').replace(/\n/g, '')); } catch { /* fail closed below */ }
-  const folder = parseMembersIndex(indexText).get(githubId) ?? null;
+  const idx = await readMembersIndex({ fetchImpl, instToken, upstream });
+  if (!idx.ok) return { status: 502, body: { error: 'index_unavailable', message: 'could not read the member index' } };
+  const folder = idx.map.get(githubId) ?? null; // an undecodable index parses to an empty map: fail closed below
   if (!folder) {
     // SOW-157: this caller is a VERIFIED effective-paid member missing only their index entry, so fire the
     // 'enroll' repository_dispatch (the reconcile writes + merges the entry within minutes) — rate-limited
@@ -189,49 +173,23 @@ export async function membershipAuthor(request, env, deps = {}) {
   const branch = hostedBranchFor(githubId, itemId);
   if (!branch) return { status: 400, body: { error: 'bad_request', message: 'invalid itemId' } };
 
-  // Fresh-base the branch on live main (create, or force-reset if it exists): each request carries the
-  // item's full file set, so a reset never loses work, and stale-base conflicts (SOW-152) cannot occur.
-  const main = await ghJson(fetchImpl, `${GH}/repos/${upstream}/git/ref/heads/main`, { headers: GH_HEADERS(instToken) });
-  const mainSha = main.data?.object?.sha;
-  if (!main.res.ok || !mainSha) return { status: 502, body: { error: 'git_failed', message: 'could not read the main branch' } };
-  const create = await fetchImpl(`${GH}/repos/${upstream}/git/refs`, {
-    method: 'POST', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: mainSha }),
-  });
-  if (!create.ok) {
-    if (create.status !== 422) return { status: 502, body: { error: 'git_failed', message: 'could not create the branch' } };
-    const reset = await fetchImpl(`${GH}/repos/${upstream}/git/refs/heads/${branch}`, {
-      method: 'PATCH', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sha: mainSha, force: true }),
-    });
-    if (!reset.ok) return { status: 502, body: { error: 'git_failed', message: 'could not reset the branch' } };
-  }
-
-  // Apply each file via the contents API on the branch. One retry on a 409 (concurrent sha race).
-  for (const f of payload.files) {
-    const applied = await applyFile(fetchImpl, instToken, upstream, branch, f);
-    if (!applied.ok) return { status: 502, body: { error: 'git_failed', message: `could not write ${f.path}` } };
-  }
-
-  // Open the PR (canonical-head: head is just the branch name). The gate resolves the member from the
-  // hosted/<github_id>/ ref, gates paid + own-folder, and auto-merges; the Worker never merges.
+  // sow-427 C1: the fresh-based branch, the per-file writes and the pull request are commitHostedFiles
+  // (hosted-commit.mjs), moved there unchanged. The pull request opens canonical-head (head is just the branch
+  // name); the gate resolves the member from the hosted/<github_id>/ ref, gates paid + own-folder, and
+  // auto-merges; the Worker never merges.
   const title = String(payload?.title || `Content update from ${folder}`).slice(0, 256);
   // sow-428: the folder is a GBTI name, not necessarily a GitHub login, so it is never written as an @mention: a
   // member named `mike-conley` would otherwise ping whichever stranger owns that GitHub account.
   const body = `Hosted authoring: published on behalf of ${folder} (github_id ${githubId}) via the GBTI publishing app.`;
-  const pr = await ghJson(fetchImpl, `${GH}/repos/${upstream}/pulls`, {
-    method: 'POST', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),
-  });
-  if (pr.res.status === 422) {
-    await removeEditorialItems(kv, deleted);
+  const committed = await commitHostedFiles({ fetchImpl, instToken, upstream, branch, files: payload.files, title, body });
+  if (!committed.ok) return { status: committed.status, body: { error: committed.error, message: committed.message } };
+  await removeEditorialItems(kv, deleted);
+  if (committed.already) {
     return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true }, queued: recorded.fresh };
   }
-  if (!pr.res.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.res.status}` } };
-  await removeEditorialItems(kv, deleted);
   // `queued` is returned alongside the body, never inside it: the caller fires the owner notice on exactly what
   // was STORED, through ctx.waitUntil, so a fail-soft email never delays the response the member is waiting on.
-  return { status: 200, body: { ok: true, branch, number: pr.data.number, html_url: pr.data.html_url }, queued: recorded.fresh };
+  return { status: 200, body: { ok: true, branch, number: committed.number, html_url: committed.html_url }, queued: recorded.fresh };
 }
 
 // sow-183: GET /membership/author/targets — superadmin-only, the picker source for the shared editor's Author
@@ -252,39 +210,10 @@ export async function membershipAuthorTargets(request, env, deps = {}) {
 
   let instToken;
   try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-  const idx = await ghJson(fetchImpl, `${GH}/repos/${upstream}/contents/house/members-index.yml?ref=main`, { headers: GH_HEADERS(instToken) });
-  if (!idx.res.ok) return { status: 502, body: { error: 'index_unavailable', message: 'could not read the member index' } };
-  let indexText = '';
-  try { indexText = atob(String(idx.data?.content || '').replace(/\n/g, '')); } catch { /* fail closed below: an empty map */ }
-  const members = [...parseMembersIndex(indexText).entries()]
+  const idx = await readMembersIndex({ fetchImpl, instToken, upstream }); // an undecodable index is an empty map
+  if (!idx.ok) return { status: 502, body: { error: 'index_unavailable', message: 'could not read the member index' } };
+  const members = [...idx.map.entries()]
     .map(([githubId, username]) => ({ githubId, username }))
     .sort((a, b) => a.username.localeCompare(b.username));
   return { status: 200, body: { ok: true, members } };
-}
-
-/** PUT (or DELETE for content: null) one file on the branch; retries once on a 409 sha race. */
-async function applyFile(fetchImpl, instToken, upstream, branch, f, attempt = 0) {
-  const url = `${GH}/repos/${upstream}/contents/${f.path}`;
-  const existing = await ghJson(fetchImpl, `${url}?ref=${encodeURIComponent(branch)}`, { headers: GH_HEADERS(instToken) });
-  const sha = existing.res.ok ? existing.data?.sha : undefined;
-  const isBinary = f.contentBase64 !== undefined && f.contentBase64 !== null;
-  if (f.content === null && !isBinary) {
-    if (!sha) return { ok: true, skipped: true }; // deleting a file that does not exist is a no-op
-    const res = await fetchImpl(url, {
-      method: 'DELETE', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `content: remove ${f.path}`, sha, branch }),
-    });
-    if (res.status === 409 && attempt === 0) return applyFile(fetchImpl, instToken, upstream, branch, f, 1);
-    return { ok: res.ok };
-  }
-  // sow-158 image upload: a binary entry is ALREADY base64 (a raster image, validated own-folder + capped in
-  // validateHostedRequest); the Contents API takes base64 bytes directly, so pass it through un-re-encoded. A
-  // text entry base64-encodes its UTF-8 string as before.
-  const encoded = isBinary ? String(f.contentBase64) : b64utf8(f.content);
-  const res = await fetchImpl(url, {
-    method: 'PUT', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: `content: update ${f.path}`, content: encoded, branch, ...(sha ? { sha } : {}) }),
-  });
-  if (res.status === 409 && attempt === 0) return applyFile(fetchImpl, instToken, upstream, branch, f, 1);
-  return { ok: res.ok };
 }

@@ -60,20 +60,62 @@ export function parseWorkspaceDraft(hash) {
   return m ? { type: m[1], slug: m[2] } : null;
 }
 
+// sow-427: the prepared-listing deep links. `#new=project&prepare=1` opens a blank project already in prepared mode
+// (the invite manager's "Prepare a listing"); `#prepare=<listing id>` reopens one listing for editing (its Edit). A
+// listing id is 16 characters of the invite alphabet (membership/prepared-listings.mjs isListingId); anything else
+// is null, so the hash can never address a KV key of its own making. Only a project can be prepared (owner
+// decision 9), so `prepare=1` beside any other new type is null too.
+const PREPARE_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
+
+/** Parse the prepared-listing deep link: `{ id: null }` for a new one, `{ id }` to edit one, else null. */
+export function parseWorkspacePrepare(hash) {
+  const h = String(hash || '').replace(/^#/, '');
+  const m = /(?:^|&)prepare=([^&]*)(?:&|$)/.exec(h);
+  if (!m) return null;
+  if (m[1] === '1') return parseWorkspaceNew(h) === 'project' ? { id: null } : null;
+  return PREPARE_ID_RE.test(m[1]) ? { id: m[1] } : null;
+}
+
+/**
+ * SOW-064: a `#new=<type>` deep link (the "+" quick-create menu) opens a BLANK editor for that content type, so the
+ * member lands straight in a new article, prompt or project: empty frontmatter and body make a blank form. sow-427:
+ * `#new=project&prepare=1` opens the same blank project already in prepared mode. Returns the workspace's `_editing`
+ * state, or null when the hash opens no editor. Shared by the first paint and a same-document hash change.
+ */
+export function editingFromHash(hash) {
+  const type = parseWorkspaceNew(hash);
+  if (!type) return null;
+  const prep = parseWorkspacePrepare(hash);
+  return { type, frontmatter: {}, body: '', ...(prep && !prep.id ? { prepared: {} } : {}) };
+}
+
+/**
+ * sow-427: the restore a `#prepare=<listing id>` link asks for, or null. Like `#edit=` and `#draft=`, it is opened
+ * once the client arrives (it needs a read), so it rides the workspace's one-shot `_restore` rather than a hash change.
+ */
+export function preparedRestore(hash) {
+  const prep = parseWorkspacePrepare(hash);
+  return prep?.id ? { prepare: prep.id } : null;
+}
+
 /**
  * SOW-104: decide what a hashchange should do given the current editor/tab state. PURE + testable so the element's
  * _onHash stays a thin dispatcher. A rail nav to a PLAIN tab (no new/edit/draft component) while an editor or
  * review pane is open is an explicit EXIT (matching the Back button); otherwise a #new= opens the editor and a
  * different plain tab switches. Returns { action: 'exit' | 'openNew' | 'switchTab' | 'none', tab?, type? }.
+ * sow-427: a prepare link is an editor link too, so it never reads as an exit, and on its own it changes no tab
+ * (a listing opens on load, through preparedRestore, exactly as an `#edit=` link does).
  */
 export function planHashRoute(hash, { editing = false, tab = 'overview' } = {}) {
   const newType = parseWorkspaceNew(hash) || null;
   const edit = parseWorkspaceEdit(hash) || null;
   const draft = parseWorkspaceDraft(hash) || null;
+  const prepare = parseWorkspacePrepare(hash);
   const tabHash = parseWorkspaceTab(hash) || 'overview';
-  if (editing && !newType && !edit && !draft) return { action: 'exit', tab: tabHash };
+  if (editing && !newType && !edit && !draft && !prepare) return { action: 'exit', tab: tabHash };
   if (newType && !editing) return { action: 'openNew', type: newType };
-  if (tabHash !== tab && !editing) return { action: 'switchTab', tab: tabHash };
+  if (prepare || editing) return { action: 'none' };
+  if (tabHash !== tab) return { action: 'switchTab', tab: tabHash };
   return { action: 'none' };
 }
 

@@ -32,6 +32,7 @@ import { deriveMembershipFromCustomer } from '../../membership/derive-status.mjs
 import { effectiveStatus } from '../../membership/overrides-core.mjs';
 import { overridesFromMirror } from '../../membership/usage-bucket.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
+import { readInvite } from './invites-store.mjs'; // sow-427: is the code a prepared listing's invitation?
 import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted, retained via [observability])
 
 /**
@@ -61,6 +62,49 @@ import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacte
  * A live coupon grant counts as paid here. It is the whole point of the invite, and it is authoritative before
  * the fold lands: the same fast path membership-status.mjs uses to report a fresh redeemer as paid.
  */
+/**
+ * The overrides mirror folded for effectiveStatus, or null when it is absent, stale or malformed. A KV error THROWS,
+ * so each caller keeps its own failure answer (resolveSignupRole's catch answers `locked`).
+ */
+async function readFreshOverrides(kv, now) {
+  const mirror = await kv?.get(OVERRIDES_KV_KEY, 'json');
+  if (!mirror?.generatedAt) return null;
+  const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return null;
+  return overridesFromMirror(mirror);
+}
+
+/**
+ * sow-427 (owner decision 5): "a paying member claims straight away with no free year involved". True when `code`
+ * is a PREPARED LISTING's invitation and this account already pays: Stripe says paid, or a fresh overrides mirror
+ * says staff or grandfathered (both count as paying). runSignup then skips the redemption, so the invitation stays
+ * issued and the claim runs issued, then claim pending, then claimed, exactly as it does for a paying member who
+ * was already signed in.
+ *
+ * Why it matters: the claim page's sign-in always carries the code, because a signed-out visitor could be anyone.
+ * Redeeming it for a paying account spent the invitation and a campaign slot, alerted the owner to a redemption
+ * that was not one, and once folded put a member-tier grant AHEAD of Stripe for a year (or replaced a permanent
+ * grandfather entry with a one-year one).
+ *
+ * Only a listing invitation is affected; a plain invite or a walk-up code redeems exactly as before. Skipping never
+ * grants anything, so every doubt answers false and the redemption runs as it always did: no listing id, an
+ * unreadable invite, a stale or unreadable mirror for an account Stripe does not call paid.
+ */
+export async function payingListingClaimant({ kv, githubId, customer, code, priceTierMap = null, now = new Date() } = {}) {
+  if (!kv || !code || !githubId) return false;
+  try {
+    const invite = await readInvite(kv, code);
+    if (!invite?.listingId) return false;
+    const { status } = deriveMembershipFromCustomer(customer, { priceTierMap, now });
+    if (status === 'paid') return true;
+    const overrides = await readFreshOverrides(kv, now);
+    if (!overrides) return false;
+    return effectiveStatus(String(githubId), status, overrides, now).status === 'paid';
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveSignupRole({ kv, githubId, customer, couponGrant = null, priceTierMap = null, now = new Date() }) {
   // sow-356: the join answer per resolved role. A role of member or trial is in the community by definition.
   // `refusal` is the reason to give IF the answer is no; an eligible member always reads 'eligible', because a
@@ -109,11 +153,7 @@ export async function resolveSignupRole({ kv, githubId, customer, couponGrant = 
       eligible: couponLive || status === 'paid' || status === 'trialing',
       reason: couponLive || status === 'paid' || status === 'trialing' ? 'eligible' : (status === 'none' ? 'free' : 'lapsed'),
     });
-    const mirror = await kv?.get(OVERRIDES_KV_KEY, 'json');
-    if (!mirror?.generatedAt) return blind();
-    const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
-    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return blind();
-    const overrides = overridesFromMirror(mirror);
+    const overrides = await readFreshOverrides(kv, now);
     if (!overrides) return blind();
 
     const eff = effectiveStatus(String(githubId), status, overrides, now);
@@ -294,8 +334,12 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   // reverses is which half survives a mid-chain failure: a redeemed grant with no Customer yet, instead of a
   // Customer with no grant yet. Both self-heal on the retry, because redeemCoupon returns the existing grant and
   // the Customer create is keyed idempotently.
+  //
+  // sow-427: an account that already pays, arriving on a prepared listing's invitation, claims with no free year
+  // (owner decision 5), so the code is not redeemed and the invitation stays issued for the claim.
   let couponGrant = null;
-  if (coupon && kv) {
+  const skipForClaim = Boolean(coupon && kv) && await payingListingClaimant({ kv, githubId, customer: existing, code: coupon, priceTierMap: config?.priceTierMap ?? null, now });
+  if (coupon && kv && !skipForClaim) {
     couponGrant = await redeemCoupon({ kv, code: coupon, githubId, login: githubLogin, now, lockSecret: couponLockSecret });
   }
 
@@ -337,7 +381,10 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
       referredBy,
       via,
       touchSession,
-      coupon, // SOW-119: pre-validated by handleStart (only a redeemable code ever reaches the state)
+      // SOW-119: pre-validated by handleStart (only a redeemable code ever reaches the state). sow-427: recorded
+      // only when a grant is in hand, so an invitation tied to someone else, refused above, leaves no copy of its
+      // code on the wrong account's customer record.
+      coupon: couponGrant ? coupon : undefined,
     });
     // Idempotency key derived from github_id so a retried create cannot double-insert.
     const customer = await stripe.createCustomer({ email: email || undefined, metadata }, `signup:${githubId}`);

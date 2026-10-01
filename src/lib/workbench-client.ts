@@ -42,6 +42,7 @@ import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin 
 import { WorkbenchClientError, err, readCsrf, createWorkerTransport } from './workbench-client-transport'; // the Worker fetches
 import { TYPE_LABEL, hostedItemId, createPublish } from './workbench-client-publish'; // publish, and the two names flipStatus shares with it
 import { adminMethods } from './workbench-client-admin'; // the admin, channel-map, invite and editorial methods
+import { preparedMethods } from './workbench-prepared'; // sow-427: prepared project listings (Worker-gated superadmin route)
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
 const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
@@ -538,6 +539,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     // channel-map and syndication methods (attached only when isSuperadmin, the role gate lives there), the
     // issued invites and the editorial review queue. Spread HERE so every name keeps its place in this object.
     ...adminMethods({ workerGet, workerPost, workerPatch, isSuperadmin }),
+    ...preparedMethods({ workerGet, workerPost, isSuperadmin }), // sow-427: get/image/save always, list/revoke/resend/delete for a superadmin
 
     // ----- SOW-043/046: interactive News over the cookie session (free-tier perk; authorizeSignedIn) -----
     getNews({ category, since, limit }: any = {}) {

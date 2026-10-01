@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import {
   buildSnapshot, collectSnapshot, encryptSnapshot, decryptSnapshot, takeBackup, listSnapshots,
   readSnapshot, restoreSnapshot, verifyLatestBackup, SNAPSHOT_KEY, BACKUP_PREFIX, DEFAULT_RETENTION_SECONDS,
+  BACKED_UP_PREFIXES,
 } from '../scripts/lib/kv-backup.mjs';
+import { LISTING_KEY_PREFIX, LISTING_IMG_PREFIX } from '../membership/prepared-listings.mjs';
 import { generateEpochKey, AssetAccessError } from '../client/src/crypto-assets.mjs';
 
 const CF = { CF_ACCOUNT_ID: 'acct', CF_KV_NAMESPACE_ID: 'ns', CF_API_TOKEN: 'tok' };
@@ -53,6 +55,8 @@ test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/rede
     'coupon-grant:8': '{"code":"CODEABLEYEAR","until":"2027-07-21T00:00:00.000Z"}',
     'redemption:CODEABLEYEAR:8': '{"code":"CODEABLEYEAR"}', 'redemptions:CODEABLEYEAR': '1',
     'earnings:6': '{}', 'touch:7': '{}', 'gh:3': 'cus_x', 'overrides:mirror': '{}',
+    // sow-427: a prepared listing is backed up; its image bytes are not (see the test below for why).
+    'invite-listing:ABCDEFGHJKMNPQRS': '{"id":"ABCDEFGHJKMNPQRS"}', 'invite-listing-img:ABCDEFGHJKMNPQRS:icon.png': '{"dataBase64":"AAAA"}',
   });
   const c = await collectSnapshot({ env: CF, fetchImpl: kv.fetchImpl, now: NOW });
   assert.equal(c.available, true);
@@ -64,10 +68,23 @@ test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/rede
   // FROM GIT. Phase 3 deletes house/bans.yml + house/grandfathered.yml, so the blob becomes the ONLY copy of
   // every ban and grandfather grant. This assertion used to prove it was absent; it now proves it is present,
   // and that inversion is the point rather than an incidental fixture update.
-  assert.deepEqual(keys, ['activity:1', 'conv:5', 'coupon-grant:8', 'follows:2', 'overrides:mirror', 'prefs:4', 'redemption:CODEABLEYEAR:8']);
+  assert.deepEqual(keys, ['activity:1', 'conv:5', 'coupon-grant:8', 'follows:2', 'invite-listing:ABCDEFGHJKMNPQRS', 'overrides:mirror', 'prefs:4', 'redemption:CODEABLEYEAR:8']);
   const none = await collectSnapshot({ env: {}, fetchImpl: async () => { throw new Error('no fetch'); } });
   assert.equal(none.available, false);
   assert.match(none.reason, /CF_ACCOUNT_ID/);
+});
+
+test('sow-427: prepared listings are backed up and their image bytes are NOT', () => {
+  // The listing record is the only copy of a superadmin's prepared project and personal message: it lives in KV
+  // by design, so nothing else could rebuild it. Its own entry is required because prefix matching is literal.
+  assert.ok(BACKED_UP_PREFIXES.includes(LISTING_KEY_PREFIX), 'invite-listing: must be in the backup');
+  assert.equal(LISTING_KEY_PREFIX, 'invite-listing:');
+  // The images stay OUT on purpose. The whole snapshot is one KV value capped at 25 MiB, and one listing at its
+  // 4 MiB image cap adds about 7 MiB once base64'd, encrypted and base64'd again, so three or four listings
+  // would fail the put and take the invites, grants and overrides backup down with them.
+  assert.equal(LISTING_IMG_PREFIX, 'invite-listing-img:');
+  assert.ok(!BACKED_UP_PREFIXES.includes(LISTING_IMG_PREFIX), 'listing image bytes must never enter the one-value snapshot');
+  assert.ok(!BACKED_UP_PREFIXES.some((p) => LISTING_IMG_PREFIX.startsWith(p)), 'and no broader prefix may sweep them in either');
 });
 
 test('encrypt/decrypt round-trips a snapshot and a wrong key is access-denied', async () => {

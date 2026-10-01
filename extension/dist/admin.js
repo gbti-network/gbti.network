@@ -1334,10 +1334,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var EM_US = `<em ${UNDERSCORE_MARK}>`;
   var STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
   var WORD_CHAR = /[\p{L}\p{N}]/u;
-  function emphasisMark(attrs, all, at2, len, star) {
+  function emphasisMark(attrs, all, at3, len, star) {
     if (!/\bdata-md="_"/.test(attrs)) return star;
-    const before = all[at2 - 1] ?? "";
-    const after = all[at2 + len] ?? "";
+    const before = all[at3 - 1] ?? "";
+    const after = all[at3 + len] ?? "";
     return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, "_");
   }
   function inlineMdToHtml(md) {
@@ -1380,12 +1380,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
       return `\0A${keep.length - 1}\0`;
     });
-    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at2, all) => {
-      const d = emphasisMark(attrs, all, at2, m.length, "**");
+    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
+      const d = emphasisMark(attrs, all, at3, m.length, "**");
       return `${d}${inner}${d}`;
     });
-    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at2, all) => {
-      const d = emphasisMark(attrs, all, at2, m.length, "*");
+    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
+      const d = emphasisMark(attrs, all, at3, m.length, "*");
       return `${d}${inner}${d}`;
     });
     s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
@@ -1395,13 +1395,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/^\s*<div>/i, "");
     s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
     s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
-      const at2 = (name) => {
+      const at3 = (name) => {
         const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(attrs);
         return m ? m[1] ?? m[2] ?? "" : "";
       };
-      const ref = at2("data-ref") || at2("src");
+      const ref = at3("data-ref") || at3("src");
       if (!/^(https?:\/\/|\.\/)/i.test(ref)) return "";
-      return `![${at2("alt").replace(/[\[\]]/g, "")}](${ref})`;
+      return `![${at3("alt").replace(/[\[\]]/g, "")}](${ref})`;
     });
     s = s.replace(/<[^>]+>/g, "");
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -1814,8 +1814,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     function toggleInline(sel, tag) {
       if (!sel.rangeCount || sel.isCollapsed) return;
       const r = sel.getRangeAt(0);
-      const at2 = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
-      const existing = at2 && at2.closest ? at2.closest(tag) : null;
+      const at3 = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+      const existing = at3 && at3.closest ? at3.closest(tag) : null;
       if (existing) {
         existing.replaceWith(document.createTextNode(existing.textContent));
         return;
@@ -3435,14 +3435,34 @@ ${listStyleProseCss(".doc-blocks")}
     const m = /(?:^|[#&])draft=(post|project|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
     return m ? { type: m[1], slug: m[2] } : null;
   }
+  var PREPARE_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
+  function parseWorkspacePrepare(hash) {
+    const h = String(hash || "").replace(/^#/, "");
+    const m = /(?:^|&)prepare=([^&]*)(?:&|$)/.exec(h);
+    if (!m) return null;
+    if (m[1] === "1") return parseWorkspaceNew(h) === "project" ? { id: null } : null;
+    return PREPARE_ID_RE.test(m[1]) ? { id: m[1] } : null;
+  }
+  function editingFromHash(hash) {
+    const type = parseWorkspaceNew(hash);
+    if (!type) return null;
+    const prep = parseWorkspacePrepare(hash);
+    return { type, frontmatter: {}, body: "", ...prep && !prep.id ? { prepared: {} } : {} };
+  }
+  function preparedRestore(hash) {
+    const prep = parseWorkspacePrepare(hash);
+    return prep?.id ? { prepare: prep.id } : null;
+  }
   function planHashRoute(hash, { editing = false, tab = "overview" } = {}) {
     const newType = parseWorkspaceNew(hash) || null;
     const edit = parseWorkspaceEdit(hash) || null;
     const draft = parseWorkspaceDraft(hash) || null;
+    const prepare = parseWorkspacePrepare(hash);
     const tabHash = parseWorkspaceTab(hash) || "overview";
-    if (editing && !newType && !edit && !draft) return { action: "exit", tab: tabHash };
+    if (editing && !newType && !edit && !draft && !prepare) return { action: "exit", tab: tabHash };
     if (newType && !editing) return { action: "openNew", type: newType };
-    if (tabHash !== tab && !editing) return { action: "switchTab", tab: tabHash };
+    if (prepare || editing) return { action: "none" };
+    if (tabHash !== tab) return { action: "switchTab", tab: tabHash };
     return { action: "none" };
   }
   function profileStrip(read3, tab) {
@@ -3485,17 +3505,17 @@ ${listStyleProseCss(".doc-blocks")}
     return (Array.isArray(prs) ? prs : []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
   }
   function prEvent(pr = {}) {
-    const at2 = (v2) => typeof v2 === "string" && v2 ? v2 : null;
+    const at3 = (v2) => typeof v2 === "string" && v2 ? v2 : null;
     if (pr.merged === true || pr.state === "merged") {
-      const t = at2(pr.mergedAt) ?? at2(pr.updatedAt) ?? at2(pr.createdAt);
+      const t = at3(pr.mergedAt) ?? at3(pr.updatedAt) ?? at3(pr.createdAt);
       return t ? { verb: "merged", at: t } : { verb: "", at: null };
     }
     if (pr.state === "closed") {
-      const t = at2(pr.closedAt) ?? at2(pr.updatedAt) ?? at2(pr.createdAt);
+      const t = at3(pr.closedAt) ?? at3(pr.updatedAt) ?? at3(pr.createdAt);
       return t ? { verb: "closed", at: t } : { verb: "", at: null };
     }
-    const created = at2(pr.createdAt);
-    const updated = at2(pr.updatedAt);
+    const created = at3(pr.createdAt);
+    const updated = at3(pr.updatedAt);
     if (updated && created && Date.parse(updated) - Date.parse(created) > 6e4) return { verb: "updated", at: updated };
     if (created) return { verb: "opened", at: created };
     return updated ? { verb: "updated", at: updated } : { verb: "", at: null };
@@ -3723,9 +3743,9 @@ ${listStyleProseCss(".doc-blocks")}
     const n = Math.max(0, Math.floor(Number(total) || 0));
     const size = Math.max(1, Math.floor(Number(per) || 0) || WORKSPACE_PAGE_SIZE);
     const pages = Math.max(1, Math.ceil(n / size));
-    const at2 = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
-    const start = at2 * size;
-    return { page: at2, pages, start, end: Math.min(n, start + size), size };
+    const at3 = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
+    const start = at3 * size;
+    return { page: at3, pages, start, end: Math.min(n, start + size), size };
   }
 
   // client-ui/src/publish-diff.mjs
@@ -4208,8 +4228,8 @@ ${listStyleProseCss(".doc-blocks")}
     if (!memberKey || !type) return null;
     const v2 = await rawGet(wbKey(memberKey, type));
     if (!v2 || !Array.isArray(v2.items)) return null;
-    const at2 = Number(v2.at) || 0;
-    return { items: v2.items, at: at2, fresh: now() - at2 < ttl };
+    const at3 = Number(v2.at) || 0;
+    return { items: v2.items, at: at3, fresh: now() - at3 < ttl };
   }
   async function wbCacheSet(memberKey, type, items, { now = Date.now, allowEmpty = false } = {}) {
     if (!memberKey || !type || !Array.isArray(items)) return;
@@ -4571,9 +4591,9 @@ ${listStyleProseCss(".doc-blocks")}
           continue;
         }
       }
-      const esc9 = escapeKeepingLinks(line, linkKeep);
+      const esc10 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc9)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc10)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -4640,7 +4660,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc9, line)];
+      const para = [hardBreak(esc10, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -6791,6 +6811,460 @@ ${listStyleProseCss(".doc-blocks")}
     return `${base}-${Date.now()}${ext}`;
   }
 
+  // membership/tiers.mjs
+  var TIER = Object.freeze({
+    none: "none",
+    // not paid, or paid for something we cannot identify (see tierForPrice)
+    member: "member",
+    // Network Member: $5 monthly / $50 annual
+    creator: "creator"
+    // Content Creator: $15 monthly / $150 annual
+  });
+  var TIER_LABEL = Object.freeze({
+    [TIER.none]: "",
+    // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
+    [TIER.member]: "Network Supporter",
+    // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
+    // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+    // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
+    [TIER.creator]: "Curator"
+  });
+  function tierLabel(tier) {
+    return TIER_LABEL[tier] ?? "";
+  }
+  var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
+
+  // membership/checkout-prices.mjs
+  var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);
+  var PRICE_ENV = Object.freeze({
+    [TIER.member]: Object.freeze({ monthly: "STRIPE_PRICE_MEMBER_MONTHLY", annual: "STRIPE_PRICE_MEMBER_ANNUAL" }),
+    [TIER.creator]: Object.freeze({ monthly: "STRIPE_PRICE_CREATOR_MONTHLY", annual: "STRIPE_PRICE_CREATOR_ANNUAL" })
+  });
+
+  // membership/tier-gate.mjs
+  var PAID_GRANT_TIERS = Object.freeze([TIER.member, TIER.creator]);
+
+  // membership/coupons.mjs
+  function normalizeCouponCode(code) {
+    return String(code ?? "").trim().toUpperCase();
+  }
+
+  // membership/invites.mjs
+  var INVITE_STATE = Object.freeze({
+    issued: "issued",
+    redeemed: "redeemed",
+    revoked: "revoked",
+    expired: "expired",
+    claim_pending: "claim_pending",
+    // sow-427: a claim pull request is open for the prepared listing
+    claimed: "claimed",
+    // sow-427: the prepared listing was published under the claimant's name
+    unknown: "unknown"
+    // a malformed or missing record: never redeemable
+  });
+  var LANDER_BY_TIER = Object.freeze({
+    member: "/member-invite/",
+    creator: "/curator-invite/"
+  });
+  var LANDER_BY_CAMPAIGN = Object.freeze({
+    CODEABLEYEAR: "/codeable-invite/"
+  });
+  function landerFor({ code, id, tier } = {}) {
+    const c = normalizeCouponCode(id || code);
+    return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
+  }
+
+  // membership/prepared-listings-shared.mjs
+  var LISTING_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
+  function isListingId(id) {
+    return typeof id === "string" && LISTING_ID_RE.test(id);
+  }
+  var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
+  var MAX_MESSAGE = 1e3;
+  var MAX_RECIPIENT_NAME = 60;
+  var INVISIBLE_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
+  function sanitizeMessage(s) {
+    if (typeof s !== "string") return "";
+    return s.replace(/\r\n?/g, "\n").replace(/\t/g, " ").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "").replace(INVISIBLE_RE, "").replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_MESSAGE).trim();
+  }
+  function sanitizeRecipientName(s) {
+    if (typeof s !== "string") return "";
+    return s.replace(/[\x00-\x1f\x7f]+/g, " ").replace(INVISIBLE_RE, "").replace(/\s+/g, " ").trim().slice(0, MAX_RECIPIENT_NAME).trim();
+  }
+  var LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+  function normalizeGithubLogin(s) {
+    if (typeof s !== "string") return null;
+    const v2 = s.trim().replace(/^@/, "");
+    return LOGIN_RE.test(v2) ? v2 : null;
+  }
+  function validateInvitationText({ recipientName, message } = {}) {
+    const name = sanitizeRecipientName(recipientName);
+    if (!name) return { ok: false, error: "recipient_required", message: "Enter the name the invitation should greet them by." };
+    const text2 = sanitizeMessage(message);
+    if (!text2) return { ok: false, error: "message_required", message: "Write the personal message the invitation shows them." };
+    return { ok: true, recipientName: name, message: text2 };
+  }
+  var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
+  var LISTING_STATE = Object.freeze({
+    prepared: "prepared",
+    revoked: "revoked",
+    publishing: "publishing",
+    claimed: "claimed",
+    unknown: "unknown"
+  });
+  function claimLink(siteBase, code) {
+    const base = String(siteBase || "").replace(/\/+$/, "");
+    return `${base}/claim/?code=${encodeURIComponent(normalizeCouponCode(code))}`;
+  }
+  function projectUrl(siteBase, slug) {
+    if (typeof slug !== "string" || !SLUG_RE.test(slug)) return null;
+    const base = String(siteBase || "").replace(/\/+$/, "");
+    return `${base}/projects/${slug}/`;
+  }
+
+  // client-ui/src/prepared-editor.mjs
+  var esc3 = (v2) => String(v2 ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var PREP_KEYS = ["id", "recipientName", "message", "githubLogin", "campaign", "code", "link", "state", "inviteState"];
+  function blankPrepared() {
+    return { id: null, recipientName: "", message: "", githubLogin: "", campaign: "", code: null, link: null, state: null, inviteState: null };
+  }
+  function preparedFromLoad(p) {
+    if (!p || typeof p !== "object") return null;
+    const out = blankPrepared();
+    for (const k of PREP_KEYS) if (p[k] !== void 0 && p[k] !== null) out[k] = typeof p[k] === "string" ? p[k] : out[k];
+    if (!isListingId(out.id)) out.id = null;
+    return out;
+  }
+  function canOfferPrepare({ role, type, itemPath, prepared, client } = {}) {
+    return role === "superadmin" && type === "project" && !itemPath && !isListingId(prepared?.id) && typeof client?.preparedSave === "function";
+  }
+  function preparedEditRefusal(listing) {
+    const st2 = listing?.state;
+    if (st2 === "claimed") return "This listing was claimed, so its project now lives in the member folder and is edited there.";
+    if (st2 === "publishing") return "A claim for this listing is being published, so it cannot be edited until that pull request merges or closes.";
+    if (st2 !== "prepared" && st2 !== "revoked") return "That prepared listing could not be read.";
+    return null;
+  }
+  function preparedEditingFrom(res) {
+    const l = res?.listing;
+    if (!l || !isListingId(l.id)) throw new Error("That prepared listing could not be read.");
+    const refusal = preparedEditRefusal(l);
+    if (refusal) throw new Error(refusal);
+    if (!l.frontmatter || typeof l.frontmatter !== "object") throw new Error("That prepared listing has no project to edit.");
+    return {
+      type: "project",
+      frontmatter: { ...l.frontmatter },
+      body: typeof l.body === "string" ? l.body : "",
+      path: "",
+      prepared: preparedFromLoad({
+        id: l.id,
+        recipientName: l.recipientName || "",
+        message: l.message || "",
+        githubLogin: l.bound ? l.boundLogin || "" : "",
+        campaign: l.campaign || "",
+        code: l.code || null,
+        link: typeof res.link === "string" ? res.link : null,
+        state: l.state || null,
+        inviteState: l.inviteState || null
+      })
+    };
+  }
+  async function openPreparedListing(client, id) {
+    if (!isListingId(id)) throw new Error("That is not a prepared listing link.");
+    if (typeof client?.preparedGet !== "function") throw new Error("Prepared listings open in the website WorkBench.");
+    return preparedEditingFrom(await client.preparedGet(id));
+  }
+  async function openPreparedInto(ws, id) {
+    try {
+      ws._editing = await openPreparedListing(ws.client, id);
+      ws._writeHash?.(`#prepare=${id}`);
+    } catch (err) {
+      ws._editing = null;
+      ws._draftMsg = err?.message || "Could not open that prepared listing.";
+      ws._tab = "project";
+      ws._writeHash?.("#tab=project");
+      ws._ensureTab?.("project");
+    }
+    ws.render();
+  }
+  function preparedChanged(ws, detail = {}) {
+    const e = ws?._editing;
+    if (!e) return;
+    e.prepared = detail?.prepared ? { ...detail.prepared } : null;
+    if (detail?.frontmatter && typeof detail.frontmatter === "object") {
+      e.frontmatter = { ...detail.frontmatter };
+      e.body = typeof detail.body === "string" ? detail.body : e.body;
+    }
+    if (isListingId(detail?.prepared?.id)) ws._writeHash?.(`#prepare=${detail.prepared.id}`);
+  }
+  function activeCampaigns(coupons) {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const c of Array.isArray(coupons) ? coupons : []) {
+      if (!c || c.active === false || !c.code) continue;
+      const code = String(c.code).toUpperCase();
+      if (seen.has(code)) continue;
+      seen.add(code);
+      out.push({ code, freeDays: Number.isFinite(Number(c.freeDays)) ? Number(c.freeDays) : null });
+    }
+    return out;
+  }
+  async function preparedCampaigns(editor) {
+    if (!editor._prepCampaigns) {
+      editor._prepCampaigns = Promise.resolve().then(() => editor.client?.couponPool?.()).then((r) => activeCampaigns(r?.coupons)).catch(() => []);
+    }
+    editor._prepCampaignList = await editor._prepCampaigns;
+    return editor._prepCampaignList;
+  }
+  var PREPARED_CSS = `
+  :host(.prep-on) #publish, :host(.prep-on) #draft, :host(.prep-on) #preview, :host(.prep-on) #secAuthorNote, :host(.prep-on) .visfield { display:none !important; }
+  :host(:not(.prep-on)) #prepsave, :host(:not(.prep-on)) #prepcard { display:none !important; }
+  .preptoggle[hidden], .prepcard [hidden] { display:none !important; }
+  .preptoggle .pt-row { display:flex; gap:10px; align-items:flex-start; margin:0; padding:13px 16px; cursor:pointer; color:var(--s-fg); font-size:13.5px; line-height:1.4; }
+  .preptoggle input[type="checkbox"] { width:auto; margin:2px 0 0; padding:0; flex:none; accent-color:var(--s-green); }
+  .preptoggle .pt-txt { display:flex; flex-direction:column; gap:3px; }
+  .preptoggle .pt-sub { font-size:12px; line-height:1.5; color:var(--s-fg-mute); }
+  .prepcard .pfld { display:flex; flex-direction:column; gap:5px; }
+  .prepcard label { margin:0; font-size:12px; font-weight:600; color:var(--s-fg-mute); }
+  .prepcard input, .prepcard select, .prepcard textarea { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:8px; padding:8px 10px; }
+  .prepcard textarea { min-height:120px; resize:vertical; line-height:1.5; font-family:inherit; }
+  .prepcard input:focus, .prepcard select:focus, .prepcard textarea:focus { outline:none; border-color:var(--s-green); background:var(--s-surface); }
+  .prepcard input[readonly], .prepcard select[disabled] { color:var(--s-fg-soft); }
+  .prepcard .plinkval { font-family:var(--font-mono, monospace); font-size:12px; }
+  .prepcard .pnote { font-size:12px; line-height:1.5; color:var(--s-fg-mute); margin:0; }
+  .prepcard .pnote.warn { color:var(--s-amber-fg, #8a5500); }
+  .prepcard .plink { display:flex; flex-direction:column; gap:7px; padding-top:4px; border-top:1px solid var(--s-line); }
+  .prepcard .pbtns { display:flex; gap:7px; flex-wrap:wrap; }
+  .prepbtn { font:inherit; font-size:12.5px; font-weight:700; color:var(--s-fg); background:var(--s-surface); border:1.5px solid var(--s-line-2); border-radius:7px; padding:5px 12px; cursor:pointer; }
+  .prepbtn:hover { background:var(--s-surface-2); color:var(--s-green-fg); border-color:var(--s-green); }
+  .prepbtn:focus-visible { outline:2px solid var(--s-green); outline-offset:2px; }
+  .ebtn.prepsave { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .ebtn.prepsave:hover { background:var(--accent); border-color:var(--s-fg); color:var(--on-accent); }
+`;
+  function preparedToolbarHtml() {
+    return '<button class="ebtn prepsave" id="prepsave" type="button">Save listing</button>';
+  }
+  function preparedToggleHtml(on) {
+    return `<section class="rcard preptoggle" id="preptoggle">
+    <label class="pt-row"><input type="checkbox" id="prepon"${on ? " checked" : ""} /><span class="pt-txt"><b>Prepare for someone who is not a member yet</b><span class="pt-sub">Saved privately with a personal invitation. They claim it under their own name with a free year and write their own author note.</span></span></label>
+  </section>`;
+  }
+  var bindingLockedFor = (p) => isListingId(p?.id) && !["issued", "revoked", "expired"].includes(String(p?.inviteState || ""));
+  function preparedCardHtml(p, campaigns = []) {
+    const s = p || blankPrepared();
+    const saved = isListingId(s.id);
+    const revoked = s.state === "revoked";
+    const locked = bindingLockedFor(s);
+    const camps = Array.isArray(campaigns) ? campaigns : [];
+    const opt = (c, sel) => `<option value="${esc3(c.code)}"${sel ? " selected" : ""}>${esc3(c.code)}${c.freeDays ? ` (${esc3(String(c.freeDays))} free days)` : ""}</option>`;
+    const chosen = s.campaign || camps[0]?.code || "";
+    const campaignField = saved ? `<select id="prep-camp" data-prep="campaign" disabled>${opt({ code: s.campaign, freeDays: camps.find((c) => c.code === s.campaign)?.freeDays }, true)}</select>
+       <p class="pnote">The campaign is fixed while this invitation is out. To change it, revoke the invitation and send it again with another campaign.</p>` : camps.length ? `<select id="prep-camp" data-prep="campaign">${camps.map((c) => opt(c, c.code === chosen)).join("")}</select>
+         <p class="pnote">The free year the invitation carries.</p>` : `<select id="prep-camp" data-prep="campaign"><option value="">No active campaign</option></select>
+         <p class="pnote warn">Activate a campaign in Admin, Coupons first. The invitation needs one for its free year.</p>`;
+    const status = !saved ? '<p class="pnote">Nothing is sent. Save listing stores this project privately and gives you an invitation link to send yourself.</p>' : revoked ? '<p class="pnote warn">This invitation is revoked, so its link no longer works. Edits still save; Send again in the invite manager gives it a new link.</p>' : "";
+    const link = saved && !revoked && s.link ? `<div class="plink"><label for="prep-link">Invitation link</label><input id="prep-link" class="plinkval" readonly value="${esc3(s.link)}" />
+        <div class="pbtns"><button type="button" class="prepbtn" data-prep-copy>Copy link</button><button type="button" class="prepbtn" data-prep-open>Open</button></div>
+        <p class="pnote">Send it yourself; nothing is emailed. Opening it while signed in as you shows the page without a Publish button.</p></div>` : "";
+    return `<section class="rcard prepcard" id="prepcard">
+    <div class="rcard-h"><span class="rcard-t">Prepared for</span></div>
+    <div class="rcard-b">
+      ${status}
+      <div class="pfld"><label for="prep-name">Greeting name</label><input id="prep-name" data-prep="recipientName" type="text" maxlength="${MAX_RECIPIENT_NAME}" autocomplete="off" placeholder="Sam" value="${esc3(s.recipientName)}" /></div>
+      <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc3(s.githubLogin)}"${locked ? " readonly" : ""} />
+        <p class="pnote">${locked ? "The free year was already taken through this link, so the account it is tied to can no longer change." : "Ties the invitation to that one account. Leave it empty and whoever opens the link first can claim it."}</p></div>
+      <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc3(s.message)}</textarea>
+        <p class="pnote">Shown to them as plain text above the listing. Their author note is theirs to write when they claim it.</p></div>
+      <div class="pfld"><label for="prep-camp">Campaign</label>${campaignField}</div>
+      ${link}
+    </div>
+  </section>`;
+  }
+  async function preparedParts(editor) {
+    const offer = canOfferPrepare({ role: editor._statusRole, type: editor.type, itemPath: editor.itemPath, prepared: editor._prepared, client: editor.client });
+    if (editor._prepared && !isListingId(editor._prepared.id) && !offer) editor._prepared = null;
+    if (!offer && !editor._prepared) return { toolbar: "", rail: "" };
+    const campaigns = await preparedCampaigns(editor);
+    return {
+      toolbar: preparedToolbarHtml(),
+      rail: (offer ? preparedToggleHtml(Boolean(editor._prepared)) : "") + preparedCardHtml(editor._prepared, campaigns)
+    };
+  }
+  var NEVER_IN_PROJECT = ["authorNote", "authorTarget", "path", "type", "author", "status", "visibility", "publishedAt", "updatedAt", "contributors", "redirectFrom"];
+  function preparedTextProblem(p) {
+    const t = validateInvitationText({ recipientName: p?.recipientName, message: p?.message });
+    if (!t.ok) return t.message;
+    if (!isListingId(p?.id) && !String(p?.campaign || "").trim()) return "Choose the campaign whose free year the invitation carries.";
+    const login = String(p?.githubLogin || "").trim();
+    if (login && !normalizeGithubLogin(login)) return "That is not a GitHub account name. Use letters, digits and single hyphens, or leave it empty.";
+    return null;
+  }
+  function buildPreparedPayload({ prepared, gathered } = {}) {
+    const p = prepared || {};
+    const input = gathered?.input && typeof gathered.input === "object" ? { ...gathered.input } : {};
+    for (const k of NEVER_IN_PROJECT) delete input[k];
+    const slug = String(input.slug ?? "").trim();
+    const creating = !isListingId(p.id);
+    const login = String(p.githubLogin ?? "").trim();
+    return {
+      op: "save",
+      ...creating ? { campaign: String(p.campaign ?? "").trim().toUpperCase() } : { id: p.id },
+      recipientName: String(p.recipientName ?? ""),
+      message: String(p.message ?? ""),
+      ...creating ? login ? { githubLogin: login } : {} : { githubLogin: login },
+      draft: { type: "project", slug, frontmatter: input, body: String(gathered?.body ?? "") },
+      stagedItem: `project:${slug}`
+    };
+  }
+  function preparedAfterSave(p, res) {
+    const row = res?.listing && typeof res.listing === "object" ? res.listing : {};
+    return {
+      id: isListingId(row.id) ? row.id : isListingId(p?.id) ? p.id : null,
+      code: typeof res?.code === "string" ? res.code : p?.code ?? null,
+      link: typeof res?.link === "string" ? res.link : p?.link ?? null,
+      state: row.state || p?.state || null,
+      inviteState: row.inviteState || p?.inviteState || null,
+      githubLogin: row.bound === true ? row.boundLogin || p?.githubLogin || "" : row.bound === false ? "" : p?.githubLogin ?? "",
+      campaign: row.campaign || p?.campaign || "",
+      recipientName: typeof row.recipientName === "string" && row.recipientName ? row.recipientName : p?.recipientName ?? ""
+    };
+  }
+  function readPreparedInputs(editor) {
+    const p = editor?._prepared;
+    if (!p) return null;
+    for (const el of editor.$$?.("[data-prep]") || []) {
+      if (el.disabled || el.readOnly) continue;
+      p[el.dataset.prep] = el.value;
+    }
+    return p;
+  }
+  async function savePrepared(editor, client = editor?.client) {
+    const p = readPreparedInputs(editor);
+    if (!p) return null;
+    if (typeof client?.preparedSave !== "function") {
+      editor.out("Prepared listings are saved from the website WorkBench.", "danger");
+      return null;
+    }
+    const problem = preparedTextProblem(p);
+    if (problem) {
+      editor.out(esc3(problem), "danger");
+      return null;
+    }
+    let gathered;
+    try {
+      gathered = editor.gather();
+    } catch (err) {
+      editor.out(esc3(failHint(err).text), "danger");
+      return null;
+    }
+    const payload = buildPreparedPayload({ prepared: p, gathered });
+    if (!payload.draft.slug) {
+      editor.out("Give the project a permalink before saving it.", "danger");
+      return null;
+    }
+    const restore = editor._btnBusy?.("#prepsave", "Saving…") || (() => {
+    });
+    editor._setChip?.("Saving…", "busy");
+    try {
+      const res = await client.preparedSave(payload);
+      Object.assign(p, preparedAfterSave(p, res));
+      editor._setChip?.("Saved", "ok");
+      editor.out(`<span class="tag ok">saved</span> ${esc3(res?.created ? "Saved privately with its invitation. Copy the link from the Prepared for card and send it yourself." : "Saved. The invitation link has not changed.")}`);
+      refreshPreparedCard(editor);
+      editor.emit?.("gbti-prepared-change", { prepared: { ...p }, frontmatter: payload.draft.frontmatter, body: payload.draft.body });
+      return res;
+    } catch (err) {
+      editor._setChip?.("");
+      const text2 = failHint(err).text;
+      editor._banner?.(esc3(text2), "danger");
+      editor.out(esc3(text2), "danger");
+      return null;
+    } finally {
+      restore();
+    }
+  }
+  function setPreparedMode(editor, on) {
+    if (on) {
+      editor._prepared = editor._prepared || editor._prepStash || blankPrepared();
+      editor._prepStash = null;
+      readPreparedInputs(editor);
+      editor.out?.("Prepared mode: Save listing stores the project privately with an invitation. Publish and the author note are hidden, because the person you invite writes their own note when they claim it.");
+    } else {
+      if (isListingId(editor._prepared?.id)) return;
+      editor._prepStash = editor._prepared;
+      editor._prepared = null;
+      editor.out?.("");
+    }
+    editor.classList?.toggle?.("prep-on", Boolean(editor._prepared));
+    editor.emit?.("gbti-prepared-change", { prepared: editor._prepared ? { ...editor._prepared } : null });
+  }
+  function wireCard(editor) {
+    for (const el of editor.$$("[data-prep]")) {
+      const sync = () => {
+        if (editor._prepared && !el.disabled && !el.readOnly) editor._prepared[el.dataset.prep] = el.value;
+      };
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    }
+    editor.$("[data-prep-copy]")?.addEventListener("click", async (e) => {
+      const b = e.currentTarget;
+      const link = editor._prepared?.link;
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+        b.textContent = "Copied";
+        setTimeout(() => {
+          b.textContent = "Copy link";
+        }, 1500);
+      } catch {
+      }
+    });
+    editor.$("[data-prep-open]")?.addEventListener("click", () => {
+      const link = editor._prepared?.link;
+      if (link && typeof window !== "undefined") window.open(link, "_blank", "noopener");
+    });
+  }
+  function refreshPreparedCard(editor) {
+    const card = editor.$?.("#prepcard");
+    if (card) card.outerHTML = preparedCardHtml(editor._prepared, editor._prepCampaignList || []);
+    const toggle = editor.$?.("#preptoggle");
+    if (toggle && isListingId(editor._prepared?.id)) toggle.hidden = true;
+    if (editor.$) wireCard(editor);
+  }
+  function wirePrepared(editor) {
+    editor.classList?.toggle?.("prep-on", Boolean(editor._prepared));
+    editor.$("#prepon")?.addEventListener("change", (e) => setPreparedMode(editor, e.currentTarget.checked === true));
+    editor.$("#prepsave")?.addEventListener("click", () => savePrepared(editor));
+    wireCard(editor);
+  }
+  function preparedImageReader(client, id, item) {
+    return async (name) => {
+      let staged = null;
+      try {
+        staged = await client?.getStagedImage?.(name, item);
+      } catch {
+        staged = null;
+      }
+      if (staged?.dataBase64) return staged;
+      if (!isListingId(id) || typeof client?.preparedImage !== "function") return null;
+      try {
+        const r = await client.preparedImage(id, name);
+        return r?.dataBase64 ? { dataBase64: r.dataBase64, contentType: r.contentType || "image/png" } : null;
+      } catch {
+        return null;
+      }
+    };
+  }
+  function preparedClient(client, id) {
+    if (!client || !isListingId(id)) return client;
+    const wrapped = Object.create(client);
+    wrapped.getStagedImage = (name, item) => preparedImageReader(client, id, item)(name);
+    return wrapped;
+  }
+  function imageClientFor(editor) {
+    return isListingId(editor?._prepared?.id) ? preparedClient(editor.client, editor._prepared.id) : editor?.client;
+  }
+
   // client-ui/src/elements/gbti-content-editor.mjs
   var _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   var DOC = _svg('<path d="M7 3h7l4 4v14H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13.5 3.2V7.5H18M9 12.5h6M9 16h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>');
@@ -6983,8 +7457,10 @@ ${listStyleProseCss(".doc-blocks")}
     skipClientRender() {
       return this._dirty === true;
     }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null } = {}) {
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
       this.type = type || this.type;
+      this._prepared = preparedFromLoad(prepared);
+      this._prepStash = null;
       this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null, skillFile: typeof skillFile === "string" ? skillFile : null };
       this.itemPath = path || null;
       this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
@@ -7026,7 +7502,7 @@ ${listStyleProseCss(".doc-blocks")}
         ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
       ];
       const item = this.itemToken;
-      const found = await loadStagedImages(paths, (name) => this.client?.getStagedImage?.(name, item), this._stagedSrc || {});
+      const found = await loadStagedImages(paths, (name) => imageClientFor(this)?.getStagedImage?.(name, item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
       this.$$("[data-cover]").forEach((c) => {
@@ -7053,6 +7529,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._paidTier = st2?.paidTier ?? null;
         canStage = this.itemScope !== "house" && (membership === "unknown" || st2?.canStageDrafts === true);
         authorFolder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase();
+        this._statusRole = st2?.role ?? null;
       } catch {
         membership = "unknown";
       }
@@ -7159,8 +7636,9 @@ ${listStyleProseCss(".doc-blocks")}
                  <p class="rail-foot-note">Live once published.</p>
                </div>
              </section>` : "";
+      const prep = await preparedParts(this);
       this.set(
-        this.css(EDITOR_SURFACE + (this.type === "prompt" ? SKILL_EDITOR_CSS : "") + `
+        this.css(EDITOR_SURFACE + (this.type === "prompt" ? SKILL_EDITOR_CSS : "") + PREPARED_CSS + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         /* sow-184 (design 3a): pin the action toolbar so Publish / Save draft / Preview never scroll off. It pins
            to the editor's scroll container; a solid --s-app background + a hairline let the document scroll under it.
@@ -7489,6 +7967,7 @@ ${listStyleProseCss(".doc-blocks")}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
            <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub && !this.staged ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind2}</span>` : ""}`}</button>
+           ${prep.toolbar}
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -7520,6 +7999,7 @@ ${listStyleProseCss(".doc-blocks")}
            </article>
            ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ""}
            <aside class="rail">
+             ${prep.rail}
              <section class="rcard rcard-status">
                <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc2(status.label)}</span></div>
                <div class="rcard-b">
@@ -7588,6 +8068,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._wireRail();
       this._wireLinks();
       this._wireGallery();
+      wirePrepared(this);
       if (this.type === "prompt") wireSkillEditor(this);
       const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : "";
       if (introSlug) {
@@ -7661,6 +8142,7 @@ ${listStyleProseCss(".doc-blocks")}
         }));
       });
       const be = this.$("#body");
+      if (be && this._prepared?.id) be.client = imageClientFor(this);
       if (be) {
         be.itemPath = this.itemPath;
         be.item = this.itemToken;
@@ -9596,8 +10078,8 @@ ${listStyleProseCss(".doc-blocks")}
       const items = this.$$(".mi");
       if (!items.length) return;
       e.preventDefault();
-      const at2 = items.indexOf(this.root?.activeElement ?? null);
-      const next = e.key === "ArrowDown" ? (at2 + 1) % items.length : at2 <= 0 ? items.length - 1 : at2 - 1;
+      const at3 = items.indexOf(this.root?.activeElement ?? null);
+      const next = e.key === "ArrowDown" ? (at3 + 1) % items.length : at3 <= 0 ? items.length - 1 : at3 - 1;
       items[next]?.focus?.();
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -9624,29 +10106,6 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-mod-actions", GbtiModActions);
-
-  // membership/tiers.mjs
-  var TIER = Object.freeze({
-    none: "none",
-    // not paid, or paid for something we cannot identify (see tierForPrice)
-    member: "member",
-    // Network Member: $5 monthly / $50 annual
-    creator: "creator"
-    // Content Creator: $15 monthly / $150 annual
-  });
-  var TIER_LABEL = Object.freeze({
-    [TIER.none]: "",
-    // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
-    [TIER.member]: "Network Supporter",
-    // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
-    // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
-    // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
-    [TIER.creator]: "Curator"
-  });
-  function tierLabel(tier) {
-    return TIER_LABEL[tier] ?? "";
-  }
-  var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 
   // client-ui/src/elements/gbti-admin.mjs
   var RANK3 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -11732,44 +12191,286 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-quote-manager", GbtiQuoteManager);
 
-  // membership/checkout-prices.mjs
-  var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);
-  var PRICE_ENV = Object.freeze({
-    [TIER.member]: Object.freeze({ monthly: "STRIPE_PRICE_MEMBER_MONTHLY", annual: "STRIPE_PRICE_MEMBER_ANNUAL" }),
-    [TIER.creator]: Object.freeze({ monthly: "STRIPE_PRICE_CREATOR_MONTHLY", annual: "STRIPE_PRICE_CREATOR_ANNUAL" })
+  // client-ui/src/prepared-listings-core.mjs
+  var PREPARED_SITE_BASE = "https://gbti.network";
+  var PREPARE_NEW_HREF = "/workbench/#new=project&prepare=1";
+  function preparedEditHref(id) {
+    return isListingId(id) ? `/workbench/#prepare=${id}` : null;
+  }
+  var PREPARED_STATE_LABELS = Object.freeze({
+    [LISTING_STATE.prepared]: "Prepared",
+    [LISTING_STATE.publishing]: "Publishing",
+    [LISTING_STATE.claimed]: "Claimed",
+    [LISTING_STATE.revoked]: "Revoked",
+    [LISTING_STATE.unknown]: "Unreadable"
   });
-
-  // membership/tier-gate.mjs
-  var PAID_GRANT_TIERS = Object.freeze([TIER.member, TIER.creator]);
-
-  // membership/coupons.mjs
-  function normalizeCouponCode(code) {
-    return String(code ?? "").trim().toUpperCase();
+  function preparedLoadPlan({ status = null, loadedFor = null, client = null } = {}) {
+    const available = typeof client?.preparedList === "function";
+    if (!available) return { available, reset: false, load: false };
+    const reset = loadedFor !== client;
+    const st2 = reset ? "idle" : status || "idle";
+    return { available, reset, load: st2 === "idle" };
+  }
+  function preparedRowState(row) {
+    const s = row && typeof row === "object" ? String(row.state || "") : "";
+    return Object.prototype.hasOwnProperty.call(PREPARED_STATE_LABELS, s) && !row.corrupt ? s : LISTING_STATE.unknown;
+  }
+  function preparedStateLabel(row) {
+    return PREPARED_STATE_LABELS[preparedRowState(row)];
+  }
+  var PREPARED_ACTION = Object.freeze({
+    copy: "copy",
+    edit: "edit",
+    revoke: "revoke",
+    resend: "resend",
+    remove: "delete",
+    view: "view"
+  });
+  function preparedActions(row) {
+    const st2 = preparedRowState(row);
+    if (!isListingId(row?.id)) return [];
+    const hasCode = typeof row.code === "string" && row.code.length > 0;
+    switch (st2) {
+      case LISTING_STATE.prepared:
+        return [...hasCode ? [PREPARED_ACTION.copy] : [], PREPARED_ACTION.edit, PREPARED_ACTION.revoke, PREPARED_ACTION.remove];
+      case LISTING_STATE.revoked:
+        return [PREPARED_ACTION.edit, PREPARED_ACTION.resend, PREPARED_ACTION.remove];
+      case LISTING_STATE.publishing:
+        return hasCode ? [PREPARED_ACTION.copy] : [];
+      case LISTING_STATE.claimed:
+        return [...projectUrl(PREPARED_SITE_BASE, row.slug) ? [PREPARED_ACTION.view] : [], PREPARED_ACTION.remove];
+      default:
+        return [];
+    }
+  }
+  function preparedLinkFor(row, siteBase = PREPARED_SITE_BASE) {
+    if (!preparedActions(row).includes(PREPARED_ACTION.copy)) return null;
+    return claimLink(siteBase, row.code);
+  }
+  function preparedProjectHref(row, siteBase = PREPARED_SITE_BASE) {
+    if (preparedRowState(row) !== LISTING_STATE.claimed) return null;
+    return projectUrl(siteBase, row.slug);
+  }
+  var day = (v2) => typeof v2 === "string" && v2.length >= 10 ? v2.slice(0, 10) : "";
+  var at2 = (login) => login ? `@${String(login).replace(/^@/, "")}` : "";
+  function preparedRowMeta(row) {
+    if (!row || typeof row !== "object") return [];
+    const out = [];
+    if (row.recipientName) out.push(`For ${row.recipientName}`);
+    out.push(row.bound ? row.boundLogin ? `Tied to ${at2(row.boundLogin)}` : "Tied to one GitHub account" : "Open to whoever claims it first");
+    if (row.campaign) out.push(`Campaign ${row.campaign}`);
+    if (row.createdAt) out.push(`Prepared ${day(row.createdAt)}${row.preparedByLogin ? ` by ${at2(row.preparedByLogin)}` : ""}`);
+    const st2 = preparedRowState(row);
+    if (st2 === LISTING_STATE.revoked && row.revokedAt) out.push(`Revoked ${day(row.revokedAt)}`);
+    if (st2 === LISTING_STATE.publishing) out.push(row.prNumber ? `Pull request #${row.prNumber} is open` : "Opening the pull request");
+    if (st2 === LISTING_STATE.claimed) out.push(`Claimed${row.claimedAt ? ` ${day(row.claimedAt)}` : ""}${row.claimedLogin ? ` by ${at2(row.claimedLogin)}` : ""}`);
+    if (row.redeemedByLogin && st2 !== LISTING_STATE.claimed) out.push(`Free year taken by ${at2(row.redeemedByLogin)}`);
+    const prior = Array.isArray(row.priorCodes) ? row.priorCodes.length : 0;
+    if (prior) out.push(`Sent again ${prior === 1 ? "once" : `${prior} times`}; earlier links no longer work`);
+    return out;
+  }
+  function preparedDeleteConfirm(row) {
+    const who = row?.recipientName ? ` for ${row.recipientName}` : "";
+    const claimed = preparedRowState(row) === LISTING_STATE.claimed;
+    return claimed ? `Delete the record of this claimed listing${who}? The published project stays where it is.` : `Delete this prepared listing${who}? The project and its images are removed and its invitation link stops working. This cannot be undone.`;
+  }
+  function preparedResendCampaigns(coupons, row) {
+    const active = (Array.isArray(coupons) ? coupons : []).filter((c) => c && c.active !== false && c.code).map((c) => String(c.code).toUpperCase());
+    const unique = [...new Set(active)];
+    const own = String(row?.campaign || "").toUpperCase();
+    return unique.includes(own) ? [own, ...unique.filter((c) => c !== own)] : unique;
+  }
+  function preparedApplyResult(rows, result, { deletedId = null } = {}) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (deletedId && result?.deleted === true) return list.filter((r) => r?.id !== deletedId);
+    const next = result?.listing;
+    if (!next || !isListingId(next.id)) return list;
+    const i = list.findIndex((r) => r?.id === next.id);
+    return i < 0 ? [next, ...list] : list.map((r, k) => k === i ? next : r);
   }
 
-  // membership/invites.mjs
-  var INVITE_STATE = Object.freeze({
-    issued: "issued",
-    redeemed: "redeemed",
-    revoked: "revoked",
-    expired: "expired",
-    unknown: "unknown"
-    // a malformed or missing record: never redeemable
-  });
-  var LANDER_BY_TIER = Object.freeze({
-    member: "/member-invite/",
-    creator: "/curator-invite/"
-  });
-  var LANDER_BY_CAMPAIGN = Object.freeze({
-    CODEABLEYEAR: "/codeable-invite/"
-  });
-  function landerFor({ code, id, tier } = {}) {
-    const c = normalizeCouponCode(id || code);
-    return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
-  }
+  // client-ui/src/elements/gbti-prepared-listings.mjs
+  var CSS16 = `
+  :host { display:block; }
+  [hidden] { display:none !important; }
+  .pl-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:26px 0 12px; padding-top:20px; border-top:1px solid var(--line); }
+  .pl-head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
+  .pl-hint { font-size:12.5px; color:var(--muted); flex:1 1 320px; }
+  .pl-msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .pl-msg.warn { color:var(--danger); }
+  .pl-list { list-style:none; margin:0; padding:0; }
+  .pl-row { border-top:1px solid var(--line); padding:12px 2px; }
+  .pl-row:first-child { border-top:0; }
+  .pl-row.busy { opacity:.55; pointer-events:none; }
+  .pl-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pl-title { font-weight:700; font-size:14.5px; color:var(--fg); overflow-wrap:anywhere; }
+  .pl-st { font-family:var(--font-mono, monospace); font-size:11px; text-transform:uppercase; letter-spacing:.08em; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted); }
+  .pl-st.prepared { color:var(--accent); border-color:var(--accent); }
+  .pl-st.publishing { color:var(--fg); border-color:var(--fg); }
+  .pl-st.revoked, .pl-st.unknown { color:var(--danger); border-color:var(--danger); }
+  .pl-meta { margin-top:5px; font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .pl-link { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .pl-link input { flex:1 1 300px; width:auto; min-width:0; font-family:var(--font-mono, monospace); font-size:12px; padding:6px 9px; }
+  .pl-acts { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .pl-acts select { width:auto; min-width:0; font-size:12.5px; padding:5px 8px; }
+  .pl-btn { display:inline-flex; align-items:center; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; text-decoration:none; }
+  .pl-btn:hover { background:var(--hover); border-color:var(--accent); color:var(--fg); }
+  .pl-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-btn[disabled] { opacity:.55; cursor:default; }
+  .pl-btn.pl-danger { color:var(--danger); }
+  .pl-btn.pl-danger:hover { background:var(--hover); border-color:var(--danger); color:var(--danger); }
+  .pl-new { display:inline-flex; align-items:center; border:1px solid var(--accent); background:var(--accent); color:var(--on-accent); border-radius:7px; font-weight:700; font-size:13px; padding:7px 14px; text-decoration:none; }
+  .pl-new:hover { background:var(--accent); border-color:var(--fg); color:var(--on-accent); }
+  .pl-new:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-confirm { margin-top:9px; padding:9px 11px; border:1px solid var(--danger); border-radius:8px; font-size:13px; color:var(--fg); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pl-confirm span { flex:1 1 260px; }
+  .pl-empty { font-size:13px; color:var(--muted); padding:10px 2px; }
+`;
+  var GbtiPreparedListings = class extends GbtiElement {
+    /** The coupon registry the host manager already read, for the Send again campaign choice. Never fetched here. */
+    set coupons(list) {
+      this._couponList = Array.isArray(list) ? list : [];
+      if (this._status === "ready" && this.isConnected) this.render();
+    }
+    async load() {
+      const client = this.client;
+      this._loadedFor = client;
+      this._status = "loading";
+      let rows = null;
+      try {
+        const r = await client.preparedList();
+        rows = Array.isArray(r?.listings) ? r.listings : null;
+      } catch {
+        rows = null;
+      }
+      if (client !== this.client) return;
+      this._rows = rows;
+      this._status = rows ? "ready" : "failed";
+      this.render();
+    }
+    render() {
+      const plan = preparedLoadPlan({ status: this._status, loadedFor: this._loadedFor, client: this.client });
+      if (!plan.available) {
+        this.set("");
+        return;
+      }
+      if (plan.reset) {
+        this._status = "idle";
+        this._rows = null;
+        this._confirmId = null;
+      }
+      if (plan.load) this.load();
+      const head = `<div class="pl-head"><h3>Prepared listings</h3>
+      <span class="pl-hint">Projects prepared for someone who is not a member yet. Each has its own invitation link; the person claims the project under their own name with a free year, and writes their own author note.</span>
+      <a class="pl-new" href="${esc2(PREPARE_NEW_HREF)}">Prepare a listing</a></div>`;
+      const msg = this._msg ? `<p class="pl-msg${this._msgWarn ? " warn" : ""}" role="status">${esc2(this._msg)}</p>` : "";
+      if (this._status === "loading") {
+        this.set(this.css(CSS16) + head + msg + '<p class="pl-empty">Loading prepared listings...</p>');
+        return;
+      }
+      if (this._status === "failed") {
+        this.set(this.css(CSS16) + head + msg + `<p class="pl-empty">Could not load the prepared listings. The coupons and invites above are unaffected. <button type="button" class="pl-btn" data-retry>Try again</button></p>`);
+        this.$("[data-retry]")?.addEventListener("click", () => {
+          this._status = "idle";
+          this._msg = null;
+          this.render();
+        });
+        return;
+      }
+      const rows = (this._rows || []).map((row) => this._rowHtml(row)).join("");
+      this.set(this.css(CSS16) + head + msg + `<ul class="pl-list">${rows || '<li class="pl-empty">No prepared listings yet.</li>'}</ul>`);
+      this._wire();
+    }
+    _rowHtml(row) {
+      const id = String(row?.id || "");
+      const st2 = preparedRowState(row);
+      const acts = preparedActions(row);
+      const title = row?.title || row?.slug || "Untitled project";
+      const link = preparedLinkFor(row);
+      const meta = preparedRowMeta(row).map((m) => `<span>${esc2(m)}</span>`).join("");
+      const btn = (act, label, extra = "") => `<button type="button" class="pl-btn${extra}" data-act="${act}" data-id="${esc2(id)}">${esc2(label)}</button>`;
+      const parts = [];
+      if (acts.includes(PREPARED_ACTION.edit)) parts.push(`<a class="pl-btn" href="${esc2(preparedEditHref(id))}">Edit</a>`);
+      if (acts.includes(PREPARED_ACTION.view)) parts.push(`<a class="pl-btn" href="${esc2(preparedProjectHref(row))}" target="_blank" rel="noopener">View project</a>`);
+      if (acts.includes(PREPARED_ACTION.revoke)) parts.push(btn("revoke", "Revoke"));
+      if (acts.includes(PREPARED_ACTION.resend)) {
+        const camps = preparedResendCampaigns(this._couponList, row);
+        const opts = camps.map((c) => `<option value="${esc2(c)}">${esc2(c)}</option>`).join("");
+        parts.push(camps.length ? `<select data-camp="${esc2(id)}" aria-label="Campaign for the new link">${opts}</select>${btn("resend", "Send again")}` : `<span class="pl-meta">No active campaign to send it again with.</span>`);
+      }
+      if (acts.includes(PREPARED_ACTION.remove)) parts.push(btn("delete", "Delete", " pl-danger"));
+      const confirm2 = this._confirmId === id && acts.includes(PREPARED_ACTION.remove) ? `<div class="pl-confirm"><span>${esc2(preparedDeleteConfirm(row))}</span>${btn("confirm-delete", "Delete for good", " pl-danger")}${btn("cancel-delete", "Keep it")}</div>` : "";
+      return `<li class="pl-row${this._busyId === id ? " busy" : ""}" data-id="${esc2(id)}">
+      <div class="pl-top"><span class="pl-title">${esc2(title)}</span><span class="pl-st ${esc2(st2)}">${esc2(preparedStateLabel(row))}</span></div>
+      ${meta ? `<div class="pl-meta">${meta}</div>` : ""}
+      ${link ? `<div class="pl-link"><input readonly value="${esc2(link)}" aria-label="Invitation link for ${esc2(title)}" />${btn("copy", "Copy link")}</div>` : ""}
+      ${parts.length ? `<div class="pl-acts">${parts.join("")}</div>` : ""}
+      ${confirm2}
+    </li>`;
+    }
+    _wire() {
+      this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._act(b.dataset.act, b.dataset.id, b)));
+    }
+    _row(id) {
+      return (this._rows || []).find((r) => r?.id === id) || null;
+    }
+    async _act(act, id, button) {
+      const row = this._row(id);
+      if (!row) return;
+      if (act === "copy") {
+        const link = preparedLinkFor(row);
+        if (!link) return;
+        try {
+          await navigator.clipboard.writeText(link);
+          button.textContent = "Copied";
+          setTimeout(() => {
+            button.textContent = "Copy link";
+          }, 1500);
+        } catch {
+        }
+        return;
+      }
+      if (act === "delete") {
+        this._confirmId = id;
+        this.render();
+        return;
+      }
+      if (act === "cancel-delete") {
+        this._confirmId = null;
+        this.render();
+        return;
+      }
+      if (act === "revoke") {
+        await this._run(id, () => this.client.preparedRevoke(id), "Revoked. Its link no longer works; Send again gives it a new one.");
+      } else if (act === "resend") {
+        const campaign = this.$(`[data-camp="${id}"]`)?.value || null;
+        await this._run(id, () => this.client.preparedResend(id, campaign), "Sent again with a new link. Copy it from the listing; the old link no longer works.");
+      } else if (act === "confirm-delete") {
+        this._confirmId = null;
+        await this._run(id, () => this.client.preparedDelete(id), "Deleted.", { deletedId: id });
+      }
+    }
+    async _run(id, fn, okMsg, opts = {}) {
+      this._busyId = id;
+      this._msg = null;
+      this.render();
+      try {
+        const r = await fn();
+        this._rows = preparedApplyResult(this._rows, r, opts);
+        this._msg = okMsg;
+        this._msgWarn = false;
+      } catch (err) {
+        this._msg = err?.message || "That did not go through. Nothing was changed; try again.";
+        this._msgWarn = true;
+      }
+      this._busyId = null;
+      this.render();
+    }
+  };
+  define("gbti-prepared-listings", GbtiPreparedListings);
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -11851,7 +12552,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -11859,7 +12560,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -11880,7 +12581,7 @@ ${listStyleProseCss(".doc-blocks")}
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS16) + `
+      this.set(this.css(CSS17) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <div class="add">
@@ -11892,7 +12593,9 @@ ${listStyleProseCss(".doc-blocks")}
       </div>
       <ul class="list">${rows || '<li class="c muted">No coupons yet.</li>'}</ul>
       ${this._invitesHtml()}
+      ${typeof this.client.preparedList === "function" ? "<div data-prepared-slot></div>" : ""}
     `);
+      this.$("[data-prepared-slot]")?.append(Object.assign(this._prepEl ||= document.createElement("gbti-prepared-listings"), { coupons: this._coupons }));
       this.$("[data-add]")?.addEventListener("click", () => this._add());
       this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.toggle)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
@@ -11921,7 +12624,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<div class="inv-head"><h3>Issued invites</h3></div>
         <p class="use warn">Could not load issued invites. The coupon registry above is unaffected.</p>`;
       }
-      const items = (this._invites || []).map((v2) => {
+      const items = (this._invites || []).filter((v2) => !v2?.listingId).map((v2) => {
         const code = esc2(String(v2.code || ""));
         const state = String(v2.state || "unknown");
         const path = landerFor({ code: v2.campaign, tier: (this._coupons || []).find((c) => String(c.code).toUpperCase() === String(v2.campaign).toUpperCase())?.tier });
@@ -12020,9 +12723,9 @@ ${listStyleProseCss(".doc-blocks")}
     return !!item && item.corrupt !== true && item.state === EDITORIAL_STATE.pending;
   }
   function waitedFor(item, now = /* @__PURE__ */ new Date()) {
-    const at2 = Date.parse(String(item?.requestedAt ?? ""));
-    if (!Number.isFinite(at2)) return "";
-    const days = Math.floor((now.getTime() - at2) / 864e5);
+    const at3 = Date.parse(String(item?.requestedAt ?? ""));
+    if (!Number.isFinite(at3)) return "";
+    const days = Math.floor((now.getTime() - at3) / 864e5);
     if (days < 0) return "just now";
     if (days === 0) return "today";
     if (days === 1) return "yesterday";
@@ -12053,7 +12756,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-editorial-manager.mjs
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; }
   [hidden] { display:none !important; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -12103,21 +12806,21 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
+        this.set(this.css(CSS18) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS17) + `<p class="msg">${esc2(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS18) + `<p class="msg">${esc2(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._items) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS17) + '<p class="muted">Loading the review queue...</p>');
+        this.set(this.css(CSS18) + '<p class="muted">Loading the review queue...</p>');
         return;
       }
       const rows = this._items.map((i) => this._rowHtml(i)).join("");
-      this.set(this.css(CSS17) + `
+      this.set(this.css(CSS18) + `
       <div class="head">
         <h3>Editorial review</h3>
         <span class="hint">${esc2(queueSummary(this._items))}</span>
@@ -12164,7 +12867,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-editorial-manager", GbtiEditorialManager);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -12209,7 +12912,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -12217,14 +12920,14 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS18) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc2(t.label || t.key)}</span><span class="desc">${esc2(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc2(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -12368,7 +13071,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-digest-manager.mjs
-  var CSS19 = `
+  var CSS20 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .busy { opacity:.55; pointer-events:none; }
@@ -12482,27 +13185,27 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS19) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS19) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS19) + `<p class="msg">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS20) + `<p class="msg">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
         });
         return;
       }
-      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
@@ -12646,13 +13349,13 @@ ${listStyleProseCss(".doc-blocks")}
       const retype = (el, block, key) => el.addEventListener("input", () => {
         this._draft[block][key] = el.value;
         const id = el.id;
-        const at2 = el.selectionStart;
+        const at3 = el.selectionStart;
         this.render();
         const next = id ? this.$(`#${id}`) : null;
         if (next) {
           next.focus();
           try {
-            next.setSelectionRange(at2, at2);
+            next.setSelectionRange(at3, at3);
           } catch {
           }
         }
@@ -12798,7 +13501,7 @@ ${listStyleProseCss(".doc-blocks")}
   });
 
   // src/lib/skill-page.mjs
-  function esc3(s) {
+  function esc4(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
   var SKILL_SHELL = Object.freeze({
@@ -12822,7 +13525,7 @@ ${listStyleProseCss(".doc-blocks")}
     "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
   };
   var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
-  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc3(r.text)}</code>` : esc3(r.text)).join("");
+  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc4(r.text)}</code>` : esc4(r.text)).join("");
   var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
   function sharedFolderNote(tab, tabs) {
     const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
@@ -12841,15 +13544,15 @@ ${listStyleProseCss(".doc-blocks")}
     const many = tabs.length > 1;
     const tabId = (t) => `skill-tab-${t.key}`;
     const panelId = (t) => `skill-panel-${t.key}`;
-    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc3(t.key)}">${esc3(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc3(tabs[0].label)}</p>`;
-    const download = fileHref ? `<a class="skill-btn" href="${esc3(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc4(t.key)}">${esc4(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc4(tabs[0].label)}</p>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc4(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
     const panels = tabs.map((t, i) => {
       const shared = sharedFolderNote(t, tabs);
       const local = runsHtml(t.local);
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc3(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc3(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc3(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc3(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc4(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc4(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc4(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc4(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
     }).join("");
     const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc3(also)}</p>` : "") + `</section>`;
+    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc4(also)}</p>` : "") + `</section>`;
   }
   function wireSkillPage(root = document, storage = globalThis.localStorage) {
     const box = root.querySelector("[data-skill-install]");
@@ -12977,7 +13680,7 @@ ${SKILL_BOX_CSS}`;
   var PREVIEW_NAME = "farley";
   var NEW = "__new__";
   var blank = () => ({ label: "", folder: "", run: "", local: "" });
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .msg.err { color:var(--danger); }
@@ -13072,20 +13775,20 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS20) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS20) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS20) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS21) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -13097,7 +13800,7 @@ ${SKILL_BOX_CSS}`;
         <span class="tl"><span class="tn">${esc2(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
       const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
       const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
-      this.set(this.css(SKILL_READER_CSS + CSS20) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(SKILL_READER_CSS + CSS21) + `<div class="${this._busy ? "busy" : ""}">
       <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
       ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc2(this._msg)}</p>` : ""}
       <div class="grid">
@@ -13261,13 +13964,13 @@ ${SKILL_BOX_CSS}`;
     return list;
   }
   var WINDOWS = Object.freeze([7, 30]);
-  var day = (now, n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
+  var day2 = (now, n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
   function windowFor(store2, path, days, now = /* @__PURE__ */ new Date()) {
     const coverage = new Set(Array.isArray(store2?.coverage) ? store2.coverage : []);
     const rows = store2?.clicks?.[path] || {};
     const out = { days, clicks: 0, crawlers: 0, other: 0, measured: 0, unmeasured: 0, list: [] };
     for (let n = 1; n <= days; n += 1) {
-      const d = day(now, n);
+      const d = day2(now, n);
       if (!coverage.has(d)) {
         out.unmeasured += 1;
         out.list.push({ date: d, measured: false });
@@ -13521,32 +14224,32 @@ ${SKILL_BOX_CSS}`;
   });
   var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
   var isMap = (v2) => !!v2 && typeof v2 === "object" && !Array.isArray(v2);
-  function attrProblems(attrs, allowed, at2, budget) {
+  function attrProblems(attrs, allowed, at3, budget) {
     const problems = [];
     if (attrs === void 0) return problems;
-    if (!isMap(attrs)) return [`${at2}: attrs must be a map`];
+    if (!isMap(attrs)) return [`${at3}: attrs must be a map`];
     for (const [k, raw] of Object.entries(attrs)) {
       if (!allowed.includes(k)) {
-        problems.push(`${at2}: attribute "${k}" is not allowed in an icon`);
+        problems.push(`${at3}: attribute "${k}" is not allowed in an icon`);
         continue;
       }
       if (typeof raw !== "string" && typeof raw !== "number") {
-        problems.push(`${at2}: attribute "${k}" must be a string or number`);
+        problems.push(`${at3}: attribute "${k}" must be a string or number`);
         continue;
       }
       const v2 = String(raw);
       budget.total += v2.length;
-      if (v2.length > ICON_LIMITS.value) problems.push(`${at2}: attribute "${k}" is too long`);
-      else if (!ATTRS2[k].test(v2)) problems.push(`${at2}: attribute "${k}" has a value an icon may not carry`);
+      if (v2.length > ICON_LIMITS.value) problems.push(`${at3}: attribute "${k}" is too long`);
+      else if (!ATTRS2[k].test(v2)) problems.push(`${at3}: attribute "${k}" has a value an icon may not carry`);
     }
     return problems;
   }
-  function shapeProblems(shapes, at2, depth, budget) {
-    if (!Array.isArray(shapes)) return [`${at2}: shapes must be a list`];
-    if (depth > ICON_LIMITS.depth) return [`${at2}: shapes are nested too deeply`];
+  function shapeProblems(shapes, at3, depth, budget) {
+    if (!Array.isArray(shapes)) return [`${at3}: shapes must be a list`];
+    if (depth > ICON_LIMITS.depth) return [`${at3}: shapes are nested too deeply`];
     const problems = [];
     shapes.forEach((s, i) => {
-      const here = `${at2}[${i}]`;
+      const here = `${at3}[${i}]`;
       budget.nodes += 1;
       if (!isMap(s)) {
         problems.push(`${here}: must be a map of { tag, attrs }`);
@@ -13604,7 +14307,7 @@ ${SKILL_BOX_CSS}`;
     const words = L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "text";
     return { line: words, button: words, icon: words, link: L2 !== "html", image: L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "image", html: L2 === "html" };
   }
-  var esc4 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc5 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -13616,31 +14319,31 @@ ${SKILL_BOX_CSS}`;
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L2 = ctaLayoutOf(cta);
     const uses = layoutUses(L2);
-    const href = esc4(hrefOverride || cta?.destination);
+    const href = esc5(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v2) => Number.isInteger(v2) && v2 > 0 ? ` ${k}="${v2}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc4(image.url)}" alt="${esc4(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    const img = (alt) => image && image.url ? `<img src="${esc5(image.url)}" alt="${esc5(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
     if (L2 === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc4(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc4(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+      return `${linkOpen("pcta-io", ` aria-label="${esc5(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc5(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
     if (L2 === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L2 === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc4(cta?.label)}</p><p class="pcta-line">${esc4(cta?.line)}</p></div></div>`);
+    if (L2 === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc5(cta?.label)}</p><p class="pcta-line">${esc5(cta?.line)}</p></div></div>`);
     const showTitle = L2 === "below" || L2 === "first" || L2 === "text" || L2 === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc4(cta?.label)}</p>`);
-    if (L2 === "below" || L2 === "first" || L2 === "text") parts.push(`<p class="pcta-line">${esc4(cta?.line)}</p>`);
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc5(cta?.label)}</p>`);
+    if (L2 === "below" || L2 === "first" || L2 === "text") parts.push(`<p class="pcta-line">${esc5(cta?.line)}</p>`);
     if (L2 === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
     if (L2 === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc4(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc5(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc4(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc5(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -13682,20 +14385,20 @@ ${SKILL_BOX_CSS}`;
   var CTA_IMAGE_MAX_BYTES = 4e5;
   var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
   var METADATA_CHUNKS = { EXIF: "EXIF (camera) data", "XMP ": "XMP metadata", ICCP: "an ICC colour profile" };
-  var fourcc = (b, at2) => String.fromCharCode(b[at2], b[at2 + 1], b[at2 + 2], b[at2 + 3]);
-  var u32 = (b, at2) => (b[at2] | b[at2 + 1] << 8 | b[at2 + 2] << 16 | b[at2 + 3] << 24) >>> 0;
-  var u24 = (b, at2) => b[at2] | b[at2 + 1] << 8 | b[at2 + 2] << 16;
+  var fourcc = (b, at3) => String.fromCharCode(b[at3], b[at3 + 1], b[at3 + 2], b[at3 + 3]);
+  var u32 = (b, at3) => (b[at3] | b[at3 + 1] << 8 | b[at3 + 2] << 16 | b[at3 + 3] << 24) >>> 0;
+  var u24 = (b, at3) => b[at3] | b[at3 + 1] << 8 | b[at3 + 2] << 16;
   function webpInfo(bytes) {
     const b = bytes instanceof Uint8Array ? bytes : null;
     if (!b) return { ok: false, problem: "the image is not binary data" };
     if (b.length > CTA_IMAGE_MAX_BYTES) return { ok: false, problem: `the image is ${Math.ceil(b.length / 1024)} KB; the limit is ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB` };
     if (b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return { ok: false, problem: "the image is not a WebP file" };
     if (u32(b, 4) + 8 > b.length) return { ok: false, problem: "the WebP file is truncated" };
-    let at2 = 12, width = 0, height = 0, image = false;
-    while (at2 + 8 <= b.length) {
-      const id = fourcc(b, at2);
-      const size = u32(b, at2 + 4);
-      const body = at2 + 8;
+    let at3 = 12, width = 0, height = 0, image = false;
+    while (at3 + 8 <= b.length) {
+      const id = fourcc(b, at3);
+      const size = u32(b, at3 + 4);
+      const body = at3 + 8;
       if (body + size > b.length) return { ok: false, problem: `the WebP ${id.trim()} chunk is truncated` };
       if (METADATA_CHUNKS[id]) return { ok: false, problem: `the image still carries ${METADATA_CHUNKS[id]}; re-encode it so it is removed` };
       if (id === "ANIM" || id === "ANMF") return { ok: false, problem: "animated images are not supported on a card" };
@@ -13722,7 +14425,7 @@ ${SKILL_BOX_CSS}`;
         }
         image = true;
       }
-      at2 = body + size + size % 2;
+      at3 = body + size + size % 2;
     }
     if (!image) return { ok: false, problem: "the WebP file has no image data" };
     if (!width || !height) return { ok: false, problem: "the WebP file has no dimensions" };
@@ -13734,13 +14437,13 @@ ${SKILL_BOX_CSS}`;
     const end = u32(b, 4) + 8;
     if (end > b.length) return null;
     const keep = [];
-    let at2 = 12;
-    while (at2 + 8 <= end) {
-      const size = u32(b, at2 + 4);
-      if (at2 + 8 + size > end) return null;
-      const next = Math.min(at2 + 8 + size + size % 2, end);
-      if (!METADATA_CHUNKS[fourcc(b, at2)]) keep.push([at2, next]);
-      at2 = next;
+    let at3 = 12;
+    while (at3 + 8 <= end) {
+      const size = u32(b, at3 + 4);
+      if (at3 + 8 + size > end) return null;
+      const next = Math.min(at3 + 8 + size + size % 2, end);
+      if (!METADATA_CHUNKS[fourcc(b, at3)]) keep.push([at3, next]);
+      at3 = next;
     }
     const out = new Uint8Array(12 + keep.reduce((n, [s, e]) => n + e - s, 0));
     out.set(b.subarray(0, 12));
@@ -13759,7 +14462,7 @@ ${SKILL_BOX_CSS}`;
   var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
   var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200, trackedPath: 200 });
   var ID_RE2 = /^[a-z0-9][a-z0-9-]*$/;
-  var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+  var SLUG_RE2 = /^[a-z0-9][a-z0-9-]*$/;
   var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
   var TRACKED_PATH_RE = /^\/[A-Za-z0-9/_-]*$/;
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
@@ -13769,7 +14472,7 @@ ${SKILL_BOX_CSS}`;
   function validRef(type, ref) {
     const r = str3(ref);
     if (!r || r.length > CTA_LIMITS.ref) return false;
-    return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE.test(r);
+    return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE2.test(r);
   }
   function amazonDestinationProblem(destination) {
     let u;
@@ -13887,21 +14590,21 @@ ${SKILL_BOX_CSS}`;
     if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
     const seen = /* @__PURE__ */ new Set();
     for (const [i, it2] of (Array.isArray(e.items) ? e.items : []).entries()) {
-      const at2 = `${where}.items[${i}]`;
+      const at3 = `${where}.items[${i}]`;
       if (!it2 || typeof it2 !== "object") {
-        problems.push(`${at2}: must be a map of { type, ref }`);
+        problems.push(`${at3}: must be a map of { type, ref }`);
         continue;
       }
       if (!CTA_ITEM_TYPES.includes(it2.type)) {
-        problems.push(`${at2}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it2.type ?? null)}`);
+        problems.push(`${at3}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it2.type ?? null)}`);
         continue;
       }
       if (!validRef(it2.type, it2.ref)) {
-        problems.push(`${at2}: ref must be a ${it2.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it2.ref ?? null)}`);
+        problems.push(`${at3}: ref must be a ${it2.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it2.ref ?? null)}`);
         continue;
       }
       const key = `${it2.type}:${str3(it2.ref)}`;
-      if (seen.has(key)) problems.push(`${at2}: ${key} is assigned to this CTA twice`);
+      if (seen.has(key)) problems.push(`${at3}: ${key} is assigned to this CTA twice`);
       seen.add(key);
     }
     return problems;
@@ -14077,7 +14780,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc5 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc6 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -14100,23 +14803,23 @@ ${SKILL_BOX_CSS}`;
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc5(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc6(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc5(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc6(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc5(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc5(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc5(rowSummary2(c))}</p>
-        <p class="sub mono">${esc5(c.partner || "no partner")} · on ${plural(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc5(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc6(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc6(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc6(rowSummary2(c))}</p>
+        <p class="sub mono">${esc6(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc6(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc6(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc6(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -14125,7 +14828,7 @@ ${SKILL_BOX_CSS}`;
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc5(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc6(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
@@ -14134,13 +14837,13 @@ ${SKILL_BOX_CSS}`;
   function field(st2, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
     const err = shownError(st2, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc5(placeholder)}">${esc5(st2.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc5(st2.d[k])}" placeholder="${esc5(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc5(err)}</span></label>`;
+    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc6(placeholder)}">${esc6(st2.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc6(st2.d[k])}" placeholder="${esc6(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc6(err)}</span></label>`;
   }
   function layoutSection(st2) {
     const tiles = CTA_LAYOUTS.map((k) => `<button class="${st2.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st2.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc5(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc5(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc5(LAYOUT_HINT[st2.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+    ${SKETCH[k]}<div><p class="tile-n">${esc6(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc6(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc6(LAYOUT_HINT[st2.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
   function wordsSection(st2) {
     const u = layoutUses(st2.d.layout);
@@ -14151,7 +14854,7 @@ ${SKILL_BOX_CSS}`;
     ${u.line ? field(st2, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
     ${u.button ? field(st2, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
     ${u.link ? field(st2, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc5(st2.d.note)}</textarea></label>
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc6(st2.d.note)}</textarea></label>
     <label class="check fld wide"><input type="checkbox" data-f="enabled"${st2.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
@@ -14171,8 +14874,8 @@ ${SKILL_BOX_CSS}`;
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc5(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc5(name)}</p>
+      ${img.url ? `<img src="${esc6(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc6(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
@@ -14180,24 +14883,24 @@ ${SKILL_BOX_CSS}`;
     </div>`;
     }
     return `${body}${st2.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc5(err)}</p>
-    ${st2.imageMsg ? `<p class="et" style="margin-top: 6px">${esc5(st2.imageMsg)}</p>` : ""}`;
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc6(err)}</p>
+    ${st2.imageMsg ? `<p class="et" style="margin-top: 6px">${esc6(st2.imageMsg)}</p>` : ""}`;
   }
   function iconResults(st2) {
     const ic3 = st2.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc5(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc6(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
     const q2 = st2.iconQuery.trim();
     const count2 = !q2 ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
     const sel = st2.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc5(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc5(i.name)}</span></button>`).join("");
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc6(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc6(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
   function iconSection(st2) {
     const sel = st2.d.icon;
-    const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc5(s.id)}">${esc5(s.name)}</button>`).join("") : "";
+    const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc6(s.id)}">${esc6(s.name)}</button>`).join("") : "";
     const pop = st2.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc5(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc6(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st2)}</div>
     </div>` : "";
@@ -14205,46 +14908,46 @@ ${SKILL_BOX_CSS}`;
     <div class="ip-row">
       <button class="${st2.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st2.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc5(sel ? sel.name : "Choose an icon")}</b><span>${esc5(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
+        <span class="ip-name"><b>${esc6(sel ? sel.name : "Choose an icon")}</b><span>${esc6(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc5(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc5(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc6(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc6(h)}">Allow</button>`).join("")}</div>`;
   }
   function htmlSection(st2, found) {
     const d = st2.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc5(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc5(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc6(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc6(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc5(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc5(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc6(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc6(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc5(st2.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st2.hostErr ? "" : " hidden"}>${esc5(st2.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc6(st2.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st2.hostErr ? "" : " hidden"}>${esc6(st2.hostErr)}</p>
     </div></div>`;
   }
   function candidateList(st2) {
     if (!st2.pageQuery.trim()) return "";
     if (!st2.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st2.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc5(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc5(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+    return `<ul class="results">${st2.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc6(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc6(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
   function pagesSection(st2) {
     const d = st2.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc5(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc5(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc6(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc6(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc5(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc6(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st2)}</div></div>`;
   }
   function previewCard(st2) {
@@ -14274,7 +14977,7 @@ ${SKILL_BOX_CSS}`;
       <div class="segs">${seg(!st2.pvPhone, "pv-side", "Sidebar")}${seg(st2.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st2.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st2)}</div>
-    <p class="pv-note" data-region="pvnote">${esc5(previewNote(st2.d))}</p>
+    <p class="pv-note" data-region="pvnote">${esc6(previewNote(st2.d))}</p>
   </aside>`;
   }
   function editorView(st2, found = []) {
@@ -14282,11 +14985,11 @@ ${SKILL_BOX_CSS}`;
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc5(editTitle(st2))}</h3>
+      <h3 class="ed-title" data-region="title">${esc6(editTitle(st2))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st2.saving ? " disabled" : ""}>${st2.saving ? "Saving…" : st2.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st2.msg ? "" : " hidden"}>${esc5(st2.msg)}</p>
+    <p class="${st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st2.msg ? "" : " hidden"}>${esc6(st2.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
         ${layoutSection(st2)}
@@ -14935,8 +15638,8 @@ ${SKILL_BOX_CSS}`;
           saved.image = `${saved.id}.webp`;
           st2.d.image = { kind: "stored", file: saved.image, url: st2.d.image.url, width: st2.d.image.width, height: st2.d.image.height };
         }
-        const at2 = this._ctas.findIndex((c) => c.id === saved.id);
-        if (at2 >= 0) this._ctas[at2] = saved;
+        const at3 = this._ctas.findIndex((c) => c.id === saved.id);
+        if (at3 >= 0) this._ctas[at3] = saved;
         else this._ctas.push(saved);
         st2.original = structuredClone(saved);
         st2.isNew = false;
@@ -15138,7 +15841,7 @@ ${SKILL_BOX_CSS}`;
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -15244,11 +15947,11 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS21) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS22) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -15257,7 +15960,7 @@ ${SKILL_BOX_CSS}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -15267,7 +15970,7 @@ ${SKILL_BOX_CSS}`;
       const rows = this._rows();
       const opt = (v2, label, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(label)}</option>`;
       const body = rows.map((it2) => this._row(it2)).join("");
-      this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS22) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc2(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -15540,7 +16243,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -16039,7 +16742,7 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -16048,7 +16751,7 @@ ${SKILL_BOX_CSS}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS22) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS23) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -16061,7 +16764,7 @@ ${SKILL_BOX_CSS}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS22) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS23) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -16074,7 +16777,7 @@ ${SKILL_BOX_CSS}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS22) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS23) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
@@ -16735,7 +17438,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS23 = `
+  var CSS24 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -16774,7 +17477,7 @@ ${SKILL_BOX_CSS}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS23) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS24) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -16811,7 +17514,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS24 = `
+  var CSS25 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -16855,7 +17558,7 @@ ${SKILL_BOX_CSS}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS24) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS25) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -17128,7 +17831,7 @@ ${SKILL_BOX_CSS}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS25 = `
+  var CSS26 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -17192,7 +17895,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS25));
+      this.set(this.css(CSS26));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -17265,12 +17968,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS25));
+        this.set(this.css(CSS26));
         return;
       }
       const u = esc2(this._username || "");
       if (!this._loaded) {
-        this.set(this.css(CSS25) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS26) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -17282,7 +17985,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS25) + `
+      this.set(this.css(CSS26) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -17369,7 +18072,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS26 = `
+  var CSS27 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -17431,7 +18134,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS26) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS27) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -17635,7 +18338,7 @@ ${BLOCKED_PILL_CSS}
     if (OG_REASON_TEXT[reason]) return { kind: "empty", message: OG_REASON_TEXT[reason], retry: reason !== "not-a-page" };
     return { kind: "empty", message: "No preview available for this link.", retry: false };
   }
-  var CSS27 = `
+  var CSS28 = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius:var(--sc-r); border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
   .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden], .catnote[hidden] { display: none; }
@@ -17790,9 +18493,9 @@ ${BLOCKED_PILL_CSS}
     render() {
       switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
         case "no-client":
-          return this.set(this.css(CSS27) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+          return this.set(this.css(CSS28) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
         case "loading":
-          return this.set(this.css(CSS27) + `<div class="card"><p class="sub">Loading…</p></div>`);
+          return this.set(this.css(CSS28) + `<div class="card"><p class="sub">Loading…</p></div>`);
         case "locked":
           return this._renderLocked();
         case "trial":
@@ -17807,7 +18510,7 @@ ${BLOCKED_PILL_CSS}
       return `<div class="notice"><span class="lock">${glyph2}</span><div><h3>${esc2(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS27) + this._noticeHtml(
+      this.set(this.css(CSS28) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
@@ -17817,7 +18520,7 @@ ${BLOCKED_PILL_CSS}
     // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
     // exists to prevent.
     _renderTrial() {
-      this.set(this.css(CSS27) + this._noticeHtml(
+      this.set(this.css(CSS28) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
         "👀"
@@ -17833,7 +18536,7 @@ ${BLOCKED_PILL_CSS}
       this._noteTab = "write";
       this._visibility = "members";
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
-      this.set(this.css(CSS27) + `
+      this.set(this.css(CSS28) + `
       <div class="card wizard">
         <p class="edit-loading" role="status"><span class="spin" aria-hidden="true"></span>Loading your share...</p>
         <div class="rail">${rail}</div>
@@ -18760,7 +19463,7 @@ ${BLOCKED_PILL_CSS}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS28 = `
+  var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -19001,11 +19704,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS28) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS29) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS28) + body);
+      this.set(this.css(CSS29) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -19116,7 +19819,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS29 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -19241,10 +19944,10 @@ ${BLOCKED_PILL_CSS}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st2 = await this.client.status();
@@ -19261,7 +19964,7 @@ ${BLOCKED_PILL_CSS}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -19287,12 +19990,12 @@ ${BLOCKED_PILL_CSS}
       const pending = dropPublished(items.map((it2) => `${it2.author}/${it2.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS29) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS30) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS29) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS30) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -19354,7 +20057,7 @@ ${BLOCKED_PILL_CSS}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc2(share.author)}" data-gbti-id="${esc2(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS29) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS30) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc2(authorName3(share.author))}</span><span class="when">${esc2(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -19397,21 +20100,21 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _splash() {
-      this.set(this.css(CSS29) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS30) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS30) + `<div class="stack">
+      this.set(this.css(CSS31) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -19982,8 +20685,8 @@ ${BLOCKED_PILL_CSS}
       if (match === null) throw new Error("Date resolve error");
       const year = +match[1];
       const month = +match[2] - 1;
-      const day2 = +match[3];
-      if (!match[4]) return new Date(Date.UTC(year, month, day2));
+      const day3 = +match[3];
+      if (!match[4]) return new Date(Date.UTC(year, month, day3));
       const hour = +match[4];
       const minute = +match[5];
       const second = +match[6];
@@ -19998,7 +20701,7 @@ ${BLOCKED_PILL_CSS}
         delta = (tzHour * 60 + tzMinute) * 6e4;
         if (match[9] === "-") delta = -delta;
       }
-      const date = new Date(Date.UTC(year, month, day2, hour, minute, second, fraction));
+      const date = new Date(Date.UTC(year, month, day3, hour, minute, second, fraction));
       if (delta) date.setTime(date.getTime() - delta);
       return date;
     }
@@ -21831,7 +22534,7 @@ ${BLOCKED_PILL_CSS}
   var MEMBERSHIP_URL2 = "https://gbti.network/membership/";
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS31 = `
+  var CSS32 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -21849,7 +22552,7 @@ ${BLOCKED_PILL_CSS}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS31) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS32) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -21858,7 +22561,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS31) + `<div class="splash">
+        this.set(this.css(CSS32) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc2(c.heading)}</h2>
         <p>${esc2(c.body)}</p>
@@ -21866,7 +22569,7 @@ ${BLOCKED_PILL_CSS}
       </div>`);
         return;
       }
-      this.set(this.css(CSS31) + `<slot></slot>`);
+      this.set(this.css(CSS32) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -21874,7 +22577,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS = 15e3;
   var POLL_MAX = 20;
-  var CSS32 = `
+  var CSS33 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -21945,7 +22648,7 @@ ${BLOCKED_PILL_CSS}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS32) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS33) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -22143,7 +22846,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE12 = "https://gbti.network";
-  var CSS33 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -22227,15 +22930,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS33) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS33) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS33) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -22251,7 +22954,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc2(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc2(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it2) => this._itemRow(resolveItem(idx, it2.type, it2.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS33) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS34) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
@@ -22324,7 +23027,7 @@ ${BLOCKED_PILL_CSS}
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK3 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS34 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -22414,14 +23117,14 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS34) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS34) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS34) + `
+      this.set(this.css(CSS35) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -22486,7 +23189,7 @@ ${BLOCKED_PILL_CSS}
   var SITE14 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -22569,11 +23272,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS35) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -22582,7 +23285,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -22992,7 +23695,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -23033,7 +23736,7 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS36) + html : "");
+      this.set(html ? this.css(CSS37) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
@@ -23086,7 +23789,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
-  var CSS37 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -23270,19 +23973,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS37) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS37) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS37) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS37) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -23292,7 +23995,7 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS37) + sections);
+      this.set(this.css(CSS38) + sections);
       this._wire();
     }
     _identity(m) {
@@ -23561,7 +24264,7 @@ ${BLOCKED_PILL_CSS}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS38 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -23671,8 +24374,7 @@ ${BLOCKED_PILL_CSS}
       this._pollTimer = null;
       this._pollTries = 0;
       this._overview = null;
-      const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
-      this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
+      this._editing = editingFromHash(typeof location !== "undefined" ? location.hash : "");
       const hash = typeof location !== "undefined" ? location.hash : "";
       this._restore = this._editing ? null : (() => {
         const path = parseWorkspaceEdit(hash);
@@ -23682,7 +24384,7 @@ ${BLOCKED_PILL_CSS}
         }
         if (path) return { edit: path };
         const d = parseWorkspaceDraft(hash);
-        return d ? { draft: d } : null;
+        return d ? { draft: d } : preparedRestore(hash);
       })();
       this._editShareId = parseWorkspaceEditShare(hash);
       this._page = 0;
@@ -23729,7 +24431,7 @@ ${BLOCKED_PILL_CSS}
           this.render();
           this._ensureTab(plan.tab);
         } else if (plan.action === "openNew") {
-          this._editing = { type: plan.type, frontmatter: {}, body: "" };
+          this._editing = editingFromHash(h);
           this.render();
         } else if (plan.action === "switchTab") {
           this._tab = plan.tab;
@@ -24143,11 +24845,12 @@ ${BLOCKED_PILL_CSS}
         this._restore = null;
         if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || "post");
         else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
+        else if (r.prepare) openPreparedInto(this, r.prepare);
       }
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS38) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -24155,7 +24858,7 @@ ${BLOCKED_PILL_CSS}
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
         ed?.addEventListener?.("gbti-renamed", (ev) => {
           const r = ev?.detail || {};
           if (!r.path) return;
@@ -24174,6 +24877,7 @@ ${BLOCKED_PILL_CSS}
           this._onPublished(e.type);
         });
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
+        ed?.addEventListener("gbti-prepared-change", (ev) => preparedChanged(this, ev.detail));
         return;
       }
       const shown = visibleTabs(TABS, this._authoring(), this._role());
@@ -24183,7 +24887,7 @@ ${BLOCKED_PILL_CSS}
         const badge = n ? `<span class="tbadge">${esc2(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc2(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS38) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS39) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -24574,8 +25278,8 @@ ${BLOCKED_PILL_CSS}
   var MAX_FUTURE_MS = 24 * 60 * 60 * 1e3;
   function normGroup(raw) {
     if (!raw || typeof raw !== "object") return null;
-    const at2 = Number(raw.at);
-    if (!Number.isFinite(at2) || at2 <= 0) return null;
+    const at3 = Number(raw.at);
+    if (!Number.isFinite(at3) || at3 <= 0) return null;
     const ids = [];
     const have = /* @__PURE__ */ new Set();
     for (const id of Array.isArray(raw.ids) ? raw.ids : []) {
@@ -24584,7 +25288,7 @@ ${BLOCKED_PILL_CSS}
       ids.push(id);
       if (ids.length >= MAX_IDS_PER_GROUP) break;
     }
-    return { at: at2, ids };
+    return { at: at3, ids };
   }
   function normalizeSeen(raw) {
     const out = { groups: {} };
@@ -24686,8 +25390,8 @@ ${BLOCKED_PILL_CSS}
         out.push({ item: it2, why: "flagged" });
         continue;
       }
-      const at2 = toMs(it2.availableAt);
-      if (at2 && now - at2 > SYNDICATION_OVERDUE_MS) out.push({ item: it2, why: "overdue" });
+      const at3 = toMs(it2.availableAt);
+      if (at3 && now - at3 > SYNDICATION_OVERDUE_MS) out.push({ item: it2, why: "overdue" });
     }
     return out;
   }
@@ -24840,7 +25544,7 @@ ${BLOCKED_PILL_CSS}
       return {};
     }
   }
-  var CSS39 = `
+  var CSS40 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -25111,7 +25815,7 @@ ${BLOCKED_PILL_CSS}
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS39) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS40) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -25158,7 +25862,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS40 = `
+  var CSS41 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -25342,7 +26046,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS41) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -25397,7 +26101,7 @@ ${BLOCKED_PILL_CSS}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -25502,11 +26206,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -25529,7 +26233,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS41) + `
+      this.set(this.css(CSS42) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -25630,7 +26334,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS42 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -25790,12 +26494,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS42) + head + `<div data-body></div>`);
+      this.set(this.css(CSS43) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -25929,7 +26633,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -26055,7 +26759,7 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS43) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS44) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
@@ -26065,7 +26769,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -26224,12 +26928,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -26248,7 +26952,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
-      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
@@ -26417,7 +27121,7 @@ ${BLOCKED_PILL_CSS}
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS45 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS46 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -26476,7 +27180,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -27002,7 +27706,7 @@ ${BLOCKED_PILL_CSS}
   var lc9 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -27126,7 +27830,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS47) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -27134,7 +27838,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS47) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -27178,7 +27882,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS47 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -27312,7 +28016,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS48) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -27325,7 +28029,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS48) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -27792,8 +28496,8 @@ ${BLOCKED_PILL_CSS}
     for (const list2 of LISTS) next[list2] = Array.isArray(data[list2]) ? [...data[list2]] : [];
     if (undo.added) {
       const arr = next[undo.added.list];
-      const at2 = arr.findIndex((r) => r && r.id === undo.added.id);
-      if (at2 !== -1) arr.splice(at2, 1);
+      const at3 = arr.findIndex((r) => r && r.id === undo.added.id);
+      if (at3 !== -1) arr.splice(at3, 1);
     }
     const { list, index, row } = undo.removed;
     const target = next[list];
@@ -27868,7 +28572,7 @@ ${BLOCKED_PILL_CSS}
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc6(s) {
+  function esc7(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function safeHref(url) {
@@ -28013,7 +28717,7 @@ ${BLOCKED_PILL_CSS}
     const render2 = (text2) => {
       const store2 = [];
       const masked = maskRuns(text2, store2);
-      const safe = esc6(masked);
+      const safe = esc7(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline3(safe, {
         bold: (t) => `<strong>${t}</strong>`,
@@ -28021,14 +28725,14 @@ ${BLOCKED_PILL_CSS}
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
           const href = safeHref(resolve(url));
-          const inner = String(label || "").trim() || esc6(resolve(url));
-          return href ? `<a href="${esc6(href)}">${inner}</a>` : inner;
+          const inner = String(label || "").trim() || esc7(resolve(url));
+          return href ? `<a href="${esc7(href)}">${inner}</a>` : inner;
         }
       });
       return done.replace(MASK_RE, (_m, i) => {
         const run = store2[Number(i)];
         if (!run) return "";
-        return run.kind === "code" ? `<code>${esc6(run.raw)}</code>` : esc6(run.raw);
+        return run.kind === "code" ? `<code>${esc7(run.raw)}</code>` : esc7(run.raw);
       });
     };
     const out = [];
@@ -28039,7 +28743,7 @@ ${BLOCKED_PILL_CSS}
         continue;
       }
       if (b.kind === "fence") {
-        out.push(`<pre><code>${esc6(b.lines.join("\n"))}</code></pre>`);
+        out.push(`<pre><code>${esc7(b.lines.join("\n"))}</code></pre>`);
         continue;
       }
       if (b.kind === "heading") {
@@ -28088,7 +28792,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var CSS48 = `
+  var CSS49 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -28209,19 +28913,19 @@ ${BLOCKED_PILL_CSS}
       const keepScroll = this._resetScroll ? 0 : this.$(".body")?.scrollTop || 0;
       this._resetScroll = false;
       if (!this.client) {
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS48) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -28235,7 +28939,7 @@ ${BLOCKED_PILL_CSS}
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v2, l, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS48) + this._shell(`
+      this.set(this.css(CSS49) + this._shell(`
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc2(hint)}</p>
       <div class="fbar">
@@ -28449,7 +29153,7 @@ ${BLOCKED_PILL_CSS}
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS49 = `
+  var CSS50 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -28556,7 +29260,7 @@ ${BLOCKED_PILL_CSS}
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc2(e.realm || "app")}</span></td>
             <td>${esc2(e.area)}</td><td class="msg">${esc2(e.msg)}</td>
             <td class="data">${esc2(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS49) + `
+      this.set(this.css(CSS50) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -28596,7 +29300,7 @@ ${BLOCKED_PILL_CSS}
   var SITE24 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS50 = `
+  var CSS51 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
@@ -28614,7 +29318,7 @@ ${BLOCKED_PILL_CSS}
   .waitbox .sub { color:var(--fg); font-size:14px; line-height:1.5; margin:0 0 12px; }
   .problem { color:var(--danger, #c0392b); font-size:13px; line-height:1.5; margin:0 0 12px; }
 `;
-  var LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+  var LOGIN_RE2 = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
   var GbtiSigninSplash = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -28638,13 +29342,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       const known = this.getAttribute("known-login") || "";
-      const who = LOGIN_RE.test(known) ? known : "";
+      const who = LOGIN_RE2.test(known) ? known : "";
       const action = this._waiting ? `<div class="waitbox">
            <p class="sub">Finish signing in using the GitHub window that just opened. It closes by itself when you are done.</p>
            <p class="note">Waiting for GitHub&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc2(who)}` : "Sign in with GitHub"}</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS50) + `<div class="splashwrap">
+      this.set(this.css(CSS51) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -28664,7 +29368,7 @@ ${BLOCKED_PILL_CSS}
   var REDIRECT_PATH = "signed-in";
   var CODE_RE = /^#code=([A-Za-z0-9_-]{43})$/;
   var ERROR_RE = /^#error=([a-z]{1,20})$/;
-  var LOGIN_RE2 = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+  var LOGIN_RE3 = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
   function b64url(bytes) {
     let bin = "";
     for (const b of bytes) bin += String.fromCharCode(b);
@@ -28681,7 +29385,7 @@ ${BLOCKED_PILL_CSS}
     const u = new URL(`${base}/auth/extension/start`);
     u.searchParams.set("challenge", challenge);
     u.searchParams.set("redirect", redirect);
-    if (login && LOGIN_RE2.test(login)) u.searchParams.set("login", login);
+    if (login && LOGIN_RE3.test(login)) u.searchParams.set("login", login);
     return u.toString();
   }
   function readRedirectResult(finalUrl, redirect) {
@@ -28944,15 +29648,15 @@ ${BLOCKED_PILL_CSS}
     const it2 = state.items.find((x) => x.id === id);
     if (!it2 || id === beforeId) return state;
     const rest = state.items.filter((x) => x.id !== id);
-    let at2;
+    let at3;
     if (beforeId == null) {
       const lastOfGroup = rest.map((x) => x.group).lastIndexOf(it2.group);
-      at2 = lastOfGroup + 1;
+      at3 = lastOfGroup + 1;
     } else {
-      at2 = rest.findIndex((x) => x.id === beforeId);
-      if (at2 < 0 || rest[at2].group !== it2.group) return state;
+      at3 = rest.findIndex((x) => x.id === beforeId);
+      if (at3 < 0 || rest[at3].group !== it2.group) return state;
     }
-    rest.splice(at2, 0, it2);
+    rest.splice(at3, 0, it2);
     return withItems(state, rest);
   }
   function addCustom(state, { url, name } = {}, newId = () => `c-${Math.random().toString(36).slice(2, 12)}`) {
@@ -29019,7 +29723,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // extension/src/quick-launch.mjs
-  var esc7 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc8 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var GLYPH = {
     gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -29036,7 +29740,7 @@ ${BLOCKED_PILL_CSS}
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
     const icon3 = icons[item.id];
     if (typeof icon3 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon3)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon3}" alt="" /></span>`;
-    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc7(letterFor(item.name))}</span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc8(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
     try {
@@ -29096,7 +29800,7 @@ ${BLOCKED_PILL_CSS}
     }
   }
   function barHtml() {
-    const links = barItems(STATE).map((it2) => `<a class="nt-app ql-go" href="${esc7(it2.url)}" target="_blank" rel="noopener noreferrer" title="${esc7(it2.name)}" aria-label="${esc7(it2.name)}, opens in a new tab">${markHtml(it2, ICONS3)}</a>`).join("");
+    const links = barItems(STATE).map((it2) => `<a class="nt-app ql-go" href="${esc8(it2.url)}" target="_blank" rel="noopener noreferrer" title="${esc8(it2.name)}" aria-label="${esc8(it2.name)}, opens in a new tab">${markHtml(it2, ICONS3)}</a>`).join("");
     return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
@@ -29151,14 +29855,14 @@ ${BLOCKED_PILL_CSS}
   function rowHtml(it2, rank) {
     const inBar = it2.on && rank < QL_CAP;
     const left = it2.on && !inBar;
-    const tools = it2.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc7(it2.id)}" aria-label="Edit ${esc7(it2.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc7(it2.id)}" aria-label="Remove ${esc7(it2.name)}" title="Remove">${glyph("trash")}</button>` : "";
-    const open = left ? `<a class="ql-tool" href="${esc7(it2.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc7(it2.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
-    return `<li class="ql-row" data-ql-row="${esc7(it2.id)}" data-group="${esc7(it2.group)}" draggable="true">
-    <button class="ql-grip" type="button" data-ql-grip="${esc7(it2.id)}" aria-label="Move ${esc7(it2.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    const tools = it2.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc8(it2.id)}" aria-label="Edit ${esc8(it2.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc8(it2.id)}" aria-label="Remove ${esc8(it2.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc8(it2.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc8(it2.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc8(it2.id)}" data-group="${esc8(it2.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc8(it2.id)}" aria-label="Move ${esc8(it2.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
     ${markHtml(it2, ICONS3)}
-    <span class="ql-txt"><b>${esc7(it2.name)}</b><small>${esc7(displayHost(it2.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+    <span class="ql-txt"><b>${esc8(it2.name)}</b><small>${esc8(displayHost(it2.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
     ${open}${tools}
-    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc7(it2.id)}" aria-checked="${it2.on ? "true" : "false"}" aria-label="Show ${esc7(it2.name)} in the bar"><span></span></button>
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc8(it2.id)}" aria-checked="${it2.on ? "true" : "false"}" aria-label="Show ${esc8(it2.name)} in the bar"><span></span></button>
   </li>`;
   }
   function listsHtml() {
@@ -29166,21 +29870,21 @@ ${BLOCKED_PILL_CSS}
     return GROUPS.map((g) => {
       const rows = STATE.items.filter((it2) => it2.group === g.key);
       const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it2) => rowHtml(it2, onRank.get(it2.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
-      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc7(g.label)}</h3>${body}</section>`;
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc8(g.label)}</h3>${body}</section>`;
     }).join("");
   }
   function previewHtml() {
     const items = barItems(STATE);
-    const icons = items.map((it2) => `<span class="ql-pv" title="${esc7(it2.name)}">${markHtml(it2, ICONS3)}</span>`).join("");
+    const icons = items.map((it2) => `<span class="ql-pv" title="${esc8(it2.name)}">${markHtml(it2, ICONS3)}</span>`).join("");
     return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
-    return `<form class="ql-form" data-ql-form="${esc7(id)}" novalidate>
+    return `<form class="ql-form" data-ql-form="${esc8(id)}" novalidate>
     <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
-    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc7(url)}" required /></label>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc8(url)}" required /></label>
     <div class="ql-form-row">
       <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS3)}</span>
-      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc7(name)}" placeholder="Found from the site" /></label>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc8(name)}" placeholder="Found from the site" /></label>
     </div>
     <p class="ql-status" data-ql-status aria-live="polite"></p>
     <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
@@ -29427,7 +30131,7 @@ ${BLOCKED_PILL_CSS}
   // extension/src/shell.mjs
   var SITE25 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc8 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc9 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -29521,7 +30225,7 @@ ${BLOCKED_PILL_CSS}
         a.href = `${SITE25}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc8(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc9(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;

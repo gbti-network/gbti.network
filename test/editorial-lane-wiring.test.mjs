@@ -113,11 +113,18 @@ test('an approval never runs without the queue record being written first', () =
     // whatever the body did. The pull request is opened through a template literal ending in `/pulls`, so it
     // is matched by shape rather than by a quoted string that no longer appears anywhere.
     const rec = src.indexOf('await recordEditorialItems(');
-    const pr = src.search(/\/pulls`/);
+    // sow-427 C1 moved the branch, the file writes and the pull request into hosted-commit.mjs unchanged, so the
+    // route now opens it through the commitHostedFiles CALL. That helper is pinned below to be what opens it.
+    const pr = src.search(/\/pulls`|await commitHostedFiles\(/);
     assert.ok(rec > 0, `${file}: the publish route writes no queue record`);
     assert.ok(pr > 0, `${file}: no pull request is opened here, so this check is looking at the wrong file`);
     assert.ok(rec < pr, `${file}: the pull request opens before the record is written`);
     assert.match(src.slice(rec, rec + 600), /recorded\.ok|!recorded/,
       `${file}: a failed record write must refuse the publish, or an item waits with nothing listing it`);
   }
+  // The helper the route calls is the thing that opens the pull request, so the call site above IS the opening.
+  const commit = read('workers/signup/hosted-commit.mjs');
+  const fn = commit.indexOf('export async function commitHostedFiles(');
+  assert.ok(fn > 0, 'hosted-commit.mjs defines commitHostedFiles');
+  assert.ok(commit.slice(fn).search(/\/pulls`/) > 0, 'commitHostedFiles opens the pull request');
 });

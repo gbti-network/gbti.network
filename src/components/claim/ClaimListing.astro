@@ -1,0 +1,92 @@
+---
+// sow-427 (amendment 7): the READ-ONLY listing view on the claim page. It is the published project page's "Doc Shell"
+// (the shared .pd-* layout in src/styles/gbti-v3.css), so the person sees their project the way it will look once it
+// is live, in both themes. It is its own small view on purpose, NOT the WorkBench preview: that page is pinned by a
+// dozen tests and carries an editor, and none of that belongs on a public page a stranger opens.
+//
+// Everything here is an empty frame at build time. src/lib/claim-page.ts fills it from the signed-out read with DOM
+// nodes and text: frontmatter strings are only ever textContent, every href has passed claim-core safeHref, and the
+// one HTML string that is parsed is the markdown body renderer's own output (client/src/markdown.mjs, which escapes
+// raw HTML), whose links and images are checked again before they are attached.
+//
+// Live-data regions of the real page (the byline, favorites, comments) render as a quiet line instead of invented
+// numbers, exactly as the WorkBench preview does.
+import Prose from '../blog/Prose.astro';
+---
+<div class="pd-shell cl-listing" data-claim-listing hidden>
+  <section class="pd-hero" data-cl-hero>
+    <img data-cl-hero-img alt="" class="pd-hero-img" hidden />
+    <div class="pd-hero-scrim"></div>
+    <div class="pd-wrap pd-hero-in">
+      <img data-cl-mark alt="" class="pd-mark" hidden />
+      <div class="pd-hero-txt">
+        <p class="pd-eyebrow" data-cl-eyebrow></p>
+        <h1 class="pd-title" data-cl-title>&nbsp;</h1>
+        <p class="pd-pitch" data-cl-desc></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="pd-bar">
+    <div class="pd-wrap pd-bar-in">
+      <div class="pd-bar-id">
+        <img data-cl-barmark alt="" class="pd-bar-mark" hidden />
+        <span class="pd-bar-name" data-cl-barname></span>
+      </div>
+      <span class="pd-bar-spec" data-cl-version hidden></span>
+      <span class="pd-bar-spec on" data-cl-pricing hidden></span>
+      <div class="pd-bar-actions" data-cl-actions></div>
+    </div>
+  </div>
+
+  <div class="pd-wrap">
+    <div class="pd-grid" data-cl-grid data-side="right">
+      <div class="pd-col">
+        <div class="pd-byline">
+          <p class="cl-inert">Your name, and the save, share and favorite controls, appear here once the listing is published.</p>
+        </div>
+        <div class="pvideo" data-cl-video hidden></div>
+        <article id="pd-overview">
+          <Prose><div data-cl-body></div></Prose>
+        </article>
+        <div class="pd-cta" data-cl-cta hidden>
+          <div class="pd-cta-txt">
+            <div class="pd-cta-title">Ready to install?</div>
+            <p class="pd-cta-sub" data-cl-cta-sub hidden></p>
+          </div>
+          <div class="pd-cta-btns" data-cl-cta-btns></div>
+        </div>
+        <div id="pd-screenshots" class="pd-gallery pd-anchor" data-cl-gallery hidden>
+          <div class="pd-gal-head"><span class="pd-rail-lab">Screenshots</span></div>
+          <h2 class="pd-gal-title" data-cl-gallery-title></h2>
+          <div class="pd-shots" data-cl-shots></div>
+        </div>
+        <p class="cl-inert" style="margin-top:36px">Your note to readers is pinned here, and the discussion follows it, once the listing is published.</p>
+      </div>
+
+      <aside class="pd-rail">
+        <div class="pd-block" data-cl-specblock hidden>
+          <dl class="pd-specs" data-cl-specs></dl>
+          <div class="pd-tags" data-cl-tags></div>
+        </div>
+        <div class="pd-block pd-rail-links" data-cl-linkblock hidden>
+          <span class="pd-rail-lab">Links</span>
+          <div class="cl-links" data-cl-links></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  /* The claim page has no site header (it is a `bare` page), so the Doc Shell's sticky stack starts under the claim
+     bar instead: --pd-off is the hook the layout exposes for exactly this (the WorkBench preview raises it too). */
+  .cl-listing { --pd-off: var(--cl-bar-h, 52px); }
+  .cl-listing .pd-bar { z-index: 30; }
+  .cl-inert { margin: 0; color: var(--fg-mute); font-size: 13px; font-style: italic; }
+  /* The rail's link list lands one level deeper than on the published page (inside the runtime-filled wrapper),
+     so the wrapper needs the column layout the published page applies to its direct children. */
+  .cl-links { display: flex; flex-direction: column; gap: 8px; }
+  .cl-listing .pd-bar-actions .btn svg, .cl-listing .pd-cta-btns .btn svg { width: 15px; height: 15px; }
+  .cl-listing .cl-nolink { color: var(--fg-soft); font-size: 13px; }
+</style>

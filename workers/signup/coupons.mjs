@@ -19,7 +19,7 @@ import {
 } from '../../membership/coupons.mjs';
 import { couponLockKey } from '../../membership/coupon-lock.mjs'; // sow-212: the post-erasure minimized lock
 import { couponsFromParsed, normalizeCouponCode } from '../../membership/coupons.mjs'; // sow-231: campaign terms
-import { inviteIsRedeemable, markInviteRedeemed } from '../../membership/invites.mjs'; // sow-231 Phase 2
+import { inviteIsRedeemable, markInviteRedeemed, bindingRefuses } from '../../membership/invites.mjs'; // sow-231 Phase 2; sow-427 binding
 import { readInvite, writeInvite } from './invites-store.mjs';
 // The same 48h freshness bound the overrides mirror uses (a local constant, not an import from
 // membership-content: that module imports THIS one for the fast-path grant, and a cycle helps nobody).
@@ -94,39 +94,110 @@ export async function validateCouponParam(kv, code, now = new Date()) {
 }
 
 /**
- * Redeem `code` for `githubId`. Returns { code, redeemedAt, until, already } on success (already = an
- * existing grant was found, nothing new written), or null when no redemption happened (fail closed).
+ * sow-427 (amendment 6): every reason a redemption would grant NO year, by name. redeemCoupon and the prepared
+ * listing's claim page both decide from these, so the page can never tell a person "sign in to redeem your free
+ * year" for a year the signup would then refuse, and send them round the same loop again.
  */
-export async function redeemCoupon({ kv, code, githubId, login = null, now = new Date(), lockSecret = null } = {}) {
-  if (!kv || !code || !githubId) return null;
+export const COUPON_REFUSAL = Object.freeze({
+  grantActive: 'grant_active', // an unexpired grant already exists (redeemCoupon hands it back; nothing new)
+  grantExpired: 'grant_expired', // the account's one free year was used and has ended
+  grantCorrupt: 'grant_corrupt', // a grant record exists whose end date cannot be read
+  locked: 'locked', // the post-erasure minimized lock (sow-212): the year was used before an erasure
+  notRedeemable: 'not_redeemable', // unknown code, retired walk-up code, invite not issued, campaign deleted, registry unreadable
+  boundElsewhere: 'bound_elsewhere', // sow-427: a bound invite and a different account
+  capReached: 'cap_reached', // the campaign's maxRedemptions is spent
+  noTerms: 'no_terms', // the campaign's terms yield no end date
+  unreadable: 'unreadable', // a KV read failed: fail closed
+});
+
+/**
+ * sow-427 (amendment 6): WHY a redemption would grant nothing, or null when it would grant a year. PURE over the
+ * values redeemCoupon reads, and redeemCoupon itself decides through it, so the two cannot disagree. The checks
+ * run in redeemCoupon's own order, and that order is load-bearing: an existing grant is the idempotency lock and
+ * is consulted before anything about the code.
+ *
+ * @param existing  the stored `coupon-grant:<id>` record, or null
+ * @param locked    true when the post-erasure minimized lock is present
+ * @param coupon    the campaign entry resolveRedeemable returned, or null
+ * @param invite    the issued invite resolveRedeemable returned, or null (a walk-up campaign code)
+ * @param redemptionCount the campaign's current counter (read only when it has a cap)
+ */
+export function couponRefusalReason({ existing = null, locked = false, coupon = null, invite = null, githubId = null, redemptionCount = 0, now = new Date() } = {}) {
+  if (existing?.until) {
+    const until = new Date(existing.until);
+    if (Number.isNaN(until.getTime())) return COUPON_REFUSAL.grantCorrupt;
+    return now.getTime() < until.getTime() ? COUPON_REFUSAL.grantActive : COUPON_REFUSAL.grantExpired;
+  }
+  if (locked) return COUPON_REFUSAL.locked;
+  if (!coupon) return COUPON_REFUSAL.notRedeemable;
+  // sow-427: a BOUND invite grants nothing to any other account and is left unused, exactly like the early
+  // returns above, so the person it was tied to can still redeem it. Plain invites are never bound.
+  if (invite && bindingRefuses(invite, githubId)) return COUPON_REFUSAL.boundElsewhere;
+  // THE CAP COUNTS AGAINST THE CAMPAIGN, NOT THE LINK. Keyed by invite code every invite would have a
+  // count of 1 and a campaign cap of 50 would never bind however many links were issued, which is the
+  // opposite of what a cap is for. The per-member `redemption:<CODE>:<githubId>` record still uses
+  // the code as submitted, because that is the provenance key.
+  if (coupon.maxRedemptions !== null && redemptionCount >= coupon.maxRedemptions) return COUPON_REFUSAL.capReached;
+  if (!redemptionUntil(now, coupon.freeDays)) return COUPON_REFUSAL.noTerms;
+  return null;
+}
+
+/**
+ * sow-427 (amendment 6): read what redeemCoupon decides on, and say whether it would grant a year for (code,
+ * githubId) right now. Returns `{ reason, existing, coupon, invite, redemptionCount }`, where `reason` is a
+ * COUPON_REFUSAL value or null. Writes nothing. The claim status route calls this for a signed-in person who is
+ * not paying, so the page offers "redeem" only when a redemption would really happen.
+ *
+ * Reads lazily in redeemCoupon's order (an existing grant or the lock ends the read), and FAILS CLOSED: any KV
+ * error is `unreadable`, never null.
+ */
+export async function couponRedemptionCheck({ kv, code, githubId, now = new Date(), lockSecret = null } = {}) {
+  const none = { existing: null, coupon: null, invite: null, redemptionCount: 0 };
+  if (!kv || !code || !githubId) return { reason: COUPON_REFUSAL.notRedeemable, ...none };
   try {
     // One coupon per member, ever: an existing grant is the idempotency lock (retries, GitHub-then-Discord
     // re-runs of the signup chain, or a second code later all land here).
     const existing = await kv.get(couponGrantKey(githubId), 'json');
-    if (existing?.until) return { ...existing, already: true };
+    if (existing?.until) return { reason: couponRefusalReason({ existing, now }), ...none, existing };
 
     // The MINIMIZED lock (sow-212). After a right-to-erasure the raw-id grant is replaced by a keyed hash of
     // the github_id, because the owner ruled the one-per-member lock survives erasure while the identifying
     // record does not. Without this check the lock would be silently unenforced for exactly those accounts,
-    // which is the abuse the ruling exists to prevent. Returns null: no redemption, and signup continues.
+    // which is the abuse the ruling exists to prevent.
     if (lockSecret) {
       const lockKey = await couponLockKey(lockSecret, githubId);
-      if (lockKey && (await kv.get(lockKey))) return null;
+      if (lockKey && (await kv.get(lockKey))) return { reason: COUPON_REFUSAL.locked, ...none };
     }
 
-    // sow-231 Phase 2: `code` may be a campaign code OR an issued invite. Either way the terms below come
-    // from the CAMPAIGN entry, so the rest of this function is unchanged by which one arrived.
+    // sow-231 Phase 2: `code` may be a campaign code OR an issued invite. Either way the terms come from the
+    // CAMPAIGN entry, so nothing below depends on which one arrived.
     const { coupon, invite } = await resolveRedeemable(kv, code, now);
-    if (!coupon) return null;
+    const capped = Boolean(coupon) && coupon.maxRedemptions !== null && !(invite && bindingRefuses(invite, githubId));
+    const redemptionCount = capped ? Number(await kv.get(redemptionCountKey(coupon.code))) || 0 : 0;
+    const reason = couponRefusalReason({ coupon, invite, githubId, redemptionCount, now });
+    return { reason, existing: null, coupon, invite, redemptionCount };
+  } catch {
+    return { reason: COUPON_REFUSAL.unreadable, ...none };
+  }
+}
 
-    // THE CAP COUNTS AGAINST THE CAMPAIGN, NOT THE LINK. Keyed by invite code every invite would have a
-    // count of 1 and a campaign cap of 50 would never bind however many links were issued, which is the
-    // opposite of what a cap is for. The per-member `redemption:<CODE>:<githubId>` record below still uses
-    // the code as submitted, because that is the provenance key.
-    if (coupon.maxRedemptions !== null) {
-      const count = Number(await kv.get(redemptionCountKey(coupon.code))) || 0;
-      if (count >= coupon.maxRedemptions) return null;
-    }
+/**
+ * Redeem `code` for `githubId`. Returns { code, redeemedAt, until, already } on success (already = an
+ * existing grant was found, nothing new written), or null when no redemption happened (fail closed).
+ *
+ * sow-427: the decision is couponRedemptionCheck's (and so couponRefusalReason's), which adds one refusal to the
+ * ones this always had: a bound invite and a different account. It returns null and leaves the invite unused.
+ */
+export async function redeemCoupon({ kv, code, githubId, login = null, now = new Date(), lockSecret = null } = {}) {
+  if (!kv || !code || !githubId) return null;
+  try {
+    const check = await couponRedemptionCheck({ kv, code, githubId, now, lockSecret });
+    // An existing grant (whatever its date) is handed back and nothing is written: the one-per-member lock.
+    if (check.existing?.until) return { ...check.existing, already: true };
+    // Every other refusal (the post-erasure lock, an unusable code, a bound invite and another account, a
+    // spent cap, unusable terms, an unreadable store) is no redemption, and signup continues as a plain one.
+    if (check.reason) return null;
+    const { coupon, invite } = check;
 
     const until = redemptionUntil(now, coupon.freeDays);
     if (!until) return null;

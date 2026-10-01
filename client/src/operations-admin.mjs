@@ -9,8 +9,10 @@ import { fetchStripeStatus } from './membership.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance, preparedAdminRequest, stagePreparedImage } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
+import { SITE_BASE } from './account-ops.mjs';
+import { claimLink, isListingId, isListingImageName, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
 
 export async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
@@ -179,6 +181,130 @@ export async function updateInviteOp(ctx, body = {}) {
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not update the invite');
   }
+}
+
+
+/**
+ * sow-427: prepare a project listing for someone who is not a member yet, and return its invitation link.
+ *
+ * The superadmin check here is UX only, taken from listAuthorTargets: anyone below superadmin gets `forbidden`
+ * before any network call. The Worker re-checks at authorizeSuperadmin on every verb and is the boundary, so its
+ * 403 surfaces as the same `forbidden`.
+ *
+ * Images travel as base64 only: this module is bundled into the MV3 extension and must stay node-free, so there
+ * is no reading a local file here. Each one is staged in the caller's own draft image store under
+ * `project:<slug>` first, then the save names that item and the Worker copies the bytes into the listing.
+ *
+ * The local checks are only the SHAPE the staging step needs (a slug for the item, image names the listing store
+ * accepts, data to send). The project itself is validated by the Worker alone, so a client that lags a Worker
+ * release can never refuse a listing the Worker would take.
+ */
+export async function prepareListingOp(ctx, args = {}) {
+  await requireSuperadminLocally(ctx, 'Preparing a listing');
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  const req = preparedSaveRequest(args);
+  const fetch = ctx.fetch ?? globalThis.fetch;
+  for (const img of req.images) {
+    try {
+      await stagePreparedImage({ token, signupBase: SIGNUP_BASE, item: req.stagedItem, name: img.name, dataBase64: img.dataBase64, fetch });
+    } catch (err) {
+      throw preparedOpError(err, `The image ${img.name} could not be staged`, { prefix: true });
+    }
+  }
+  let r;
+  try {
+    r = await preparedAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'POST', body: req.body, fetch });
+  } catch (err) {
+    throw preparedOpError(err, 'The listing could not be saved');
+  }
+  const id = r?.listing?.id;
+  const code = r?.code;
+  if (!isListingId(id) || typeof code !== 'string' || !code) {
+    throw new OperationError('admin-op-failed', 'The network did not return the invitation. Check the invite manager before trying again.');
+  }
+  return { id, code, link: claimLink(SITE_BASE, code), state: r.listing.state ?? null, bound: r.listing.bound === true };
+}
+
+/** The superadmin UX gate. `no-identity` passes through; any role below superadmin is `forbidden`. */
+async function requireSuperadminLocally(ctx, what) {
+  let role = null;
+  try { ({ role } = await requireAdmin(ctx)); } catch (err) { if (err?.code !== 'forbidden') throw err; }
+  if (role !== 'superadmin') throw new OperationError('forbidden', `${what} is for superadmins only.`);
+}
+
+const blankArg = (v) => v === undefined || v === null || (typeof v === 'string' && !v.trim());
+const PREPARED_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/** One `{ name, dataBase64 }` image, normalized: a `./images/` prefix and a data URL header are both accepted. */
+function preparedImageArg(img, i) {
+  const name = String(img?.name ?? '').trim().replace(/^\.\/images\//, '');
+  if (!isListingImageName(name)) {
+    throw new OperationError('bad-request', `images[${i}].name must be a lowercase png, jpg, webp or gif file name, as referenced by ./images/<name>.`);
+  }
+  const dataBase64 = String(img?.dataBase64 ?? '').replace(/^data:[^,]*;base64,/i, '').replace(/\s+/g, '');
+  if (!dataBase64) throw new OperationError('bad-request', `images[${i}] (${name}) has no dataBase64.`);
+  return { name, dataBase64 };
+}
+
+/**
+ * The staging item, the images and the save body for prepareListingOp, or a `bad-request`. Pure. The body is the
+ * shape the WorkBench editor sends: `{ op:'save', id?, campaign, recipientName, message, githubLogin?, draft,
+ * stagedItem }`. On an edit (`id`) an absent greeting, message or campaign is left out, which the Worker reads as
+ * unchanged; `githubLogin` is sent only when the caller passed the key, because an empty value unties.
+ */
+function preparedSaveRequest(args = {}) {
+  if (args.authorNote !== undefined) {
+    throw new OperationError('bad-request', 'A prepared listing takes no author note. The recipient writes their own when they claim it.');
+  }
+  const input = args.input;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new OperationError('bad-request', 'input (the project frontmatter) is required.');
+  }
+  const slug = String(input.slug ?? ''); // untrimmed: the draft carries input.slug too, and the two must agree
+  if (!PREPARED_SLUG_RE.test(slug) || slug.length > PREPARED_SLUG_MAX) {
+    throw new OperationError('bad-request', `input.slug is required: lowercase letters, digits and hyphens, at most ${PREPARED_SLUG_MAX} characters.`);
+  }
+  const id = blankArg(args.id) ? null : String(args.id).trim();
+  if (id !== null && !isListingId(id)) throw new OperationError('bad-request', 'id must be a listing id returned by an earlier call.');
+  if (id === null) {
+    for (const key of ['recipientName', 'message', 'campaign']) {
+      if (blankArg(args[key])) throw new OperationError('bad-request', `${key} is required.`);
+    }
+  }
+  const list = args.images === undefined || args.images === null ? [] : args.images;
+  if (!Array.isArray(list)) throw new OperationError('bad-request', 'images must be an array of { name, dataBase64 }.');
+  if (list.length > PREPARED_MAX_IMAGES) throw new OperationError('bad-request', `A listing holds at most ${PREPARED_MAX_IMAGES} images.`);
+  const images = list.map(preparedImageArg);
+  const seen = new Set();
+  for (const { name } of images) {
+    if (seen.has(name)) throw new OperationError('bad-request', `The image ${name} is listed twice.`);
+    seen.add(name);
+  }
+  const stagedItem = `project:${slug}`;
+  const body = {
+    op: 'save',
+    ...(id ? { id } : {}),
+    ...(blankArg(args.campaign) ? {} : { campaign: String(args.campaign).trim() }),
+    ...(blankArg(args.recipientName) ? {} : { recipientName: String(args.recipientName) }),
+    ...(blankArg(args.message) ? {} : { message: String(args.message) }),
+    ...(args.githubLogin === undefined ? {} : { githubLogin: args.githubLogin === null ? '' : String(args.githubLogin) }),
+    draft: { type: 'project', slug, frontmatter: input, body: typeof args.body === 'string' ? args.body : '' },
+    stagedItem,
+  };
+  return { stagedItem, images, body };
+}
+
+/** A transport refusal as the typed error the agent sees. With `prefix`, the context leads the Worker's reason. */
+function preparedOpError(err, context, { prefix = false } = {}) {
+  if (err instanceof OperationError) return err;
+  const message = err?.message ? (prefix ? `${context}: ${err.message}` : err.message) : context;
+  if (err?.status === 401) return new OperationError('not-authenticated', message);
+  if (err?.status === 403) return new OperationError('forbidden', message);
+  if (err?.status === 400 && ['invalid', 'unsupported_type', 'bad_slug'].includes(err?.code)) {
+    return new OperationError('invalid-content', message, err.details);
+  }
+  return new OperationError('admin-op-failed', message, err?.details);
 }
 
 

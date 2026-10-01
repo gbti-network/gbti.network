@@ -84,7 +84,8 @@ export default defineConfig({
     // the build and fails with the route to add. It found EIGHT already here when it was written (the admin
     // tools, the WorkBench and its two sub-pages, sign-in, browse, embed, account notifications), which is what
     // a hand-maintained list does when nothing checks it.
-    sitemap({ filter: (page) => !/\/(account|account\/notifications|admin|browse|embed|login|sponsorship|welcome|workbench|workbench\/mcp|workbench\/preview|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
+    // sow-427: `claim` is the prepared-listing invitation page, /claim/?code=<CODE>, a bearer link for one person.
+    sitemap({ filter: (page) => !/\/(account|account\/notifications|admin|browse|claim|embed|login|sponsorship|welcome|workbench|workbench\/mcp|workbench\/preview|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

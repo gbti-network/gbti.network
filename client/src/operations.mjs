@@ -100,6 +100,7 @@ export {
   decideEditorialOp,
   createInviteOp,
   updateInviteOp,
+  prepareListingOp, // sow-427: a prepared project listing and its invitation link (superadmin)
   refreshCouponUntil,
   triggerAdminOp,
   governanceAdminOp, // sow-213 Phase 2b: governance goes to the Worker, which holds SIGNUP_KV and the moderation log

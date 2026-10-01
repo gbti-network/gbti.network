@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { prAttention, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
+import { prAttention, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -22,6 +22,7 @@ import './gbti-subscriptions.mjs';
 import './gbti-onboarding-progress.mjs'; // sow-343: the onboarding card in the Overview banner slot
 import './gbti-profile-editor.mjs'; // sow-346: the Profile tab
 import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the profile strip reads found / absent / failed
+import { openPreparedInto, preparedChanged } from '../prepared-editor.mjs'; // sow-427: prepared mode lives there, not here
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -165,10 +166,8 @@ class GbtiWorkspace extends GbtiElement {
     this._pollTimer = null; // SOW-072 P3: the single live PR-list poll timer id
     this._pollTries = 0;    // SOW-072 P3: poll attempts this viewing session (bounds a never-merging PR)
     this._overview = null; // SOW-052: { membership, role, counts, attention[] }
-    // SOW-064: a #new=<type> deep-link (from the "+" quick-create menu) opens a BLANK editor for that content type,
-    // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
-    const newType = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
-    this._editing = newType ? { type: newType, frontmatter: {}, body: '' } : null;
+    // SOW-064 + sow-427: a #new=<type> deep link opens a BLANK editor (in prepared mode for #new=project&prepare=1).
+    this._editing = editingFromHash(typeof location !== 'undefined' ? location.hash : '');
     // SOW-106 QA fix: an #edit=<path> / #draft=<type>:<slug> deep-link restores the open editor after a refresh.
     // Consumed by render() once the client exists (the SOW-070 client-arrival pattern).
     const hash = typeof location !== 'undefined' ? location.hash : '';
@@ -177,7 +176,7 @@ class GbtiWorkspace extends GbtiElement {
       if (isProfilePath(path)) { this._tab = 'profile'; return null; } // sow-346: the generic editor mishandles profile links
       if (path) return { edit: path };
       const d = parseWorkspaceDraft(hash);
-      return d ? { draft: d } : null;
+      return d ? { draft: d } : preparedRestore(hash); // sow-427: #prepare=<listing id> opens once the client arrives
     })();
     this._editShareId = parseWorkspaceEditShare(hash); // sow-304: `#tab=share&edit-share=<id>` opens that share in the composer
     this._page = 0; // SOW-062: the current content-list page (client-side paging; resets on tab switch)
@@ -232,7 +231,7 @@ class GbtiWorkspace extends GbtiElement {
         this._editing = null;
         this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
       } else if (plan.action === 'openNew') {
-        this._editing = { type: plan.type, frontmatter: {}, body: '' }; this.render();
+        this._editing = editingFromHash(h); this.render(); // SOW-064 + sow-427
       } else if (plan.action === 'switchTab') {
         this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
       }
@@ -619,7 +618,7 @@ class GbtiWorkspace extends GbtiElement {
       const r = this._restore;
       this._restore = null;
       if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || 'post');
-      else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
+      else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug }); else if (r.prepare) openPreparedInto(this, r.prepare); // sow-427
     }
     if (this.client && !this._ownProfileAsked) this._loadProfile(); // sow-346
     if (typeof document !== 'undefined') document.body?.classList.toggle('gbti-editing', !!this._editing); // SOW-062 P6: paint .nt-main solid while editing (kills glass bleed)
@@ -631,7 +630,7 @@ class GbtiWorkspace extends GbtiElement {
       // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta.
       // SOW-145: an EDIT carries a house/ path the editor infers scope from; a NEW item has no path, so the
       // current workspace scope decides (a superadmin in House scope creates house content).
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
       // SOW-112 QA fix: after a rename PR opens, drop the stale caches and repoint the deep-link hash at the
       // NEW path — but do NOT refetch it yet (the auto-merge takes ~2-3 minutes; an immediate read 404s and
       // looked like the rename did nothing). The editor already updated its own view optimistically.
@@ -656,6 +655,7 @@ class GbtiWorkspace extends GbtiElement {
       // of the editor's flag, so clearing the editor's copy alone would be undone by the next repaint.
       ed?.addEventListener('gbti-published', () => { if (this._editing) this._editing.staged = false; this._onPublished(e.type); });
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
+      ed?.addEventListener('gbti-prepared-change', (ev) => preparedChanged(this, ev.detail)); // sow-427: survives the next repaint; a saved listing's hash reopens it
       return;
     }
     const shown = visibleTabs(TABS, this._authoring(), this._role()); // sow-404: the role hides superadmin-only tabs

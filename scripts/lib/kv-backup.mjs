@@ -45,7 +45,16 @@ export const BACKUP_PREFIX = 'backup:';
 // themselves, it exists nowhere in git by design (the storage boundary), and losing it loses both the
 // pending review queue and the record of who was already turned down. This list is EXPLICIT, not a
 // wildcard, so a new store is silently outside the backup until its prefix is added here.
-export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:', 'application:', 'editorial:'];
+// sow-427: 'invite-listing:' is the ONLY copy of a prepared listing: the project a superadmin wrote for someone
+// who is not a member yet, the greeting and the personal message. It lives in KV by design (nothing reaches the
+// repository before the person agrees), so losing it loses the work and voids the invitation link. It needs its
+// own entry: prefix matching is literal, and 'invite:' does not match 'invite-listing:'.
+// Its IMAGES ('invite-listing-img:') are deliberately NOT backed up. The whole snapshot is ONE KV value, capped at
+// 25 MiB, and image bytes arrive base64 inside JSON and are then encrypted and base64'd again, so a single listing
+// at its 4 MiB image cap adds about 7 MiB. Three or four listings would make the put fail, and the invites, grants
+// and overrides would go unbacked with them. 'draftimg:' is excluded for the same reason. A lost image is
+// re-uploaded by the superadmin; the record says which names it expects.
+export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'invite-listing:', 'overrides:', 'application:', 'editorial:'];
 export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export const SNAPSHOT_KEY = (iso) => `${BACKUP_PREFIX}${iso}`;
 

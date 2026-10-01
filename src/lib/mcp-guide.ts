@@ -53,6 +53,7 @@ export function mcpToolGroups(names: string[]): { title: string; tools: string[]
     ['Drafts', ['list_drafts', 'read_draft', 'publish_draft', 'discard_draft']],
     ['Pull requests and contributions', ['list_prs', 'pr_status', 'list_contributions', 'get_contribution', 'review_contribution']],
     ['Discussion and shares', ['list_comments', 'post_comment', 'edit_comment', 'add_share']],
+    ['Invitations', ['prepare_listing']], // sow-427: superadmin only; the Worker refuses anyone else
   ];
   const seen = new Set<string>();
   const out = groups.map(([title, list]) => ({ title, tools: list.filter((t) => names.includes(t) && !seen.has(t) && seen.add(t)) })).filter((g) => g.tools.length);

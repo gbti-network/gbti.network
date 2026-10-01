@@ -1,0 +1,103 @@
+---
+// sow-427: THE PREPARED-LISTING CLAIM PAGE, /claim/?code=<CODE>. A superadmin prepared a project for someone who is
+// not a member yet and sent them this link. The page shows the project the way it will look once published, with a
+// dialog over it carrying the superadmin's personal message; signing in with GitHub grants the free year, and the
+// person then writes their own author note and publishes the listing under their name. The flow and every sentence
+// on it live in src/lib/claim-core.mjs (pure, unit-tested); src/lib/claim-page.ts wires them to this markup.
+//
+// NOTHING ABOUT THE LISTING IS IN THIS FILE, AND NOTHING THE SCRIPT LEARNS REACHES THE DOCUMENT HEAD. A pasted link
+// unfurls in Slack and LinkedIn from the static title, description and og tags, so they are generic on purpose
+// (sow-427 trap 7): the project's title and the person's name must not reach whoever sees the unfurl. BaseLayout
+// builds og:url from the pathname only, so the code never appears there, and the script never sets the tab title.
+//
+// The title is BARE ("An invitation"): BaseLayout appends " | GBTI Network" to both the page title and og:title, and a title
+// that carries the brand double-brands the unfurl (test/page-titles.test.mjs).
+//
+// UNLISTED THREE WAYS. `noindex` here, the `claim` entry in the sitemap filter (astro.config.mjs), and
+// `Referrer-Policy: no-referrer` for /claim/* (public/_headers) so the code in the address is not handed to any site
+// this page loads from or links to.
+//
+// `bare`: no site header or footer, and so no digest invitation opening over the claim dialog. The page carries
+// its own slim bar instead, with the one control a dismissed dialog leaves behind.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ClaimDialog from '../../components/claim/ClaimDialog.astro';
+import ClaimListing from '../../components/claim/ClaimListing.astro';
+import { SIGNUP_BASE } from '../../lib/membership';
+import { CATEGORY_LABELS } from '../../lib/taxonomy';
+import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
+import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../../lib/touch.mjs';
+---
+<BaseLayout
+  title="An invitation"
+  description="A private invitation to join GBTI Network, a professional publishing network for developers."
+  noindex={true}
+  bare={true}
+>
+  <div
+    class="cl"
+    data-claim-root
+    data-signup-base={SIGNUP_BASE}
+    data-labels={JSON.stringify(CATEGORY_LABELS)}
+    data-ref-cookie={REF_COOKIE}
+    data-via-cookie={REF_VIA_COOKIE}
+    data-sid-cookie={TOUCH_CAPTURE_ENABLED ? TOUCH_SID_COOKIE : ''}
+  >
+    <header class="cl-bar">
+      <div class="cl-bar-in">
+        <a href="/" class="cl-brand" aria-label="GBTI Network home">
+          <img src="/brand/logo/mark-mint.png" alt="" width="26" height="26" />
+          <span>GBTI Network</span>
+        </a>
+        <span class="cl-tag">Invitation</span>
+        <span class="cl-barnote" data-claim-barnote hidden>A preview of the listing prepared for you. It is not published yet.</span>
+        <button type="button" class="btn btn-primary cl-open" data-claim-open hidden>Claim this listing</button>
+      </div>
+    </header>
+
+    <section class="cl-panel" data-claim-panel>
+      <div class="cl-card">
+        <h1 class="cl-card-title" data-claim-panel-title>Opening your invitation</h1>
+        <p class="cl-card-text" data-claim-panel-text></p>
+        <div class="cl-card-busy" data-claim-panel-busy><span class="cld-spin" aria-hidden="true"></span><span>One moment</span></div>
+        <div class="cld-actions" data-claim-panel-actions></div>
+      </div>
+      <noscript>
+        <div class="cl-card"><p class="cl-card-text">This invitation needs JavaScript to open. Turn it on for this site, then reload the page.</p></div>
+      </noscript>
+    </section>
+
+    <ClaimListing />
+    <ClaimDialog />
+  </div>
+</BaseLayout>
+
+<script>
+  import { startClaimPage } from '../../lib/claim-page';
+  startClaimPage(document);
+</script>
+
+<style is:global>
+  .cl { --cl-bar-h: 52px; min-height: 100vh; background: var(--paper-2); }
+  .cl-bar { position: sticky; top: 0; z-index: 45; background: var(--ink); border-bottom: 1.5px solid var(--ink-3); }
+  .cl-bar-in { max-width: 1000px; margin: 0 auto; padding: 0 34px; min-height: var(--cl-bar-h); display: flex; align-items: center; gap: 14px; }
+  @media (max-width: 560px) { .cl-bar-in { padding: 0 16px; gap: 10px; } }
+  .cl-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; font-family: var(--f-display); font-weight: 600; font-size: 16px; text-decoration: none; flex: none; }
+  /* The bar is ink in both themes, so the mint mark (the one made for dark surfaces) serves both. */
+  .cl-tag { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; font-weight: 700; text-transform: uppercase;
+    color: var(--ink); background: var(--green-mint); padding: 3px 9px; border-radius: 999px; flex: none; }
+  .cl-barnote { color: #b8b4c2; font-size: 13px; flex: 1; min-width: 0; }
+  .cl-open { margin-left: auto; padding: 8px 14px; font-size: 13.5px; border-radius: var(--r-sm); box-shadow: none; flex: none; }
+  .cl-open:hover { transform: none; }
+  @media (max-width: 720px) { .cl-barnote { display: none; } .cl-brand span { display: none; } }
+
+  .cl-panel { display: flex; justify-content: center; padding: 72px 16px 96px; }
+  .cl-panel[hidden] { display: none; }
+  .cl-card { width: 100%; max-width: 520px; padding: 34px; background: var(--paper); border: 1px solid var(--line);
+    border-radius: var(--r-lg); box-shadow: var(--sh); }
+  @media (max-width: 480px) { .cl-card { padding: 26px 20px; } }
+  .cl-card-title { margin: 0 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 26px; line-height: 1.2; color: var(--fg); }
+  .cl-card-text { margin: 0; font-size: 15px; line-height: 1.6; color: var(--fg-soft); }
+  .cl-card-text:empty { display: none; }
+  .cl-card-busy { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13.5px; color: var(--fg-mute); }
+  .cl-card-busy[hidden] { display: none; }
+</style>

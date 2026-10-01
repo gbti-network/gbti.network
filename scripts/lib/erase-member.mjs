@@ -32,6 +32,7 @@ import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, r
 import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs'; // sow-314
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
+import { erasePreparedListings } from './erase-prepared-listings.mjs'; // sow-427: its own module (this file is over the cap)
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
@@ -819,6 +820,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'prefs', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-046: hard-delete the member's prefs (prefs:${githubId}: category interests + followed news channels).` },
     { step: 'shoptalk', auto: true, tool: 'erase-member.mjs --apply', action: `sow-314: remove the member's address from the Saturday Shop Talk event (a Google Calendar guest list this project does not own; Google mails the un-invite), drop it from shoptalk:placed, and delete shoptalk:optout:${githubId}. Fails closed without calendar credentials.` },
     { step: 'drafts', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-157: hard-delete the hosted draft store (drafts:${githubId}), which may contain unpublished text.` },
+    { step: 'prepared-listings', auto: true, tool: 'erase-member.mjs --apply', action: `sow-427: sweep invite-listing:* and invite:*. A prepared listing tied to github_id ${githubId}, redeemed by them or pending their claim, and never claimed, is DELETED with its images (invite-listing-img:<id>:*), and its invitation is revoked before its tie is removed. A listing they claimed keeps only the fact of the claim (the greeting name, title, slug, claimant fields and tie are nulled). Invites naming them as claimant, pending claimant or tied account have those fields nulled. Runs before redeemed-invites, which it reads.` },
     { step: 'redeemed-invites', auto: true, tool: 'erase-member.mjs --apply', action: `Minimize every invite this member redeemed (invite:*): null redeemedBy + redeemedByLogin, KEEP redeemedAt (a date with nobody attached identifies nobody). The superadmin administration note is deliberately left alone; redacting an admin's own outreach text is the owner's call, not a cleanup step's.` },
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
     { step: 'reverse-follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-186: delete ${FOLLOWERS_KEY(githubId)} (the inbound follower index) and scrub github_id ${githubId} from every followers:* set (a prefix scan, resolution-free). Follower github_ids survive in their own forward follows: lists; reconcile's full recompute is the periodic backstop.` },
@@ -1069,6 +1071,7 @@ export async function runErasure({
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
   await runStep('coupon-grant', () => minimizeCouponGrant({ githubId, env, fetchImpl })); // SOW-119: minimize, never delete (owner ruling)
   await runStep('coupon-redemptions', () => eraseCouponRedemptions({ githubId, env, fetchImpl })); // SOW-119: id-in-key records + counter
+  await runStep('prepared-listings', () => erasePreparedListings({ githubId, env, fetchImpl, now })); // sow-427: reads redeemedBy, so BEFORE the next step
   await runStep('redeemed-invites', () => minimizeRedeemedInvites({ githubId, env, fetchImpl })); // sow-231: person-keyed by redeemedBy, so it needs a sweep
   await runStep('conv-snapshot', () => eraseConversionSnapshot({ githubId, env, fetchImpl })); // SOW-059: own frozen snapshot
   await runStep('conv-counterpart', () => scrubConversionSnapshots({ githubId, env, fetchImpl })); // SOW-059: scrub as counterpart

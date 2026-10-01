@@ -201,3 +201,28 @@ test('every endpoint reports a missing edge store rather than throwing', async (
     assert.equal(res.status, 503, `${fn.name} degrades cleanly`);
   }
 });
+
+// sow-427 B0: THE REAL GATE, not the double. Every test above passes an `authorize` fake that returns a `mirror`,
+// which is exactly how production shipped `issuedByLogin: null` on every invite: the real authorizeAdmin returned
+// no mirror, issuerLogin read nothing, and no test could see it. This drives the real gate with a bearer token and
+// a fake GitHub user lookup, so the login has to come from the mirror the gate itself read.
+test('sow-427: an invite issued through the REAL admin gate records the issuer login', async () => {
+  const overrides = {
+    generatedAt: new Date(Date.now() - 60_000).toISOString(), // the gate checks freshness against the real clock
+    roles: { superadmins: [{ github_id: '2002207', login: 'atwellpub' }] },
+    bans: { bans: [] },
+    grandfathered: { grandfathered: [] },
+  };
+  const kv = fakeKv({ 'coupons:config': MIRROR, 'overrides:mirror': JSON.stringify(overrides) });
+  const request = new Request('https://x/y', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok' },
+    body: JSON.stringify({ campaign: 'CODEABLEYEAR' }),
+  });
+  const fetchUser = async (token) => (token === 'tok' ? { githubId: '2002207', login: 'atwellpub' } : null);
+  const res = await membershipInviteCreate(request, env(kv), { now: NOW, randomBytes: fixedBytes(0), fetchUser });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.invite.issuedByLogin, 'atwellpub', 'the login comes from the mirror the real gate read');
+  const stored = JSON.parse(kv.store.get(inviteKey(res.body.invite.code)));
+  assert.equal(stored.issuedByLogin, 'atwellpub');
+});

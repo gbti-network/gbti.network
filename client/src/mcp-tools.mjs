@@ -26,6 +26,7 @@ import {
   readDraft,
   discardDraft,
   publishDraft,
+  prepareListingOp,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
 // sow-271: resolve the retired `product` type name at the MCP BOUNDARY, so nothing downstream has to know it
@@ -259,6 +260,32 @@ export const TOOLS = [
     description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, limit: { type: 'integer' } }, ['targetType', 'targetSlug']),
     handler: (ctx, args) => listComments(ctx, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit }),
+  },
+  // sow-427 (decision 9): the owner's agent prepares a project listing for someone who is not a member yet and
+  // gets back the invitation link, the way one was prepared by hand on 2026-09-28. Superadmin only, checked here
+  // for a useful error and again by the Worker, which is the boundary. It takes no author note on purpose: the
+  // note is the recipient's own, written when they claim (decision 4), and never ghostwritten.
+  {
+    name: 'prepare_listing',
+    description: 'SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes none and you must not write one for them. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.',
+    inputSchema: obj(
+      {
+        input: { type: 'object', description: 'The project frontmatter, with image fields as ./images/<name> references.' },
+        body: { type: 'string', description: 'The project description in markdown: facts about the work.' },
+        recipientName: { type: 'string', description: 'The name the invitation greets, at most 60 characters.' },
+        message: { type: 'string', description: 'Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page.' },
+        githubLogin: { type: 'string', description: 'Optional. The GitHub account of the recipient. Only that account can claim the listing or its free year.' },
+        campaign: { type: 'string', description: 'The coupon campaign whose free year the invitation grants. It must be active.' },
+        images: {
+          type: 'array',
+          description: 'The images the project references, each staged privately before the save.',
+          items: obj({ name: { type: 'string' }, dataBase64: { type: 'string' } }, ['name', 'dataBase64']),
+        },
+        id: { type: 'string', description: 'Optional. The listing id an earlier call returned, to edit that listing.' },
+      },
+      ['input', 'recipientName', 'message', 'campaign'],
+    ),
+    handler: (ctx, args) => prepareListingOp(ctx, args ?? {}),
   },
 ];
 

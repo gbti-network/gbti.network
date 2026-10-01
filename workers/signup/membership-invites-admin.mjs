@@ -46,6 +46,34 @@ function issuerLogin(auth) {
   catch { return null; }
 }
 
+/**
+ * Mint an invite code for `campaign` that collides with nothing: no issued invite and no campaign code.
+ * Returns `{ ok: true, code }` or `{ ok: false, status, error, message }` ('unmintable' 400, 'mint_failed' 503).
+ *
+ * sow-427: extracted from membershipInviteCreate, unchanged, so a prepared listing's invite (and its "Send again")
+ * mints through the SAME loop and cannot drift into a second minting rule. `randomBytes` is `(n) => Uint8Array`
+ * (tests pass a fixed supply); `config` is the coupons mirror when the caller already read it.
+ */
+export async function mintUniqueInvite(kv, campaign, randomBytes = null, { config = undefined, now = new Date() } = {}) {
+  const rand = typeof randomBytes === 'function'
+    ? randomBytes
+    : (n) => crypto.getRandomValues(new Uint8Array(n));
+  const cfg = config === undefined ? await readCouponsConfig(kv, now) : config;
+
+  for (let i = 0; i < MINT_ATTEMPTS; i += 1) {
+    let candidate;
+    try { candidate = mintInviteCode(campaign, rand(MINT_BYTES)); }
+    catch (e) { return { ok: false, status: 400, error: 'unmintable', message: e?.message || 'this campaign cannot mint an invite code' }; }
+    // Two collisions to rule out, and BOTH matter. A previously issued invite is the obvious one. A
+    // CAMPAIGN code is the subtle one: if a minted code equalled a campaign name, redemption would resolve
+    // it as the shared campaign and the invite would silently stop being single-use.
+    if (couponByCode(cfg, candidate, now)) continue;
+    if (await readInvite(kv, candidate)) continue;
+    return { ok: true, code: candidate };
+  }
+  return { ok: false, status: 503, error: 'mint_failed', message: 'could not mint a unique code; try again' };
+}
+
 /** Read one invite record, or null. A malformed value reads as null so a caller can never act on junk. */
 
 /**
@@ -78,24 +106,9 @@ export async function membershipInviteCreate(request, env, { authorize = authori
     return bad(400, 'bad_request', 'expiresAt must be an ISO date when set');
   }
 
-  const rand = typeof randomBytes === 'function'
-    ? randomBytes
-    : (n) => crypto.getRandomValues(new Uint8Array(n));
-
-  let code = null;
-  for (let i = 0; i < MINT_ATTEMPTS; i += 1) {
-    let candidate;
-    try { candidate = mintInviteCode(campaign, rand(MINT_BYTES)); }
-    catch (e) { return bad(400, 'unmintable', e?.message || 'this campaign cannot mint an invite code'); }
-    // Two collisions to rule out, and BOTH matter. A previously issued invite is the obvious one. A
-    // CAMPAIGN code is the subtle one: if a minted code equalled a campaign name, redemption would resolve
-    // it as the shared campaign and the invite would silently stop being single-use.
-    if (couponByCode(config, candidate, now)) continue;
-    if (await readInvite(kv, candidate)) continue;
-    code = candidate;
-    break;
-  }
-  if (!code) return bad(503, 'mint_failed', 'could not mint a unique code; try again');
+  const minted = await mintUniqueInvite(kv, campaign, randomBytes, { config, now });
+  if (!minted.ok) return bad(minted.status, minted.error, minted.message);
+  const code = minted.code;
 
   const rec = newInvite({
     campaign,
@@ -136,6 +149,10 @@ export async function membershipInviteList(request, env, { authorize = authorize
   for (const name of names) {
     const key = name.slice(INVITE_KEY_PREFIX.length);
     const rec = await readInvite(kv, key);
+    // sow-427: an invite minted for a PREPARED LISTING is managed only through the superadmin prepared-listing
+    // routes (owner decision 10), which show it beside its project. Listing it here as well would put a
+    // superadmin-only invitation, and its code, in front of every admin.
+    if (rec?.listingId) continue;
     const s = inviteSummary(rec, now);
     // A record that will not parse at all yields null and is genuinely absent. A record that parses but is
     // STRUCTURALLY BAD resolves to state `unknown`, and it is kept deliberately: dropping it would make a
@@ -168,6 +185,9 @@ export async function membershipInviteUpdate(request, env, { authorize = authori
   const code = normalizeCouponCode(body?.code);
   const rec = await readInvite(kv, code);
   if (!rec) return bad(404, 'not_found', `no invite named ${code || '(none)'}`);
+  // sow-427: a prepared listing's invite is revoked, sent again or deleted WITH its listing, by a superadmin
+  // (owner decision 10). Revoking it here would leave the listing live and disagreeing with its own invitation.
+  if (rec.listingId) return bad(409, 'prepared_invite', 'this invitation belongs to a prepared listing; manage it from the prepared listings');
 
   const action = String(body?.action ?? '');
   let result;

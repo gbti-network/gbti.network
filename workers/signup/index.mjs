@@ -65,6 +65,11 @@ import { membershipAdminOps } from './membership-admin-ops.mjs';
 import { membershipAdminMail } from './membership-admin-mail.mjs';
 import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
 import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } from './membership-invites-admin.mjs'; // sow-231
+import { membershipPreparedGet, membershipPreparedPost } from './membership-prepared-admin.mjs'; // sow-427: prepared project listings (superadmin)
+import { inviteListingRead, inviteListingImage } from './prepared-claim-read.mjs'; // sow-427: the signed-out read of a prepared listing by its code
+import { membershipClaimStatus, membershipClaimPost, preparedFinalizeHook } from './membership-claim.mjs'; // sow-427: claiming a prepared listing
+import { sendListingClaimedAlert } from './listing-claimed-alert.mjs'; // sow-427: the owner notice when a claim merges
+import { sweepPreparedClaims } from './prepared-claim-sweep.mjs'; // sow-427: finalize claims nobody is watching
 import { editorialList, editorialDecide } from './membership-editorial.mjs'; // sow-323: the editorial review queue
 import { newsItemDecide, newsRemovedList } from './membership-admin-news.mjs'; // sow-338: superadmin news removal
 import { sendEditorialQueueAlert, sendEditorialApprovedEmail } from './editorial-alert.mjs'; // sow-323
@@ -1013,7 +1018,11 @@ async function drainFiveMinute(env) {
   try { report = await maybeSendWeeklyReport(env); }
   catch (e) { report = { error: String(e?.message ?? e) }; }
 
-  return { syndication: settle(syndication), mail: settle(mail), welcome, report };
+  // sow-427 amendment 2: finalize prepared-listing claims nobody is watching (bounded, quarter-hourly, COUNTS ONLY).
+  let prepared;
+  try { prepared = await sweepPreparedClaims(env); } catch { prepared = { error: true }; }
+
+  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared };
 }
 
 // Shared by both Tuesday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still
@@ -1401,6 +1410,47 @@ export default {
         }
         if (method === 'PATCH') {
           const r = await membershipInviteUpdate(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+      // sow-427: PREPARED PROJECT LISTINGS, superadmin only (owner decision 10). A project written for someone who is
+      // not a member yet, and the invitation that lets them claim it. Same credentialed-CORS + allowCookie shape as
+      // the invites route above (the POST is CSRF-gated for a cookie caller). Person-keyed: NEVER cached.
+      if (pathname === '/membership/admin/prepared') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          // sow-427 C2: finalize up to FINALIZE_PER_LIST publishing rows as the manager loads (notice via waitUntil).
+          const r = await membershipPreparedGet(request, env, { allowCookie: true, finalize: preparedFinalizeHook(env, ctx) });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+        if (method === 'POST') {
+          const r = await membershipPreparedPost(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+      // sow-427: the SIGNED-OUT read of a prepared listing by the code in its link, for the claim page. Anonymous,
+      // IP rate limited, and one identical 404 for every inactive case. The code is a bearer secret and the body is
+      // about a person, so never cached, and varied on the bearer like the membership oracle.
+      if (pathname === '/invite/listing' || pathname === '/invite/listing-image') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = pathname === '/invite/listing' ? await inviteListingRead(request, env) : await inviteListingImage(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      // sow-427 C2: CLAIMING a prepared listing. Signed in (bearer, or the website cookie with CSRF on the POST), so
+      // credentialed CORS and never cached. The claim publishes the stored record plus the claimant's own note; the
+      // POST reads only `code` and `note`. A response may carry `notify` (the merge was noticed here): the owner
+      // notice goes out through waitUntil, fail-soft, and never delays the page.
+      if (pathname === '/membership/claim') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET' || method === 'POST') {
+          const r = method === 'GET'
+            ? await membershipClaimStatus(request, env, { allowCookie: true })
+            : await membershipClaimPost(request, env, { allowCookie: true });
+          if (r.notify && ctx?.waitUntil) ctx.waitUntil(sendListingClaimedAlert(env, r.notify));
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
         }
       }

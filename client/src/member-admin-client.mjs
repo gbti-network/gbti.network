@@ -1,7 +1,7 @@
 // SOW-038 P2: the client read path for the admin per-member Stripe-status map, via the signup Worker's
 // GET /membership/admin/statuses. Mirrors member-follows-client.mjs: a thin, injectable-fetch wrapper that sends
 // the GitHub bearer token. The Worker is the authority (admin-gated, fail-closed); this just relays. Unit-tested
-// with a fake fetch (no network).
+// with a fake fetch (no network). sow-427 adds the prepared-listing transport (preparedAdminRequest).
 
 const trimBase = (signupBase) => String(signupBase || '').replace(/\/$/, '');
 
@@ -200,6 +200,62 @@ export async function editorialAdminRequest({ token, signupBase, method = 'GET',
   try { data = await res.json(); } catch { /* ignore */ }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
   return data;
+}
+
+/**
+ * sow-427: a refusal from the prepared-listing routes. Unlike the AdminClientError the transports above throw, it
+ * keeps the HTTP `status`, the Worker's `code` (its `error` field) and any list the Worker attached (`details`:
+ * `issues`, `missing` or `names`). The agent tool needs all three: a 403 means "you are not a superadmin" and must
+ * surface as `forbidden`, while a 400 or 409 is about the listing itself, and the message alone cannot say which.
+ */
+export class PreparedAdminError extends AdminClientError {
+  constructor(message, { status = 0, code = null, details } = {}) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+async function preparedCall(url, { token, method, body, fetch }, what) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) {
+    const list = [data?.issues, data?.missing, data?.names].find(Array.isArray);
+    throw new PreparedAdminError(data?.message || data?.error || `${what} failed (${res.status})`,
+      { status: res.status, code: typeof data?.error === 'string' ? data.error : null, details: list });
+  }
+  return data;
+}
+
+/**
+ * sow-427: the prepared project listings, over the bearer token (the agent server and the extension). The website
+ * uses the cookie session against the same route. The Worker gates every verb at authorizeSuperadmin and is the
+ * boundary; this only relays. `query` is a plain object of search params (`{ id }`, `{ id, image }`); null and
+ * undefined values are left out.
+ */
+export async function preparedAdminRequest({ token, signupBase, method = 'GET', body = null, query = null, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new PreparedAdminError('not signed in', { status: 401, code: 'unauthorized' });
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query ?? {})) if (v !== null && v !== undefined) params.set(k, String(v));
+  const qs = params.toString();
+  return preparedCall(trimBase(signupBase) + '/membership/admin/prepared' + (qs ? '?' + qs : ''), { token, method, body, fetch }, 'prepared listing request');
+}
+
+/**
+ * sow-427: stage one image for a prepared listing in the CALLER's own draft image store (the ordinary
+ * `POST /membership/draft-image` put, keyed by the caller's account number and `item`). The prepared save then
+ * copies it into the listing and deletes the staged copy, so the bytes never have to ride inside the save body.
+ */
+export async function stagePreparedImage({ token, signupBase, item, name, dataBase64, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new PreparedAdminError('not signed in', { status: 401, code: 'unauthorized' });
+  return preparedCall(trimBase(signupBase) + '/membership/draft-image',
+    { token, method: 'POST', body: { op: 'put', item, name, dataBase64 }, fetch }, 'image staging');
 }
 
 /** SOW-058: the superadmin syndication queue (admin-gated read) -> { pending, sent, cancelled, failed }. */

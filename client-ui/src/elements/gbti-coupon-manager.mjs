@@ -7,6 +7,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { houseEditAck } from '../workspace-core.mjs';
 import { landerFor } from '../../../membership/invites.mjs';
+import './gbti-prepared-listings.mjs'; // sow-427: prepared project listings, mounted below the invites for a superadmin client
 
 // sow-231 Phase 3: THE SHARE URL IS NO LONGER ONE HARDCODED PATH. It was `/codeable-invite/?coupon=` for
 // every coupon, which was correct when that was the only lander. There are now three, tier-scoped, and a
@@ -130,7 +131,10 @@ class GbtiCouponManager extends GbtiElement {
       </div>
       <ul class="list">${rows || '<li class="c muted">No coupons yet.</li>'}</ul>
       ${this._invitesHtml()}
+      ${typeof this.client.preparedList === 'function' ? '<div data-prepared-slot></div>' : ''}
     `);
+    // sow-427: ONE kept instance, re-attached after every repaint, so a coupon action never reloads the listings.
+    this.$('[data-prepared-slot]')?.append(Object.assign(this._prepEl ||= document.createElement('gbti-prepared-listings'), { coupons: this._coupons }));
 
     this.$('[data-add]')?.addEventListener('click', () => this._add());
     this.$$('[data-toggle]').forEach((b) => b.addEventListener('click', () => this._toggle(b.dataset.toggle)));
@@ -158,7 +162,8 @@ class GbtiCouponManager extends GbtiElement {
         <p class="use warn">Could not load issued invites. The coupon registry above is unaffected.</p>`;
     }
 
-    const items = (this._invites || []).map((v) => {
+    // sow-427: a prepared invitation is managed with its listing below, never here (the Worker already skips them).
+    const items = (this._invites || []).filter((v) => !v?.listingId).map((v) => {
       const code = esc(String(v.code || ''));
       const state = String(v.state || 'unknown');
       const path = landerFor({ code: v.campaign, tier: (this._coupons || []).find((c) => String(c.code).toUpperCase() === String(v.campaign).toUpperCase())?.tier });

@@ -28,6 +28,25 @@ test('a new account headed to checkout keeps going to checkout', () => {
   assert.equal(signinLanding({ created: true, returnTo: '/membershipx/' }), '/welcome/?next=%2Fmembershipx%2F', 'only the real checkout path');
 });
 
+// sow-427 (owner decision 6): the SECOND exception, and only this one. A new account that signed in from a prepared
+// listing lands on its claim page first, marked `welcome=1` so the page sends it to the welcome steps afterwards.
+// Pinned as narrowly as the checkout exception above, so it cannot widen into "any return path skips the welcome".
+test('sow-427: a new account headed to a claim page lands there first, marked welcome=1', () => {
+  assert.equal(signinLanding({ created: true, returnTo: '/claim/?code=ABC123' }), '/claim/?code=ABC123&welcome=1');
+  assert.equal(signinLanding({ created: true, returnTo: '/claim/?code=CDEABEYEAR23456789AB' }), '/claim/?code=CDEABEYEAR23456789AB&welcome=1');
+});
+
+test('sow-427: near misses of the claim path still meet the welcome steps first', () => {
+  for (const rt of ['/claimx/?code=A', '/claim/?code=abc', '/claim/?code=ABC&x=1', '/claim/other', '/claim/', '/claim/?code=AB',
+    '/claim/?code=ABC123#x', '/claim/?code=ABC123&welcome=1', '/claim-other/?code=ABC123', `/claim/?code=${'A'.repeat(33)}`]) {
+    assert.equal(signinLanding({ created: true, returnTo: rt }), `/welcome/?next=${encodeURIComponent(rt)}`, rt);
+  }
+});
+
+test('sow-427: a returning account on a claim page keeps its path unchanged, with no welcome marker', () => {
+  assert.equal(signinLanding({ created: false, returnTo: '/claim/?code=ABC123' }), '/claim/?code=ABC123');
+});
+
 test('a returning account lands where it was headed, or on its account page, never on the welcome steps', () => {
   assert.equal(signinLanding({ created: false, returnTo: '/workbench/' }), '/workbench/');
   assert.equal(signinLanding({ created: false }), '/account/');
@@ -97,6 +116,14 @@ test('the real callback: a returning account with no return path lands on its ac
 test('the real callback: a returning account lands back where it was', async () => {
   const r = await callback({ existing: true, returnTo: '/workbench/' });
   assert.equal(r.location, 'https://gbti.test/workbench/');
+});
+
+test('sow-427: the real callback: a new account from a claim page lands on it first, marked welcome=1', async () => {
+  const r = await callback({ returnTo: '/claim/?code=CDEABEYEAR23456789AB' });
+  assert.equal(r.status, 302);
+  assert.equal(r.location, 'https://gbti.test/claim/?code=CDEABEYEAR23456789AB&welcome=1');
+  const back = await callback({ existing: true, returnTo: '/claim/?code=CDEABEYEAR23456789AB' });
+  assert.equal(back.location, 'https://gbti.test/claim/?code=CDEABEYEAR23456789AB', 'a returning account gets no marker');
 });
 
 test('the real callback: an unsafe return path in the state is dropped, for new and returning accounts', async () => {
