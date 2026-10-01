@@ -17,6 +17,8 @@ import { safeReturnTo } from '../workers/signup/index.mjs';
 import { CLAIM_STATE } from '../membership/prepared-listings.mjs';
 import { MAX_CLAIM_NOTE } from '../membership/prepared-claim-files.mjs';
 import { MAX_MESSAGE } from '../membership/prepared-listings.mjs';
+import { readFileSync } from 'node:fs';
+import yaml from 'js-yaml';
 
 const BASE = 'https://signup.gbti.network';
 const TIERS = { member: { label: 'Network Supporter', priceAnnual: 50 }, creator: { label: 'Curator', priceAnnual: 150 } };
@@ -268,7 +270,7 @@ test('the rest of the view: labels, specs, tags, the side, the video through the
   assert.equal(m.title, 'Widget');
   assert.equal(m.description, 'Does widget things.');
   assert.deepEqual(m.crumbs, [{ key: 'devops', label: 'DevOps' }, { key: 'unknown-key', label: 'unknown-key' }]);
-  assert.deepEqual(m.specs, [['Version', '1.2.0'], ['Requires', 'Node 20+'], ['Works with', 'linux, mac'], ['License', 'MIT']]);
+  assert.deepEqual(m.specs, [['Version', '1.2.0'], ['Requires', 'Node 20+'], ['Works with', 'linux, mac']], 'the licence is its own row');
   assert.deepEqual(m.tags, ['cli']);
   assert.equal(m.version, 'v1.2.0');
   assert.equal(m.pricing, 'Free');
@@ -280,6 +282,33 @@ test('the rest of the view: labels, specs, tags, the side, the video through the
   assert.equal(listingModel({ slug: 's', frontmatter: {} }).side, 'right');
   assert.equal(listingModel({ slug: 's', frontmatter: {} }).title, 's');
   assert.equal(listingModel(null).title, 'Untitled project');
+});
+
+test('the License row is the published page\'s licenseRow: a link to the terms, plain text, or no row at all', () => {
+  // The real vocabulary, as both pages read it at build.
+  const LICENSES = yaml.load(readFileSync(new URL('../house/licenses.yml', import.meta.url), 'utf8'));
+  const lic = (fm) => listingModel({ slug: 's', frontmatter: fm }, { licenses: LICENSES }).license;
+  assert.deepEqual(lic({ license: 'MIT' }), { id: 'MIT', href: 'https://spdx.org/licenses/MIT.html' }, 'the public page from the list');
+  assert.deepEqual(lic({ license: 'Custom', licenseUrl: 'https://widget.example/terms' }), { id: 'Custom', href: 'https://widget.example/terms' });
+  assert.deepEqual(lic({ license: 'MIT', licenseUrl: 'https://widget.example/LICENSE' }), { id: 'MIT', href: 'https://widget.example/LICENSE' }, 'the author link wins');
+  assert.deepEqual(lic({ license: 'Proprietary' }), { id: 'Proprietary', href: null }, 'no public page: plain text');
+  assert.equal(lic({ license: 'WTFPL' }), null, 'an id outside the list is dropped, as published');
+  assert.equal(lic({ license: 'mit' }), null, 'exact match only');
+  assert.equal(lic({}), null);
+  assert.equal(listingModel({ slug: 's', frontmatter: { license: 'MIT' } }).license, null, 'no vocabulary: fail closed, no row');
+  // A licence address that is not http(s) never becomes an href.
+  assert.deepEqual(lic({ license: 'Custom', licenseUrl: 'javascript:alert(1)' }), { id: 'Custom', href: null });
+  // Drift: the published page builds the row with the same helper and the same link class.
+  const page = readFileSync(new URL('../src/pages/projects/[slug].astro', import.meta.url), 'utf8');
+  assert.match(page, /const licenseInfo = licenseRow\(\n\s*\{ license: d\.license, licenseUrl: d\.licenseUrl, detected: detectedLicense, repoLicenseHref \},\n\s*LICENSES,/);
+  assert.match(page, /<a href=\{licenseInfo\.href\} rel="noopener" class="pd-release-link">\{licenseInfo\.id\}<\/a>/);
+  assert.match(page, /yaml\.load\(fs\.readFileSync\(path\.resolve\(process\.cwd\(\), 'house\/licenses\.yml'\), 'utf8'\)\)/);
+  const claimPage = readFileSync(new URL('../src/pages/claim/index.astro', import.meta.url), 'utf8');
+  assert.match(claimPage, /yaml\.load\(fs\.readFileSync\(path\.resolve\(process\.cwd\(\), 'house\/licenses\.yml'\), 'utf8'\)\)/, 'the preview reads the same list');
+  assert.match(claimPage, /data-licenses=\{JSON\.stringify\(LICENSES\)\}/);
+  const script = readFileSync(new URL('../src/lib/claim-page.ts', import.meta.url), 'utf8');
+  assert.match(script, /listingModel\(l, \{ labels, images, licenses, now: new Date\(\) \}\)/);
+  assert.match(script, /licLink\.className = 'pd-release-link';/, 'the published link look');
 });
 
 // ---- the Worker's answers --------------------------------------------------------------------------------------

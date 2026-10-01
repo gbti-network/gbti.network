@@ -12,10 +12,11 @@
 //
 // THE CLAIM PUBLISHES EXACTLY WHAT WAS PREPARED. The stored record IS the superadmin's approval of a public project,
 // so the claimant supplies only their own author note. Nothing in this module takes a frontmatter or a body from
-// the claimant, and nothing here should ever start to.
+// the claimant, and nothing here should ever start to. The record may carry a SUGGESTED note (sow-434), but that is
+// only the text the claim dialog starts from: the note that is published is whatever the claimant submits.
 //
 // No logging anywhere in this module, and none may be added: the invitation code is a bearer secret, and the title,
-// the greeting name and the message are about a person who has not agreed to anything yet.
+// the greeting name, the message and the suggested note are about a person who has not agreed to anything yet.
 
 import { INVITE_STATE, inviteState, bindingRefuses } from './invites.mjs';
 import { normalizeCouponCode, COUPON_CODE_RE } from './coupons.mjs';
@@ -25,7 +26,7 @@ import { schemaFor } from '../client/src/schemas.mjs';
 // The browser-safe half lives in its own module (see its header); everything there is re-exported from here, so
 // a server-side caller keeps one import path.
 export * from './prepared-listings-shared.mjs';
-import { GITHUB_ID_RE, LISTING_STATE, PLACEHOLDER_FOLDER, PREPARED_MAX_IMAGES, PREPARED_SLUG_MAX, SLUG_RE, isListingId, listingImageRefs, normalizeGithubLogin, sanitizeMessage, sanitizeRecipientName } from './prepared-listings-shared.mjs';
+import { GITHUB_ID_RE, LISTING_STATE, PLACEHOLDER_FOLDER, PREPARED_MAX_IMAGES, PREPARED_SLUG_MAX, SLUG_RE, isListingId, listingImageRefs, normalizeGithubLogin, sanitizeMessage, sanitizeRecipientName, sanitizeSuggestedNote, validateSuggestedNote } from './prepared-listings-shared.mjs';
 
 // ---- validating a prepared project ----------------------------------------------------------------------------
 
@@ -160,10 +161,11 @@ function boundFields(boundGithubId, boundLogin) {
 
 /**
  * A new listing record from a VALIDATED draft (validatePreparedDraft's `draft`). Throws on anything malformed:
- * the route validates first, so a throw here is a programming error, never a user one.
+ * the route validates first, so a throw here is a programming error, never a user one. `suggestedNote` is optional
+ * (sow-434) and stored as '' when there is none; the route checks its length with validateSuggestedNote first.
  */
 export function newListing({
-  id, draft, recipientName, message, campaign, code,
+  id, draft, recipientName, message, suggestedNote = '', campaign, code,
   boundGithubId = null, boundLogin = null, preparedBy, preparedByLogin = null, now = new Date(),
 } = {}) {
   if (!isListingId(id)) throw new Error('prepared-listings: invalid listing id');
@@ -187,6 +189,7 @@ export function newListing({
     images: Array.isArray(draft.images) ? [...draft.images] : [],
     recipientName: sanitizeRecipientName(recipientName),
     message: sanitizeMessage(message),
+    suggestedNote: sanitizeSuggestedNote(suggestedNote),
     campaign: camp,
     code: c,
     priorCodes: [],
@@ -221,8 +224,9 @@ export function listingState(rec) {
  * Apply an edit from the superadmin. Allowed only while the listing is prepared or revoked. Returns
  * `{ ok: true, next, changed, removedImages }` or `{ ok: false, error, message }`.
  *
- * @param edit `{ draft?, recipientName?, message?, binding? }`. `draft` is a validated draft; `binding` is
- *             `{ boundGithubId, boundLogin }`, or null to untie it, or undefined to leave it.
+ * @param edit `{ draft?, recipientName?, message?, suggestedNote?, binding? }`. `draft` is a validated draft;
+ *             `suggestedNote` of '' or null clears it (it is optional); `binding` is `{ boundGithubId, boundLogin }`,
+ *             or null to untie it, or undefined to leave it.
  * @param invite the listing's current invite, used to refuse a binding change once the invitation is redeemed or
  *             claimed: the year already went to one account, and moving the tie would hand the project to another.
  * `removedImages` names the stored images the new draft no longer references, for the route to delete.
@@ -253,6 +257,13 @@ export function applyListingEdit(rec, edit = {}, { now = new Date(), invite = nu
     const text = sanitizeMessage(edit.message);
     if (!text) return { ok: false, error: 'message_required', message: 'Write the personal message the invitation shows them.' };
     next.message = text;
+  }
+  if (edit.suggestedNote !== undefined) {
+    const v = validateSuggestedNote(edit.suggestedNote);
+    if (!v.ok) return { ok: false, error: v.error, message: v.message };
+    // Compared with what the record holds (a listing saved before sow-434 has no field at all), so saving an
+    // untouched form is still no change and does not move updatedAt.
+    if (v.suggestedNote !== (typeof rec.suggestedNote === 'string' ? rec.suggestedNote : '')) next.suggestedNote = v.suggestedNote;
   }
   if (edit.binding !== undefined) {
     let b;
@@ -356,12 +367,13 @@ export function markListingClaimed(rec, { githubId, login = null, folder, path, 
 
 /**
  * The record that stays after a claim, so the manager keeps saying "prepared for Sam, claimed 2 Oct". The project
- * copy, the body, the image list and the personal message go: the project now lives in the repository under the
- * claimant's name, and a message written to someone before they joined has no reason to outlive the claim.
+ * copy, the body, the image list, the personal message and the suggested note go: the project now lives in the
+ * repository under the claimant's name, the note that went live is the one they submitted, and text written to or for
+ * someone before they joined has no reason to outlive the claim.
  */
 export function minimizeClaimedListing(rec) {
   if (!isPlainObject(rec)) return rec;
-  return { ...rec, frontmatter: null, body: null, message: null, images: [], claimPendingAt: null, claimPendingBy: null };
+  return { ...rec, frontmatter: null, body: null, message: null, suggestedNote: null, images: [], claimPendingAt: null, claimPendingBy: null };
 }
 
 // ---- views ----------------------------------------------------------------------------------------------------
@@ -369,8 +381,8 @@ export function minimizeClaimedListing(rec) {
 
 
 /**
- * The superadmin manager's row. Never carries the personal message or the project body (Edit loads those through
- * listingAdminView). `inviteState` is the invitation's own state beside the listing's.
+ * The superadmin manager's row. Never carries the personal message, the suggested note or the project body (Edit
+ * loads those through listingAdminView). `inviteState` is the invitation's own state beside the listing's.
  */
 export function listingSummary(rec, invite = null, now = new Date()) {
   if (!isPlainObject(rec)) return null;
@@ -409,6 +421,7 @@ export function listingAdminView(rec, invite = null, now = new Date()) {
     ...s,
     boundGithubId: rec.boundGithubId ?? null,
     message: rec.message ?? '',
+    suggestedNote: typeof rec.suggestedNote === 'string' ? rec.suggestedNote : '',
     frontmatter: rec.frontmatter ?? null,
     body: rec.body ?? '',
     images: Array.isArray(rec.images) ? [...rec.images] : [],
@@ -417,10 +430,16 @@ export function listingAdminView(rec, invite = null, now = new Date()) {
 
 /**
  * What a signed-out visitor holding the link may see. NEVER the administration note (that is on the invite and is
- * not read here), never an account number, never the binding, never the code. `terms` is the campaign entry
- * (`{ tier, freeDays }`) read WITHOUT the active gate, so a retired campaign does not void a sent link.
+ * not read here), never an account number, never the code. `terms` is the campaign entry (`{ tier, freeDays }`) read
+ * WITHOUT the active gate, so a retired campaign does not void a sent link.
+ *
+ * sow-434 adds two fields for the preview that looks published. `suggestedNote` ('' when none) fills the pinned
+ * "From the author" card and pre-fills the claim dialog's note box. `githubLogin` is the login of a TIED listing, so
+ * the example profile can link their real GitHub page; it is null for an untied listing, and the account number the
+ * tie is stored by never leaves (boundGithubId is read only to decide that a tie exists).
  */
 export function publicListingView(rec, terms = null) {
+  const tied = rec?.boundGithubId !== null && rec?.boundGithubId !== undefined && rec?.boundGithubId !== '';
   return {
     type: rec?.type ?? 'project',
     slug: rec?.slug ?? null,
@@ -429,6 +448,8 @@ export function publicListingView(rec, terms = null) {
     images: Array.isArray(rec?.images) ? [...rec.images] : [],
     recipientName: rec?.recipientName ?? '',
     message: rec?.message ?? '',
+    suggestedNote: typeof rec?.suggestedNote === 'string' ? rec.suggestedNote : '',
+    githubLogin: tied ? normalizeGithubLogin(String(rec.boundLogin ?? '')) : null,
     preparedByLogin: rec?.preparedByLogin ?? null,
     tier: terms?.tier ?? null,
     freeDays: Number.isInteger(terms?.freeDays) ? terms.freeDays : null,

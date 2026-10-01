@@ -11,18 +11,19 @@
 // to touch an invite that belongs to a listing and hides it from its list.
 //
 // A LISTING NEVER EXISTS WITHOUT ITS INVITATION, AND THE ORDER OF A SAVE IS THE WHOLE DESIGN (amendment 5).
-// Everything that can refuse runs first and writes nothing: the campaign, the greeting and message, the project
-// (validatePreparedDraft: schema, link schemes, image references, no members-only gating), the GitHub account for
-// a binding, the image bytes, the size dry run (preparedSizeProblem), a permalink no project on the site or other
-// listing uses, and the category and licence against the house lists. Only then: the images, the invite (no
-// expiry, owner decision 8), the listing, and LAST the deletion of the superadmin's staged copies. A refusal at any
-// check leaves the staged images in place so the retry finds them; a failed write undoes what came before it.
+// Everything that can refuse runs first and writes nothing: the campaign, the greeting and message, the suggested
+// note (sow-434), the project (validatePreparedDraft: schema, link schemes, image references, no members-only
+// gating), the GitHub account for a binding, the image bytes, the size dry run (preparedSizeProblem), a permalink no
+// project on the site or other listing uses, and the category and licence against the house lists. Only then: the
+// images, the invite (no expiry, owner decision 8), the listing, and LAST the deletion of the superadmin's staged
+// copies. A refusal at any check leaves the staged images in place so the retry finds them; a failed write undoes
+// what came before it.
 //
 // THE STORED RECORD IS THE SUPERADMIN'S APPROVAL of a public project (the claim publishes it byte for byte, with
 // only the claimant's note added), so every check here runs again at the claim.
 //
-// No logging anywhere in this module: the invitation code is a bearer secret, and the title, the greeting and the
-// message are about a person who has not agreed to anything yet.
+// No logging anywhere in this module: the invitation code is a bearer secret, and the title, the greeting, the
+// message and the suggested note are about a person who has not agreed to anything yet.
 
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { readInvite, writeInvite } from './invites-store.mjs';
@@ -42,8 +43,8 @@ import { itemTokenOf } from '../../membership/draft-images.mjs';
 import { newInvite, revokeInvite, setInviteBinding, inviteState, INVITE_STATE } from '../../membership/invites.mjs';
 import {
   isListingId, isListingImageName, mintListingId, normalizeGithubLogin, validateInvitationText, validatePreparedDraft,
-  newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend, listingSummary,
-  listingAdminView, claimLink,
+  validateSuggestedNote, newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend,
+  listingSummary, listingAdminView, claimLink,
 } from '../../membership/prepared-listings.mjs';
 import { listingHouseProblems, preparedSizeProblem } from '../../membership/prepared-claim-files.mjs';
 
@@ -191,9 +192,11 @@ async function restoreInviteBinding(kv, code, listing, now) {
 // ---- save -----------------------------------------------------------------------------------------------------
 
 /**
- * `{ op: 'save', id?, campaign, recipientName, message, githubLogin?, draft: { type, slug, frontmatter, body },
- *    stagedItem? }`. Without `id` it creates a listing and its invitation; with `id` it edits one that is prepared or
- * revoked. On an edit every field is optional (absent means unchanged); `githubLogin` of '' or null unties.
+ * `{ op: 'save', id?, campaign, recipientName, message, suggestedNote?, githubLogin?, draft: { type, slug,
+ *    frontmatter, body }, stagedItem? }`. Without `id` it creates a listing and its invitation; with `id` it edits one
+ * that is prepared or revoked. On an edit every field is optional (absent means unchanged); `githubLogin` of '' or
+ * null unties, and `suggestedNote` of '' or null clears the suggestion (sow-434: optional, plain text, at most
+ * MAX_SUGGESTED_NOTE characters, refused rather than cut when longer).
  */
 async function saveListing(body, { env, kv, auth, now, rand, io }) {
   const creating = blank(body?.id);
@@ -229,6 +232,14 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
       message: body?.message !== undefined ? body.message : current?.message,
     });
     if (!text.ok) return bad(400, text.error, text.message);
+  }
+
+  // The suggested note (sow-434). Optional, so it is checked only when sent: undefined leaves an edit's note alone.
+  let suggestedNote;
+  if (body?.suggestedNote !== undefined) {
+    const v = validateSuggestedNote(body.suggestedNote);
+    if (!v.ok) return bad(400, v.error, v.message);
+    suggestedNote = v.suggestedNote;
   }
 
   // The project.
@@ -272,11 +283,11 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
   }
 
   return creating
-    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, draft, binding: bind.binding, collected })
-    : updateListing({ kv, auth, now, io, id, readEarlier: current, text, draft, binding: bind.binding, collected });
+    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding: bind.binding, collected })
+    : updateListing({ kv, auth, now, io, id, readEarlier: current, text, suggestedNote, draft, binding: bind.binding, collected });
 }
 
-async function createListing({ kv, auth, now, rand, io, config, campaign, text, draft, binding, collected }) {
+async function createListing({ kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding, collected }) {
   let id = null;
   for (let i = 0; i < LISTING_ID_ATTEMPTS && !id; i += 1) {
     let candidate;
@@ -298,7 +309,7 @@ async function createListing({ kv, auth, now, rand, io, config, campaign, text, 
       listingId: id, boundGithubId: bound?.boundGithubId ?? null, boundLogin: bound?.boundLogin ?? null,
     });
     rec = newListing({
-      id, draft, recipientName: text.recipientName, message: text.message, campaign, code,
+      id, draft, recipientName: text.recipientName, message: text.message, suggestedNote: suggestedNote ?? '', campaign, code,
       boundGithubId: bound?.boundGithubId ?? null, boundLogin: bound?.boundLogin ?? null,
       preparedBy: auth.githubId, preparedByLogin: login, now,
     });
@@ -320,7 +331,7 @@ async function createListing({ kv, auth, now, rand, io, config, campaign, text, 
   return { status: 200, body: { ok: true, created: true, changed: true, listing: listingSummary(rec, inv, now), code, link: claimLink(io.siteBase, code) } };
 }
 
-async function updateListing({ kv, auth, now, io, id, readEarlier, text, draft, binding, collected }) {
+async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggestedNote, draft, binding, collected }) {
   // RE-READ BEFORE THE FIRST WRITE (review F1). saveListing read the listing and then waited on GitHub (the login
   // lookup, the uncached permalink check, the house lists), and a claim can take its lock in that gap. Writing the
   // copy read before it back would wipe the lock while the claim's pull request is open: nothing would ever finalize
@@ -336,6 +347,7 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, draft, 
   const edit = {};
   if (draft) edit.draft = draft;
   if (text) { edit.recipientName = text.recipientName; edit.message = text.message; }
+  if (suggestedNote !== undefined) edit.suggestedNote = suggestedNote;
   if (binding !== undefined) edit.binding = binding;
   const applied = applyListingEdit(current, edit, { now, invite });
   if (!applied.ok) {

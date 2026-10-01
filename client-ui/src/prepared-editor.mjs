@@ -7,8 +7,10 @@
 // WHAT PREPARED MODE CHANGES IN THE EDITOR, AND WHY.
 //   - Publish, Save draft and Preview are hidden: nothing is published and nothing lands in the superadmin's own
 //     draft store. The one action is Save listing, which calls client.preparedSave.
-//   - The From the author section is hidden. The author note is the claimant's alone (owner decision 4): they write
-//     it in the claim step, and a note written here would put words in their mouth under their name.
+//   - The From the author section is hidden. The author note is the claimant's (owner decision 4): they write and
+//     publish it in the claim step, under their own name. What the card offers instead is a SUGGESTED note (sow-434,
+//     which relaxed decision 4 to this): optional text the claim dialog starts from and the claimant edits or keeps.
+//     It states facts about the work and never invents their reasons, and it is never published unless they submit it.
 //   - The audience switch is hidden. A claimed project is always published to everyone (the Worker refuses any
 //     members-only gating in a prepared project), so the switch would offer a choice that does not exist.
 //   - Hiding is done by one class on the editor host (`prep-on`) and !important rules, not by re-rendering, so an
@@ -22,11 +24,11 @@
 // Worker copies the bytes into the listing's own store and then deletes the staged copies. Reading one back for an
 // open listing tries the staged copy first, then the listing store (preparedImageReader).
 //
-// Nothing here logs. The invitation code in the link is a bearer secret, and the greeting, the message and the
-// project are about a person who has not agreed to anything yet.
+// Nothing here logs. The invitation code in the link is a bearer secret, and the greeting, the message, the suggested
+// note and the project are about a person who has not agreed to anything yet.
 
 import { failHint } from './workspace-core.mjs';
-import { isListingId, validateInvitationText, normalizeGithubLogin, MAX_MESSAGE, MAX_RECIPIENT_NAME } from '../../membership/prepared-listings-shared.mjs';
+import { isListingId, validateInvitationText, validateSuggestedNote, normalizeGithubLogin, MAX_MESSAGE, MAX_RECIPIENT_NAME, MAX_SUGGESTED_NOTE } from '../../membership/prepared-listings-shared.mjs';
 
 // The same escape as base.mjs, kept here so this module stays DOM-free and node-testable without loading the element
 // base (and the avatar layer it pulls in). cta-manager-view.mjs does the same for the same reason.
@@ -34,11 +36,11 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 // ---- the prepared state ----------------------------------------------------------------------------------------
 
-const PREP_KEYS = ['id', 'recipientName', 'message', 'githubLogin', 'campaign', 'code', 'link', 'state', 'inviteState'];
+const PREP_KEYS = ['id', 'recipientName', 'message', 'suggestedNote', 'githubLogin', 'campaign', 'code', 'link', 'state', 'inviteState'];
 
 /** The prepared state of a listing that has not been saved yet. */
 export function blankPrepared() {
-  return { id: null, recipientName: '', message: '', githubLogin: '', campaign: '', code: null, link: null, state: null, inviteState: null };
+  return { id: null, recipientName: '', message: '', suggestedNote: '', githubLogin: '', campaign: '', code: null, link: null, state: null, inviteState: null };
 }
 
 /** The `prepared` option handed to the editor's load(), as a fresh prepared state, or null when absent. */
@@ -81,7 +83,8 @@ export function preparedEditingFrom(res) {
     body: typeof l.body === 'string' ? l.body : '',
     path: '',
     prepared: preparedFromLoad({
-      id: l.id, recipientName: l.recipientName || '', message: l.message || '', githubLogin: l.bound ? (l.boundLogin || '') : '',
+      id: l.id, recipientName: l.recipientName || '', message: l.message || '', suggestedNote: l.suggestedNote || '',
+      githubLogin: l.bound ? (l.boundLogin || '') : '',
       campaign: l.campaign || '', code: l.code || null, link: typeof res.link === 'string' ? res.link : null,
       state: l.state || null, inviteState: l.inviteState || null,
     }),
@@ -202,9 +205,13 @@ export function preparedToggleHtml(on) {
 
 const bindingLockedFor = (p) => isListingId(p?.id) && !['issued', 'revoked', 'expired'].includes(String(p?.inviteState || ''));
 
+/** The hint under the suggested note: the rule the agent tool's description states too (sow-434). */
+export const SUGGESTED_NOTE_HINT = 'A starting point they can edit or keep. State facts about the work; never invent their reasons.';
+
 /**
- * The "Prepared for" rail card: the greeting name, the optional GitHub account, the personal message, the campaign,
- * and once saved the invitation link with Copy and Open. `p` null renders the card empty, hidden until the toggle.
+ * The "Prepared for" rail card: the greeting name, the optional GitHub account, the personal message, the optional
+ * suggested note, the campaign, and once saved the invitation link with Copy and Open. `p` null renders the card
+ * empty, hidden until the toggle.
  */
 export function preparedCardHtml(p, campaigns = []) {
   const s = p || blankPrepared();
@@ -240,7 +247,9 @@ export function preparedCardHtml(p, campaigns = []) {
       <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc(s.githubLogin)}"${locked ? ' readonly' : ''} />
         <p class="pnote">${locked ? 'The free year was already taken through this link, so the account it is tied to can no longer change.' : 'Ties the invitation to that one account. Leave it empty and whoever opens the link first can claim it.'}</p></div>
       <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc(s.message)}</textarea>
-        <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to write when they claim it.</p></div>
+        <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to publish when they claim it.</p></div>
+      <div class="pfld"><label for="prep-note">Suggested note (optional)</label><textarea id="prep-note" data-prep="suggestedNote" maxlength="${MAX_SUGGESTED_NOTE}" placeholder="Pre-fills their author note when they claim it.">${esc(s.suggestedNote)}</textarea>
+        <p class="pnote">${esc(SUGGESTED_NOTE_HINT)}</p></div>
       <div class="pfld"><label for="prep-camp">Campaign</label>${campaignField}</div>
       ${link}
     </div>
@@ -273,6 +282,8 @@ const NEVER_IN_PROJECT = ['authorNote', 'authorTarget', 'path', 'type', 'author'
 export function preparedTextProblem(p) {
   const t = validateInvitationText({ recipientName: p?.recipientName, message: p?.message });
   if (!t.ok) return t.message;
+  const note = validateSuggestedNote(p?.suggestedNote ?? '');
+  if (!note.ok) return note.message;
   if (!isListingId(p?.id) && !String(p?.campaign || '').trim()) return 'Choose the campaign whose free year the invitation carries.';
   const login = String(p?.githubLogin || '').trim();
   if (login && !normalizeGithubLogin(login)) return 'That is not a GitHub account name. Use letters, digits and single hyphens, or leave it empty.';
@@ -280,9 +291,10 @@ export function preparedTextProblem(p) {
 }
 
 /**
- * The body for `client.preparedSave`. Creating (no listing id) sends the campaign and a GitHub account only when one
- * was given (blank means first come). Editing sends the id, never the campaign (it is fixed while the invitation is
- * out), and always the account field, where blank unties and the stored login leaves the binding as it is.
+ * The body for `client.preparedSave`. Creating (no listing id) sends the campaign, and a GitHub account and a
+ * suggested note only when one was given (a blank account means first come; a blank note means none). Editing sends
+ * the id, never the campaign (it is fixed while the invitation is out), and always the account and the note, where
+ * blank unties or clears and the stored value leaves it as it is.
  */
 export function buildPreparedPayload({ prepared, gathered } = {}) {
   const p = prepared || {};
@@ -291,11 +303,13 @@ export function buildPreparedPayload({ prepared, gathered } = {}) {
   const slug = String(input.slug ?? '').trim();
   const creating = !isListingId(p.id);
   const login = String(p.githubLogin ?? '').trim();
+  const note = String(p.suggestedNote ?? '');
   return {
     op: 'save',
     ...(creating ? { campaign: String(p.campaign ?? '').trim().toUpperCase() } : { id: p.id }),
     recipientName: String(p.recipientName ?? ''),
     message: String(p.message ?? ''),
+    ...(creating ? (note.trim() ? { suggestedNote: note } : {}) : { suggestedNote: note }),
     ...(creating ? (login ? { githubLogin: login } : {}) : { githubLogin: login }),
     draft: { type: 'project', slug, frontmatter: input, body: String(gathered?.body ?? '') },
     stagedItem: `project:${slug}`,
@@ -373,7 +387,7 @@ export function setPreparedMode(editor, on) {
     editor._prepared = editor._prepared || editor._prepStash || blankPrepared();
     editor._prepStash = null;
     readPreparedInputs(editor);
-    editor.out?.('Prepared mode: Save listing stores the project privately with an invitation. Publish and the author note are hidden, because the person you invite writes their own note when they claim it.');
+    editor.out?.('Prepared mode: Save listing stores the project privately with an invitation. Publish and the author note are hidden, because the person you invite publishes their own note when they claim it, starting from your suggested note if you leave one.');
   } else {
     if (isListingId(editor._prepared?.id)) return;
     editor._prepStash = editor._prepared;

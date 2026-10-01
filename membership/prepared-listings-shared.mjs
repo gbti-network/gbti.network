@@ -1,6 +1,7 @@
-// sow-427: the BROWSER-SAFE half of the prepared-listings core: ids and KV key shapes, the limits, the greeting and
-// message sanitizers, image-name rules, the listing state names, and the two addresses (the claim link and the
-// project page). It imports only small pure modules, so the shared UI, the extension and the agent tools can use it.
+// sow-427: the BROWSER-SAFE half of the prepared-listings core: ids and KV key shapes, the limits, the greeting,
+// message and suggested-note sanitizers, image-name rules, the listing state names, and the two addresses (the claim
+// link and the project page). It imports only small pure modules, so the shared UI, the extension and the agent tools
+// can use it.
 //
 // WHY IT IS SPLIT OUT. prepared-listings.mjs validates a prepared project with the content builder and its schemas,
 // which pull the whole schema library into any bundle that imports them. Importing these few helpers from there
@@ -8,7 +9,7 @@
 // validator or the record state machine imports prepared-listings.mjs, which re-exports everything here.
 //
 // No logging anywhere in this module, and none may be added: the invitation code is a bearer secret, and the
-// greeting name and the message are about a person who has not agreed to anything yet.
+// greeting name, the message and the suggested note are about a person who has not agreed to anything yet.
 
 import { alphabetSample } from './invites.mjs';
 import { normalizeCouponCode } from './coupons.mjs';
@@ -76,6 +77,11 @@ export const SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
 export const PREPARED_MAX_IMAGES = 12;
 export const MAX_MESSAGE = 1000;
 export const MAX_RECIPIENT_NAME = 60;
+/**
+ * sow-434: the longest suggested note. It is the claim note's own cap (MAX_CLAIM_NOTE in prepared-claim-files.mjs,
+ * NOTE_MAX in src/lib/claim-core.mjs), because the suggestion pre-fills that box; a test holds the three together.
+ */
+export const MAX_SUGGESTED_NOTE = 2000;
 /** The folder a size or schema dry run builds into. Never a real member folder, never committed. */
 export const PLACEHOLDER_FOLDER = 'prepared-listing';
 
@@ -93,6 +99,12 @@ const INVISIBLE_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
  * store time would show a reader literal entities.
  */
 export function sanitizeMessage(s) {
+  return plainText(s, MAX_MESSAGE);
+}
+
+// The plain-text rule sanitizeMessage describes, with the cap as a parameter, so the suggested note is cleaned by the
+// very same steps rather than by a copy that could drift.
+function plainText(s, max) {
   if (typeof s !== 'string') return '';
   return s
     .replace(/\r\n?/g, '\n')
@@ -103,8 +115,33 @@ export function sanitizeMessage(s) {
     .replace(/[ ]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-    .slice(0, MAX_MESSAGE)
+    .slice(0, max)
     .trim();
+}
+
+/**
+ * sow-434: the SUGGESTED NOTE, an optional starting point for the claimant's own author note. Plain text, cleaned
+ * exactly like the message (line breaks kept, every other control and the bidirectional controls removed, blank runs
+ * collapsed), capped at MAX_SUGGESTED_NOTE. '' means there is none. It is never published as it stands: the claim
+ * dialog pre-fills its note box with it, and the note that goes live is the one the claimant edits or keeps and
+ * submits themselves. Like the message, markup is stored verbatim and made safe where it is rendered.
+ */
+export function sanitizeSuggestedNote(s) {
+  return plainText(s, MAX_SUGGESTED_NOTE);
+}
+
+/**
+ * The suggested note a save carries, checked: `{ ok: true, suggestedNote }`, where an absent, null or blank value is
+ * '' (none), or `{ ok: false, error: 'invalid' | 'suggested_note_too_long', message }`. A note over the cap is REFUSED
+ * rather than cut, so nobody is handed a pre-filled note that stops mid-sentence.
+ */
+export function validateSuggestedNote(raw) {
+  if (raw === undefined || raw === null) return { ok: true, suggestedNote: '' };
+  if (typeof raw !== 'string') return { ok: false, error: 'invalid', message: 'The suggested note must be plain text.' };
+  if (plainText(raw, Infinity).length > MAX_SUGGESTED_NOTE) {
+    return { ok: false, error: 'suggested_note_too_long', message: `The suggested note is longer than ${MAX_SUGGESTED_NOTE} characters. Shorten it and save again.` };
+  }
+  return { ok: true, suggestedNote: sanitizeSuggestedNote(raw) };
 }
 
 /** The greeting name ("Hi Sam,"): one line, controls collapsed to a space, trimmed, capped at MAX_RECIPIENT_NAME. */

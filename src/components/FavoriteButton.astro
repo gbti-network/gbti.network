@@ -11,22 +11,34 @@ interface Props {
   targetSlug: string;
   count?: number;
   size?: 'sm' | 'md' | 'rail'; // sow-179: 'rail' is the icon-only 38px button for the Editorial/Journal sticky rail
+  inert?: boolean; // sow-434: the invitation preview's disabled copy, see below
 }
-const { targetType, targetSlug, count = 0, size = 'md' } = Astro.props;
+const { targetType, targetSlug, count = 0, size = 'md', inert = false } = Astro.props;
+// sow-434: `inert` is the invitation preview's copy (/claim/), for a listing nobody has published yet. The markup
+// stays the same elements in the same order, and every live hook is switched off attribute by attribute, so the
+// default output is byte for byte what it was (test/claim-render.test.mjs pins the template; a site build diffed
+// before and after proved it). Wrapping either version in a conditional would not do: Astro drops the whitespace
+// between elements inside an expression, which changes the published markup.
+// Inert, the host is a plain <span> rather than <gbti-favorite>: save-controls.ts upgrades ANY <gbti-favorite> on the
+// page, and the claimant is signed in, so a real tag would write a favorite against a slug nobody has published.
+// No data-gbti-* hooks, no data-signin, and the button is disabled with the one tooltip.
+const Host = inert ? 'span' : 'gbti-favorite';
+const live = <T,>(v: T): T | undefined => (inert ? undefined : v);
 ---
-<gbti-favorite
-  data-gbti-target-type={targetType}
-  data-gbti-target-slug={targetSlug}
-  data-gbti-count={count}
-  data-gbti-size={size}
-  data-gbti-region="favorite"
+<Host
+  data-gbti-target-type={live(targetType)}
+  data-gbti-target-slug={live(targetSlug)}
+  data-gbti-count={live(count)}
+  data-gbti-size={live(size)}
+  data-gbti-region={live('favorite')}
   class:list={['gbti-favorite', size === 'sm' && 'fav-sm', size === 'rail' && 'fav-rail']}
+  style={inert ? 'display:inline-flex' : undefined}
 >
-  <button type="button" class="fav-pill" data-signin data-tooltip="Favorite" aria-label={`Favorite this ${targetType}${count > 0 ? `, ${count} so far` : ''}`}>
+  <button type="button" class="fav-pill" data-signin={live('')} disabled={inert || undefined} aria-disabled={inert ? 'true' : undefined} style={inert ? 'cursor:not-allowed' : undefined} data-tooltip={inert ? 'Available once published' : 'Favorite'} aria-label={inert ? `Favorite this ${targetType}, available once published` : `Favorite this ${targetType}${count > 0 ? `, ${count} so far` : ''}`}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-heart" /></svg>
     {count > 0 && <span class="fav-count">{count}</span>}
   </button>
-</gbti-favorite>
+</Host>
 <style is:global>
   /* The light-DOM pill is the public (inert) display; when <gbti-favorite> upgrades, its Shadow DOM covers it. */
   gbti-favorite { display: inline-flex; }

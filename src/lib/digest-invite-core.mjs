@@ -32,12 +32,17 @@ export const INVITE_VISIT_KEY = 'gbti_digest_invite_visit';
 /** localStorage: `{ v: 1, n: <dismissals so far>, until: <quiet until, ms>, done: true once subscribed }`. */
 export const INVITE_STATE_KEY = 'gbti-digest-invite';
 
-/** Pages the invitation never opens on: selling a membership or a sponsorship, signing in, and the account area. */
+/**
+ * Pages the invitation never opens on: selling a membership or a sponsorship, signing in, claiming a prepared listing,
+ * and the account area. `/claim/` (sow-434) covers the invitation preview and its example profile page: the person
+ * there is already invited, and a preview must never carry a live subscribe form.
+ */
 export const INVITE_QUIET_PATHS = Object.freeze([
   '/membership/',
   '/member-invite/',
   '/curator-invite/',
   '/codeable-invite/',
+  '/claim/',
   '/sponsorship/',
   '/login/',
   '/welcome/',

@@ -4,10 +4,31 @@ import type { CollectionEntry } from 'astro:content';
 import { ICON_PATHS } from '../../lib/social';
 
 interface Props {
-  profile: CollectionEntry<'profile'>;
+  profile?: CollectionEntry<'profile'>;
+  /**
+   * sow-434: the EXAMPLE profile (/claim/profile/?code=<CODE>), for someone invited to claim a prepared listing who
+   * has no profile yet. It is this same template, so it matches a published profile by construction. No profile is
+   * read: the avatar and the links take an example arm each, the name is a placeholder, and
+   * src/lib/claim-profile.ts fills the name, its initial and the person's real GitHub link at runtime.
+   *
+   * THE PICTURE IS THE INITIAL, as the no-avatar arm below draws it. The claim writes the new profile with a name and
+   * no avatar (membership/prepared-claim-files.mjs), so the profile the person gets shows exactly this until they add
+   * a picture themselves; an example showing a photo would promise something the claim does not deliver.
+   *
+   * WHY ARMS INSIDE THE EXPRESSIONS THAT WERE ALREADY HERE, AND NOT A BRANCH AROUND THE HEADER. Astro's compact
+   * printer drops the spaces between tags inside an expression, and an expression placed before markup re-flows the
+   * markup after it, so wrapping the header would change the bytes of every published profile. An arm added to an
+   * existing expression, and an attribute that renders nothing, leave them identical (measured against the dev
+   * server's output on 2026-10-01; test/claim-profile-guards.test.mjs pins the published markup).
+   */
+  example?: boolean;
 }
-const { profile } = Astro.props;
-const d = profile.data;
+const { profile, example = false } = Astro.props;
+const d = (example ? { displayName: 'Your name' } : profile!.data) as CollectionEntry<'profile'>['data'];
+
+// sow-434: the example's links. GitHub is the person's own and is filled at runtime when the invitation is tied to
+// an account; the rest are placeholders that link nowhere, drawn with a dashed edge and named as examples.
+const EXAMPLE_LINKS = [['website', 'Example website'], ['x', 'Example X profile'], ['linkedin', 'Example LinkedIn profile']] as const;
 
 const socials = Object.entries(d.links ?? {})
   .filter(([k, v]) => ICON_PATHS[k] && typeof v === 'string' && /^https?:\/\//.test(v)) as [string, string][];
@@ -21,7 +42,11 @@ const skills = d.skills ?? [];
 <header class="band-sm dark relative overflow-hidden">
   <Container class="relative flex flex-col max-sm:items-center gap-8 sm:flex-row sm:items-start sm:gap-12">
     <div class="shrink-0">
-      {d.avatar ? (
+      {example ? (
+        <div data-example-avatar class="grid h-48 w-48 place-items-center sm:h-[300px] sm:w-[300px]" style="border-radius:var(--r-lg);border:4px solid var(--paper);background:var(--ink-2);box-shadow:var(--sh-lg)">
+          <span class="h1" style="color:#fff" data-example-initial>{d.displayName.charAt(0)}</span>
+        </div>
+      ) : d.avatar ? (
         <img src={d.avatar} alt={d.displayName} class="h-48 w-48 object-cover sm:h-[300px] sm:w-[300px]" style="border-radius:var(--r-lg);border:4px solid var(--paper);box-shadow:var(--sh-lg)" />
       ) : (
         <div class="grid h-48 w-48 place-items-center sm:h-[300px] sm:w-[300px]" style="border-radius:var(--r-lg);border:4px solid var(--paper);background:var(--ink-2);box-shadow:var(--sh-lg)">
@@ -31,7 +56,7 @@ const skills = d.skills ?? [];
     </div>
     <div class="flex flex-col gap-3 text-center sm:pt-10 sm:text-left">
       <div class="flex flex-wrap items-center max-sm:justify-center gap-3 sm:justify-start">
-        <h1 class="h1" style="color:#fff">{d.displayName}</h1>
+        <h1 class="h1" style="color:#fff" data-example-name={example ? '' : undefined}>{d.displayName}</h1>
         <span class="chip chip-green">member</span>
       </div>
       {d.headline && <p class="lead">{d.headline}</p>}
@@ -54,7 +79,23 @@ const skills = d.skills ?? [];
           )}
         </div>
       )}
-      {socials.length > 0 && (
+      {example ? (
+        <>
+          <div class="mt-2 flex flex-wrap max-sm:justify-center gap-3 sm:justify-start">
+            <a data-example-github hidden target="_blank" rel="noopener noreferrer" data-tooltip="github" class="grid h-11 w-11 place-items-center transition hover:-translate-y-0.5" style="border-radius:var(--r);border:1.5px solid var(--line-dark-2);color:var(--on-dark-soft)">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS.github} /></svg>
+              <span class="sr-only">github</span>
+            </a>
+            {EXAMPLE_LINKS.map(([k, label]) => (
+              <span data-example-link data-tooltip={label} class="grid h-11 w-11 place-items-center" style="border-radius:var(--r);border:1.5px dashed var(--line-dark-2);color:var(--on-dark-mute)">
+                <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS[k]} /></svg>
+                <span class="sr-only">{label}</span>
+              </span>
+            ))}
+          </div>
+          <p style="margin:0;color:var(--on-dark-mute);font-size:.82rem">The dashed links are examples. You add your own after you claim the listing.</p>
+        </>
+      ) : socials.length > 0 && (
         <div class="mt-2 flex flex-wrap max-sm:justify-center gap-3 sm:justify-start">
           {socials.map(([k, v]) => (
             <a href={v} target="_blank" rel="noopener noreferrer" data-tooltip={k} class="grid h-11 w-11 place-items-center transition hover:-translate-y-0.5" style="border-radius:var(--r);border:1.5px solid var(--line-dark-2);color:var(--on-dark-soft)">

@@ -16,7 +16,8 @@
 //
 // THE SAVE BODY IS AN ALLOW-LIST. Only the fields the route reads are forwarded, so an author note, an author
 // target or a repository path can never ride along from a caller: the claimant writes the author note, and a
-// prepared project has no path until it is claimed.
+// prepared project has no path until it is claimed. `suggestedNote` (sow-434) is allowed because it is not the
+// note: it is the optional text the claim dialog starts from, stored on the listing and never published as it is.
 
 type WorkerGet = (path: string) => Promise<any>;
 type WorkerPost = (path: string, body: unknown) => Promise<any>;
@@ -24,7 +25,7 @@ type WorkerPost = (path: string, body: unknown) => Promise<any>;
 export const PREPARED_ROUTE = '/membership/admin/prepared';
 
 /** The fields a prepared save may carry, and nothing else. */
-export const PREPARED_SAVE_FIELDS = Object.freeze(['id', 'campaign', 'recipientName', 'message', 'githubLogin', 'draft', 'stagedItem']);
+export const PREPARED_SAVE_FIELDS = Object.freeze(['id', 'campaign', 'recipientName', 'message', 'suggestedNote', 'githubLogin', 'draft', 'stagedItem']);
 
 /** A save body from whatever the caller passed: the allow-listed fields that are present, plus `op: 'save'`. */
 export function preparedSaveBody(payload: any = {}): Record<string, unknown> {

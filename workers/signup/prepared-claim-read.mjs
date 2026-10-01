@@ -14,8 +14,9 @@
 //     nothing about the project in it: not the title, not the person's name, not whether a listing ever existed.
 //
 // What a readable listing shows is publicListingView: the project, the greeting and the personal message, the
-// preparer's login, and the campaign's tier and length. Never the administration note (that lives on the invite and
-// is not read into the answer), never a code, never an account number, never the binding.
+// suggested note, the preparer's login, the tied account's login (sow-434, for the example profile's GitHub link),
+// and the campaign's tier and length. Never the administration note (that lives on the invite and is not read into
+// the answer), never a code, never an account number, so never the number a tie is stored by.
 //
 // THE CAMPAIGN IS READ FOR ITS TERMS ONLY, WITHOUT THE ACTIVE GATE (sow-231 trap 1, sow-427 trap 6): switching a
 // campaign off closes its walk-up code, and must not void a prepared invitation already in someone's inbox. A

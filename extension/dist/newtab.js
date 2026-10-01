@@ -13224,10 +13224,25 @@ ${listStyleProseCss(".doc-blocks")}
   var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
   var MAX_MESSAGE = 1e3;
   var MAX_RECIPIENT_NAME = 60;
+  var MAX_SUGGESTED_NOTE = 2e3;
   var INVISIBLE_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
   function sanitizeMessage(s) {
+    return plainText(s, MAX_MESSAGE);
+  }
+  function plainText(s, max) {
     if (typeof s !== "string") return "";
-    return s.replace(/\r\n?/g, "\n").replace(/\t/g, " ").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "").replace(INVISIBLE_RE, "").replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_MESSAGE).trim();
+    return s.replace(/\r\n?/g, "\n").replace(/\t/g, " ").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "").replace(INVISIBLE_RE, "").replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, max).trim();
+  }
+  function sanitizeSuggestedNote(s) {
+    return plainText(s, MAX_SUGGESTED_NOTE);
+  }
+  function validateSuggestedNote(raw) {
+    if (raw === void 0 || raw === null) return { ok: true, suggestedNote: "" };
+    if (typeof raw !== "string") return { ok: false, error: "invalid", message: "The suggested note must be plain text." };
+    if (plainText(raw, Infinity).length > MAX_SUGGESTED_NOTE) {
+      return { ok: false, error: "suggested_note_too_long", message: `The suggested note is longer than ${MAX_SUGGESTED_NOTE} characters. Shorten it and save again.` };
+    }
+    return { ok: true, suggestedNote: sanitizeSuggestedNote(raw) };
   }
   function sanitizeRecipientName(s) {
     if (typeof s !== "string") return "";
@@ -13266,9 +13281,9 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/prepared-editor.mjs
   var esc6 = (v2) => String(v2 ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var PREP_KEYS = ["id", "recipientName", "message", "githubLogin", "campaign", "code", "link", "state", "inviteState"];
+  var PREP_KEYS = ["id", "recipientName", "message", "suggestedNote", "githubLogin", "campaign", "code", "link", "state", "inviteState"];
   function blankPrepared() {
-    return { id: null, recipientName: "", message: "", githubLogin: "", campaign: "", code: null, link: null, state: null, inviteState: null };
+    return { id: null, recipientName: "", message: "", suggestedNote: "", githubLogin: "", campaign: "", code: null, link: null, state: null, inviteState: null };
   }
   function preparedFromLoad(p) {
     if (!p || typeof p !== "object") return null;
@@ -13302,6 +13317,7 @@ ${listStyleProseCss(".doc-blocks")}
         id: l.id,
         recipientName: l.recipientName || "",
         message: l.message || "",
+        suggestedNote: l.suggestedNote || "",
         githubLogin: l.bound ? l.boundLogin || "" : "",
         campaign: l.campaign || "",
         code: l.code || null,
@@ -13392,6 +13408,7 @@ ${listStyleProseCss(".doc-blocks")}
   </section>`;
   }
   var bindingLockedFor = (p) => isListingId(p?.id) && !["issued", "revoked", "expired"].includes(String(p?.inviteState || ""));
+  var SUGGESTED_NOTE_HINT = "A starting point they can edit or keep. State facts about the work; never invent their reasons.";
   function preparedCardHtml(p, campaigns = []) {
     const s = p || blankPrepared();
     const saved = isListingId(s.id);
@@ -13416,7 +13433,9 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc6(s.githubLogin)}"${locked ? " readonly" : ""} />
         <p class="pnote">${locked ? "The free year was already taken through this link, so the account it is tied to can no longer change." : "Ties the invitation to that one account. Leave it empty and whoever opens the link first can claim it."}</p></div>
       <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc6(s.message)}</textarea>
-        <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to write when they claim it.</p></div>
+        <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to publish when they claim it.</p></div>
+      <div class="pfld"><label for="prep-note">Suggested note (optional)</label><textarea id="prep-note" data-prep="suggestedNote" maxlength="${MAX_SUGGESTED_NOTE}" placeholder="Pre-fills their author note when they claim it.">${esc6(s.suggestedNote)}</textarea>
+        <p class="pnote">${esc6(SUGGESTED_NOTE_HINT)}</p></div>
       <div class="pfld"><label for="prep-camp">Campaign</label>${campaignField}</div>
       ${link}
     </div>
@@ -13436,6 +13455,8 @@ ${listStyleProseCss(".doc-blocks")}
   function preparedTextProblem(p) {
     const t = validateInvitationText({ recipientName: p?.recipientName, message: p?.message });
     if (!t.ok) return t.message;
+    const note = validateSuggestedNote(p?.suggestedNote ?? "");
+    if (!note.ok) return note.message;
     if (!isListingId(p?.id) && !String(p?.campaign || "").trim()) return "Choose the campaign whose free year the invitation carries.";
     const login = String(p?.githubLogin || "").trim();
     if (login && !normalizeGithubLogin(login)) return "That is not a GitHub account name. Use letters, digits and single hyphens, or leave it empty.";
@@ -13448,11 +13469,13 @@ ${listStyleProseCss(".doc-blocks")}
     const slug = String(input.slug ?? "").trim();
     const creating = !isListingId(p.id);
     const login = String(p.githubLogin ?? "").trim();
+    const note = String(p.suggestedNote ?? "");
     return {
       op: "save",
       ...creating ? { campaign: String(p.campaign ?? "").trim().toUpperCase() } : { id: p.id },
       recipientName: String(p.recipientName ?? ""),
       message: String(p.message ?? ""),
+      ...creating ? note.trim() ? { suggestedNote: note } : {} : { suggestedNote: note },
       ...creating ? login ? { githubLogin: login } : {} : { githubLogin: login },
       draft: { type: "project", slug, frontmatter: input, body: String(gathered?.body ?? "") },
       stagedItem: `project:${slug}`
@@ -13530,7 +13553,7 @@ ${listStyleProseCss(".doc-blocks")}
       editor._prepared = editor._prepared || editor._prepStash || blankPrepared();
       editor._prepStash = null;
       readPreparedInputs(editor);
-      editor.out?.("Prepared mode: Save listing stores the project privately with an invitation. Publish and the author note are hidden, because the person you invite writes their own note when they claim it.");
+      editor.out?.("Prepared mode: Save listing stores the project privately with an invitation. Publish and the author note are hidden, because the person you invite publishes their own note when they claim it, starting from your suggested note if you leave one.");
     } else {
       if (isListingId(editor._prepared?.id)) return;
       editor._prepStash = editor._prepared;

@@ -68,6 +68,54 @@ export function buildAuthorNoteHtml({ name, href, avatarUrl, bodyHtml, seed } = 
 }
 
 /**
+ * sow-434: the same pinned block as DOM NODES, for a page that may not parse markup at all (the invitation preview,
+ * /claim/, whose guard allows one innerHTML and spends it on the markdown body). A twin of buildAuthorNoteHtml above,
+ * attribute for attribute and in the same order, which test/claim-render.test.mjs holds it to. Two differences, both
+ * because there is no markup to parse: the body is NODES the caller built from text (`bodyNodes`), and the photo drops
+ * itself on a load error through a listener rather than an inline handler.
+ *
+ * `href` is set only when it is a same-site path or an http(s) address; anything else leaves both links without one,
+ * which renders in place as plain text (the `a:not([href])` rule), exactly as a missing profile page does. There is no
+ * slot for anything extra in the card: a caller that labels it (the invitation's "Suggested note") puts the label
+ * outside, so the card stays the published card.
+ */
+export function buildAuthorNoteNodes(doc, { name, href, avatarUrl, seed, bodyNodes = [] } = {}) {
+  const b = AUTHOR_NOTE_BLOCK;
+  const el = (tag, attrs = {}) => {
+    const n = doc.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    return n;
+  };
+  const link = typeof href === 'string' && (/^\/(?!\/)/.test(href) || /^https?:\/\//i.test(href)) ? href : null;
+  const layer = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0';
+  const avatar = el('span', { class: 'rounded-full', style: `position:relative;display:inline-flex;overflow:hidden;width:${b.avatarSize}px;height:${b.avatarSize}px;flex-shrink:0;background:var(--tint)` });
+  avatar.appendChild(el('img', { src: memberBlob(seed || name), alt: '', 'aria-hidden': 'true', 'data-blob': '', style: layer }));
+  if (avatarUrl) {
+    const photo = el('img', { src: String(avatarUrl), alt: '', width: String(b.avatarSize), height: String(b.avatarSize), style: layer });
+    photo.addEventListener('error', () => photo.remove());
+    avatar.appendChild(photo);
+  }
+  const card = el('article', { class: b.card, style: b.cardStyle });
+  const head = el('div', { class: b.head });
+  const avLink = el('a', link ? { href: link, class: 'shrink-0' } : { class: 'shrink-0' });
+  avLink.appendChild(avatar);
+  const who = el('div');
+  const eyebrow = el('p', { class: b.eyebrow, style: b.eyebrowStyle });
+  eyebrow.appendChild(doc.createTextNode(b.eyebrowText));
+  const nameLink = el('a', link ? { href: link, class: b.name, style: b.nameStyle } : { class: b.name, style: b.nameStyle });
+  nameLink.appendChild(doc.createTextNode(String(name ?? '')));
+  who.appendChild(eyebrow);
+  who.appendChild(nameLink);
+  head.appendChild(avLink);
+  head.appendChild(who);
+  const body = el('div', { class: b.body, style: b.bodyStyle });
+  for (const n of bodyNodes) body.appendChild(n);
+  card.appendChild(head);
+  card.appendChild(body);
+  return card;
+}
+
+/**
  * sow-358: the placeholder the preview shows in edit mode when an item has no note yet, so a note can be
  * WRITTEN there rather than only edited.
  */

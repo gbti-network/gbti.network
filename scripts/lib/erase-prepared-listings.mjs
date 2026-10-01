@@ -11,7 +11,7 @@
 //      redeem. A code retired by "Send again" does not count: the listing it once opened now greets somebody else.
 //   2. They CLAIMED it: the project now lives in the repository (the content step drafts it), and the minimized
 //      listing record keeps saying "prepared, claimed on this date" with nobody attached. The greeting name, the
-//      title, the slug, the claimant fields, the tie and the pull request number are nulled.
+//      title, the slug, the suggested note, the claimant fields, the tie and the pull request number are nulled.
 //   3. An invite names them as the claimant, the pending claimant or the tied account: those fields are nulled. A
 //      pending claim keeps its date, so the invite stays unredeemable (fail closed) rather than reopening.
 //   4. An invite they REDEEMED: not touched here. minimizeRedeemedInvites owns `redeemedBy`, and runs AFTER this step
@@ -90,7 +90,7 @@ export async function erasePreparedListings({ githubId, env = process.env, fetch
         key, env, fetchImpl,
         value: JSON.stringify({
           ...value,
-          recipientName: null, message: null, title: null, slug: null, frontmatter: null, body: null, images: [],
+          recipientName: null, message: null, suggestedNote: null, title: null, slug: null, frontmatter: null, body: null, images: [],
           claimedBy: null, claimedLogin: null, claimedFolder: null, claimedPath: null,
           boundGithubId: null, boundLogin: null, claimPendingBy: null, prNumber: null,
         }),

@@ -1,17 +1,33 @@
 ---
-// sow-427 (amendment 7): the READ-ONLY listing view on the claim page. It is the published project page's "Doc Shell"
-// (the shared .pd-* layout in src/styles/gbti-v3-detail.css), so the person sees their project the way it will look once it
-// is live, in both themes. It is its own small view on purpose, NOT the WorkBench preview: that page is pinned by a
-// dozen tests and carries an editor, and none of that belongs on a public page a stranger opens.
+// sow-427 (amendment 7), rebuilt by sow-434: the READ-ONLY listing view on the claim page. It is the published project
+// page (src/pages/projects/[slug].astro) section for section, on the same "Doc Shell" layout (the shared .pd-* rules in
+// src/styles/gbti-v3-detail.css), so the person sees their project exactly as it will look once it is live. sow-427
+// chose a quieter read-only view; the owner reversed that on 2026-09-30 ("we want the layout to 100% match").
 //
 // Everything here is an empty frame at build time. src/lib/claim-page.ts fills it from the signed-out read with DOM
-// nodes and text: frontmatter strings are only ever textContent, every href has passed claim-core safeHref, and the
-// one HTML string that is parsed is the markdown body renderer's own output (client/src/markdown.mjs, which escapes
-// raw HTML), whose links and images are checked again before they are attached.
+// nodes and text (src/lib/claim-render.ts builds the larger pieces): frontmatter strings are only ever textContent,
+// every href has passed a claim-core check, and the one HTML string that is parsed is the markdown body renderer's
+// own output (client/src/markdown.mjs, which escapes raw HTML), whose links and images are checked again before they
+// are attached.
 //
-// Live-data regions of the real page (the byline, favorites, comments) render as a quiet line instead of invented
-// numbers, exactly as the WorkBench preview does.
+// THE BYLINE AND THE ACTIONS ARE THE REAL COMPONENTS, not copies. ContentMeta renders with a placeholder author whose
+// name is no member folder (so it links nowhere and loads no picture), and the page fills in the recipient's name, a
+// picture, today's date and the link to the example profile. ContentActions renders `inert`: the same classes and icons
+// as the published row, with nothing that can save, share or open anything (see that component). Rendering the real
+// components is what ships their scoped styles here.
+//
+// THE DISCUSSION IS A STATIC COPY of the published empty state: the pinned "From the author" card (the page builds it
+// with buildAuthorNoteNodes, src/lib/author-note.mjs), the "0 Comments" heading and the empty card a member sees. No
+// composer and no custom elements, and none of the published page's membership pitches: the person reading this was
+// invited already. For the same reason the rail and the close leave out the live digest subscribe boxes; the close
+// keeps the static "Follow the GBTI Network" links (FollowNetwork), as published.
 import Prose from '../blog/Prose.astro';
+import ContentMeta from '../ContentMeta.astro';
+import ContentActions from '../ContentActions.astro';
+import FollowNetwork from '../FollowNetwork.astro';
+
+// The build date is a stand-in only: the page writes today's date over it before the listing is shown.
+const BUILT = new Date();
 ---
 <div class="pd-shell cl-listing" data-claim-listing hidden>
   <section class="pd-hero" data-cl-hero>
@@ -42,8 +58,9 @@ import Prose from '../blog/Prose.astro';
   <div class="pd-wrap">
     <div class="pd-grid" data-cl-grid data-side="right">
       <div class="pd-col">
-        <div class="pd-byline">
-          <p class="cl-inert">Your name, and the save, share and favorite controls, appear here once the listing is published.</p>
+        <div class="pd-byline" data-cl-byline>
+          <ContentMeta author="Your name" publishedAt={BUILT} />
+          <ContentActions type="project" slug="invitation-preview" title="Invitation preview" url="https://gbti.network/" inert />
         </div>
         <div class="pvideo" data-cl-video hidden></div>
         <article id="pd-overview">
@@ -56,37 +73,68 @@ import Prose from '../blog/Prose.astro';
           </div>
           <div class="pd-cta-btns" data-cl-cta-btns></div>
         </div>
+        {/* The page appends the grid (.pd-shots) or the carousel (.pd-carousel) here, after the title, as the
+            published page renders one or the other by resolveGalleryStyle. */}
         <div id="pd-screenshots" class="pd-gallery pd-anchor" data-cl-gallery hidden>
           <div class="pd-gal-head"><span class="pd-rail-lab">Screenshots</span></div>
           <h2 class="pd-gal-title" data-cl-gallery-title></h2>
-          <div class="pd-shots" data-cl-shots></div>
         </div>
-        <p class="cl-inert" style="margin-top:36px">Your note to readers is pinned here, and the discussion follows it, once the listing is published.</p>
       </div>
 
       <aside class="pd-rail">
+        {/* The contents rail: the page appends its links after the label once the body has rendered, then starts the
+            same scroll-spy the published page runs (initToc binds to the first [data-pd-toc]). */}
+        <nav class="pd-toc" aria-label="Contents" data-pd-toc data-cl-toc hidden>
+          <span class="pd-rail-lab">Contents</span>
+        </nav>
         <div class="pd-block" data-cl-specblock hidden>
           <dl class="pd-specs" data-cl-specs></dl>
           <div class="pd-tags" data-cl-tags></div>
         </div>
         <div class="pd-block pd-rail-links" data-cl-linkblock hidden>
           <span class="pd-rail-lab">Links</span>
-          <div class="cl-links" data-cl-links></div>
         </div>
       </aside>
+
+      <div class="pd-close">
+        <section id="comments" class="mx-auto" style="margin-top:48px;max-width:800px">
+          <div data-cl-note></div>
+          <h2 class="h3" style="margin-top:40px">0 Comments</h2>
+          <div class="card" style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
+            <p class="body-sm muted" style="margin:0">No comments yet. Be the first.</p>
+          </div>
+        </section>
+        <FollowNetwork />
+      </div>
     </div>
   </div>
 </div>
 
 <style is:global>
-  /* The claim page has no site header (it is a `bare` page), so the Doc Shell's sticky stack starts under the claim
-     bar instead: --pd-off is the hook the layout exposes for exactly this (the WorkBench preview raises it too). */
-  .cl-listing { --pd-off: var(--cl-bar-h, 52px); }
-  .cl-listing .pd-bar { z-index: 30; }
-  .cl-inert { margin: 0; color: var(--fg-mute); font-size: 13px; font-style: italic; }
-  /* The rail's link list lands one level deeper than on the published page (inside the runtime-filled wrapper),
-     so the wrapper needs the column layout the published page applies to its direct children. */
-  .cl-links { display: flex; flex-direction: column; gap: 8px; }
-  .cl-listing .pd-bar-actions .btn svg, .cl-listing .pd-cta-btns .btn svg { width: 15px; height: 15px; }
-  .cl-listing .cl-nolink { color: var(--fg-soft); font-size: 13px; }
+  /* The claim strip sits under the site header and stays there, so the Doc Shell's sticky stack (the install bar,
+     then the rail) starts below both: --pd-off is the hook the layout exposes for exactly this (the WorkBench
+     preview raises it the same way for its preview bar). */
+  .pd-shell.cl-listing { --pd-off: calc(var(--head-h) + var(--cl-strip-h, 0px)); }
+  /* The Doc Shell gives several of these regions a display of their own, which beats the plain [hidden] rule; inside
+     the listing, hidden always means hidden. */
+  .cl-listing [hidden] { display: none !important; }
+  /* The body renders into a div inside .prose-gbti (the page fills [data-cl-body]), so the published first-child rules
+     (`.prose-gbti > :first-child`, `.pd-col .prose-gbti > :first-child`) reach that div, not the first heading or
+     paragraph. This puts their zero top margin back where the published page has it; without it the write-up starts
+     32px low under a heading. */
+  .cl-listing [data-cl-body] > :first-child { margin-top: 0; }
+  /* A grid shot opens the lightbox from a div rather than the published page's link (the page script sets no
+     address on a shot), so it takes the pointer the link would have had. */
+  .cl-listing .pd-shot [data-lightbox] { cursor: pointer; }
+  /* The note card's label, on its own line just above the card, in the house pill style. Never inside the card's head
+     row: nothing in that row can shrink, so a label there pushed it off a phone screen (claim-render.ts). */
+  .cl-note-tag { display: inline-block; margin-bottom: 10px; font-family: var(--f-mono); font-size: 10.5px;
+    letter-spacing: .08em; font-weight: 700; text-transform: uppercase; color: var(--green-700); background: var(--paper);
+    border: 1px solid var(--green); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .cl-note-empty { margin: 0; color: var(--fg-mute); font-style: italic; }
+  /* The author note's body rules, copied from Comments.astro (they ship only on a page that renders Comments).
+     test/claim-render.test.mjs holds each one to that file. */
+  .cmt-rich > :first-child { margin-top: 0; }
+  .cmt-rich > :last-child { margin-bottom: 0; }
+  .cmt-rich p { margin: 0.7em 0; }
 </style>

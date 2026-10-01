@@ -85,12 +85,16 @@ test('a readable code shows the project and the invitation, and the tier and len
   assert.equal(v.freeDays, 365);
 });
 
-test('the answer never carries the administration note, a code, an account number or the binding', async () => {
+test('the answer never carries the administration note, a code or an account number; a tie shows only as its login', async () => {
   const r = await read(seeded(), CODE);
   const text = JSON.stringify(r.body);
-  for (const secret of [ADMIN_NOTE, CODE, PREPARER, BOUND, 'sam-dev', 'CODEABLEYEAR', ID]) {
+  for (const secret of [ADMIN_NOTE, CODE, PREPARER, BOUND, 'CODEABLEYEAR', ID]) {
     assert.equal(text.includes(secret), false, `the public read leaked ${secret}`);
   }
+  // sow-434 decision 9: the tied account's LOGIN is shown (the example profile links their GitHub), never its number.
+  assert.equal(r.body.listing.githubLogin, 'sam-dev');
+  const untied = await read(seeded(records({ listing: { boundGithubId: null, boundLogin: null } })), CODE);
+  assert.equal(untied.body.listing.githubLogin, null);
 });
 
 test('EVERY inactive case answers the same 404 body, byte for byte, with nothing about the project in it', async () => {

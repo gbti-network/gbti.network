@@ -14,16 +14,20 @@
 //
 // SAFETY RULES THIS FILE KEEPS. No listing string is ever given to innerHTML: frontmatter goes to textContent, the
 // message to text nodes (messageToNodes), and the ONE parsed string is the markdown renderer's output, parsed inside
-// an inert <template> and re-checked (links, images, frames) before it is attached. Every href comes from safeHref.
-// Nothing here logs, and the tab title is never touched, so the project title stays out of the tab strip, the
-// history list and any screen share.
+// an inert <template> and re-checked (links, images, frames) before it is attached. Every href comes from safeHref
+// or a claim-core builder. Nothing here logs, and the tab title is never touched, so the project title stays out of
+// the tab strip, the history list and any screen share.
+//
+// sow-434: the preview is the published page section for section. The larger DOM builders (the crumbs, the
+// screenshots, the contents rail, the byline and the author note card) live in claim-render.ts, under the same rules.
 import {
   parseClaimQuery, buildClaimSigninUrl, claimStatusUrl, listingReadUrl, listingImageUrl, pollDelayMs, greetingLine,
   preparedByLine, messageToNodes, tierLine, safeHref, safeImagePayload, imageDataUrl, listingImageNames, bodyImageSrc,
   bodyLinkHref, bodyFrameSrc, relayFrameSrc, listingModel, statusFromResponse, postOutcome, postErrorMessage, claimView,
-  POLLING_STATES, POLL_GIVE_UP_MS, WELCOME_REDIRECT_MS, NOTE_MAX,
+  exampleProfileHref, bylineIdentity, noteCardName, noteCardView, POLLING_STATES, POLL_GIVE_UP_MS, WELCOME_REDIRECT_MS, NOTE_MAX,
 } from './claim-core.mjs';
-import { hasWebSessionCookie, signOutWeb } from './member-signal';
+import { hasWebSessionCookie, signOutWeb, readMemberSignal, currentIdentity, onMemberSignal } from './member-signal';
+import { renderCrumbs, renderGallery, renderToc, fillByline, renderNoteCard } from './claim-render';
 
 type View = ReturnType<typeof claimView>;
 type Action = View['actions'][number];
@@ -61,13 +65,18 @@ export function startClaimPage(doc: Document): void {
   const { code, welcome } = parseClaimQuery(location.search);
   let labels: Record<string, string> = {};
   try { labels = JSON.parse(root.dataset.labels || '{}') || {}; } catch { labels = {}; }
+  // house/licenses.yml, read at build (sow-434): the License row is built from it as on the published page.
+  let licenses: unknown = null;
+  try { licenses = JSON.parse(root.dataset.licenses || 'null'); } catch { licenses = null; }
   let tiers: Record<string, { label: string; priceAnnual: number }> = {};
   try { tiers = JSON.parse(dialog.dataset.tiers || '{}') || {}; } catch { tiers = {}; }
 
   const panel = $('[data-claim-panel]');
   const listingEl = $('[data-claim-listing]');
   const openBtn = $<HTMLButtonElement>('[data-claim-open]');
-  const barNote = $('[data-claim-barnote]');
+  const strip = $('[data-claim-strip]');
+  // The example profile page for this invitation: the byline's name and the note card link there (sow-434).
+  const profileHref = exampleProfileHref(code);
 
   let listing: any = null;
   let state = 'loading';
@@ -166,7 +175,7 @@ export function startClaimPage(doc: Document): void {
   const errEl = $('[data-claim-error]', dialog);
   const showError = (msg: string) => { if (errEl) { errEl.textContent = msg; errEl.hidden = !msg; } };
   const syncCount = () => { if (noteCount && noteText) noteCount.textContent = `${noteText.value.length} / ${NOTE_MAX}`; };
-  noteText?.addEventListener('input', () => { syncCount(); showError(''); });
+  noteText?.addEventListener('input', () => { syncCount(); showError(''); showNote(); });
   let publishing = false;
   noteForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -241,7 +250,7 @@ export function startClaimPage(doc: Document): void {
       closeDialog();
       show(listingEl, false);
       show(openBtn, false);
-      show(barNote, false);
+      show(strip, false);
       show(panel, true);
       setText($('[data-claim-panel-title]'), v.title);
       setText($('[data-claim-panel-text]'), v.text);
@@ -250,7 +259,8 @@ export function startClaimPage(doc: Document): void {
     } else {
       show(panel, false);
       show(listingEl, true);
-      show(barNote, true);
+      show(strip, true);
+      showIdentity();
       setText($('[data-claim-title]', dialog), v.title);
       setText($('[data-claim-text]', dialog), v.text);
       const tier = v.tier ? tierLine({ tier: listing.tier, freeDays: listing.freeDays }, tiers) : null;
@@ -367,21 +377,28 @@ export function startClaimPage(doc: Document): void {
     if (!el) return;
     if (src) { el.src = src; el.alt = alt; el.hidden = false; } else { el.removeAttribute('src'); el.hidden = true; }
   };
-  const iconSvg = (id: string | null): SVGSVGElement | null => {
+  // An icon from the page's sprite. `size` is set only where the published markup sets it (the end CTA's 16px); the
+  // install bar and the rail size theirs in CSS (.pd-bar .btn svg, .pd-rail-link svg), as published.
+  const iconSvg = (id: string | null, size?: number): SVGSVGElement | null => {
     if (!id) return null;
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
+    if (size) { svg.setAttribute('width', String(size)); svg.setAttribute('height', String(size)); }
     svg.setAttribute('aria-hidden', 'true');
     const use = doc.createElementNS('http://www.w3.org/2000/svg', 'use');
     use.setAttribute('href', `#${id}`);
     svg.appendChild(use);
     return svg;
   };
-  const linkButton = (l: { label: string; url: string; locked?: boolean; icon?: string | null }, cls: string): HTMLElement => {
+  const linkButton = (l: { label: string; url: string; locked?: boolean; icon?: string | null; hint?: string }, cls: string, iconSize?: number): HTMLElement => {
     if (l.locked) {
+      // A members-only link renders inert, as on the published page: the lock icon, the label and the tooltip.
       const span = doc.createElement('span');
-      span.className = `${cls} pd-locked-btn`;
-      span.textContent = `${l.label} (members)`;
+      span.className = /\bbtn\b/.test(cls) ? `${cls} pd-locked-btn` : cls;
+      if (l.hint) span.setAttribute('data-tooltip', l.hint);
+      const lock = iconSvg('ico-lock');
+      if (lock) span.appendChild(lock);
+      span.appendChild(doc.createTextNode(l.label));
       return span;
     }
     const a = doc.createElement('a');
@@ -389,7 +406,7 @@ export function startClaimPage(doc: Document): void {
     a.href = l.url;
     a.rel = 'noopener noreferrer';
     a.target = '_blank';
-    const svg = iconSvg(l.icon ?? null);
+    const svg = iconSvg(l.icon ?? null, iconSize);
     if (svg) a.appendChild(svg);
     a.appendChild(doc.createTextNode(l.label));
     return a;
@@ -444,7 +461,7 @@ export function startClaimPage(doc: Document): void {
     setText($('[data-claim-from]', dialog), preparedByLine(l.preparedByLogin));
 
     const images = await loadImages(l);
-    const m = listingModel(l, { labels, images });
+    const m = listingModel(l, { labels, images, licenses, now: new Date() });
 
     const hero = $('[data-cl-hero]');
     if (hero) { if (m.hero.preset) hero.setAttribute('data-preset', m.hero.preset); else hero.removeAttribute('data-preset'); }
@@ -456,26 +473,7 @@ export function startClaimPage(doc: Document): void {
     setText($('[data-cl-desc]'), m.description);
 
     const eb = $('[data-cl-eyebrow]');
-    if (eb) {
-      eb.replaceChildren();
-      if (m.crumbs.length) {
-        eb.classList.add('cat-crumbs');
-        m.crumbs.forEach((c: { label: string }, i: number) => {
-          if (i > 0) {
-            const sep = doc.createElement('span');
-            sep.className = 'cc-sep';
-            sep.setAttribute('aria-hidden', 'true');
-            sep.textContent = '›';
-            eb.appendChild(sep);
-          }
-          const span = doc.createElement('span');
-          span.textContent = c.label;
-          eb.appendChild(span);
-        });
-      } else {
-        eb.textContent = 'Project';
-      }
-    }
+    if (eb) renderCrumbs(doc, eb, m.crumbs);
 
     const version = $('[data-cl-version]');
     setText(version, m.version); show(version, Boolean(m.version));
@@ -490,8 +488,9 @@ export function startClaimPage(doc: Document): void {
     const cta = $('[data-cl-cta]');
     if (cta) {
       const btns: HTMLElement[] = [];
-      if (m.primary && !m.primary.locked) btns.push(linkButton(m.primary, 'btn btn-primary'));
-      if (m.repo) btns.push(linkButton(m.repo, 'btn btn-ghost'));
+      // The CTA icons carry width and height 16, as the published CTA markup does.
+      if (m.primary && !m.primary.locked) btns.push(linkButton(m.primary, 'btn btn-primary', 16));
+      if (m.repo) btns.push(linkButton(m.repo, 'btn btn-ghost', 16));
       $('[data-cl-cta-btns]')?.replaceChildren(...btns);
       const sub = $('[data-cl-cta-sub]');
       setText(sub, m.ctaSub); show(sub, Boolean(m.ctaSub));
@@ -510,14 +509,40 @@ export function startClaimPage(doc: Document): void {
         row.append(dt, dd);
         return row;
       }));
+      // The License row after the others, as published: a green link to the terms (.pd-release-link), or plain text
+      // for a licence with no public page.
+      if (m.license) {
+        const row = doc.createElement('div');
+        row.className = 'pd-spec';
+        const dt = doc.createElement('dt'); dt.textContent = 'License';
+        const dd = doc.createElement('dd');
+        if (m.license.href) {
+          const licLink = doc.createElement('a');
+          licLink.className = 'pd-release-link';
+          licLink.href = m.license.href;
+          licLink.rel = 'noopener noreferrer';
+          licLink.target = '_blank';
+          licLink.textContent = m.license.id;
+          dd.appendChild(licLink);
+        } else {
+          dd.textContent = m.license.id;
+        }
+        row.append(dt, dd);
+        specs.appendChild(row);
+      }
     }
     $('[data-cl-tags]')?.replaceChildren(...m.tags.map((t: string) => {
       const s = doc.createElement('span'); s.className = 'pd-tag'; s.textContent = t; return s;
     }));
-    show($('[data-cl-specblock]'), m.specs.length > 0 || m.tags.length > 0);
+    show($('[data-cl-specblock]'), m.specs.length > 0 || m.tags.length > 0 || Boolean(m.license));
 
-    $('[data-cl-links]')?.replaceChildren(...m.railLinks.map((l: any) => linkButton(l, `pd-rail-link${l.locked ? ' locked' : ''}`)));
-    show($('[data-cl-linkblock]'), m.railLinks.length > 0);
+    const linkBlock = $('[data-cl-linkblock]');
+    if (linkBlock) {
+      // As on the published page the links sit directly under the rail label, so the block's column layout spaces them.
+      linkBlock.querySelectorAll(':scope > :not(.pd-rail-lab)').forEach((n) => n.remove());
+      linkBlock.append(...m.railLinks.map((l: any) => linkButton(l, `pd-rail-link${l.locked ? ' locked' : ''}`)));
+      show(linkBlock, m.railLinks.length > 0);
+    }
 
     const videoBox = $('[data-cl-video]');
     const frameSrc = m.video ? relayFrameSrc(m.video, location.origin) : null;
@@ -541,21 +566,39 @@ export function startClaimPage(doc: Document): void {
     const gal = $('[data-cl-gallery]');
     if (gal && m.gallery.length) {
       setText($('[data-cl-gallery-title]'), `See ${m.title} in action`);
-      $('[data-cl-shots]')?.replaceChildren(...m.gallery.map((s: { src: string; caption: string }, i: number) => {
-        const fig = doc.createElement('figure');
-        fig.className = 'pd-shot';
-        const im = doc.createElement('img');
-        im.src = s.src;
-        im.alt = s.caption || `${m.title} screenshot ${i + 1}`;
-        fig.appendChild(im);
-        if (m.captioned) { const cap = doc.createElement('figcaption'); cap.textContent = s.caption; fig.appendChild(cap); }
-        return fig;
-      }));
-      gal.hidden = false;
+      renderGallery(doc, gal, { title: m.title, shots: m.gallery, captioned: m.captioned, style: m.galleryStyle });
     }
 
     await renderBody(m.body, images);
+    const nav = $('[data-cl-toc]');
+    const bodyEl = $('[data-cl-body]');
+    if (nav && bodyEl) renderToc(doc, nav, bodyEl, { hasGallery: m.gallery.length > 0 });
+
+    // The suggested note starts the claim note (sow-434 decision 1), unless the browser restored something typed.
+    const suggestion = typeof l.suggestedNote === 'string' ? l.suggestedNote : '';
+    if (noteText && !noteText.value && suggestion) { noteText.value = suggestion; syncCount(); }
+    showIdentity();
   }
+
+  // ---- the byline and the author note: whose name and face, and the note as it stands -------------------------
+  const today = new Date();
+  const who = () => bylineIdentity({ state, signal: currentIdentity(readMemberSignal()), recipientName: listing?.recipientName });
+  function showNote(): void {
+    const holder = $('[data-cl-note]');
+    if (!holder || !listing) return;
+    const view = noteCardView({ suggestion: typeof listing.suggestedNote === 'string' ? listing.suggestedNote : '', current: noteText ? noteText.value : null });
+    // The face is the byline's; the name is the folder the published card will print (noteCardName).
+    const name = noteCardName({ state, signal: currentIdentity(readMemberSignal()), listing });
+    renderNoteCard(doc, holder, { ...who(), name }, profileHref, view);
+  }
+  function showIdentity(): void {
+    const byline = $('[data-cl-byline]');
+    if (!listing) return;
+    if (byline) fillByline(doc, byline, who(), profileHref, today);
+    showNote();
+  }
+  // The signed-in identity can arrive after the claim status (the cookie session resolves on its own schedule).
+  onMemberSignal(() => { if (listing && !onPanel) showIdentity(); });
 
   // ---- the visit -----------------------------------------------------------------------------------------------
   async function boot(): Promise<void> {

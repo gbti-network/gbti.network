@@ -79,9 +79,20 @@ test('the sales, sign-in and account pages stay quiet, with or without the slash
   }
   // The owner named the kinds of page; this is the list that answers it. Changing it is a decision, so it is pinned.
   assert.deepEqual([...INVITE_QUIET_PATHS], [
-    '/membership/', '/member-invite/', '/curator-invite/', '/codeable-invite/', '/sponsorship/',
+    '/membership/', '/member-invite/', '/curator-invite/', '/codeable-invite/', '/claim/', '/sponsorship/',
     '/login/', '/welcome/', '/account/', '/workbench/', '/admin/',
   ]);
+});
+
+test('sow-434: the invitation preview and its example profile page stay quiet, on a ?code= link too', () => {
+  // These pages render the real site chrome (no `bare`), so BaseLayout mounts the invitation there. The quiet list is
+  // the only thing that keeps a live subscribe form off a preview; `?code=` is not a coupon, so nothing else does.
+  for (const path of ['/claim/', '/claim', '/claim/profile/']) {
+    assert.equal(isQuietPath(path), true, path);
+    assert.equal(inviteBlocker(base({ path, search: '?code=ABC123' })), 'quiet-page', path);
+  }
+  assert.equal(carriesCoupon('?code=ABC123'), false, 'the claim code is not a coupon');
+  for (const path of ['/claimed/', '/claims/', '/projects/claim/']) assert.equal(isQuietPath(path), false, path);
 });
 
 test('an invitation link (a coupon in the address) keeps it closed on any page', () => {

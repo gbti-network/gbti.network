@@ -3,10 +3,16 @@
 // title or the person's name), the sitemap and the Referer never carry the code, the free-year line binds to the tier
 // registry, the message and the listing never reach innerHTML, every href is vetted, the signed-out read carries no
 // credentials while the claim calls do, and the copy follows the writing rules.
+//
+// sow-434 extended it deliberately in three places: the page now renders in the real site chrome (no longer `bare`),
+// the DOM builders moved partly into src/lib/claim-render.ts (read here with the page script, and allowed NO
+// innerHTML at all), and the href census gained the preview's own addresses, each from a checked builder: the hero
+// crumbs (crumbHref), the example profile link (exampleProfileHref) and the in-page contents anchors.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseHeaders, cspForPath } from '../scripts/check-headers.mjs';
+import { inviteBlocker } from '../src/lib/digest-invite-core.mjs';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -15,8 +21,13 @@ const DIALOG = 'src/components/claim/ClaimDialog.astro';
 const LISTING = 'src/components/claim/ClaimListing.astro';
 const CORE = 'src/lib/claim-core.mjs';
 const SCRIPT = 'src/lib/claim-page.ts';
+const RENDER = 'src/lib/claim-render.ts'; // sow-434: the preview's DOM builders, under the page script's rules
 const ASTRO = [PAGE, DIALOG, LISTING];
-const NEW_FILES = [...ASTRO, CORE, SCRIPT, 'test/claim-core.test.mjs', 'test/claim-page-guards.test.mjs'];
+const SCRIPTS = [SCRIPT, RENDER];
+const NEW_FILES = [
+  ...ASTRO, CORE, ...SCRIPTS, 'test/claim-core.test.mjs', 'test/claim-page-guards.test.mjs',
+  'test/claim-render.test.mjs', 'test/claim-preview-core.test.mjs',
+];
 
 /** The BaseLayout opening tag of the page, whole. */
 function layoutTag(src) {
@@ -56,26 +67,36 @@ test('every new file stays at or under the 900-line cap', () => {
   }
 });
 
-test('the page is noindex and bare, with a generic title and description and the default share image', () => {
+test('the page is noindex in the real site chrome, with a generic title and description and the default share image', () => {
   const tag = layoutTag(read(PAGE));
   assert.match(tag, /\bnoindex=\{true\}/);
-  assert.match(tag, /\bbare=\{true\}/);
+  // sow-434 (owner, 2026-09-30): the real header and footer, so the preview reads as part of the site.
+  assert.doesNotMatch(tag, /\bbare\b/, 'the invitation renders in the real site chrome');
   assert.match(tag, /\btitle="An invitation"/, 'bare: BaseLayout adds the brand to the page title and og:title');
   assert.match(tag, /\bdescription="[^"{}]+"/, 'a literal description, nothing interpolated');
   // Generic unfurls: no page-specific image or type, and no prop that could carry anything from the listing.
   assert.doesNotMatch(tag, /ogImage|ogType|ogImageSize/);
   const props = [...tag.matchAll(/\s([a-zA-Z]+)=/g)].map((m) => m[1]).sort();
-  assert.deepEqual(props, ['bare', 'description', 'noindex', 'title']);
+  assert.deepEqual(props, ['description', 'noindex', 'title']);
+});
+
+test('the real chrome does not bring the digest invitation: a live subscribe form never opens over the preview', () => {
+  // Without `bare`, BaseLayout mounts DigestInvite. A signed-out recipient on the invitation link (?code=, not a coupon)
+  // would meet it a minute in, once the claim dialog closes, unless the quiet list covers the page.
+  const ctx = { state: null, visit: null, signedIn: false, path: '/claim/', search: '?code=ABC123', now: Date.now() };
+  assert.equal(inviteBlocker(ctx), 'quiet-page');
+  assert.equal(inviteBlocker({ ...ctx, path: '/claim' }), 'quiet-page');
 });
 
 test('nothing sets the document title or writes to the head from listing data', () => {
-  for (const f of [...ASTRO, CORE, SCRIPT]) {
+  for (const f of [...ASTRO, CORE, ...SCRIPTS]) {
     const src = read(f);
     assert.doesNotMatch(src, /document\.title/, `${f} must not set document.title (the project title stays out of the tab)`);
     assert.doesNotMatch(src, /set:html|outerHTML|insertAdjacentHTML|document\.write/, `${f} writes markup directly`);
     assert.doesNotMatch(src, /<meta\b|<title\b|property="og:/, `${f} adds head metadata of its own`);
   }
   assert.doesNotMatch(read(SCRIPT), /document\.head\.(?!appendChild\(s\))/, 'the one head write is the Turnstile script tag');
+  assert.doesNotMatch(read(RENDER), /\.head\b/, 'the preview builders never touch the head');
 });
 
 test('the message and the listing never reach innerHTML: one parse, of the markdown renderer output, in a <template>', () => {
@@ -91,18 +112,44 @@ test('the message and the listing never reach innerHTML: one parse, of the markd
   // Frontmatter strings go to textContent only.
   assert.doesNotMatch(src, /\.innerText\s*=/);
   for (const f of ASTRO) assert.doesNotMatch(read(f), /innerHTML/, `${f}`);
+  // sow-434: the preview builders parse nothing at all, and the author note card is built from nodes.
+  const render = read(RENDER);
+  assert.ok(render.length > 2000, 'the render module was read: this check is broken if not');
+  assert.doesNotMatch(render, /\.innerHTML|\.outerHTML|insertAdjacentHTML|createContextualFragment|new DOMParser/);
+  assert.match(render, /buildAuthorNoteNodes\(doc, \{/, 'the note card is the DOM twin, not the HTML string builder');
+  assert.doesNotMatch(render, /buildAuthorNoteHtml/);
 });
 
-test('every href the page script sets is vetted: safeHref, the model (safeHref inside), or bodyLinkHref', () => {
+test('every href the page script sets is vetted: safeHref, the model (safeHref inside), bodyLinkHref, or a claim-core builder', () => {
   const src = read(SCRIPT);
-  const sets = [...src.matchAll(/(\w+)\.href = ([^;]+);|setAttribute\('href', ([^)]+)\)/g)].map((m) => m[0]);
+  const render = read(RENDER);
+  const sets = [...(src + render).matchAll(/(\w+)\.href = ([^;]+);|setAttribute\('href', ([^)]+)\)/g)].map((m) => m[0]);
   assert.deepEqual(sets.sort(), [
     'a.href = l.url;', // a model link: listingModel passed every url through safeHref
     'el.href = href;', // an action: a site path, or safeHref
     'location.href = url;', // the sign-in: buildClaimSigninUrl, pinned below
     "setAttribute('href', `#${id}`)", // an icon from the page's own sprite, by an id from iconForUrl's fixed map
     "setAttribute('href', href)", // a body link: bodyLinkHref
+    // sow-434, the preview's own addresses (claim-render.ts):
+    "setAttribute('href', href)", // a hero crumb: crumbHref, the feed filtered to a taxonomy-shaped key
+    "setAttribute('href', profile)", // the byline avatar: exampleProfileHref of the validated code
+    "setAttribute('href', profile)", // the byline name: the same
+    "setAttribute('href', `#${t.id}`)", // a contents entry: an id this page stamped (claimToc)
+    'licLink.href = m.license.href;', // the licence link: licenseRow (https only), then safeHref in listingModel
   ].sort());
+  assert.match(read(CORE), /license: lic \? \{ id: lic\.id, href: safeHref\(lic\.href\) \} : null,/, 'the licence href passed safeHref');
+  // Each new address comes from its checked builder, and only from there.
+  assert.match(render, /const href = crumbHref\(c\.key\);\n\s*if \(href\) a\.setAttribute\('href', href\);/);
+  assert.match(render, /if \(profile\) av\.setAttribute\('href', profile\);/);
+  assert.match(render, /if \(profile\) name\.setAttribute\('href', profile\);/);
+  assert.match(render, /const \{ ids, toc \} = claimToc\(/, 'the contents ids and entries come from claimToc');
+  assert.match(src, /const profileHref = exampleProfileHref\(code\);/);
+  const calls = [...src.matchAll(/\b(?:fillByline|renderNoteCard)\(doc, [^;]*;/g)].map((m) => m[0]);
+  assert.equal(calls.length, 2, 'the byline and the note card are each filled from one place');
+  for (const call of calls) assert.match(call, /, profileHref, /, `${call} takes the example profile address`);
+  // The note card's links are set inside buildAuthorNoteNodes, which takes only a same-site path or an http(s) URL.
+  assert.match(read('src/lib/author-note.mjs'), /const link = typeof href === 'string' && \(\/\^\\\/\(\?!\\\/\)\/\.test\(href\) \|\| \/\^https\?:\\\/\\\/\/i\.test\(href\)\) \? href : null;/);
+  assert.match(render, /buildAuthorNoteNodes\(doc, \{ name: who\.name, href: profile,/);
   assert.match(src, /const url = buildClaimSigninUrl\(\{[\s\S]*?\}\);\n\s*if \(url\) window\.location\.href = url;/);
   assert.match(src, /const href = typeof a\.href === 'string' && \/\^\\\/\(\?!\\\/\)\/\.test\(a\.href\) \? a\.href : safeHref\(a\.href\);\n\s*if \(href\) el\.href = href;/);
   assert.match(src, /const href = bodyLinkHref\(a\.getAttribute\('href'\) \|\| ''\);\n\s*if \(!href\) \{ a\.removeAttribute\('href'\); return; \}\n\s*a\.setAttribute\('href', href\);/);
@@ -119,6 +166,7 @@ test('every href the page script sets is vetted: safeHref, the model (safeHref i
 
 test('the signed-out reads carry no credentials; the claim calls carry the session, and the POST the CSRF header', () => {
   const src = read(SCRIPT);
+  assert.doesNotMatch(read(RENDER), /\bfetch\(/, 'the preview builders read nothing from the network');
   const fetches = [...src.matchAll(/await fetch\(([^;]*?)\);/gs)].map((m) => m[1]);
   assert.equal(fetches.length, 4, 'the listing read, the image read, the claim status and the claim POST');
   const listingReads = fetches.filter((f) => f.startsWith('url, { cache'));
@@ -164,7 +212,7 @@ test('the free-year line binds to the tier registry, never to words typed into t
   }
 });
 
-test('the sitemap leaves out /claim/, and only /claim/', () => {
+test('the sitemap leaves out the claim pages (/claim/ and /claim/profile/), and nothing else', () => {
   const cfg = read('astro.config.mjs');
   const m = /sitemap\(\{ filter: \(page\) => !\/(.+?)\/\.test\(page\)/.exec(cfg);
   assert.ok(m, 'the sitemap filter regex was found: this check is broken if not');
@@ -193,19 +241,21 @@ test('/claim sends no Referer, and the rule adds one header without touching the
 });
 
 test('no logging anywhere in the page, its components or its core', () => {
-  for (const f of [...ASTRO, CORE, SCRIPT]) assert.doesNotMatch(read(f), /\bconsole\./, `${f} logs`);
+  for (const f of [...ASTRO, CORE, ...SCRIPTS, 'src/lib/author-note.mjs']) assert.doesNotMatch(read(f), /\bconsole\./, `${f} logs`);
 });
 
 test('the copy follows the writing rules: no dashes, no contractions, "free year" never "trial"', () => {
-  for (const f of [...ASTRO, CORE, SCRIPT]) {
+  for (const f of [...ASTRO, CORE, ...SCRIPTS]) {
     const src = read(f);
     assert.doesNotMatch(src, /[\u2014\u2013]/, `${f} carries an em or en dash`);
     assert.doesNotMatch(src, /\btrial\b/i, `${f} says trial`);
   }
-  const words = [...ASTRO.map((f) => astroWords(read(f))), literals(read(SCRIPT)), literals(read(CORE))].join('\n');
+  const words = [...ASTRO.map((f) => astroWords(read(f))), ...SCRIPTS.map((f) => literals(read(f))), literals(read(CORE))].join('\n');
   assert.ok(words.length > 2000, `read ${words.length} characters of copy: this check is broken if that is small`);
   assert.match(words, /Look at the listing first/, 'control: the dialog text was read');
   assert.match(words, /Add your note and publish/, 'control: the core copy was read');
+  assert.match(words, /This listing is not published yet\./, 'control: the sow-434 strip was read');
+  assert.match(words, /Open screenshot /, 'control: the preview builders were read');
   assert.doesNotMatch(words, CONTRACTION, 'no contractions');
   assert.doesNotMatch(words, / - /, 'no spaced hyphen standing in for a dash');
   // Controls: the scans fire on copy that breaks them.

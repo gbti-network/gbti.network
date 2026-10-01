@@ -20,17 +20,26 @@ interface Props {
   categories?: string[];
   count?: number; // build-time favorite count
   variant?: 'row' | 'rail'; // sow-179: 'rail' is the Editorial/Journal sticky vertical action rail
+  inert?: boolean; // sow-434: the invitation preview's disabled copy, see below
 }
-const { type, slug, title, url, author, categories = [], count, variant = 'row' } = Astro.props;
+const { type, slug, title, url, author, categories = [], count, variant = 'row', inert = false } = Astro.props;
 const itemPath = author ? contentItemPath(type, author, slug) : null;
 const railSize = variant === 'rail' ? 'rail' : 'md';
+// sow-434: `inert` is the invitation preview's copy (/claim/), for a listing nobody has published yet. The markup
+// stays the same elements in the same order, and every live hook is switched off attribute by attribute, so the
+// default output is byte for byte what it was (test/claim-render.test.mjs pins the template; a site build diffed
+// before and after proved it). Wrapping either version in a conditional would not do: Astro drops the whitespace
+// between elements inside an expression, which changes the published markup.
+// Inert, the row carries no data-gbti-* hooks (the script below and the extension key on them), passes `inert` to the
+// three controls, and has no Open in extension button.
+const live = <T,>(v: T): T | undefined => (inert ? undefined : v);
 ---
-<div class:list={['content-actions', variant === 'rail' && 'ca-rail']} data-gbti-region="actions" data-gbti-type={type} data-gbti-item-path={itemPath}>
-  <FavoriteButton targetType={type} targetSlug={slug} count={count} size={railSize} />
-  <CollectionButton targetType={type} targetSlug={slug} size={railSize} />
+<div class:list={['content-actions', variant === 'rail' && 'ca-rail']} data-gbti-region={live('actions')} data-gbti-type={live(type)} data-gbti-item-path={live(itemPath)}>
+  <FavoriteButton targetType={type} targetSlug={slug} count={count} size={railSize} inert={inert} />
+  <CollectionButton targetType={type} targetSlug={slug} size={railSize} inert={inert} />
   <span class="act-div" aria-hidden="true"></span>
-  <ShareRow type={type} title={title} url={url} categories={categories} variant={variant} />
-  {itemPath && (
+  <ShareRow type={type} title={title} url={url} categories={categories} variant={variant} inert={inert} />
+  {itemPath && !inert && (
     <button type="button" class="ext-open" data-ext-open hidden title="Open this item in the GBTI extension">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-puzzle"/></svg>
       <span class="ext-open-label">Open in extension</span>

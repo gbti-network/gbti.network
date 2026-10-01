@@ -17,8 +17,15 @@
 //   2. Fail closed. An unknown state, an unreadable answer or a malformed code is never shown as a claim the person
 //      can make: it is the inactive panel or a retry.
 
-import { normalizeGallery, hasCaptions, repoUrl, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHero, iconForUrl } from './project-page.mjs';
+import {
+  normalizeGallery, hasCaptions, repoUrl, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHero, iconForUrl,
+  resolveGalleryStyle, buildToc,
+} from './project-page.mjs';
+import { slugifyHeading } from './pd-enhance.mjs';
 import { embedUrl } from '../../client/src/video-embed.mjs';
+import { idAvatarUrl, memberAvatarUrl, isFolder } from '../../membership/member-avatar.mjs';
+import { isGithubLogin } from './github-login.mjs';
+import { licenseRow } from '../../membership/licenses.mjs';
 
 /** An invitation code, after trimming and uppercasing: the coupon alphabet the Worker checks (COUPON_CODE_RE). */
 export const CLAIM_CODE_RE = /^[A-Z0-9]{3,32}$/;
@@ -59,12 +66,13 @@ const isServerState = (s) => typeof s === 'string' && SERVER_STATES.includes(s);
  * @typedef {{ state: string, surface: 'dialog'|'panel', title: string, text: string, tier: boolean,
  *   signin: { label: string } | null, note: boolean, poll: boolean, busy: boolean, actions: ClaimAction[],
  *   redirect: string|null }} ClaimView
- * @typedef {{ label: string, url: string, locked: boolean, icon: string|null }} ViewLink
+ * @typedef {{ label: string, url: string, locked: boolean, icon: string|null, hint: string }} ViewLink
  * @typedef {{ title: string, description: string, crumbs: { key: string, label: string }[],
  *   hero: { image: string, preset: string|null }, mark: string, barMark: string, version: string, pricing: string,
  *   repo: { label: string, url: string, icon: string|null } | null, primary: ViewLink|null, railLinks: ViewLink[],
- *   ctaSub: string, specs: [string, string][], tags: string[], gallery: { src: string, caption: string }[],
- *   captioned: boolean, video: string|null, side: 'left'|'right', body: string }} ListingModel
+ *   ctaSub: string, specs: [string, string][], license: { id: string, href: string|null } | null, tags: string[],
+ *   gallery: { src: string, caption: string }[], captioned: boolean, galleryStyle: 'grid'|'carousel', video: string|null,
+ *   side: 'left'|'right', body: string }} ListingModel
  * @typedef {{ state: string, projectUrl?: string|null, retryAfterSeconds?: number|null }
  *   | { transient: true, rateLimited?: boolean }} StatusAnswer
  */
@@ -321,16 +329,16 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
 /**
  * Everything the listing view renders, decided once and in plain data. `labels` is the build-time category label
- * map; `images` maps a file name to its data: URL. Image fields resolve ONLY to the listing's own images (a remote
+ * map; `licenses` is the build-time house/licenses.yml document; `images` maps a file name to its data: URL. Image fields resolve ONLY to the listing's own images (a remote
  * URL in an image field is refused at save, and is not loaded here either). Every href is safeHref-checked, and a
  * link that fails keeps its label and loses its address.
  */
 /**
  * @param {any} listing
- * @param {{ labels?: Record<string, string>, images?: Record<string, string> }} [opts]
+ * @param {{ labels?: Record<string, string>, images?: Record<string, string>, licenses?: any, now?: Date|null }} [opts]
  * @returns {ListingModel}
  */
-export function listingModel(listing, { labels = {}, images = {} } = {}) {
+export function listingModel(listing, { labels = {}, images = {}, licenses = null, now = null } = {}) {
   const fm = listing && typeof listing.frontmatter === 'object' && listing.frontmatter ? listing.frontmatter : {};
   const slug = str(listing?.slug);
   const title = str(fm.title) || slug || 'Untitled project';
@@ -353,14 +361,21 @@ export function listingModel(listing, { labels = {}, images = {} } = {}) {
   const repo = repoUrl(links);
   const primaryLink = resolvePrimaryCta(links, pricingUrl);
   const rail = railLinks(links, primaryLink, pricingUrl, fm.pricing);
-  const asLink = (l) => (l ? { label: String(linkLabel(l) || 'Link'), url: l.url, locked: isLockedLink(l), icon: iconForUrl(l.url) } : null);
+  const asLink = (l) => (l ? { label: String(linkLabel(l) || 'Link'), url: l.url, locked: isLockedLink(l), icon: iconForUrl(l.url), hint: lockedHint(l) } : null);
 
   const specs = [];
   if (str(fm.version)) specs.push(['Version', str(fm.version)]);
   if (str(fm.requires)) specs.push(['Requires', str(fm.requires)]);
   const platforms = Array.isArray(fm.platforms) ? fm.platforms.filter((p) => typeof p === 'string' && p.trim()) : [];
   if (platforms.length) specs.push(['Works with', platforms.join(', ')]);
-  if (str(fm.license)) specs.push(['License', str(fm.license)]);
+  // sow-434: the published page's Published row. A claimed listing is published at the claim, so the date the person
+  // would see is today's, written the way the page writes it.
+  if (now instanceof Date && !Number.isNaN(now.valueOf())) specs.push(['Published', railDate(now)]);
+  // The License row is the published page's own (licenseRow): an id from house/licenses.yml, linked to the author's
+  // licenseUrl or the licence's public page, plain for Proprietary, and no row at all for an id outside the list (or
+  // with no list to check against). The published page links the repository's own licence file first; the preview
+  // cannot ask GitHub for it, so it links the next address in the same order. The href is safeHref-checked again.
+  const lic = licenseRow({ license: fm.license, licenseUrl: fm.licenseUrl }, licenses);
 
   const shots = normalizeGallery(fm.gallery)
     .map((s) => ({ src: typeof s.src === 'string' ? img(s.src) : '', caption: typeof s.caption === 'string' ? s.caption : '' }))
@@ -382,16 +397,156 @@ export function listingModel(listing, { labels = {}, images = {} } = {}) {
     pricing: pricing ? cap(pricing) : '',
     repo: repo ? { label: 'View on GitHub', url: repo, icon: iconForUrl(repo) } : null,
     primary: asLink(primaryLink),
-    railLinks: rail.map(asLink).filter(Boolean),
+    // The rail draws every unlocked link with the one link icon, as the published rail does (#ico-link).
+    railLinks: rail.map(asLink).filter(Boolean).map((l) => ({ ...l, icon: 'ico-link' })),
     ctaSub: [pricing ? cap(pricing) : null, str(fm.requires) || null].filter(Boolean).join(' · '),
     specs,
+    license: lic ? { id: lic.id, href: safeHref(lic.href) } : null,
     tags: (Array.isArray(fm.tags) ? fm.tags : []).filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim()),
     gallery: shots,
     captioned: hasCaptions(shots),
+    galleryStyle: resolveGalleryStyle(fm.galleryStyle, shots.length), // the published page's rule, sow-434
     video,
     side: fm.sidebarPosition === 'left' ? 'left' : 'right',
     body: typeof listing?.body === 'string' ? listing.body : '',
   };
+}
+
+/** The published page's tooltip on a members-only link, word for word (src/pages/projects/[slug].astro lockedHint). */
+export function lockedHint(link) {
+  if (!isLockedLink(link)) return '';
+  return link.encrypted
+    ? 'Encrypted member content. Open in the GBTI client to unlock.'
+    : 'Members only. Open in the GBTI client to unlock.';
+}
+
+/** A rail date the way the published page writes its Updated and Published rows ("1 Oct 2026"). */
+export function railDate(d) {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// sow-434: the parts of the published page the preview now draws (crumbs, contents, byline, the author note)
+
+/**
+ * Where a hero crumb links: the cross-type feed filtered to that category, the published page's destination
+ * (CategoryCrumbs.astro). A key outside the taxonomy's slug shape links nowhere.
+ */
+export function crumbHref(key) {
+  return typeof key === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(key) ? `/feeds/?cat=${encodeURIComponent(key)}` : null;
+}
+
+/** The example profile page for this invitation: the byline's name and the note's links point here. */
+export function exampleProfileHref(code) {
+  const c = normalizeClaimCode(code);
+  return c ? `/claim/profile/?code=${c}` : null;
+}
+
+/**
+ * The contents rail for the rendered body: ids for its h2s (slugified as the WorkBench preview stamps them) and the
+ * published page's entries (buildToc: Overview, the h2s, Screenshots, Discussion). `texts` are the h2s in order.
+ */
+export function claimToc(texts, { hasGallery = false } = {}) {
+  const taken = new Set(['pd-overview', 'pd-screenshots', 'comments']);
+  const ids = (Array.isArray(texts) ? texts : []).map((t) => slugifyHeading(t, taken));
+  const headings = ids.map((id, i) => ({ depth: 2, slug: id, text: String(texts[i] ?? '') }));
+  return { ids, toc: buildToc(headings, { hasBody: true, hasGallery, hasDiscussion: true }) };
+}
+
+/** The states in which a signed-in account IS the person the listing is for, so the byline may wear their face. */
+export const CLAIMANT_STATES = Object.freeze([
+  'redeem', 'ready', 'claim_failed', 'publishing', 'pending_grant', 'pending_folder', 'year_used', 'year_unavailable',
+]);
+
+/** The name the byline and the note carry: the recipient name the preparer wrote, one line, or a plain stand-in. */
+export function bylineName(name) {
+  const n = typeof name === 'string' ? name.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+  return n || 'Your name';
+}
+
+/**
+ * Whose picture the byline shows. Signed out, or signed in as anyone the listing is NOT for (the preparer's preview,
+ * another account), it is the blobatar drawn from the recipient's name. Signed in as the claimant, it is their own:
+ * `/avatar/<folder>` once the account has a GBTI folder, else GitHub's picture for the account number, with the
+ * blobatar for the folder (or the login it will become) underneath, as Avatar.astro layers it.
+ *
+ * @param {{ state?: string, signal?: { username?: string|null, login?: string|null, githubId?: string|null }|null, recipientName?: string }} [opts]
+ * @returns {{ name: string, seed: string, photo: string }}
+ */
+export function bylineIdentity({ state = '', signal = null, recipientName = '' } = {}) {
+  const name = bylineName(recipientName);
+  const out = { name, seed: name, photo: '' };
+  if (!signal || !CLAIMANT_STATES.includes(state)) return out;
+  const folder = typeof signal.username === 'string' ? signal.username.toLowerCase() : '';
+  if (isFolder(folder)) return { name, seed: folder, photo: memberAvatarUrl(folder, { site: '' }) };
+  const byId = idAvatarUrl(signal.githubId);
+  const login = typeof signal.login === 'string' ? signal.login.toLowerCase() : '';
+  return byId ? { name, seed: isFolder(login) ? login : name, photo: byId } : out;
+}
+
+/**
+ * The name on the pinned "From the author" card. NOT the byline's name: the published card prints the author's GBTI
+ * folder (Comments.astro, `authorDisplay(intro.data.author)`), while the byline prints the profile's display name, so
+ * a published project shows both. The folder a claim publishes under is the claimant's: their own once they are
+ * signed in as the person the listing is for and have one, else, on a tied invitation, the bound login in lower case
+ * (a new member's folder). With neither known, the recipient name, as the byline has it. The example profile's card
+ * prints the same rule (cardAuthor in claim-profile-core.mjs), so the two pages agree.
+ *
+ * @param {{ state?: string, signal?: { username?: string|null }|null, listing?: any }} [opts]
+ * @returns {string}
+ */
+export function noteCardName({ state = '', signal = null, listing = null } = {}) {
+  const own = signal && CLAIMANT_STATES.includes(state) && typeof signal.username === 'string' ? signal.username.toLowerCase() : '';
+  if (isFolder(own)) return own;
+  const tied = listing && isGithubLogin(listing.githubLogin) ? listing.githubLogin.toLowerCase() : '';
+  return tied || bylineName(listing?.recipientName);
+}
+
+/** The note card's label while it shows the preparer's suggestion untouched, and once it shows anything else. */
+export const NOTE_LABEL_SUGGESTED = 'Suggested note';
+export const NOTE_LABEL_OWN = 'Your note';
+/** The card's line when there is no suggestion and nothing typed yet. */
+export const NOTE_CARD_PLACEHOLDER = 'Your note to readers is pinned here. You write it in your own words when you claim the listing.';
+
+/**
+ * What the pinned "From the author" card shows: the claim note as it stands (`current`, the dialog's note box) or,
+ * before there is one, the preparer's suggestion. Labelled "Suggested note" while it is the suggestion word for
+ * word, and "Your note" once it is anything else, including empty, when the card shows a placeholder line instead.
+ *
+ * @param {{ suggestion?: string, current?: string|null }} [opts]
+ * @returns {{ label: string, text: string, placeholder: string }}
+ */
+export function noteCardView({ suggestion = '', current = null } = {}) {
+  const sug = typeof suggestion === 'string' ? suggestion : '';
+  const text = typeof current === 'string' ? current : sug;
+  if (!text.trim()) return { label: NOTE_LABEL_OWN, text: '', placeholder: NOTE_CARD_PLACEHOLDER };
+  return { label: sug.trim() && text === sug ? NOTE_LABEL_SUGGESTED : NOTE_LABEL_OWN, text, placeholder: '' };
+}
+
+/** A line ending CommonMark turns into a hard break: two or more spaces, or a backslash, before the newline. */
+const HARD_BREAK_RE = / {2,}$|\\$/;
+
+/**
+ * The note as paragraphs of text nodes, at the note's own cap (NOTE_MAX), broken where the PUBLISHED card breaks it.
+ * The claim publishes the note verbatim as the markdown body of the intro comment, and the published card renders it
+ * as markdown (no breaks plugin), so this follows CommonMark rather than the message's one-line-per-line layout: a
+ * blank line (spaces allowed) starts a paragraph, a newline after two spaces or a backslash is a <br>, and every other
+ * newline is a soft break, which the published page shows as a space. Markup stays literal text, never a tag.
+ */
+export function noteToNodes(text, doc) {
+  const s = (typeof text === 'string' ? text : '').replace(/\r\n?/g, '\n').slice(0, NOTE_MAX).trim();
+  const out = [];
+  if (!s) return out;
+  for (const lines of s.split(/\n(?:[ \t]*\n)+/).map((p) => p.split('\n')).filter((ls) => ls.some((l) => l.trim()))) {
+    const p = doc.createElement('p');
+    lines.forEach((line, i) => {
+      const last = i === lines.length - 1;
+      if (i > 0) p.appendChild(HARD_BREAK_RE.test(lines[i - 1]) ? doc.createElement('br') : doc.createTextNode(' '));
+      p.appendChild(doc.createTextNode(last ? line : line.replace(HARD_BREAK_RE, '')));
+    });
+    out.push(p);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------------

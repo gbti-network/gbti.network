@@ -1,0 +1,174 @@
+---
+// sow-434: THE EXAMPLE PROFILE, /claim/profile/?code=<CODE>. The invitation page (/claim/?code=<CODE>) shows a prepared
+// project the way it will look once published; its byline links here, to the profile the person will have once they
+// claim it. Owner, 2026-09-30: "make the author page example linked, look real, with placeholder text and socials with
+// a very clear note that this also is not published but is setup to show example."
+//
+// THE PUBLISHED LAYOUT, NOT A SKETCH OF IT. The real header and footer (BaseLayout without `bare`), then what
+// src/pages/members/[username].astro renders: ProfileHeader (its `example` arms: the name's initial where a picture
+// would be, as the claimed profile has none, a placeholder name, the example links), the bio and the subscribe control
+// in its slot, and the Projects section with the prepared project as
+// a card. The card and the subscribe button are look-alikes of ProjectCard and SubscribeButton, because neither can
+// take a variant without changing the bytes of every published page that renders it (see ProfileHeader's note), and
+// test/claim-profile-guards.test.mjs holds their classes, styles and icons to those components' source.
+//
+// NOTHING ABOUT THE LISTING IS IN THIS FILE, AND NOTHING THE SCRIPT LEARNS REACHES THE DOCUMENT HEAD. The title,
+// description and og tags are the invitation page's generic ones (sow-427 trap 7: a pasted link must not unfurl the
+// person's name or the project's title), and src/lib/claim-profile.ts never sets the tab title.
+//
+// UNLISTED THREE WAYS, like the invitation page. `noindex` here, the `claim\/profile` entry in the sitemap filter
+// (astro.config.mjs), and the `/claim/*` rule in public/_headers (Referrer-Policy: no-referrer), which already covers
+// this path: the code in the address is a bearer credential, so no image, link or GitHub hop may receive it.
+//
+// INERT BY CONSTRUCTION. Nothing here can follow, subscribe, sign in or save: no custom elements, no data-signin, no
+// data-gbti-* hooks, and the one control (Subscribe) is a disabled button with the "Available once published" tooltip.
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Container from '../../../components/Container.astro';
+import ProfileHeader from '../../../components/members/ProfileHeader.astro';
+import { SIGNUP_BASE } from '../../../lib/membership';
+import { CATEGORY_LABELS } from '../../../lib/taxonomy';
+import { BANNER_LEAD, BANNER_TEXT, BIO_PLACEHOLDER, INERT_TOOLTIP } from '../../../lib/claim-profile-core.mjs';
+
+// The same picture layers as StackedAvatars (sow-428): the blobatar, with the photo over it.
+const ring = 'border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12);background:var(--tint)';
+const layer = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0';
+---
+<BaseLayout
+  title="An invitation"
+  description="A private invitation to join GBTI Network, a professional publishing network for developers."
+  noindex={true}
+>
+  <div class="cp" data-cp-root data-signup-base={SIGNUP_BASE} data-labels={JSON.stringify(CATEGORY_LABELS)}>
+    <section class="cp-panel" data-cp-panel>
+      <div class="cp-card">
+        <h1 class="cp-card-title" data-cp-panel-title>Opening the example profile</h1>
+        <p class="cp-card-text" data-cp-panel-text></p>
+        <div class="cp-card-busy" data-cp-panel-busy><span class="cp-spin" aria-hidden="true"></span><span>One moment</span></div>
+        <div class="cp-actions" data-cp-panel-actions></div>
+      </div>
+      <noscript>
+        <div class="cp-card"><p class="cp-card-text">This page needs JavaScript to open. Turn it on for this site, then reload the page.</p></div>
+      </noscript>
+    </section>
+
+    <div data-cp-page hidden>
+      <div class="cp-banner" role="note" aria-label="Example profile">
+        <Container class="cp-banner-in">
+          <span class="cp-pill">Example</span>
+          <p class="cp-banner-text"><strong>{BANNER_LEAD}</strong> {BANNER_TEXT}</p>
+          <a class="btn btn-ghost cp-banner-back" data-cp-back>Back to your invitation</a>
+        </Container>
+      </div>
+
+      <ProfileHeader example>
+        <div class="mx-auto max-w-xl sm:mx-0 lead">
+          <p class="cp-example-tag">Example bio</p>
+          <p class="cp-bio">{BIO_PLACEHOLDER}</p>
+        </div>
+        <div class="mt-4 flex flex-wrap max-sm:justify-center gap-3 sm:justify-start">
+          {/* SubscribeButton's look (variant white), with nothing behind it: no <gbti-subscribe>, no dialog, no data-signin. */}
+          <span class="cp-inert-wrap" style="display:inline-flex" data-tooltip={INERT_TOOLTIP}>
+            <button type="button" class="btn btn-white subscribe-btn cp-inert" disabled aria-disabled="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right:6px"><use href="#ico-mega"/></svg>
+              Subscribe to activity
+            </button>
+          </span>
+        </div>
+      </ProfileHeader>
+
+      <section class="band tint">
+        <Container>
+          <div id="projects" style="scroll-margin-top:90px">
+            <div class="sec-head">
+              <h2 class="h2" data-cp-projects-title>Projects</h2>
+            </div>
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {/* ProjectCard's markup (the directory variant), filled from the listing. Every link goes back to the invitation. */}
+              <article class="card card-hover" style="padding:22px;display:flex;flex-direction:column">
+                <a data-cp-back class="flex items-center g14" style="margin-bottom:16px">
+                  <img data-cp-card-icon alt="" width="64" height="64" style="width:56px;height:56px;flex:none;border-radius:var(--r);object-fit:contain;background:var(--tint);border:1.5px solid var(--line)" />
+                  <div>
+                    <h2 class="h4" data-cp-card-title></h2>
+                    <div class="flex items-center g8 wrap-w" style="margin-top:6px">
+                      <span class="chip" data-cp-card-cat hidden></span>
+                      <span class="chip chip-green" data-cp-card-paid hidden>Paid</span>
+                      <span class="chip" data-cp-card-members hidden data-tooltip="Has member-only resources" style="display:inline-flex;align-items:center;gap:4px">
+                        <svg viewBox="0 0 24 24" width="12" height="12"><use href="#ico-lock"/></svg>Members
+                      </span>
+                    </div>
+                  </div>
+                </a>
+                <p class="body-sm muted" style="flex:1;margin-bottom:16px" data-cp-card-desc></p>
+                <div class="flex items-center g12" style="margin-bottom:14px">
+                  <div class="flex items-center">
+                    <div class="flex -space-x-2">
+                      <a data-cp-self data-cp-card-person class="relative inline-block transition-transform hover:z-10 hover:-translate-y-0.5">
+                        <span class="h-5 w-5 text-[9px] relative block overflow-hidden rounded-full" style={ring}>
+                          <img data-cp-blob alt="" aria-hidden="true" style={layer} />
+                          <img data-cp-photo alt="" hidden style={layer} />
+                        </span>
+                      </a>
+                    </div>
+                  </div>
+                  <a data-cp-self data-cp-card-name class="body-sm" style="color:var(--fg-soft);font-weight:500"></a>
+                </div>
+                <div class="flex items-center g16">
+                  <a data-cp-back class="link" style="font-size:14px">View details <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
+                  <a data-cp-card-repo hidden rel="noopener noreferrer" target="_blank" class="body-sm muted" style="font-weight:600">Repo</a>
+                </div>
+              </article>
+            </div>
+          </div>
+        </Container>
+      </section>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  import { startClaimProfile } from '../../../lib/claim-profile';
+  startClaimProfile(document);
+</script>
+
+<style>
+  /* The panel: the invitation page's plain card, on the same quiet band, for loading and for every dead link. */
+  .cp-panel { display: flex; justify-content: center; padding: 72px 16px 96px; background: var(--paper-2); min-height: 60vh; }
+  .cp-panel[hidden] { display: none; }
+  .cp-card { width: 100%; max-width: 520px; height: fit-content; padding: 34px; background: var(--paper); border: 1px solid var(--line);
+    border-radius: var(--r-lg); box-shadow: var(--sh); }
+  @media (max-width: 480px) { .cp-card { padding: 26px 20px; } }
+  .cp-card-title { margin: 0 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 26px; line-height: 1.2; color: var(--fg); }
+  .cp-card-text { margin: 0; font-size: 15px; line-height: 1.6; color: var(--fg-soft); }
+  .cp-card-text:empty { display: none; }
+  .cp-card-busy { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13.5px; color: var(--fg-mute); }
+  .cp-card-busy[hidden] { display: none; }
+  .cp-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--green); animation: cp-spin .8s linear infinite; }
+  @keyframes cp-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .cp-spin { animation: none; } }
+  .cp-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+  .cp-actions:empty { display: none; }
+
+  /* The banner: amber in both themes, so it can never be read as part of the profile it describes. */
+  .cp-banner { background: var(--amber-tint); border-bottom: 2px solid var(--amber); }
+  .cp-banner :global(.cp-banner-in) { display: flex; align-items: center; gap: 16px; padding-top: 16px; padding-bottom: 16px; }
+  /* Amber text on the page surface, not white on amber: white on the light theme's amber is under the AA contrast for
+     text this small. */
+  .cp-pill { flex: none; font-family: var(--f-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--amber-text); background: var(--paper); border: 1.5px solid var(--amber); padding: 3px 9px; border-radius: 999px; }
+  .cp-banner-text { margin: 0; flex: 1; min-width: 0; font-size: 14.5px; line-height: 1.55; color: var(--fg); }
+  .cp-banner-text strong { color: var(--amber-text); }
+  .cp-banner-back { flex: none; padding: 9px 14px; font-size: 13.5px; border-radius: var(--r-sm); }
+  @media (max-width: 720px) {
+    .cp-banner :global(.cp-banner-in) { flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+    .cp-banner-text { flex-basis: 100%; }
+  }
+
+  /* The placeholder bio and its label. The header band is dark in both themes, so the label takes the dark theme's
+     amber text colour outright rather than the token, which is a dark brown in the light theme. */
+  .cp-example-tag { margin: 0 0 6px; font-family: var(--f-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f0c883; }
+  .cp-bio { margin: 0; font-style: italic; }
+
+  /* The inert subscribe control: the published look, and nothing that suggests it can be pressed. */
+  .cp-inert { cursor: default; }
+  .cp-inert:hover { transform: none; box-shadow: var(--sh); }
+</style>

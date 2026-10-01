@@ -9,21 +9,31 @@ interface Props {
   targetType: 'post' | 'project' | 'prompt' | 'share'; // SOW-050 P3: Shares are a first-class basket type
   targetSlug: string;
   size?: 'sm' | 'md' | 'rail'; // sow-179: 'rail' is the icon-only 38px button for the Editorial/Journal sticky rail
+  inert?: boolean; // sow-434: the invitation preview's disabled copy, see below
 }
-const { targetType, targetSlug, size = 'md' } = Astro.props;
+const { targetType, targetSlug, size = 'md', inert = false } = Astro.props;
+// sow-434: `inert` is the invitation preview's copy (/claim/), for a listing nobody has published yet. The markup
+// stays the same elements in the same order, and every live hook is switched off attribute by attribute, so the
+// default output is byte for byte what it was (test/claim-render.test.mjs pins the template; a site build diffed
+// before and after proved it). Wrapping either version in a conditional would not do: Astro drops the whitespace
+// between elements inside an expression, which changes the published markup.
+// Inert, the host is a plain <span> that no script upgrades (see FavoriteButton.astro), with no hooks, disabled.
+const Host = inert ? 'span' : 'gbti-collection';
+const live = <T,>(v: T): T | undefined => (inert ? undefined : v);
 ---
-<gbti-collection
-  data-gbti-target-type={targetType}
-  data-gbti-target-slug={targetSlug}
-  data-gbti-size={size}
-  data-gbti-region="collection"
+<Host
+  data-gbti-target-type={live(targetType)}
+  data-gbti-target-slug={live(targetSlug)}
+  data-gbti-size={live(size)}
+  data-gbti-region={live('collection')}
   class:list={['gbti-collection', size === 'sm' && 'col-sm', size === 'rail' && 'col-rail']}
+  style={inert ? 'display:inline-flex' : undefined}
 >
-  <button type="button" class="col-pill" data-signin data-tooltip="Save to a collection" aria-label={`Save this ${targetType} to a collection`}>
+  <button type="button" class="col-pill" data-signin={live('')} disabled={inert || undefined} aria-disabled={inert ? 'true' : undefined} style={inert ? 'cursor:not-allowed' : undefined} data-tooltip={inert ? 'Available once published' : 'Save to a collection'} aria-label={inert ? `Save this ${targetType} to a collection, available once published` : `Save this ${targetType} to a collection`}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-folder" /></svg>
     <span class="col-label">Save</span>
   </button>
-</gbti-collection>
+</Host>
 <style is:global>
   /* The light-DOM pill is the public (inert) display; when <gbti-collection> upgrades, its Shadow DOM covers it. */
   gbti-collection { display: inline-flex; }

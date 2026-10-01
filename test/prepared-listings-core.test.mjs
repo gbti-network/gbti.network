@@ -331,14 +331,19 @@ test('the manager row never carries the personal message or the body; the admin 
   assert.equal(full.frontmatter.title, 'SurfacedBy');
 });
 
-test('the public view carries the listing and the terms, and never an account number, the code or the tie', () => {
+test('the public view carries the listing and the terms, and never an account number or the code; a tie shows only as its login', () => {
   const v = publicListingView(listing({ boundGithubId: '4242', boundLogin: 'sam' }), { tier: 'member', freeDays: 365, code: 'CODEABLEYEAR' });
-  assert.deepEqual(Object.keys(v).sort(), ['body', 'freeDays', 'frontmatter', 'images', 'message', 'preparedByLogin', 'recipientName', 'slug', 'tier', 'type']);
+  assert.deepEqual(Object.keys(v).sort(), [
+    'body', 'freeDays', 'frontmatter', 'githubLogin', 'images', 'message', 'preparedByLogin', 'recipientName', 'slug', 'suggestedNote', 'tier', 'type',
+  ]);
   assert.equal(v.tier, 'member');
   assert.equal(v.freeDays, 365);
+  assert.equal(v.githubLogin, 'sam', 'sow-434: the bound login, for the example profile');
+  assert.equal(v.suggestedNote, '', 'no suggestion is an empty string');
   const flat = JSON.stringify(v);
   for (const secret of ['4242', 'CDEABEYEAR23456789AB', '2002207', 'CODEABLEYEAR']) assert.ok(!flat.includes(secret), secret);
   assert.equal(publicListingView(listing(), null).tier, null, 'an unknown campaign simply omits the terms');
+  assert.equal(publicListingView(listing(), null).githubLogin, null, 'an untied listing names no account');
 });
 
 // ---- guards over every new sow-427 core module -----------------------------------------------------------------

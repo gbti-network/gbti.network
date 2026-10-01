@@ -12,7 +12,7 @@ import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance, preparedAdminRequest, stagePreparedImage } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 import { SITE_BASE } from './account-ops.mjs';
-import { claimLink, isListingId, isListingImageName, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
+import { claimLink, isListingId, isListingImageName, validateSuggestedNote, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
 
 export async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
@@ -249,13 +249,22 @@ function preparedImageArg(img, i) {
 
 /**
  * The staging item, the images and the save body for prepareListingOp, or a `bad-request`. Pure. The body is the
- * shape the WorkBench editor sends: `{ op:'save', id?, campaign, recipientName, message, githubLogin?, draft,
- * stagedItem }`. On an edit (`id`) an absent greeting, message or campaign is left out, which the Worker reads as
- * unchanged; `githubLogin` is sent only when the caller passed the key, because an empty value unties.
+ * shape the WorkBench editor sends: `{ op:'save', id?, campaign, recipientName, message, suggestedNote?,
+ * githubLogin?, draft, stagedItem }`. On an edit (`id`) an absent greeting, message or campaign is left out, which
+ * the Worker reads as unchanged; `githubLogin` and `suggestedNote` are sent only when the caller passed the key,
+ * because an empty value unties or clears.
+ *
+ * sow-434: `suggestedNote` is NOT the author note, which this still refuses. It is the optional text the claim dialog
+ * starts from, which the recipient edits or keeps and publishes themselves. Its shape and length are checked here
+ * with the shared rule, before any image is staged, and the Worker checks them again.
  */
 function preparedSaveRequest(args = {}) {
   if (args.authorNote !== undefined) {
-    throw new OperationError('bad-request', 'A prepared listing takes no author note. The recipient writes their own when they claim it.');
+    throw new OperationError('bad-request', 'A prepared listing takes no author note. The recipient writes and publishes their own when they claim it; pass suggestedNote for a starting point they can edit.');
+  }
+  if (args.suggestedNote !== undefined) {
+    const v = validateSuggestedNote(args.suggestedNote);
+    if (!v.ok) throw new OperationError('bad-request', v.message);
   }
   const input = args.input;
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -288,6 +297,7 @@ function preparedSaveRequest(args = {}) {
     ...(blankArg(args.campaign) ? {} : { campaign: String(args.campaign).trim() }),
     ...(blankArg(args.recipientName) ? {} : { recipientName: String(args.recipientName) }),
     ...(blankArg(args.message) ? {} : { message: String(args.message) }),
+    ...(args.suggestedNote === undefined ? {} : { suggestedNote: args.suggestedNote === null ? '' : args.suggestedNote }),
     ...(args.githubLogin === undefined ? {} : { githubLogin: args.githubLogin === null ? '' : String(args.githubLogin) }),
     draft: { type: 'project', slug, frontmatter: input, body: typeof args.body === 'string' ? args.body : '' },
     stagedItem,

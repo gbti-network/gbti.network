@@ -19723,6 +19723,23 @@ function isListingId(id) {
 var PREPARED_SLUG_MAX = 64;
 var SLUG_RE2 = new RegExp(`^${SLUG_PATTERN}$`);
 var PREPARED_MAX_IMAGES = 12;
+var MAX_SUGGESTED_NOTE = 2e3;
+var INVISIBLE_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
+function plainText(s, max) {
+  if (typeof s !== "string") return "";
+  return s.replace(/\r\n?/g, "\n").replace(/\t/g, " ").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "").replace(INVISIBLE_RE, "").replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, max).trim();
+}
+function sanitizeSuggestedNote(s) {
+  return plainText(s, MAX_SUGGESTED_NOTE);
+}
+function validateSuggestedNote(raw) {
+  if (raw === void 0 || raw === null) return { ok: true, suggestedNote: "" };
+  if (typeof raw !== "string") return { ok: false, error: "invalid", message: "The suggested note must be plain text." };
+  if (plainText(raw, Infinity).length > MAX_SUGGESTED_NOTE) {
+    return { ok: false, error: "suggested_note_too_long", message: `The suggested note is longer than ${MAX_SUGGESTED_NOTE} characters. Shorten it and save again.` };
+  }
+  return { ok: true, suggestedNote: sanitizeSuggestedNote(raw) };
+}
 var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
 var IMAGE_NAME_RE = /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
 function isListingImageName(name) {
@@ -19789,7 +19806,11 @@ function preparedImageArg(img, i) {
 }
 function preparedSaveRequest(args = {}) {
   if (args.authorNote !== void 0) {
-    throw new OperationError("bad-request", "A prepared listing takes no author note. The recipient writes their own when they claim it.");
+    throw new OperationError("bad-request", "A prepared listing takes no author note. The recipient writes and publishes their own when they claim it; pass suggestedNote for a starting point they can edit.");
+  }
+  if (args.suggestedNote !== void 0) {
+    const v = validateSuggestedNote(args.suggestedNote);
+    if (!v.ok) throw new OperationError("bad-request", v.message);
   }
   const input = args.input;
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -19822,6 +19843,7 @@ function preparedSaveRequest(args = {}) {
     ...blankArg(args.campaign) ? {} : { campaign: String(args.campaign).trim() },
     ...blankArg(args.recipientName) ? {} : { recipientName: String(args.recipientName) },
     ...blankArg(args.message) ? {} : { message: String(args.message) },
+    ...args.suggestedNote === void 0 ? {} : { suggestedNote: args.suggestedNote === null ? "" : args.suggestedNote },
     ...args.githubLogin === void 0 ? {} : { githubLogin: args.githubLogin === null ? "" : String(args.githubLogin) },
     draft: { type: "project", slug, frontmatter: input, body: typeof args.body === "string" ? args.body : "" },
     stagedItem
@@ -20183,16 +20205,18 @@ var TOOLS = [
   // sow-427 (decision 9): the owner's agent prepares a project listing for someone who is not a member yet and
   // gets back the invitation link, the way one was prepared by hand on 2026-09-28. Superadmin only, checked here
   // for a useful error and again by the Worker, which is the boundary. It takes no author note on purpose: the
-  // note is the recipient's own, written when they claim (decision 4), and never ghostwritten.
+  // note is the recipient's own, published when they claim (decision 4). sow-434 relaxed that rule to allow an
+  // optional `suggestedNote`, a factual starting point their note box opens with, which they edit or keep.
   {
     name: "prepare_listing",
-    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes none and you must not write one for them. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
+    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
     inputSchema: obj(
       {
         input: { type: "object", description: "The project frontmatter, with image fields as ./images/<name> references." },
         body: { type: "string", description: "The project description in markdown: facts about the work." },
         recipientName: { type: "string", description: "The name the invitation greets, at most 60 characters." },
         message: { type: "string", description: 'Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page, after a greeting the page adds on its own ("Hi <recipientName>,"), so do not open with a greeting.' },
+        suggestedNote: { type: "string", description: "Optional. A suggested author note, plain text, at most 2000 characters. It is a starting point they can edit or keep: it shows in the preview as a suggestion and pre-fills the note box when they claim the listing, and nothing is published until they submit their own. State facts about the work; never invent their reasons, motives or history. On an edit, an empty string clears it." },
         githubLogin: { type: "string", description: "Optional. The GitHub account of the recipient. Only that account can claim the listing or its free year." },
         campaign: { type: "string", description: "The coupon campaign whose free year the invitation grants. It must be active." },
         images: {
