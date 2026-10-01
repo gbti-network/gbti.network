@@ -118,3 +118,15 @@ test('sow-436: the theme decides which screenshot shows', () => {
   assert.match(css, /\n  :global\(\[data-theme="dark"\]\) \.xbn-shot :global\(\.xbn-img-dark\) \{ display: block; \}/, 'and shows the dark one');
   for (const m of css.matchAll(/@container[^{]*\{([\s\S]*?)\n  \}/g)) assert.doesNotMatch(m[1], /xbn-img/, 'no layout block touches which picture shows');
 });
+
+// Owner, 2026-10-01: the same banner full width under every article. It mounts right after the article layout, so it
+// sits below the article, its sidebar and the closing stack in both layouts (the Journal sidebar runs beside the
+// closing stack, so anything inside a slot would sit beside the sidebar, not under it).
+test('every article page mounts the full-width banner right after the article layout', () => {
+  const article = stripComments(read('src/pages/articles/[slug].astro'));
+  assert.match(article, /<\/Layout>\s*(\{\})?\s*<div class="art-xbn"><ExtensionBanner \/><\/div>/, 'the full-width form, directly after the layout');
+  // The room below it goes with the banner: no gap is left before the footer when the switch is off or it is hidden.
+  assert.match(article, /\.art-xbn:not\(:has\(\.xbn\)\) \{ padding-bottom: 0; \}/);
+  assert.match(article, /:global\(html\[data-gbti-extension\]\) \.art-xbn \{ padding-bottom: 0; \}/);
+  assert.equal([...article.matchAll(/<ExtensionBanner\b/g)].length, 1, 'mounted once, outside every slot');
+});

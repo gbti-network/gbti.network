@@ -26,6 +26,7 @@ import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 import { buildArticleToc } from '../../lib/article-page.mjs';
 import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
 import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
+import ExtensionBanner from '../../components/home/ExtensionBanner.astro'; // owner 2026-10-01: under every article
 
 export async function getStaticPaths() {
   const posts = (await getCollection('post')).filter(hasPublicPage);
@@ -91,6 +92,19 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
     {isJournal && <CtaCard slot="rail" type="post" ref={d.slug} wrap="" />}
     {!isJournal && <CtaCard slot="closing" type="post" ref={d.slug} wrap="card" pad />}
   </Layout>
+  {/* Owner, 2026-10-01: the extension banner, full width under every article: below the article, its sidebar and the
+      closing stack, in both layouts. The full-width form (page gutters, as on the homepage). It still hides for a
+      reader who has the extension and follows the extension-CTA site setting, both inside the component. The wrapper
+      only adds room above the footer (the homepage leaves about 58px below the banner; on its own it leaves 18). */}
+  <div class="art-xbn"><ExtensionBanner /></div>
   <EditHooks type="post" owner={d.author} slug={d.slug} />
   <TouchSignal type="post" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />
 </BaseLayout>
+
+<style>
+  /* The room below the article banner, which goes when the banner does: the CTA switch is off (nothing renders) or the
+     reader has the extension (its content script stamps <html data-gbti-extension>, which hides the banner). */
+  .art-xbn { padding-bottom: 40px; }
+  .art-xbn:not(:has(.xbn)) { padding-bottom: 0; }
+  :global(html[data-gbti-extension]) .art-xbn { padding-bottom: 0; }
+</style>
