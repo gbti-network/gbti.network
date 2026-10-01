@@ -1,0 +1,38 @@
+---
+// sow-435: the first-touch referral credit on its own. Split out of CommunityInvite so a page can credit its author
+// without showing the join panel: articles dropped the panel (owner, 2026-09-30) but kept the credit, so a reader who
+// joins after reading an article still credits its author. CommunityInvite renders this too, so every page that
+// shows the panel (projects, prompts, the utilities) behaves exactly as before.
+import { refCodeForAuthor, REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
+
+interface Props {
+  /** Content author username. Resolved to the author's immutable github_id referral code. */
+  author: string;
+  /** Where the visitor landed, recorded for attribution, e.g. "post:my-slug". */
+  via?: string;
+}
+const { author, via } = Astro.props;
+// undefined for house content and unknown authors, so nothing is set for them (as before).
+const refCode = refCodeForAuthor(author);
+---
+{refCode && (
+  <script
+    define:vars={{ refCode, via: via ?? '', cookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, days: REF_COOKIE_DAYS }}
+  >
+    // First-touch referral: set the cookie ONLY if it is not already present, so the FIRST member whose
+    // content a visitor lands on wins the attribution across the rest of their visit. Self-referral is
+    // rejected server-side at signup (the Worker drops a ref equal to the new member's own github_id),
+    // so we do not need to know who is viewing here.
+    (function () {
+      try {
+        var has = document.cookie.split('; ').some(function (c) { return c.indexOf(cookie + '=') === 0; });
+        if (has) return;
+        var maxAge = 60 * 60 * 24 * days;
+        document.cookie = cookie + '=' + encodeURIComponent(refCode) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+        if (via) {
+          document.cookie = viaCookie + '=' + encodeURIComponent(via) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+        }
+      } catch (e) { /* cookies disabled: attribution simply does not persist, no error surfaced */ }
+    })();
+  </script>
+)}

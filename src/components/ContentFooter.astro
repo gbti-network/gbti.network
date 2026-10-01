@@ -6,6 +6,7 @@
 // this block.
 import { getCollection } from 'astro:content';
 import CommunityInvite from './CommunityInvite.astro';
+import ReferralCredit from './ReferralCredit.astro';
 import Comments from './blog/Comments.astro';
 import AuthorBox from './blog/AuthorBox.astro';
 import FollowNetwork from './FollowNetwork.astro';
@@ -22,8 +23,9 @@ interface Props {
   wide?: boolean; // span the full content-column width (e.g. inside the prompt main column) instead of the centered reading column
   hideAuthor?: boolean; // skip the "Written by" box when the page already shows the author elsewhere (e.g. the prompt sidebar Author card)
   aliases?: string[]; // SOW-112: pre-rename slugs, unioned into comment lookups so a renamed item still finds its thread + intro
+  invite?: boolean; // sow-435: false drops the join panel but keeps the author's referral credit (articles pass false)
 }
-const { type, slug, author, publishedAt, via, wide = false, hideAuthor = false, aliases = [] } = Astro.props;
+const { type, slug, author, publishedAt, via, wide = false, hideAuthor = false, aliases = [], invite = true } = Astro.props;
 const viaTag = via ?? `${type}:${slug}`;
 // The "From the author" intro (SOW-014, rendered by Comments.astro) already carries the author's name and
 // avatar right above the thread, so a plain "Written by" box is redundant whenever one exists -- skip it
@@ -31,7 +33,7 @@ const viaTag = via ?? `${type}:${slug}`;
 // somewhere else entirely, regardless of whether an intro exists.
 const skipAuthorBox = hideAuthor || hasAuthorNote(await getCollection('comment'), type, slug, author, aliases);
 ---
-<CommunityInvite author={author} via={viaTag} />
+{invite ? <CommunityInvite author={author} via={viaTag} /> : <ReferralCredit author={author} via={viaTag} />}
 {!skipAuthorBox && <AuthorBox author={author} publishedAt={publishedAt} />}
 {/* sow-166 / sow-202: the digest capture. Mounted HERE rather than on each of the three page templates,
     because this component is already the one shared closing block for articles, projects and prompts, so

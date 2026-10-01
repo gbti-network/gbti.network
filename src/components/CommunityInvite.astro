@@ -1,6 +1,7 @@
 ---
 import { authorDisplay } from '../lib/authors';
-import { refCodeForAuthor, REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
+import { refCodeForAuthor } from '../lib/referral';
+import ReferralCredit from './ReferralCredit.astro'; // sow-435: the first-touch credit, shared with pages that show no panel
 import { offeredTiers, benefitProse, revenueFragments } from '../lib/tiers';
 
 interface Props {
@@ -109,24 +110,4 @@ const isMemberAuthored = author !== 'gbti';
   .community-invite .ci-submit-a svg { flex: none; }
   html.is-gbti-member .community-invite .ci-submit { display: none; }
 </style>
-{refCode && (
-  <script
-    define:vars={{ refCode, via: via ?? '', cookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, days: REF_COOKIE_DAYS }}
-  >
-    // First-touch referral: set the cookie ONLY if it is not already present, so the FIRST member whose
-    // content a visitor lands on wins the attribution across the rest of their visit. Self-referral is
-    // rejected server-side at signup (the Worker drops a ref equal to the new member's own github_id),
-    // so we do not need to know who is viewing here.
-    (function () {
-      try {
-        var has = document.cookie.split('; ').some(function (c) { return c.indexOf(cookie + '=') === 0; });
-        if (has) return;
-        var maxAge = 60 * 60 * 24 * days;
-        document.cookie = cookie + '=' + encodeURIComponent(refCode) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-        if (via) {
-          document.cookie = viaCookie + '=' + encodeURIComponent(via) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-        }
-      } catch (e) { /* cookies disabled: attribution simply does not persist, no error surfaced */ }
-    })();
-  </script>
-)}
+<ReferralCredit author={author} via={via} />

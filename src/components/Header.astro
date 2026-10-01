@@ -14,13 +14,10 @@ import { SIGNED_IN_NAV, SIGNED_OUT_NAV } from '../lib/site-nav';
 import { extensionCtaEnabled } from '../lib/site-settings';
 // The signed-out standalone pages (kept out of the signed-in nav per the owner: only the five feed items there).
 // sow-201 (owner decision): Revenue Model comes OUT of the header nav and stays in the footer (Footer.astro).
-// sow-271: "Get Extension" is extension ADVERTISING, so it is governed by the superadmin site setting. With the
-// setting off this array is empty and the map below renders nothing, so the signed-out nav is SIGNED_OUT_NAV
-// alone. That is intended, not a bug; if the slot should carry something else, add it here.
+// sow-271: the extension advertising in the header is governed by the superadmin site setting. sow-435 (owner,
+// 2026-09-30): the "Get Extension" nav item is gone; the homepage banner and the share-page banner carry the
+// promotion now. The "Get the extension to continue" nudge in the account menu stays behind the same switch.
 const extensionCtaShown = extensionCtaEnabled();
-const signedOutExtra = extensionCtaShown
-  ? [{ label: 'Get Extension', href: '/extension/' }]
-  : [];
 ---
 <header class="site-head" id="top">
   <div class="wrap head-inner">
@@ -35,7 +32,6 @@ const signedOutExtra = extensionCtaShown
     <nav class="nav" aria-label="Primary">
       <div class="nav-set" data-nav-set="out">
         {SIGNED_OUT_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
-        {signedOutExtra.map((i) => <a href={i.href}>{i.label}</a>)}
       </div>
       <div class="nav-set" data-nav-set="in" hidden>
         {SIGNED_IN_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
@@ -118,7 +114,6 @@ const signedOutExtra = extensionCtaShown
           any standalone pages + Sign in; signed-in = the flat member list. Swapped by identity (script below). */}
       <div data-mnav-set="out">
         {SIGNED_OUT_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
-        {signedOutExtra.map((i) => <a href={i.href}>{i.label}</a>)}
         {/* sow-394: the phone home of the header's Submit content button, going to the plans like it. Inside the
             signed-out set, so the identity swap above removes it for a signed-in reader. */}
         <a href="/membership/" class="m-submit"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-pencil" /></svg> Submit content</a>

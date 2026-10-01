@@ -20,7 +20,6 @@ function writeArticle(root, slug, html) {
 
 const FULL_CLOSING_SLOT = `
   <div class="art-j-rail">rail stuff</div>
-  <section class="dark community-invite" style="max-width:820px">Join the GBTI Network</section>
   <div class="author-box mx-auto">Written by</div>
   <section id="comments">0 Comments</section>
 `;
@@ -42,9 +41,8 @@ test('fails when the closing slot rendered empty (the ternary/non-literal-slot b
   writeArticle(root, 'broken-post', `<html><head><style>html.is-gbti-member-active .community-invite{display:none}</style></head><body><div class="art-e-hero"></div></body></html>`);
   const { errors, checked } = checkArticleClosingSlot({ root });
   assert.equal(checked, 1);
-  assert.equal(errors.length, 3); // CommunityInvite, AuthorBox, Comments all missing
+  assert.equal(errors.length, 2); // AuthorBox and Comments missing (the join panel is no longer required, sow-435)
   assert.match(errors[0], /broken-post/);
-  assert.match(errors.join('\n'), /CommunityInvite/);
   assert.match(errors.join('\n'), /AuthorBox/);
   assert.match(errors.join('\n'), /Comments section/);
   fs.rmSync(root, { recursive: true, force: true });
@@ -67,7 +65,7 @@ test('checks multiple pages independently, one error set per broken page', () =>
   writeArticle(root, 'bad-post', '<html><body><p>nothing here</p></body></html>');
   const { errors, checked } = checkArticleClosingSlot({ root });
   assert.equal(checked, 2);
-  assert.equal(errors.length, 3);
+  assert.equal(errors.length, 2);
   assert.ok(errors.every((e) => e.includes('bad-post')));
   fs.rmSync(root, { recursive: true, force: true });
 });
@@ -115,7 +113,6 @@ test('ZERO COVERAGE: an articles section with no built pages fails', () => {
 // markup below is copied from a real built product page that has a note, not invented.
 const NOTE_INSTEAD_OF_AUTHORBOX = `
   <div class="art-j-rail">rail stuff</div>
-  <section class="dark community-invite" style="max-width:820px">Join the GBTI Network</section>
   <section id="comments">
     <article class="card"><div><p class="eyebrow" style="color:var(--green-700)">From the author</p>
     <a href="/members/gbtilabs/" class="link">GBTI Network</a></div></article>
@@ -133,10 +130,20 @@ test('a page with NEITHER the AuthorBox nor a note still fails (the invariant is
   const root = tmpRoot();
   writeArticle(root, 'post-with-no-attribution', '<html><body>'
     + '<div class="art-j-rail">rail</div>'
-    + '<section class="dark community-invite">Join</section>'
     + '<section id="comments">0 Comments</section>'
     + '</body></html>');
   const { errors } = checkArticleClosingSlot({ root });
   assert.equal(errors.length, 1);
   assert.match(errors[0], /author attribution/);
+});
+
+// sow-435 (owner, 2026-09-30): the join panel came off articles. Its return is the failure now, not its absence.
+test('an article that renders the "Join the GBTI Network" panel fails', () => {
+  const root = tmpRoot();
+  writeArticle(root, 'panel-came-back', `<html><body>${FULL_CLOSING_SLOT}<section class="dark community-invite">Join the GBTI Network</section></body></html>`);
+  const { errors, checked } = checkArticleClosingSlot({ root });
+  assert.equal(checked, 1);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /panel-came-back/);
+  assert.match(errors[0], /removed from articles, sow-435/);
 });

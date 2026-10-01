@@ -24,11 +24,17 @@ import { readToggle } from '../membership/site-settings-edits.mjs';
 // querySelector argument, which is not a rendered advert, and matching it would be the "grep found the word so
 // the thing must be there" mistake.
 export const CTA_MARKERS = [
-  ['the header "Get Extension" nav item', '>Get Extension<'],
   ['the homepage Add-to-Chrome banner', 'class="xbn"'],
   ['the sign-in modal "Get the extension" footnote', 'Get the extension</a> to edit'],
   ['the header "Get the extension to continue" download nudge', 'class="hm-item hm-download"'],
   ['the archived v1 homepage extension band', 'id="newtab"'],
+];
+
+// sow-435 (owner, 2026-09-30): surfaces that were REMOVED, not switched. They must render on no page in either
+// position. A retired marker cannot stay in CTA_MARKERS, because with the setting ON every marker there must render
+// somewhere, so the list would demand the very thing that was taken out.
+export const RETIRED_SURFACES = [
+  ['the header "Get Extension" nav item (removed, sow-435)', '>Get Extension<'],
 ];
 
 // sow-271 Phase 3 INVERTED THIS ASSERTION, and the reason matters more than the change.
@@ -123,6 +129,13 @@ export function checkExtensionCta({ distDir, ctaEnabled }) {
         if (!hits.has(label)) hits.set(label, []);
         hits.get(label).push(path.relative(distDir, f));
       }
+    }
+  }
+
+  for (const [label, marker] of RETIRED_SURFACES) {
+    const found = files.filter((f) => fs.readFileSync(f, 'utf8').includes(marker));
+    if (found.length) {
+      errors.push(`${label} still renders on ${found.length} page${found.length === 1 ? '' : 's'} (e.g. ${path.relative(distDir, found[0])}).`);
     }
   }
 

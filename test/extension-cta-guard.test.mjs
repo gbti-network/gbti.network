@@ -27,10 +27,10 @@ function fullAdvertDist() {
 }
 
 test('setting OFF + a surface still rendering FAILS, naming the surface', () => {
-  const { errors } = checkExtensionCta({ distDir: mkDist({ 'a.html': '<nav><a>Get Extension</a></nav>' }), ctaEnabled: false });
+  const { errors } = checkExtensionCta({ distDir: mkDist({ 'a.html': '<div class="wrap xbn-wrap"><a class="xbn" href="#">Add to Chrome</a></div>' }), ctaEnabled: false });
   assert.equal(errors.length, 1);
   assert.match(errors[0], /switched OFF/);
-  assert.match(errors[0], /Get Extension/);
+  assert.match(errors[0], /Add-to-Chrome banner/);
 });
 
 test('setting OFF + a clean build PASSES', () => {
@@ -96,7 +96,7 @@ test('a marker appearing only in a .js bundle does NOT trip the guard', () => {
 
 test('the guard walks nested directories, not just the dist root', () => {
   const { errors } = checkExtensionCta({
-    distDir: mkDist({ 'index.html': '<p>clean</p>', 'deep/nested/page/index.html': `<nav><a>Get Extension</a></nav>` }),
+    distDir: mkDist({ 'index.html': '<p>clean</p>', 'deep/nested/page/index.html': `<a class="xbn" href="#">Add to Chrome</a>` }),
     ctaEnabled: false,
   });
   assert.equal(errors.length, 1);
@@ -176,4 +176,18 @@ test('the corrected install page passes, and the same words on another page are 
   const NEW = '<p class="lead">The extension turns every new tab into the network.</p><h3>Read, save and share</h3>';
   const dist = mkDist({ 'a.html': '<p>Publish through the network</p>', [INSTALL_PAGE]: `<main>${NEW}</main>` });
   assert.deepEqual(checkExtensionCta({ distDir: dist, ctaEnabled: false }).errors, []);
+});
+
+// sow-435 (owner, 2026-09-30): the header "Get Extension" item was REMOVED, not switched, so it must render nowhere in
+// either position, and it is no longer one of the markers the ON position demands.
+test('sow-435: the retired header item fails in both positions, and ON no longer requires it', async () => {
+  const { RETIRED_SURFACES } = await import('../scripts/check-extension-cta.mjs');
+  assert.ok(RETIRED_SURFACES.some(([, m]) => m === '>Get Extension<'));
+  assert.ok(!CTA_MARKERS.some(([, m]) => m === '>Get Extension<'), 'a retired surface cannot be a required ON marker');
+  for (const ctaEnabled of [false, true]) {
+    const files = { 'a.html': '<nav><a href="/extension/">Get Extension</a></nav>' };
+    if (ctaEnabled) files['b.html'] = CTA_MARKERS.map(([, m]) => `<div>${m}</div>`).join('');
+    const { errors } = checkExtensionCta({ distDir: mkDist(files), ctaEnabled });
+    assert.ok(errors.some((e) => /Get Extension" nav item \(removed, sow-435\) still renders/.test(e)), `${ctaEnabled ? 'ON' : 'OFF'}: ${JSON.stringify(errors)}`);
+  }
 });

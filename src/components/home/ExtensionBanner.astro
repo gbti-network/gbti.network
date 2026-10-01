@@ -23,11 +23,16 @@ import newtabShot from '../../assets/extension/newtab-network.webp'; // the 0.5.
 // this protects against is the next promo placement being added without anyone remembering the switch exists.
 import { extensionCtaEnabled } from '../../lib/site-settings';
 const show = extensionCtaEnabled();
+// sow-435: `inline` mounts it inside a page column (the share page, under the discussion) without the page gutters
+// that `.wrap` adds. The layout follows the banner's OWN width (container queries below), so the same banner reads
+// right in a narrow column and on the full-width homepage.
+interface Props { inline?: boolean }
+const { inline = false } = Astro.props;
 // The Chrome logo, drawn once: one segment, turned for the other two, then the white ring and the blue centre.
 const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
 ---
 {show && (
-<div class="wrap xbn-wrap">
+<div class={inline ? 'xbn-wrap xbn-inline' : 'wrap xbn-wrap'}>
 <a
   class="xbn"
   href={EXTENSION.webStoreUrl}
@@ -89,6 +94,9 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
   /* sow-400: a reader who already has the extension never sees the promotion for it. :global() keeps Astro from
      demanding its scope id on <html>, as in the dark-mode rules below. */
   :global(html[data-gbti-extension]) .xbn-wrap { display: none; }
+  /* sow-435: the banner measures itself, so the tablet and phone layouts below follow its own width. */
+  .xbn-wrap { container-type: inline-size; }
+  .xbn-inline .xbn { margin: 32px 0 0; }
 
   .xbn-glow {
     position: absolute;
@@ -214,8 +222,10 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
   :global([data-theme="dark"]) .xbn-eyebrow,
   :global([data-theme="dark"]) .xbn-note { color: #9a95a3; }
 
-  /* A tablet: a narrower text column and a smaller screenshot. */
-  @media (max-width: 900px) {
+  /* A narrow banner (a tablet, or a page column such as the share page's): a narrower text column and a smaller
+     screenshot. Container queries, not media queries, so the banner follows its own width wherever it is mounted;
+     they sit at the end of the styles because a container query adds no specificity and must win on order. */
+  @container (max-width: 860px) {
     .xbn { height: 420px; }
     .xbn-text { left: 40px; top: 48px; width: 360px; }
     .xbn-title { font-size: 40px; }
@@ -223,8 +233,9 @@ const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
     .xbn-shot { left: 430px; top: 70px; width: 560px; }
   }
 
-  /* A phone: the text, a full-width button, then the screenshot below, still angled and running off the edges. */
-  @media (max-width: 640px) {
+  /* A phone-wide banner: the text, a full-width button, then the screenshot below, still angled and running off the
+     edges. */
+  @container (max-width: 600px) {
     .xbn { height: auto; padding: 28px 24px 0; }
     .xbn-glow { top: auto; right: -200px; bottom: -200px; width: 600px; height: 600px; }
     .xbn-text { position: static; width: auto; gap: 14px; }

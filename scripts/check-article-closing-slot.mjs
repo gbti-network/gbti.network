@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build guard (sow-183 QA follow-up): the article "closing" slot (CommunityInvite, AuthorBox/"Written by",
+// Build guard (sow-183 QA follow-up): the article "closing" slot (AuthorBox/"Written by" and, until sow-435, CommunityInvite,
 // and the Comments section, all composed once in src/pages/articles/[slug].astro and shared across every
 // Article*.astro layout) rendered completely EMPTY on every non-Journal article for a while, because Astro
 // silently drops every statically-slotted sibling on a page when ANY ONE slotted child uses a non-literal
@@ -25,7 +25,6 @@ import { listBuiltDetailPages, sectionBuilt, distHasHtml } from './lib/dist-page
 // page regardless of whether the section itself rendered).
 // A marker may be an ARRAY, meaning any one of them satisfies the check.
 const CLOSING_SLOT_MARKERS = [
-  ['CommunityInvite ("Join the GBTI Network")', 'class="dark community-invite"'],
   // sow-219 (2026-08-11): an article can now carry a from-the-author note, and ContentFooter's skipAuthorBox
   // DELIBERATELY drops the "Written by" box when it does, because the pinned note already carries the byline.
   // This entry required the AuthorBox specifically, so the first article published with a note failed the
@@ -33,6 +32,13 @@ const CLOSING_SLOT_MARKERS = [
   ['the author attribution (AuthorBox "Written by", or the pinned "From the author" note)',
     ['class="author-box mx-auto"', 'style="color:var(--green-700)">From the author<']],
   ['Comments section', 'id="comments"'],
+];
+
+// sow-435 (owner, 2026-09-30): the "Join the GBTI Network" panel came OFF articles. It used to be the first marker above;
+// now its presence on an article is the failure, so the removal cannot quietly come back. The author's referral credit
+// it carried stays (ReferralCredit), but that renders nothing for house content, so it cannot be a required marker.
+const ABSENT_ON_ARTICLES = [
+  ['the "Join the GBTI Network" panel (removed from articles, sow-435)', 'class="dark community-invite"'],
 ];
 
 // Which layout a built page used, inferred from a signature class only that layout's markup emits. Purely
@@ -87,6 +93,9 @@ export function checkArticleClosingSlot({ root, distDir = path.join(root, 'dist'
       if (!anyOf.some((m) => html.includes(m))) {
         errors.push(`articles/${slug}/: missing ${label} -- the ContentFooter closing-slot content did not render. A non-literal slot attribute on any ONE slotted child in [slug].astro or an Article*.astro layout silently drops every OTHER statically-slotted sibling (this exact bug shipped once, see sow-183); check for that first.`);
       }
+    }
+    for (const [label, marker] of ABSENT_ON_ARTICLES) {
+      if (html.includes(marker)) errors.push(`articles/${slug}/: ${label} rendered. Articles pass invite={false} to ContentFooter; check that the article page still does.`);
     }
     for (const [name, sig] of LAYOUT_SIGNATURES) if (html.includes(sig)) layoutsSeen.add(name);
   }

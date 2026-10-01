@@ -33,14 +33,14 @@ test('sow-400: mounted once, as the first thing inside the section blocks, and n
 test('sow-400: signed-in members see it; only an installed extension hides it', () => {
   assert.equal(/data-home-joincard/.test(bannerMarkup), false, 'the join-card hook hides it for every signed-in member');
   assert.match(banner, /:global\(html\[data-gbti-extension\]\) \.xbn-wrap \{ display: none; \}/);
-  assert.match(bannerMarkup, /<div class="wrap xbn-wrap">\s*<a\s+class="xbn"/, 'the wrapper the installed rule hides');
+  assert.match(bannerMarkup, /<div class=\{inline \? 'xbn-wrap xbn-inline' : 'wrap xbn-wrap'\}>\s*<a\s+class="xbn"/, 'the wrapper the installed rule hides (sow-435: inline drops only the page gutters)');
   // The attribute the rule keys on is the one the extension's content script actually sets.
   assert.match(read('extension/src/content.mjs'), /document\.documentElement\.dataset\.gbtiExtension = /);
 });
 
 test('sow-400: still behind the one extension CTA switch, gated inside the component', () => {
   assert.match(banner, /const show = extensionCtaEnabled\(\);/);
-  assert.match(bannerMarkup, /^\s*\{show && \(\s*<div class="wrap xbn-wrap">/, 'the whole banner, wrapper included, is inside the gate');
+  assert.match(bannerMarkup, /^\s*\{show && \(\s*<div class=\{inline \? 'xbn-wrap xbn-inline' : 'wrap xbn-wrap'\}>/, 'the whole banner, wrapper included, is inside the gate');
   assert.ok(CTA_MARKERS.some(([, m]) => m === 'class="xbn"'), 'the build guard marker for this banner');
   assert.match(bannerMarkup, /class="xbn"/, 'the markup still carries the marker the build guard looks for');
 });
@@ -76,8 +76,25 @@ test('sow-433: the copy the owner kept', () => {
 test('sow-433: dark mode keeps the near-black panel, and a phone stacks the text above the screenshot', () => {
   assert.match(css, /:global\(\[data-theme="dark"\]\) \.xbn \{\s*background: #141218;/);
   assert.match(css, /:global\(\[data-theme="dark"\]\) \.xbn-title \{ color: #f3f2f0; \}/);
-  const phone = /@media \(max-width: 640px\) \{([\s\S]*?)\n  \}/.exec(css)?.[1] || '';
+  const phone = /@container \(max-width: 600px\) \{([\s\S]*?)\n  \}/.exec(css)?.[1] || '';
   assert.match(phone, /\.xbn \{ height: auto;/);
   assert.match(phone, /\.xbn-text \{ position: static;/);
   assert.match(phone, /\.xbn-shot \{\s*position: relative;/);
+});
+
+// sow-435 (owner, 2026-09-30): the same banner under the discussion on share pages. It measures itself, so the narrow
+// layouts follow its own width (a share column, a tablet, a phone) rather than the window's.
+test('sow-435: the banner follows its own width, and the inline form drops only the page gutters', () => {
+  assert.match(css, /\.xbn-wrap \{ container-type: inline-size; \}/);
+  assert.match(css, /@container \(max-width: 860px\) \{/);
+  assert.match(css, /@container \(max-width: 600px\) \{/);
+  assert.doesNotMatch(css, /@media \(max-width/, 'no viewport breakpoints left to disagree with the container ones');
+  assert.ok(css.indexOf('@container (max-width: 860px)') > css.indexOf(':global([data-theme="dark"]) .xbn-title'), 'the container blocks come last');
+  assert.match(banner, /const \{ inline = false \} = Astro\.props;/);
+});
+
+test('sow-435: share pages mount the inline banner right after the discussion', () => {
+  const share = stripComments(read('src/pages/shares/[author]/[id].astro'));
+  assert.match(share, /<Comments targetType="share" targetSlug=\{slug\} author=\{d\.author\} wide=\{true\} \/>\s*(\{\})?\s*<ExtensionBanner inline \/>/, 'the banner follows the discussion (the comment between them is stripped to {})');
+  assert.equal([...home.matchAll(/<ExtensionBanner\s*\/>/g)].length, 1, 'the homepage still mounts the full-width form once');
 });
