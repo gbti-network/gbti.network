@@ -44,7 +44,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // contract and one set of tests (mail-enroll-legacy.test.mjs).
 import { grandfatheredAllowSet } from './mail-enroll-legacy.mjs';
 import { createStripeClient } from '../clients/stripe.mjs';
-import { putKvValue } from './lib/erase-member.mjs';
+import { putKvValue } from './lib/kv-rest.mjs';
 import { parseLegacyUsers, matchLegacyAddresses, applySuppliedAddresses } from './lib/legacy-addresses.mjs';
 import { planCustomerCreates, createRecoveredCustomer } from './lib/stripe-backfill.mjs';
 

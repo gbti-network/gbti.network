@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readOverridesFromKv } from './lib/overrides-source.mjs'; // sow-213 Step 2 (R6): the allow-set reads the KV mirror, not house/grandfathered.yml
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
-import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
+import { listKvByPrefix, putKvValue } from './lib/kv-rest.mjs';
 import { idsPresent } from './mail-enroll.mjs';
 import { parseLegacyUsers, matchLegacyAddresses, applySuppliedAddresses } from './lib/legacy-addresses.mjs';
 

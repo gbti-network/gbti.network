@@ -11,10 +11,13 @@
 // recorded to the deletable erasure audit log (scripts/lib/erase-audit.mjs).
 //
 // Pure + injectable (env + fetch + clients), so each piece is unit-tested with fakes (no network, no secrets).
-// Mirrors scripts/lib/kv-mirror.mjs for the CF KV REST calls.
+// The CF KV REST calls live in ./kv-rest.mjs, which mirrors scripts/lib/kv-mirror.mjs.
+//
+// Split at the 900-line cap (2026-09-30). This file keeps the per-member KV steps, the plan (planErasure), the
+// orchestrator (runErasure) and its step list. The KV REST helpers moved to ./kv-rest.mjs, the mail and digest
+// erasure to ./erase-mail.mjs, and the git content erasure to ./erase-content.mjs. Every name this file exported
+// before the split is still exported from here, so no caller has to change its import.
 
-import yaml from 'js-yaml';
-import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 import { INVITE_KEY_PREFIX } from '../../membership/invites.mjs'; // sow-231 Phase 2
 import { scrubOpener } from '../../membership/news-opens.mjs'; // SOW-111: per-item news detail-open sets
@@ -22,17 +25,19 @@ import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store
 import { couponGrantKey } from '../../workers/signup/coupons.mjs'; // SOW-119 / sow-212: the one-per-member lock
 import { redemptionKey, redemptionCountKey } from '../../membership/coupons.mjs'; // SOW-119 key builders
 import { listCouponRedemptions } from './coupon-grants.mjs';
-import { writeOverrideToKvRest } from './kv-mirror.mjs'; // sow-213 Step 3: the grandfather grant is removed from the KV mirror on erasure, not a git file
 import { couponLockKey, COUPON_LOCK_VALUE } from '../../membership/coupon-lock.mjs'; // sow-212: the minimized lock
-import { mailHash, MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs'; // SOW-166: the keyed identity behind every mail key
-import { normalizeSubscriber } from '../../membership/mail-subscriber.mjs'; // SOW-166: the record shape the scan matches on
-import { eraseSubscriberMail } from '../../workers/signup/mail-store.mjs'; // SOW-166: the one shared mail eraser
 import { FOLLOWERS_KEY, normalizeFollowers, applyFollower } from '../../membership/member-followers.mjs'; // SOW-186 phase 3
 import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, readSeen as readShoptalkSeen, writeSeen as writeShoptalkSeen, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX } from './shoptalk-state.mjs'; // sow-314
 import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs'; // sow-314
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
-import { erasePreparedListings } from './erase-prepared-listings.mjs'; // sow-427: its own module (this file is over the cap)
+import { erasePreparedListings } from './erase-prepared-listings.mjs'; // sow-427: its own module (this file was over the cap)
+import { deleteKvKey, listKvByPrefix, putKvValue, readKvValueStrict } from './kv-rest.mjs';
+import { eraseMailRecords } from './erase-mail.mjs';
+import { eraseContent } from './erase-content.mjs';
+export { deleteKvKey, listKvByPrefix, putKvValue, readKvValueStrict, readKvValue, kvRestShim } from './kv-rest.mjs';
+export { findMemberSubscriberHashes, eraseMailRecords } from './erase-mail.mjs';
+export { eraseContent, MEMBERS_INDEX_PATH } from './erase-content.mjs';
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
@@ -42,31 +47,9 @@ export const DRAFT_IMAGES_PREFIX = (githubId) => `draftimg:${githubId}:`; // sta
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
 export const CONV_SNAPSHOT_KEY = (githubId) => `conv:${githubId}`; // SOW-059 P1c: the frozen conversion attribution snapshot
-export const MEMBERS_INDEX_PATH = 'house/members-index.yml';
 // SOW-119 coupon lock. Delegates to the canonical builder rather than restating `coupon-grant:<id>`: a
 // duplicated key literal is exactly how two halves of this system have drifted before.
 export const COUPON_GRANT_KEY = (githubId) => couponGrantKey(String(githubId));
-const toBase64 = (str) => Buffer.from(str, 'utf8').toString('base64');
-
-/**
- * DELETE one key from the signup Worker's KV via the Cloudflare REST API. Returns { deleted, key, reason }.
- * Missing credentials (local dry-runs, tests) is a reported no-op, not a throw; a real API error throws.
- */
-export async function deleteKvKey({ key, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) {
-    return { deleted: false, key, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
-  }
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
-  const res = await fetchImpl(url, { method: 'DELETE', headers: { Authorization: `Bearer ${apiToken}` } });
-  if (!res || !res.ok) {
-    const detail = res && res.text ? await res.text().catch(() => '') : '';
-    throw new Error(`KV delete failed: ${res ? res.status : 'no response'} ${String(detail).slice(0, 200)}`);
-  }
-  return { deleted: true, key };
-}
 
 /** Hard-delete a member's activity (favorites + collections) from the deletable edge store. */
 export async function eraseActivity({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
@@ -243,62 +226,6 @@ export async function eraseLookupCache({ githubId, env = process.env, fetchImpl 
 }
 
 /**
- * List KV entries under a prefix via the REST API. Missing creds = a reported no-op.
- *
- * Returns `{ available, keys, entries, dropped }`. The KEY LIST is fail-closed: a failed page THROWS, because a
- * short list is indistinguishable from a short keyspace. The per-key VALUE READ must not throw, or one unreadable
- * record would fail an entire scan, so it is REPORTED instead: `keys` is every key that was listed, `entries` is
- * only those whose value read succeeded AND parsed as a JSON object, and `dropped` counts the difference.
- * `keys.length === entries.length + dropped` always holds.
- *
- * `dropped` SPLITS BY CAUSE into `unreadable` (the read failed, so we could not tell what the key holds) and
- * `unparsed` (the read succeeded and the value was not a JSON object). They are different facts and a caller
- * should treat them differently: `unreadable` is a blind spot an erasure MUST refuse on, while `unparsed` is a
- * schema mismatch that is often benign. A guard that fails closed on the combined count refuses on benign schema
- * drift, and a guard that cries wolf is a guard someone switches off.
- *
- * A CALLER THAT ERASES MUST CHECK `unreadable`. A key dropped that way is a record that was NOT scrubbed, and
- * reporting the scrub count on its own makes "we could not read whether this record names them" look exactly
- * like "it does not". A caller that only needs to know which keys exist should read `keys` and never fetch a
- * value at all.
- */
-export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = globalThis.fetch, keysOnly = false } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) return { available: false, reason: 'CF creds not set', entries: [], keys: [], dropped: 0, unreadable: 0, unparsed: 0 };
-  const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
-  const headers = { Authorization: `Bearer ${apiToken}` };
-  const keys = [];
-  let cursor = '';
-  for (let page = 0; page < 100000; page++) {
-    const url = `${apiBase}/keys?prefix=${encodeURIComponent(prefix)}&limit=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
-    const res = await fetchImpl(url, { headers });
-    if (!res || !res.ok) throw new Error(`KV key list failed: ${res ? res.status : 'no response'}`);
-    const json = await res.json();
-    for (const k of json?.result ?? []) if (k?.name) keys.push(k.name);
-    cursor = json?.result_info?.cursor || '';
-    if (!cursor) break;
-  }
-  // A caller that only needs to know which keys EXIST skips the value loop entirely, as the doc above says it
-  // should. eraseDraftImages does: it deletes by key, and each staged image value may be a full megabyte, so
-  // fetching them to throw them away would move tens of megabytes for nothing. The key list stays fail-closed.
-  if (keysOnly) return { available: true, entries: [], keys, dropped: 0, unreadable: 0, unparsed: 0 };
-  const entries = [];
-  let unreadable = 0;   // the read itself failed: we could not tell what is in this key
-  let unparsed = 0;     // the read succeeded and the value was not a JSON object: a schema mismatch, not a blind spot
-  for (const key of keys) {
-    const res = await fetchImpl(`${apiBase}/values/${encodeURIComponent(key)}`, { headers });
-    if (!res || !res.ok) { unreadable++; continue; }
-    let value = null;
-    try { value = await res.json(); } catch { value = null; }
-    if (value && typeof value === 'object') entries.push({ key, value });
-    else unparsed++;
-  }
-  return { available: true, entries, keys, dropped: unreadable + unparsed, unreadable, unparsed };
-}
-
-/**
  * The shared refusal for a scan-and-scrub erasure step. `listKvByPrefix` reports the keys it could not read, and
  * each of those is a record that MAY name this member and was NOT scrubbed. A step's own count says only what it
  * DID change, so without this the audit record cannot tell "there was nothing to scrub" from "we could not look".
@@ -313,37 +240,6 @@ function incompleteScan(listed, prefix) {
     unreadable: listed.unreadable,
     reason: `${listed.unreadable} of ${total} ${prefix}* record(s) could not be read and were NOT scrubbed`,
   };
-}
-
-/** PUT a KV value via the REST API. Missing creds = a reported no-op. */
-/**
- * Write one KV value. **REFUSES LOUDLY BY DEFAULT when the Cloudflare credentials are absent.**
- *
- * It used to return `{written: false, reason}` instead, which is the right shape for a reporting step and the
- * wrong one for every caller whose NEXT ACTION assumes the write happened. That made safety a property of the
- * CALLER: eight erasure writers in this file are safe only because each independently returns before reaching a
- * write when the creds are missing, and they do not even share a mechanism (seven gate on a prefix scan's
- * `available`, `minimizeCouponGrant` gates on a strict single-key read). Nothing enforced it, and
- * `await putKvValue(...)` looks identical at a guarded and an unguarded call site, so a ninth writer copying an
- * existing line would inherit the shape and not the protection. "All current callers are safe" was a fact about
- * today, not a property of the code (OnboardingMaster, 2026-08-22).
- *
- * So the guard is now the default and tolerance is what you write on purpose. Pass `allowMissingCreds: true`
- * only where a no-op is genuinely correct AND the return is inspected, e.g. a reporting step that prints
- * "SKIPPED (no creds)". A genuine PUT failure has always thrown and still does.
- */
-export async function putKvValue({ key, value, env = process.env, fetchImpl = globalThis.fetch, allowMissingCreds = false } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) {
-    if (allowMissingCreds) return { written: false, reason: 'CF creds not set' };
-    throw new Error(`KV put refused for ${key}: CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set. Pass allowMissingCreds:true only if a silent no-op is correct here and you inspect the result.`);
-  }
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
-  const res = await fetchImpl(url, { method: 'PUT', headers: { Authorization: `Bearer ${apiToken}` }, body: typeof value === 'string' ? value : JSON.stringify(value) });
-  if (!res || !res.ok) throw new Error(`KV put failed: ${res ? res.status : 'no response'}`);
-  return { written: true, key };
 }
 
 /**
@@ -364,40 +260,6 @@ export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = 
     }
   }
   return { scrubbed, ...(incompleteScan(listed, 'news-opens:') || {}) };
-}
-
-/** GET one raw KV value via the REST API (used for the shared coupon counter). Missing creds = null. */
-/**
- * Read one KV value, keeping ABSENT and UNREADABLE apart. `readKvValue` collapses both to null, which is fine for
- * a caller asking "is there something here" and DANGEROUS for one that computes a new value FROM the old one: a
- * transient read failure then looks like a zero or empty prior state, and the write destroys real data.
- *
- * Returns `{ ok: true, value }` where a null value means genuinely absent (404), or `{ ok: false, status }` when
- * the read failed and we therefore know nothing about what the key holds.
- */
-export async function readKvValueStrict({ key, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) return { ok: false, value: null, status: null, reason: 'CF creds not set' };
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
-  const res = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
-  if (res && res.status === 404) return { ok: true, value: null, status: 404 };   // genuinely absent
-  if (!res || !res.ok) return { ok: false, value: null, status: res ? res.status : null };
-  const text = res.text ? await res.text().catch(() => null) : null;
-  if (text === null) return { ok: false, value: null, status: res.status ?? null };
-  return { ok: true, value: text, status: res.status ?? 200 };
-}
-
-export async function readKvValue({ key, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) return null;
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
-  const res = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
-  if (!res || !res.ok) return null;
-  return res.text ? res.text().catch(() => null) : null;
 }
 
 /**
@@ -578,225 +440,6 @@ export async function scrubConversionSnapshots({ githubId, env = process.env, fe
  * rest are the operator checklist (composed from reconcile + the SOW-016 rotation), printed so nothing is
  * silently skipped. Pure (returns data), so it is unit-tested.
  */
-/**
- * A Workers-KV-shaped facade over the REST helpers above, so the SCRIPT side and the WORKER side run the SAME
- * erasure logic (`eraseSubscriberMail`) instead of two implementations that can drift. An erasure path is the
- * worst possible place for two implementations, because the failure mode is silent: records that were never
- * deleted look exactly like records that were.
- *
- * `get` honours the TYPE ARGUMENT because mail-store.mjs uses both forms (`kv.get(k, 'json')` at the issue,
- * send, pending and subscriber reads, plain `kv.get(k)` at the existence checks). A shim that ignored it would
- * hand back a raw string where an object was expected, every parse would yield null, and the erasure would
- * report success having deleted nothing.
- *
- * `list` is keys-only ON PURPOSE and does not reuse listKvByPrefix, which fetches every value and then DROPS
- * any entry whose value is not a JSON object. That filter is harmless where it is used; here it would silently
- * skip an issue whose body failed to parse, and with it that issue's send record for this person. Enumerating
- * keys without reading values is both cheaper and the only version that cannot lose a key.
- */
-export function kvRestShim({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const accountId = env.CF_ACCOUNT_ID;
-  const namespaceId = env.CF_KV_NAMESPACE_ID;
-  const apiToken = env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) return null;
-  const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
-  const headers = { Authorization: `Bearer ${apiToken}` };
-  return {
-    async get(key, type) {
-      // THROWS on an unreadable key, returns null only for a genuine miss. Real Workers KV behaves this way, and
-      // the whole point of this shim is that the script side and the Worker side run the SAME erasure logic. The
-      // previous version swallowed a failed read into null, which made findMemberSubscriberHashes' fail-closed
-      // catch DEAD on the script path: an unreadable subscriber record was silently reported as a clean scan.
-      const read = await readKvValueStrict({ key, env, fetchImpl });
-      if (!read.ok) throw new Error(`KV read failed for ${key}: ${read.status ?? read.reason ?? 'no response'}`);
-      const text = read.value;
-      if (text == null) return null;
-      if (type !== 'json') return text;
-      try { return JSON.parse(text); } catch { return null; }
-    },
-    async put(key, value) {
-      return putKvValue({ key, value, env, fetchImpl });
-    },
-    async delete(key) {
-      return deleteKvKey({ key, env, fetchImpl });
-    },
-    async list({ prefix, cursor } = {}) {
-      const url = `${base}/keys?prefix=${encodeURIComponent(prefix ?? '')}&limit=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
-      const res = await fetchImpl(url, { headers });
-      if (!res || !res.ok) throw new Error(`KV key list failed: ${res ? res.status : 'no response'}`);
-      const json = await res.json();
-      const next = json?.result_info?.cursor || '';
-      return {
-        keys: (json?.result ?? []).filter((k) => k?.name).map((k) => ({ name: k.name })),
-        list_complete: !next,
-        cursor: next || undefined,
-      };
-    },
-  };
-}
-
-/**
- * SOW-166 right-to-erasure: delete the member's weekly-digest records.
- *
- * THIS STEP MUST RUN BEFORE THE STRIPE CUSTOMER DELETE, and that is a correctness constraint rather than a
- * preference. Every mail key is derived from the ADDRESS via mailHash, while erasure is driven by github_id,
- * so nothing in the mail keyspace can be located from a github_id alone. The address lives in exactly one
- * place we can still read: the Stripe customer. Once step `stripe` deletes it, the hash can never be computed
- * again and the subscriber record is unreachable BY ANY FUTURE RUN, permanently. Each step looks correct on
- * its own, which is precisely why the ordering is written down here and asserted by a test rather than left to
- * whoever next edits runErasure.
- *
- * The suppression marker `mail:suppress:<hash>` deliberately SURVIVES (eraseSubscriberMail keeps it). Deleting
- * it would silently re-contact someone who asked not to be contacted, and it holds a bare keyed hash with no
- * address in it. Same shape the owner already ruled on for the coupon lock on 2026-08-11: the record that
- * prevents a future harm outlives erasure in a form that can answer "has this opted out" but never "who".
- *
- * Fails SOFT and says why. Every skip reason is reported rather than swallowed, because "no mail records were
- * deleted" and "we could not tell whether there were any" must never look the same in the audit record.
- */
-/**
- * Find every MEMBER subscriber record belonging to one person, by SCANNING `mail:subscriber:*` and matching the
- * record's own identity fields. PURE over the injected kv.
- *
- * WHY A SCAN AND NOT AN INDEX. A `source: 'member'` record is REQUIRED to carry `githubId`
- * (mail-subscriber.mjs buildSubscriber), so the person is already findable from the records themselves. A
- * maintained `github_id -> hash` index would be a second thing to keep in sync, earning its place only for a hot
- * O(1) read, and erasure is not one: it runs rarely, per person, and a full scan is cheap at this size.
- *
- * MATCHES githubId OR customerId, and the second half is deliberate. normalizeSubscriber is intentionally more
- * permissive than buildSubscriber and still accepts a stored customerId-only member record, on the stated
- * reasoning that a normalizer returning null would leave such a record in KV "invisible to every reader
- * including any cleanup that might remove it". ERASURE IS THAT CLEANUP. Matching only githubId would preserve
- * visibility for a cleanup that then does not look, and the permissiveness would buy nothing. Honest limit: a
- * customerId-only record cannot be created today, and matching it needs a customerId we only have while Stripe
- * still holds the customer. Cheap insurance against a stray, not coverage.
- *
- * REPORTS FAILURE AND TRUNCATION EXPLICITLY. `{ ok: false }` on a list error, `truncated: true` if the page cap
- * is hit. A scan that failed must NEVER be reportable as "found none": for erasure those look identical from
- * outside and only one of them means the person's records are gone.
- */
-export async function findMemberSubscriberHashes(kv, { githubId, customerId = null, maxPages = 200 } = {}) {
-  const gid = String(githubId ?? '').trim();
-  const cid = String(customerId ?? '').trim();
-  const hashes = [];
-  let scanned = 0;
-  if (!kv?.list) return { ok: false, error: 'kv has no list capability', hashes, scanned, truncated: false };
-  if (!gid && !cid) return { ok: false, error: 'no github_id or customer_id to match on', hashes, scanned, truncated: false };
-
-  let cursor;
-  for (let page = 0; page < maxPages; page++) {
-    let res;
-    try {
-      res = await kv.list({ prefix: MAIL_SUBSCRIBER_PREFIX, cursor });
-    } catch (e) {
-      return { ok: false, error: `subscriber list failed: ${e?.message || e}`, hashes, scanned, truncated: true };
-    }
-    for (const k of res?.keys ?? []) {
-      const name = String(k?.name ?? '');
-      if (!name.startsWith(MAIL_SUBSCRIBER_PREFIX)) continue;
-      scanned++;
-      let raw = null;
-      try {
-        raw = await kv.get(name, 'json');
-      } catch (e) {
-        // A record we could not READ might be the one we must erase, so this cannot be shrugged off.
-        return { ok: false, error: `subscriber read failed for ${name}: ${e?.message || e}`, hashes, scanned, truncated: true };
-      }
-      const rec = normalizeSubscriber(raw);
-      if (!rec || rec.source !== 'member') continue;
-      const mine = (gid && rec.githubId === gid) || (cid && rec.customerId === cid);
-      if (mine) hashes.push(name.slice(MAIL_SUBSCRIBER_PREFIX.length));
-    }
-    cursor = res?.cursor;
-    if (res?.list_complete || !cursor) return { ok: true, hashes, scanned, truncated: false };
-  }
-  // Ran out of pages with a cursor still open: we did NOT see the whole keyspace.
-  return { ok: true, hashes, scanned, truncated: true };
-}
-
-/**
- * Erase this person's mail records. SOW-166.
- *
- * THE SCAN IS THE PRIMARY PATH AND STRIPE IS ONLY A SUPPLEMENT. This previously derived the hash from
- * `customer.email` and did nothing else, which made erasure impossible for three real populations, all of them
- * reporting a clean skip rather than a failure:
- *   - a member whose Stripe customer was ALREADY DELETED (the 2026-08-21 ordering hazard, as an actual
- *     unerasable state rather than a procedural rule),
- *   - a customer with NO email, which `signup.mjs` can create when the GitHub account exposes none,
- *   - Stripe unconfigured or unreachable.
- * The scan needs neither Stripe nor MAIL_SUPPRESS_KEY, so it closes all three. It also retires the ordering
- * dependency rather than documenting around it: a rule that lives in a runbook is one an operator can violate
- * with no way to detect the violation afterwards.
- *
- * THE SUPPRESSION MARKER IS NEVER TOUCHED, here or in eraseSubscriberMail. It must OUTLIVE the record so a later
- * re-add cannot silently un-suppress someone who opted out. Deleting it would present as thoroughness AND as a
- * clean run, because a deleted marker leaves nothing behind to notice.
- */
-export async function eraseMailRecords({ githubId, stripe = null, env = process.env, fetchImpl = globalThis.fetch, kv: injectedKv = null } = {}) {
-  // kv is injectable so the erase PATH itself is testable, not just the scan helper. Production passes none.
-  const kv = injectedKv || kvRestShim({ env, fetchImpl });
-  if (!kv) return { skipped: true, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
-  const gid = String(githubId ?? '').trim();
-  if (!gid) return { skipped: true, reason: 'no github_id given' };
-
-  // Stripe is consulted OPPORTUNISTICALLY, for the customerId that lets the scan also match a stray
-  // customerId-only record, and for the email fallback below. Its absence is not fatal any more.
-  let customer = null;
-  let stripeNote = 'not consulted';
-  if (stripe) {
-    try {
-      customer = await stripe.findCustomerByGithubId(gid);
-      stripeNote = customer?.id ? 'customer found' : 'no customer found';
-    } catch (e) {
-      stripeNote = `lookup failed: ${e?.message || e}`; // non-fatal: the scan does not need it
-    }
-  }
-
-  const scan = await findMemberSubscriberHashes(kv, { githubId: gid, customerId: customer?.id ?? null });
-  if (!scan.ok) return { error: scan.error, scanned: scan.scanned, stripe: stripeNote };
-
-  const hashes = new Set(scan.hashes);
-
-  // BELT AND BRACES, not the primary path. If Stripe still has an address, add the hash it derives to. This
-  // catches a record the scan could not match on identity (none can be created today) and costs one hash.
-  let emailFallback = 'not used';
-  const secret = env.MAIL_SUPPRESS_KEY;
-  if (secret && customer?.email) {
-    const h = await mailHash(secret, customer.email);
-    if (h) {
-      emailFallback = hashes.has(h) ? 'agreed with the scan' : 'added a hash the scan did not match';
-      hashes.add(h);
-    }
-  }
-
-  const totals = { subscriber: 0, sends: 0, issues: 0 };
-  const mailErrors = [];
-  for (const h of hashes) {
-    const c = await eraseSubscriberMail(kv, h);
-    totals.subscriber += c.subscriber || 0;
-    totals.sends += c.sends || 0;
-    totals.issues += c.issues || 0;
-    // eraseSubscriberMail now reports ok=false when it could not prove it erased everything (identity-record
-    // delete threw, a list page was lost, a send record was unreadable/undeletable). That must surface as an
-    // INCOMPLETE erasure, not be summed away into the success counts.
-    if (!c.ok) mailErrors.push({ hash: h, errors: c.errors || ['unknown'] });
-  }
-
-  return {
-    ...totals,
-    matched: hashes.size,
-    scanned: scan.scanned,
-    // Proof of completeness needs BOTH a full scan AND every per-hash mail erasure succeeding. A truncated scan
-    // means we did not see the whole keyspace; a mail-erasure error means a record may still be in KV. Either one
-    // makes this run NOT proof of completeness, so the report must not read as done.
-    incomplete: (scan.truncated || mailErrors.length > 0) || undefined,
-    mailErrors: mailErrors.length ? mailErrors : undefined,
-    stripe: stripeNote,
-    emailFallback,
-    suppressionMarkerKept: true,
-  };
-}
-
 export function planErasure({ githubId, username } = {}) {
   const who = username ? `members/${username}/` : "the member's";
   return [
@@ -898,129 +541,6 @@ export async function eraseDiscordRoles({ githubId, stripe = null, discord = nul
     }
   }
   return { removed };
-}
-
-/**
- * Right-to-erasure for one member's REPOSITORY records. Two decoupled halves:
- *   - the KV grant removal (sow-213 Step 3): the grandfather grant is person-keyed edge state now
- *     (house/grandfathered.yml is deleted), so it is removed from the overrides mirror directly. No git, no
- *     GitHub client needed, so a member with no folder still gets their grant stripped.
- *   - ONE auto-merged git PR that flips every published file in the member's folder to draft and removes their
- *     members-index entry. Reversible (a re-subscribe / un-erase can re-publish); git history persists, disclosed
- *     in the TOS. Reported no-op without a GitHub client or any net git change. `files` is the member's content
- *     descriptors ([{ path, status }]) from buildRepoIndex; reading happens in the caller so this is testable
- *     with a fake github client.
- *
- * The GRANDFATHERED removal was added 2026-08-11 (SecurityMaster's adjudication). Until Step 3 it lived in a
- * PUBLIC git file carrying the github_id, login, a `reason` describing the commercial relationship, and an
- * `until`; the storage-boundary ruling moved that person-keyed record off the public chain into KV, and this
- * erasure follows it there. Fail LOUD on a KV write error: a GDPR erasure that could not remove a grant is
- * exactly the silent gap this must never have.
- */
-export async function eraseContent({ github = null, githubId, username, files = [], base = 'main', now = new Date(), env = process.env, fetchImpl = globalThis.fetch, removeGrant = null } = {}) {
-  const id = String(githubId);
-  const decode = (b) => Buffer.from(b, 'base64').toString('utf8');
-  const safeYaml = (text) => { try { return yaml.load(text) || {}; } catch { return null; } };
-
-  // sow-213 Step 3: remove the grandfather grant from the KV mirror, decoupled from the git PR below. Idempotent
-  // (a no-op if the id has no grant: writeOverrideToKvRest reports "already in that state"). Any OTHER failure is
-  // a grantError surfaced loudly. applyKvOverride REMOVE drops only source:'kv' entries, and post-deletion the
-  // preserve-mark marks every entry, so this reaches them.
-  let grantRemoved = false;
-  let grantError = null;
-  const doRemoveGrant = removeGrant || ((args) => writeOverrideToKvRest({ env, fetchImpl, ...args }));
-  const gr = await doRemoveGrant({ section: 'grandfathered', githubId: id, remove: true });
-  if (gr.written) grantRemoved = true;
-  else if (gr.reason && !/already in that state/.test(gr.reason)) grantError = gr.reason;
-
-  if (!github) {
-    // No GitHub client: the git half cannot run, but the KV grant removal above did.
-    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
-    if (grantRemoved) return { grantRemoved, flipped: 0, indexRemoved: false, pr: null };
-    return { skipped: true, reason: 'no GitHub client (set GITHUB_BOT_TOKEN + GITHUB_CONTENT_REPO), and no KV grant to remove' };
-  }
-
-  // Phase 1 -- DECIDE the GIT changes from the base branch (content flips + members-index removal). Cheap reads;
-  // the no-op case creates no branch. The shas read here are NOT used to commit (that would be a TOCTOU).
-  const toFlip = [];
-  for (const f of files) {
-    const existing = await github.getContent(f.path, base);
-    if (!existing?.content) continue;
-    const current = decode(existing.content);
-    if (flipStatus(current, 'draft') !== current) toFlip.push(f.path);
-  }
-  let wantIndexRemoval = false;
-  const idxBase = await github.getContent(MEMBERS_INDEX_PATH, base);
-  if (idxBase?.content) {
-    const parsed = safeYaml(decode(idxBase.content));
-    if (parsed?.members && Object.prototype.hasOwnProperty.call(parsed.members, id)) wantIndexRemoval = true;
-  }
-  if (toFlip.length === 0 && !wantIndexRemoval) {
-    // No git changes. Return based on the KV grant outcome above.
-    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
-    if (grantRemoved) return { grantRemoved, flipped: 0, indexRemoved: false, pr: null };
-    return { skipped: true, reason: 'no published content, members-index entry, or grandfather grant to change' };
-  }
-
-  // Phase 2 -- COMMIT on a fresh branch, reading each target FROM THE BRANCH so the blob sha is authoritative
-  // even if the base advanced since phase 1 (no TOCTOU; mirrors scripts/reconcile.mjs enactContent's order).
-  const baseRef = await github.getRef(`heads/${base}`);
-  const baseSha = baseRef?.object?.sha;
-  if (!baseSha) return { error: `cannot resolve base head sha for ${base}` };
-  const branch = `erase/${id}-${now.getTime()}`;
-  await github.createRef(branch, baseSha);
-
-  let flipped = 0;
-  for (const path of toFlip) {
-    const onBranch = await github.getContent(path, branch);
-    if (!onBranch?.content) continue;
-    const current = decode(onBranch.content);
-    const next = flipStatus(current, 'draft');
-    if (next === current) continue; // a concurrent flip beat us to it: skip
-    await github.putContent(path, { message: `erase: draft ${path}`, content: toBase64(next), branch, sha: onBranch.sha });
-    flipped++;
-  }
-
-  let indexRemoved = false;
-  if (wantIndexRemoval) {
-    const onBranch = await github.getContent(MEMBERS_INDEX_PATH, branch);
-    const parsed = onBranch?.content ? safeYaml(decode(onBranch.content)) : null;
-    if (parsed?.members && Object.prototype.hasOwnProperty.call(parsed.members, id)) {
-      delete parsed.members[id]; // removes ONLY this github_id; every other member is preserved by the round-trip
-      await github.putContent(MEMBERS_INDEX_PATH, {
-        message: `erase: remove members-index entry for github_id ${id}`,
-        content: toBase64(yaml.dump(parsed, { lineWidth: 100, noRefs: true })),
-        branch, sha: onBranch.sha,
-      });
-      indexRemoved = true;
-    }
-  }
-
-  if (flipped === 0 && !indexRemoved) {
-    // The decided git changes were applied concurrently between phase 1 and phase 2 (practically never for an
-    // erasure target). Skip the diff-less PR (GitHub rejects those); the KV grant removal above still stands.
-    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
-    return { skipped: true, reason: 'content already drafted / records already removed concurrently', grantRemoved };
-  }
-
-  const removals = [
-    indexRemoved ? 'the members-index entry' : null,
-    grantRemoved ? 'the grandfather grant (KV)' : null,
-  ].filter(Boolean);
-  const pull = await github.createPull({
-    title: `erase: draft ${username ?? `github_id ${id}`} content + remove house records`,
-    head: branch,
-    base,
-    body:
-      `Automated SOW-024 right-to-erasure for github_id ${id}: flips ${flipped} file(s) -> draft` +
-      `${removals.length ? ` and removes ${removals.join(' and ')}` : ''}. Reversible; git history persists ` +
-      '(disclosed in the TOS).',
-  });
-  await github.mergePull(pull.number, { method: 'squash' });
-  // Surface a grant-removal error even alongside a successful content PR: the erasure is not fully done if the
-  // grant could not be removed from KV.
-  if (grantError) return { pr: pull.number, flipped, indexRemoved, grantRemoved, grantError };
-  return { pr: pull.number, flipped, indexRemoved, grantRemoved };
 }
 
 /**

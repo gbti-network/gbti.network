@@ -23,12 +23,14 @@
 // FAIL CLOSED like the other scan steps: a failed key list throws (runStep records the error), and a record whose
 // value could not be read is reported as `incomplete`, never as a clean run.
 //
-// The KV helpers come from erase-member.mjs through a DYNAMIC import, so the two modules do not import each other in
-// a ring (erase-member.mjs imports this one statically).
+// The KV helpers come from kv-rest.mjs, a leaf module that imports nothing local, so this module and
+// erase-member.mjs (which imports this one statically) cannot form a ring. It used to need a dynamic import of
+// erase-member.mjs for that reason, before the KV helpers were split out of it (2026-09-30).
 
 import { LISTING_KEY_PREFIX, listingImagePrefix, isListingId } from '../../membership/prepared-listings.mjs';
 import { INVITE_KEY_PREFIX, INVITE_STATE, inviteState, revokeInvite, clearInviteClaimPending } from '../../membership/invites.mjs';
 import { normalizeCouponCode } from '../../membership/coupons.mjs';
+import * as kvRest from './kv-rest.mjs';
 
 const same = (v, id) => v !== null && v !== undefined && v !== '' && String(v) === id;
 
@@ -51,7 +53,7 @@ function incomplete(listedListings, listedInvites) {
  */
 export async function erasePreparedListings({ githubId, env = process.env, fetchImpl = globalThis.fetch, now = new Date(), kvOps = null } = {}) {
   if (!githubId) throw new Error('a github_id is required');
-  const { listKvByPrefix, putKvValue, deleteKvKey } = kvOps || await import('./erase-member.mjs');
+  const { listKvByPrefix, putKvValue, deleteKvKey } = kvOps || kvRest;
   const id = String(githubId);
 
   const invites = await listKvByPrefix({ prefix: INVITE_KEY_PREFIX, env, fetchImpl });

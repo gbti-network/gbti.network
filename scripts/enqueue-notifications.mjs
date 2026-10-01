@@ -36,11 +36,12 @@ import { parseContentFile } from '../client/src/content-ops.mjs';
 import { buildSyndicationItem, publicUrlFor } from './lib/content-syndication.mjs';
 import { reverseMembersIndex } from './lib/discord-mention.mjs';
 import { selectPublishedTransitions } from './lib/publish-transitions.mjs';
-// erase-member.mjs is the script-lib home for the KV REST shim AND the follows:/prefs: key builders (it already
-// re-declares them from the canonical Worker handlers, membership-follows.mjs / membership-prefs.mjs, because
-// those pull the Worker runtime graph and cannot be imported into a node script). Importing all three from here
-// reuses the shim's dependency graph with no new key-literal duplication.
-import { kvRestShim, FOLLOWS_KEY, PREFS_KEY } from './lib/erase-member.mjs';
+// The KV REST shim lives in kv-rest.mjs (split out of erase-member.mjs at the 900-line cap). erase-member.mjs stays
+// the script-lib home for the follows:/prefs: key builders (it already re-declares them from the canonical Worker
+// handlers, membership-follows.mjs / membership-prefs.mjs, because those pull the Worker runtime graph and cannot
+// be imported into a node script). Importing them from there adds no new key-literal duplication.
+import { kvRestShim } from './lib/kv-rest.mjs';
+import { FOLLOWS_KEY, PREFS_KEY } from './lib/erase-member.mjs';
 import { FOLLOWERS_KEY, followerIds } from '../membership/member-followers.mjs';
 import { normalizeFollows } from '../membership/member-follows.mjs';
 import { normalizePrefs } from '../membership/member-prefs.mjs';

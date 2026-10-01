@@ -26,7 +26,7 @@ import { applyOverridesSource } from './lib/overrides-source.mjs'; // sow-213 R1
 import { loadReferralConfig, isPayoutsActive } from '../membership/referral-config.mjs';
 import { activeIntervalsFromStripe, isActiveAt, COMMISSION_STATE } from '../membership/commissions.mjs';
 import { planSnapshotPayouts, invoiceState, buildEarningsLedger } from './lib/snapshot-payout-plan.mjs';
-import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
+import { listKvByPrefix, putKvValue } from './lib/kv-rest.mjs';
 import { readCommentsIndex, gatherSnapshotPoints, reverseMembersIndex } from './lib/collaboration-gather.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');

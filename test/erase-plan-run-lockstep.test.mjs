@@ -25,7 +25,11 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { planErasure } from '../scripts/lib/erase-member.mjs';
 
-const SRC = fs.readFileSync(fileURLToPath(new URL('../scripts/lib/erase-member.mjs', import.meta.url)), 'utf8');
+const readLib = (name) => fs.readFileSync(fileURLToPath(new URL(`../scripts/lib/${name}`, import.meta.url)), 'utf8');
+// runErasure and every runStep call live in erase-member.mjs. eraseContent moved to erase-content.mjs when the
+// file was split at the 900-line cap, so the members-index exemption below reads that file for its proof.
+const SRC = readLib('erase-member.mjs');
+const CONTENT_SRC = readLib('erase-content.mjs');
 
 /** The steps runErasure actually executes, read from the source: there is no way to enumerate them at runtime
  *  without performing an erasure. */
@@ -81,7 +85,7 @@ test('the bundled exemptions are REAL, not a place to hide a missing step', () =
   }
   // And the exemption must be justified in the SOURCE too, not only here: members-index is claimed to happen
   // inside eraseContent, so eraseContent must actually touch the members index.
-  const fn = /export async function eraseContent[\s\S]*?\n}\n/.exec(SRC);
+  const fn = /export async function eraseContent[\s\S]*?\n}\n/.exec(CONTENT_SRC);
   assert.ok(fn, 'eraseContent was not found: this check is broken, not the subject');
   assert.match(fn[0], /MEMBERS_INDEX_PATH/,
     'members-index is exempted as "bundled into the content step", but eraseContent does not touch the members index');

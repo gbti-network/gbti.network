@@ -43,7 +43,7 @@ import { gatherMembers, gatherOverrideOnlyMembers } from './lib/reconcile-member
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
-import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
+import { listKvByPrefix, putKvValue } from './lib/kv-rest.mjs';
 import {
   planMailEnrollment, planFollowBackfill, enrollmentCounts, IDENTITY_REASON, HOUSE_FOLLOW_TARGETS,
 } from './lib/mail-enroll.mjs';

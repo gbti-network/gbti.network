@@ -30,7 +30,7 @@
 //
 // So none of them is allowed to answer with an empty collection. The caller aborts the sweep instead.
 
-import { listKvByPrefix, readKvValue } from './erase-member.mjs';
+import { listKvByPrefix, readKvValue } from './kv-rest.mjs';
 import { putKvJson } from './kv-mirror.mjs';
 
 export const PLACED_KEY = 'shoptalk:placed';
