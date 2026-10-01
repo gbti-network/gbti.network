@@ -13,6 +13,7 @@ import { accountKey } from '../client-ui/src/welcome-core.mjs';
 import { GbtiProfileEditor } from '../client-ui/src/elements/gbti-profile-editor.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
 import { profileStrip, isProfilePath, parseWorkspaceTab, parseWorkspaceEdit, resolveTab } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource, WORKSPACE_FILES } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const notFound = () => Object.assign(new Error('could not load that item'), { code: 'not-found' });
@@ -236,7 +237,7 @@ test('the Profile tab is a real tab, and a profile edit link opens it', () => {
 });
 
 test('the element wiring: the tab mounts one kept editor, the strip opens the tab, the extension opens the website tab', () => {
-  const src = read('client-ui/src/elements/gbti-workspace.mjs');
+  const src = workspaceSource();
   assert.match(src, /\{ id: 'profile', label: 'Profile', authoring: true \}/);
   assert.match(src, /if \(isProfilePath\(path\)\) \{ this\._tab = 'profile'; return null; \}/);
   assert.match(src, /if \(this\._tab === 'profile'\) return '<div data-profile-slot><\/div>';/);
@@ -249,7 +250,15 @@ test('the element wiring: the tab mounts one kept editor, the strip opens the ta
   // red it just as surely as growing it did (sow-377 removed 3 lines by moving the page arithmetic into
   // workspace-core). Now it means what it says: a ratchet that refuses growth and welcomes a reduction.
   // Lower the ceiling deliberately when the file shrinks; never raise it without splitting the file.
-  assert.ok(src.split('\n').length - 1 <= 1114, `the WorkBench element grew past its size: ${src.split('\n').length - 1} lines`);
+  // The file was split at the 900-line limit on 2026-09-30 (it stood at 1114 lines): the stylesheet moved to
+  // workspace-css.mjs and the loaders to workspace-data.mjs. The ratchet measures the element file ALONE, so the
+  // modules cannot hide its growth; the pins above read all three through workspaceSource().
+  const el = read('client-ui/src/elements/gbti-workspace.mjs');
+  assert.ok(el.split('\n').length - 1 <= 718, `the WorkBench element grew past its size: ${el.split('\n').length - 1} lines`);
+  for (const f of WORKSPACE_FILES) {
+    const lines = read(f).split('\n').length - 1;
+    assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
+  }
 });
 
 test('the copy follows the writing rules', () => {

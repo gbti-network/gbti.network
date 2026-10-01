@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import * as esbuild from 'esbuild';
 
 import { parseWorkspacePrepare, planHashRoute, editingFromHash, preparedRestore } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 import {
   blankPrepared, preparedFromLoad, canOfferPrepare, preparedEditRefusal, preparedEditingFrom, openPreparedListing,
   openPreparedInto, preparedChanged, activeCampaigns, preparedCampaigns, preparedCardHtml, preparedToggleHtml,
@@ -424,7 +425,7 @@ test('the content editor carries hook lines only: every prepared behaviour is in
 });
 
 test('the workspace routes both prepare links and keeps the prepared state across its repaints', () => {
-  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   assert.match(ws, /import \{ openPreparedInto, preparedChanged \} from '\.\.\/prepared-editor\.mjs';/);
   assert.match(ws, /this\._editing = editingFromHash\(typeof location !== 'undefined' \? location\.hash : ''\);/, 'the first paint');
   assert.match(ws, /this\._editing = editingFromHash\(h\); this\.render\(\);/, 'a same-document #new= link');
@@ -436,9 +437,11 @@ test('the workspace routes both prepare links and keeps the prepared state acros
   assert.match(ws, /addEventListener\('gbti-prepared-change', \(ev\) => preparedChanged\(this, ev\.detail\)\)/);
   assert.ok(ws.split('\n').filter((l) => l.includes('sow-427')).length <= 8, 'hook lines only');
   // The element is held to its size by a ratchet (test/profile-editing.test.mjs). These hooks are paid for by moving
-  // the #new= boot into workspace-core (editingFromHash), so the element did not grow at all.
-  const newlines = (ws.match(/\n/g) || []).length; // the figure wc -l reports, and the one the ratchet measures
-  assert.ok(newlines <= 1114, `the WorkBench element grew: ${newlines} lines`);
+  // the #new= boot into workspace-core (editingFromHash), so the element did not grow at all. Since the split at the
+  // 900-line limit (2026-09-30) the ceiling is the element file alone, the figure that ratchet measures.
+  const el = read('client-ui/src/elements/gbti-workspace.mjs');
+  const newlines = (el.match(/\n/g) || []).length; // the figure wc -l reports, and the one the ratchet measures
+  assert.ok(newlines <= 718, `the WorkBench element grew: ${newlines} lines`);
 });
 
 // ---- guards --------------------------------------------------------------------------------------------------

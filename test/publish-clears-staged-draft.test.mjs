@@ -17,6 +17,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 const CLIENT = 'src/lib/workbench-client.ts';
@@ -25,7 +26,6 @@ const CLIENT = 'src/lib/workbench-client.ts';
 // flipStatus's rather than publish's, and the check would pass while measuring the wrong function.
 const PUBLISH = 'src/lib/workbench-client-publish.ts';
 const EDITOR = 'client-ui/src/elements/gbti-content-editor.mjs';
-const WORKSPACE = 'client-ui/src/elements/gbti-workspace.mjs';
 
 // ---------------------------------------------------------------- the record dies on publish
 
@@ -74,7 +74,7 @@ test('a successful publish clears the staged flag on the editor', () => {
 });
 
 test('the workspace clears ITS copy of staged, which is re-fed into load on every render', () => {
-  const s = src(WORKSPACE);
+  const s = workspaceSource();
   const line = s.split('\n').find((l) => l.includes("addEventListener('gbti-published'"));
   assert.match(line, /_editing\.staged = false/,
     'line ~641 re-feeds { staged: e.staged } into load(), so clearing only the editor would be undone');
@@ -105,7 +105,7 @@ test('no em dash in the banner copy, per the writing conventions', () => {
 // ---------------------------------------------------------------- the author note travels
 
 test('the saved author note is carried from the store into the editor', () => {
-  const w = src(WORKSPACE);
+  const w = workspaceSource();
   assert.match(w, /authorNote: typeof full\.authorNote === 'string'/, '_openDraft used to drop the field readDraft returns');
   const load = w.split('\n').find((l) => l.includes('ed.load(e.type, e.frontmatter'));
   assert.match(load, /authorNote: e\.authorNote/, 'the second hop dropped it too, so both have to carry it');

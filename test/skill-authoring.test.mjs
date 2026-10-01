@@ -14,6 +14,7 @@ import { audienceRefusal } from '../workers/signup/membership-audience.mjs';
 import { draftRecordForEditor } from '../src/lib/workbench-client-core.mjs';
 import { madeForRows, toggleTarget, mainHeading, mainHeadingHtml, kindSectionHtml, skillSectionsHtml, skillFileFrom, siteFor, normalizeKind } from '../client-ui/src/editor-skill.mjs';
 import { FIELDS } from '../client/src/form-fields.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const src = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const FILE = '---\nname: farley\ndescription: remembers people\n---\n# Farley\n';
@@ -246,7 +247,7 @@ test('the editor and workspace carry kind and the skill file end to end', () => 
   assert.match(ed, /skillFile: typeof skillFile === 'string' \? skillFile : null \};/, 'load keeps it on the preset');
   assert.match(ed, /if \(this\.type === 'prompt'\) wireSkillEditor\(this\);/);
   assert.match(ed, /\.fld\[hidden\] \{ display:none; \}/, 'a hidden rail field really hides; .fld sets display:flex, which beats the attribute');
-  const ws = src('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   assert.match(ws, /authorNote: e\.authorNote \?\? null, skillFile: e\.skillFile \?\? null \}\);/);
   assert.equal((ws.match(/skillFile: typeof full\.skillFile === 'string' \? full\.skillFile : null/g) || []).length, 2, 'an item and a draft both open with it');
   const page = src('src/pages/skill-install.json.ts');

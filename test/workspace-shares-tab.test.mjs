@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseWorkspaceTab, parseWorkspaceEditShare, planHashRoute, visibleTabs, visibleTiles } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -25,7 +26,7 @@ test('edit-share=<id> parses a share id and nothing else', () => {
 });
 
 test('the Shares tab is authoring-gated: shown on the website, hidden in the extension, and so is its tile', () => {
-  const src = read('client-ui/src/elements/gbti-workspace.mjs');
+  const src = workspaceSource();
   const m = /\{ id: 'share', label: 'Shares'([^}]*)\}/.exec(src);
   assert.ok(m, 'the TABS entry exists');
   assert.match(m[1], /authoring: true/);
@@ -71,7 +72,7 @@ test('both transports honour an edit: createdAt kept, the stale pointer dropped,
 
 // sow-317: the Network content scope reaches every member's content, and the pieces that make an edit land in place.
 test('sow-317: the Network scope pins: author filter + chips in the workspace, the share list scope, the foreign-path publish', () => {
-  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   for (const lit of ['data-author', 'filterByAuthor(content, this._authorFilter)', "authorOf(it)", 'scope="network"', 'Unpublished items across the network']) assert.ok(ws.includes(lit), lit);
   const sl = read('client-ui/src/elements/gbti-share-list.mjs');
   for (const lit of ["getAttribute('scope') === 'network'", 'this.client.networkShares()', 'Network shares']) assert.ok(sl.includes(lit), lit);
@@ -86,7 +87,7 @@ test('sow-317: the Network scope pins: author filter + chips in the workspace, t
 // reachable only by switching on another tab first), and the share page showed Edit to the author alone while
 // every other content page shows it to the owner OR a superadmin. Three pins, one per repair.
 test('the Shares tab renders the same scope switch the content tabs do, from one markup helper', () => {
-  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   const shareBranch = ws.slice(ws.indexOf("if (this._tab === 'share') {"), ws.indexOf('</gbti-share-list>`', ws.indexOf("if (this._tab === 'share') {")));
   assert.ok(shareBranch.length > 0 && shareBranch.length < 900, 'the Shares tab branch was found');
   assert.match(shareBranch, /this\._canScope\(\) \? `<div class="lc-bar">\$\{this\._scopeSwitchHtml\(\)\}<\/div>` : ''/, 'superadmin-only, the same lc-bar wrapper');
@@ -97,7 +98,7 @@ test('the Shares tab renders the same scope switch the content tabs do, from one
 });
 
 test('a deep link to another member\'s share moves a superadmin to Network shares for the visit, and nobody else anywhere', () => {
-  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   const listener = ws.slice(ws.indexOf("addEventListener('gbti-share-list-loaded'"), ws.indexOf('\n    });', ws.indexOf("addEventListener('gbti-share-list-loaded'")) + 8);
   assert.match(listener, /if \(id && !e\?\.detail\?\.consumed\)/, 'only an id the live list did NOT find is re-issued');
   assert.match(listener, /if \(!this\._scopeResolved\) \{ this\._editShareId = id; return; \}/, 'before the role is known the id is kept, not acted on');

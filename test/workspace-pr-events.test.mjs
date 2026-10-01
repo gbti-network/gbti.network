@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { prEvent, sortPullsByEvent } from '../client-ui/src/workspace-core.mjs';
 import { relTime, absTime } from '../client-ui/src/time-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 const T = (iso) => iso;
@@ -71,7 +72,7 @@ test('DRIFT: the Worker still projects the four timestamps onto each my-pulls it
 // two renderings of one thing.
 test('DRIFT: both PR row surfaces use the shared prEvent, not their own date logic', () => {
   for (const f of ['client-ui/src/elements/gbti-workspace.mjs', 'client-ui/src/elements/gbti-pr-list.mjs']) {
-    const s = src(f);
+    const s = f === 'client-ui/src/elements/gbti-workspace.mjs' ? workspaceSource() : src(f);
     assert.match(s, /prEvent\(pr\)/, `${f} stopped using the shared event rule`);
     assert.match(s, /from '\.\.\/time-core\.mjs'/, `${f} stopped using the shared relTime`);
   }

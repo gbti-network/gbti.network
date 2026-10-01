@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 // The real TABS shape, with the five authoring tabs flagged. Kept here as a fixture rather than
 // imported, so a change to the component's tab list fails the ELEMENT test below rather than silently
@@ -74,8 +75,7 @@ test('sow-204: degenerate inputs do not throw', () => {
 // assertion above would keep passing while describing a tab list the product no longer has. This reads the
 // real source and pins the two facts the fixture depends on.
 test('sow-204: the component TABS actually carry the flags this fixture assumes', async () => {
-  const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-workspace.mjs', import.meta.url), 'utf8');
+  const src = workspaceSource();
   const block = /const TABS = \[([\s\S]*?)\n\];/.exec(src);
   assert.ok(block, 'could not find the TABS block; this guard is pointed at the wrong shape');
 
@@ -175,8 +175,7 @@ test('sow-204: degenerate tile inputs do not throw', () => {
 });
 
 test('sow-204: the component tiles actually link to the tabs this fixture assumes', async () => {
-  const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-workspace.mjs', import.meta.url), 'utf8');
+  const src = workspaceSource();
   const block = /const tiles = \[([\s\S]*?)\n {4}\];/.exec(src);
   assert.ok(block, 'could not find the tiles block; this guard is pointed at the wrong shape');
 

@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { pageWindow, WORKSPACE_PAGE_SIZE } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -60,11 +61,11 @@ test('sow-377: the share list renders a slice, and by ABSOLUTE index', () => {
 
 test('sow-377: no WorkBench list keeps its own copy of the page arithmetic', () => {
   for (const f of ['client-ui/src/elements/gbti-workspace.mjs', 'client-ui/src/elements/gbti-share-list.mjs']) {
-    const src = read(f);
+    const src = f === 'client-ui/src/elements/gbti-workspace.mjs' ? workspaceSource() : read(f);
     assert.equal(/Math\.ceil\([a-zA-Z._]+\.length \/ PAGE\)/.test(src), false, `${f} still computes its own page count`);
     assert.equal(/const PAGE = \d+;/.test(src), false, `${f} still declares its own page size`);
   }
   // And the workspace really does call the shared helper, twice: the content list and the PR list.
-  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const ws = workspaceSource();
   assert.equal((ws.match(/pageWindow\(/g) || []).length, 2, 'both workspace lists must use the shared window');
 });

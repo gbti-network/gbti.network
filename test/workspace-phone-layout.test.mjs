@@ -3,12 +3,11 @@
 // keeps the active tab in view without moving the page.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 import { tabScrollLeft } from '../client-ui/src/workspace-core.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
-const src = readFileSync(ROOT + 'client-ui/src/elements/gbti-workspace.mjs', 'utf8');
+const src = workspaceSource();
 const css = src.replace(/\/\*[\s\S]*?\*\//g, '');
 const phone = css.match(/@container \(max-width: 560px\) \{([\s\S]*?)\n  \}/);
 

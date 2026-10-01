@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { curatorBanner, trialBanner } from '../client-ui/src/workspace-core.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 test('a paid supporter is told their work goes to members first and is reviewed', () => {
   const b = curatorBanner('paid', 'member', true);
@@ -48,7 +49,7 @@ test('signed-out, lapsed and free members get nothing here', () => {
 });
 
 test('the workspace element actually renders it in the trial banner slot', () => {
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-workspace.mjs', import.meta.url), 'utf8');
+  const src = workspaceSource();
   const code = src.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert.match(code, /trialBanner\(ov\.membership, this\._authoring\(\)\) \|\| curatorBanner\(ov\.membership, ov\.paidTier, this\._authoring\(\)\)/,
     'the banner must be wired into the same slot, or a correct function nothing calls');

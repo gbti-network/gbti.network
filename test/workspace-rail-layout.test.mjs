@@ -2,10 +2,9 @@
 // left rail beside the content pane. Source pins for the two halves; the render is driven in the harness.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
-const ROOT = new URL('..', import.meta.url).pathname;
-const src = readFileSync(ROOT + 'client-ui/src/elements/gbti-workspace.mjs', 'utf8');
+const src = workspaceSource();
 const css = src.replace(/\/\*[\s\S]*?\*\//g, '');
 
 test('corners: no squared 2px radius is left; surfaces take the shared token and controls the 8px step', () => {

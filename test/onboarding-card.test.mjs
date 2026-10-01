@@ -5,13 +5,13 @@
 // read, the card says nothing rather than listing finished work as unfinished.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import { loadOnboardingState, loadProgress, onboardingCardHtml, cachedProgress, rememberProgress, forgetProgress, CARD_TTL_MS, WELCOME_SITE_URL } from '../client-ui/src/onboarding-card-core.mjs';
 import { onboardingProgress, ONBOARDING_STEPS } from '../membership/onboarding.mjs';
 import { requestedStep } from '../client-ui/src/welcome-core.mjs';
 import { setClient } from '../client-ui/src/base.mjs';
 import { GbtiOnboardingProgress } from '../client-ui/src/elements/gbti-onboarding-progress.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const notFound = () => { const e = new Error('no such item'); e.code = 'not-found'; return e; };
 
@@ -188,7 +188,7 @@ test('a recreated card paints from memory and does not read everything again', a
 });
 
 test('the WorkBench overview carries the card in its banner slot', () => {
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-workspace.mjs', import.meta.url), 'utf8');
+  const src = workspaceSource();
   assert.match(src, /import '\.\/gbti-onboarding-progress\.mjs';/);
   assert.match(src, /\$\{trialHtml\}<gbti-onboarding-progress><\/gbti-onboarding-progress>\n\s*<div class="ov-tiles">/);
 });

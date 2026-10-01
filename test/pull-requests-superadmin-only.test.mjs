@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { visibleTabs, resolveTab, visibleTiles, prAttention } from '../client-ui/src/workspace-core.mjs';
 import { setClient } from '../client-ui/src/index.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
+import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -81,7 +82,7 @@ test('prAttention keeps declined and open pull requests, at most six', () => {
 // ---- the component ----
 
 test('the component flags the Pull requests tab superadmin-only', () => {
-  assert.match(read('client-ui/src/elements/gbti-workspace.mjs'), /\{ id: 'prs', label: 'Pull requests', superadminOnly: true \}/);
+  assert.match(workspaceSource(), /\{ id: 'prs', label: 'Pull requests', superadminOnly: true \}/);
 });
 
 /** Run the Overview load for a given role and record which client reads happened. */
