@@ -78,7 +78,7 @@ export function sameFollowerSet(a, b) {
   return true;
 }
 
-// ---- Cloudflare KV REST access (mirrors scripts/lib/favorite-counts.mjs + erase-member.mjs) ----
+// ---- Cloudflare KV REST access (mirrors scripts/lib/favorite-counts.mjs + scripts/lib/kv-rest.mjs) ----
 
 function cfBase(env) {
   const accountId = env.CF_ACCOUNT_ID, namespaceId = env.CF_KV_NAMESPACE_ID, apiToken = env.CF_API_TOKEN;

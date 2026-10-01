@@ -1,5 +1,5 @@
 // sow-269: the project families and the banner color presets are separate lists by design (removing a family must
-// never remove a preset that published frontmatter names), and gbti-v3.css restates the presets as literal
+// never remove a preset that published frontmatter names), and gbti-v3-detail.css restates the presets as literal
 // hero rules because a stylesheet cannot import a module. Three lists that must agree by hand drifted before:
 // Chrome Extensions was a taxonomy leaf with no family, no preset and no hero rule, so Ryker rendered as a
 // Utilities project with no filter chip. The failure is SILENT: a preset key with no CSS rule validates, shows

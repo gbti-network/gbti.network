@@ -95,7 +95,7 @@ test('applyDraftPut: a pending author reassignment SURVIVES the round trip', () 
 });
 
 test('applyDraftPut: an ABSENT author target PRESERVES a stored one', () => {
-  // src/pages/workbench/preview.astro saves drafts too and knows nothing about this field. If absence cleared,
+  // The WorkBench preview (src/lib/preview-edit.ts) saves drafts too and knows nothing about this field. If absence cleared,
   // pressing Preview would silently throw away a reassignment the superadmin had already chosen, which is a
   // quieter version of the very bug being fixed. Same contract as authorNote, for the same reason.
   let s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'member', username: 'atwellpub' } }));

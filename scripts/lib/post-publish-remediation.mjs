@@ -47,7 +47,7 @@ export function planRemediation({ errors = [], publishedFiles = [] } = {}) {
 
 /**
  * Flip the given content files status: published -> draft via ONE auto-merged bot PR (reversible; the author fixes +
- * re-publishes). Mirrors erase-member.mjs eraseContent: a phase-1 base read decides what changes (already-draft /
+ * re-publishes). Mirrors eraseContent in erase-content.mjs: a phase-1 base read decides what changes (already-draft /
  * missing are skipped, so a no-op opens no PR), then a phase-2 commit reads each target FROM THE BRANCH (no TOCTOU).
  * Reported no-op without a GitHub client. Injectable, so it unit-tests with a fake github.
  */

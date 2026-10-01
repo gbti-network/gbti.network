@@ -88,7 +88,7 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
     : (typeof prev?.authorNote === 'string' ? prev.authorNote : null);
   // The pending author reassignment travels with the draft, on exactly the authorNote terms above and for
   // exactly the same reason: an ABSENT value PRESERVES what is stored rather than clearing it, because
-  // src/pages/workbench/preview.astro is a second saveDraft caller that knows nothing about this field and
+  // the WorkBench preview (src/lib/preview-edit.ts) is a second saveDraft caller that knows nothing about this field and
   // must not be able to destroy a superadmin's pending reassignment simply by saving. Clearing is explicit:
   // send null, which is what the editor does once a publish has consumed the move.
   const authorTarget = d.authorTarget !== undefined

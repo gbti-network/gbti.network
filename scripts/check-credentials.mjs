@@ -25,9 +25,10 @@ import { sendCouponRedemptionAlert } from '../workers/signup/coupon-alert.mjs';
 
 /**
  * sow-292: read one KV value with the three outcomes kept apart: present, ABSENT (404), and UNREADABLE (any other
- * failure). The same shape as scripts/lib/erase-member.mjs's strict reader, re-stated here rather than imported:
- * that module pulls in js-yaml, which the credential-health job does not install (its first live run crashed on
- * exactly that import before probing anything). This monitor stays dependency-free on purpose.
+ * failure). The same shape as readKvValueStrict in scripts/lib/kv-rest.mjs, re-stated here rather than imported: it
+ * lived in erase-member.mjs until 2026-09-30, which pulls in js-yaml, and the credential-health job does not install
+ * that (its first live run crashed on exactly that import before probing anything). kv-rest.mjs imports nothing, so
+ * importing from it would now be safe. This monitor stays dependency-free on purpose.
  */
 export async function readKvStrict({ key, env = process.env, fetch = globalThis.fetch } = {}) {
   const { CF_ACCOUNT_ID: accountId, CF_KV_NAMESPACE_ID: namespaceId, CF_API_TOKEN: apiToken } = env;

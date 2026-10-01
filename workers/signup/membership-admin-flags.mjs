@@ -10,7 +10,7 @@
 // only, matching the client rule it replaces (client/src/admin-ops.mjs setContentFlagOp) and the file's own
 // CODEOWNERS pin.
 //
-// In its own file because membership-admin-author.mjs is at the 900-line cap, the same reason the CTA
+// In its own file because membership-admin-author.mjs was at the 900-line cap when this was written, the same reason the CTA
 // validators live in membership-admin-ctas.mjs.
 import { setContentFlag, flagKeyForPath } from '../../membership/content-flags.mjs';
 

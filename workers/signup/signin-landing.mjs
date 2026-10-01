@@ -1,5 +1,5 @@
-// sow-343: where a completed website sign-in lands. Kept out of index.mjs (over the size cap) and free of imports,
-// so the caller validates the return path first (oauth-state.mjs safeReturnTo) and this only decides.
+// sow-343: where a completed website sign-in lands. Its own module (the Worker entry was over the size cap when
+// this was written; signup-routes.mjs calls it) and free of imports, so the caller validates the return path first (oauth-state.mjs safeReturnTo) and this only decides.
 
 // sow-427 (owner decision 6, 2026-09-30): a new account that signed in from a prepared-listing invitation lands on
 // its claim page FIRST, and meets the welcome steps straight after. Matched as the whole return path, anchored at both

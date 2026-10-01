@@ -1,5 +1,5 @@
 // sow-337: the file-writing plumbing of the admin write route (membership-admin-author.mjs), moved here because
-// that file is at the size cap. It PUTs or DELETEs one file on a hosted-admin branch through the Contents API.
+// that file was at the size cap. It PUTs or DELETEs one file on a hosted-admin branch through the Contents API.
 // A text entry ({ path, content }) is base64-encoded from its UTF-8 string; a binary entry ({ path,
 // contentBase64 }) is already base64 and passes through un-re-encoded, the same shape the member publish route
 // uses (membership-author.mjs), so a call-to-action image lands byte for byte as the shared check accepted it.

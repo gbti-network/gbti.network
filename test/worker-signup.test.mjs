@@ -175,7 +175,7 @@ test('signup with no existing customer creates one with full metadata + KV index
   // KV index written to the new customer id.
   assert.equal(kv.store.get('gh:12345'), 'cus_new');
   // No guild call of any kind for a free account. The symmetry of the join role and the explicit addRole, for
-  // the members who DO join, is pinned by "runSignup ASSIGNS the resolved role" below.
+  // the members who DO join, is pinned by "runSignup ASSIGNS the resolved role" in test/worker-signup-role.test.mjs.
   assert.equal(discord.calls.addGuildMember.length, 0, 'not added to the server');
   assert.equal(discord.calls.addRole.length, 0, 'and given no role');
   assert.equal(discord.calls.removeRole.length, 0, 'nor is anything stripped from someone who is not there');

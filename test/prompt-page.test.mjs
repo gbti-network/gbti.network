@@ -28,7 +28,7 @@ test('main precedes the aside, because grid children take columns in source orde
 });
 
 test('the preview actually consumes the contract rather than hardcoding the classes', () => {
-  // The reshape lives in preview-shells.mjs; preview.astro calls it. Assert both ends, so neither the branch
+  // The reshape lives in preview-shells.mjs; the preview page script (src/lib/preview-page.ts) calls it. Assert both ends, so neither the branch
   // nor its one caller can quietly go away and leave the prompt preview back on the product shell.
   assert.match(shellSrc, /from '\.\/prompt-page\.mjs'/);
   assert.match(shellSrc, /buildPromptHeadHtml/);
@@ -39,7 +39,7 @@ test('the preview actually consumes the contract rather than hardcoding the clas
   assert.match(previewSrc, /^\s*applyPreviewShell\(document,/m);
   // And it must not have grown its own copies of the class names.
   for (const cls of [PROMPT_SHELL.block, PROMPT_SHELL.body, PROMPT_SHELL.grid]) {
-    assert.ok(!previewSrc.includes(`'${cls}'`), `preview.astro hardcodes "${cls}" instead of reading the contract`);
+    assert.ok(!previewSrc.includes(`'${cls}'`), `the preview page hardcodes "${cls}" instead of reading the contract`);
   }
 });
 

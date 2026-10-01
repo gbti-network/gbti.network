@@ -1,7 +1,7 @@
 // sow-109 Phase 5: the prompt editor's "What are you sharing?" choice and, for a skill, the parts a skill adds: the
 // install note, the "Made for" tick list, the skill file (SKILL.md) and the "Commands and usage" heading on the page
-// text. Laid out from the approved canvas (the WorkbenchEditor board). Split out of gbti-content-editor.mjs, which is
-// already past the size cap, so that file only calls in: it renders these strings and runs wireSkillEditor once.
+// text. Laid out from the approved canvas (the WorkbenchEditor board). Split out of gbti-content-editor.mjs, which was
+// past the size cap at the time, so that file only calls in: it renders these strings and runs wireSkillEditor once.
 //
 // Nothing here is a new contract. The choice writes the `kind` form field, the tick list writes the same `targets`
 // input the rail's chips write, and the skill file is read by the editor's gather() and published beside index.md by

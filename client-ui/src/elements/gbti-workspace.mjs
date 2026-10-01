@@ -254,8 +254,8 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       if (notes.length && ed?.out) ed.out(esc(notes.join(' ')), e.invalidNote ? 'danger' : 'muted');
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
       // workbench reflects the change immediately on return, never a stale list.
-      // sow-326: the editing state stops being a staged draft the moment the publish succeeds. Line ~641
-      // re-feeds `{ staged: e.staged }` into load() on every workspace render, and load() is the only writer
+      // sow-326: the editing state stops being a staged draft the moment the publish succeeds. The ed.load()
+      // call above re-feeds `{ staged: e.staged }` into load() on every workspace render, and load() is the only writer
       // of the editor's flag, so clearing the editor's copy alone would be undone by the next repaint.
       ed?.addEventListener('gbti-published', () => { if (this._editing) this._editing.staged = false; this._onPublished(e.type); });
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082

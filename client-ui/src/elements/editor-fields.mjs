@@ -173,7 +173,7 @@ export const withEditorFields = (Base) => class extends Base {
       return wrap(this._linksInner(f, value));
     }
     // sow-268: the project gallery[] editor -> structured rows (was a raw JSON textarea that could not
-    // round-trip: an array value renders comma-joined at line ~773, and coerceValue('json') then JSON.parse'd
+    // round-trip: an array value renders comma-joined (the `v` expression in fieldHtml), and coerceValue('json') then JSON.parse'd
     // that string and threw, so every project with screenshots was unsaveable and Preview was a dead button).
     // Same shape as links: rows serialize into the SAME hidden [data-key="gallery"] json input gather() reads.
     if (f.kind === 'json' && f.key === 'gallery') {

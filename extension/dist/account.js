@@ -105,7 +105,7 @@
   var EDITOR_SURFACE = `
 :host {
   --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
-  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css:44 already uses site-side for the identical reason. */
+  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css (--fg-mute) already uses site-side for the identical reason. */
   --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
   --s-amber-fg:#8a5500; /* sow-184: a readable amber for TEXT (the Staged pill) -- the golden #d9a13c fails AA on a light tint */
   --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);

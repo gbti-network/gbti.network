@@ -383,7 +383,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
           type, slug, path: path || null, frontmatter: input, body,
           // SOW-014: omitted rather than nulled, so a caller that does not know about the note cannot clear one.
           ...(typeof authorNote === 'string' ? { authorNote } : {}),
-          // Same contract for the pending author reassignment, and it matters more here: preview.astro saves
+          // Same contract for the pending author reassignment, and it matters more here: the preview page (src/lib/preview-edit.ts) saves
           // drafts too and passes no authorTarget, so nulling on absence would let a Preview quietly throw
           // away a reassignment the superadmin had already chosen. `null` is passed explicitly to CLEAR, which
           // is what the editor does once a publish has consumed the move.

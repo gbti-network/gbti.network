@@ -7,7 +7,7 @@
 //     here instead of reddening the content check after the pull request merges;
 //   - adding a tool edits house/ai-tools.yml as TEXT (one inserted line), because the config path re-serializes a
 //     file and keeps only its top comment, and that file's grouping comments are for the people who maintain it.
-// In its own file because membership-admin-author.mjs is past the size cap; that file only spreads these rows in.
+// In its own file because membership-admin-author.mjs was past the size cap when this was written; that file only spreads these rows in.
 //
 // The rules themselves live in the node-free core (membership/skill-install-edits.mjs) and THROW; every build here
 // catches them into a 400, because a thrown validator reaching the dispatch is the silent-200 failure sow-415 fixed.

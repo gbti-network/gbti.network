@@ -1,6 +1,6 @@
 // sow-281: the Worker half of the CTA registry (house/ctas.yml): the SUPERADMIN pool read and the input validators
 // for the five write ops (cta-add / cta-update / cta-toggle / cta-assign / cta-unassign). The ops themselves are
-// rows in membership-admin-author.mjs's CONFIG_OP table (the file is at the size cap, so the validators live here)
+// rows in membership-admin-author.mjs's CONFIG_OP table (the validators live here because that file was at the size cap when they were written)
 // with rank: ROLE_RANK.superadmin; the second authority is the CODEOWNERS pin on house/ctas.yml. The validators
 // bound the wire shapes to exactly the caps the pure core enforces (CTA_LIMITS), so a malformed request costs no
 // GitHub read; the core (membership/cta-edits.mjs) is what refuses a bad destination or the Amazon rule.

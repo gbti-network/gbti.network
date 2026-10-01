@@ -1,7 +1,7 @@
 // sow-427: the WorkBench project editor's PREPARED MODE. A superadmin writes a project for someone who is not a member
 // yet; saving stores it privately in KV with a personal invitation (never the repository), and the person claims it
-// under their own name with a free year. <gbti-content-editor> is far over the 900-line cap, so it carries HOOK
-// LINES only and everything about prepared mode lives here: the rail card, the toggle, the save, the image reads,
+// under their own name with a free year. <gbti-content-editor> was far over the 900-line cap when this was written, so it carries HOOK
+// LINES only (test/prepared-editor.test.mjs still holds it to that) and everything about prepared mode lives here: the rail card, the toggle, the save, the image reads,
 // and the two WorkBench deep links (`#new=project&prepare=1`, `#prepare=<listing id>`).
 //
 // WHAT PREPARED MODE CHANGES IN THE EDITOR, AND WHY.

@@ -5,7 +5,7 @@
 //
 //   1. CONTROLS RUN FIRST. If the luminance routine is wrong, every number below is worthless and would
 //      pass or fail for the wrong reason. A 0-1 versus 0-255 channel bug is the classic silent version.
-//      One control is taken from elsewhere in this repo (gbti-v3.css:44 states 5.36:1 for #6c6976 on
+//      One control is taken from elsewhere in this repo (gbti-v3.css's --fg-mute comment states 5.36:1 for #6c6976 on
 //      white), so the routine is checked against a figure computed by someone else, not only against
 //      textbook pairs.
 //   2. THE TEXT/NON-TEXT SPLIT IS A WRITTEN FIXTURE. CSS cannot tell us whether a declaration paints text
@@ -49,7 +49,7 @@ test('sow-249 control: the contrast routine reproduces known values', () => {
   assert.equal(contrast('#767676', '#ffffff').toFixed(2), '4.54');  // the classic AA pass on white
   assert.equal(contrast('#777777', '#ffffff').toFixed(2), '4.48');  // one step lighter, the classic fail
   assert.equal(contrast('#ffffff', '#000000').toFixed(2), '21.00'); // order-independent
-  // Cross-check against a figure this repo computed independently: src/styles/gbti-v3.css:44 states
+  // Cross-check against a figure this repo computed independently: src/styles/gbti-v3.css's --fg-mute comment states
   // "5.36:1 on #fff" for --fg-mute #6c6976. If our routine disagrees with that, one of them is wrong.
   assert.equal(contrast('#6c6976', '#ffffff').toFixed(2), '5.36');
 });

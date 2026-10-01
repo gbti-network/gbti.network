@@ -14,7 +14,7 @@
 // people rather than by code.
 //
 // A NEIGHBOURING CLAIM OF MINE WAS WRONG AND IS WITHDRAWN HERE, so nobody builds on it. Commit 569d0799 said
-// "a broken erasure step survives a dry run". It does not. runErasure returns at erase-member.mjs:992 when
+// "a broken erasure step survives a dry run". It does not. runErasure returns early (its `if (!apply)` guard) when
 // `apply` is false and executes NO step, so a dry run was never going to catch a broken call; the probe that
 // produced that claim was measuring the plan path and being read as the run path. A real apply is properly
 // guarded: runStep records the throw as `outcome: 'error'` with its reason, and scripts/erase-member.mjs:89

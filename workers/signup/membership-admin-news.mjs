@@ -9,8 +9,8 @@
 // list the same item for longer. The tombstone carries a copy of the item, which is what makes Undo exact.
 //
 // WHY THIS IS NOT IN membership-admin-author.mjs. Every action there opens a pull request against a file in the
-// repository; this writes KV. The two need different failure handling, and that module is already 863 lines
-// against the project's 900-line cap.
+// repository; this writes KV. The two need different failure handling, and that module was 863 lines
+// against the project's 900-line cap when this was written.
 //
 // The route is superadmin-gated on the SERVER (authorizeSuperadmin). The news item page reveals the controls from
 // the member signal, which is presentation only: an admin, a news editor or a forged signal gets 403 here and

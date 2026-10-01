@@ -203,7 +203,7 @@ test('DRIFT: every class in the card contract still appears in ArticleCard.astro
 });
 
 // The regression this guards is specific: the card's max-width, padding and background used to be inline
-// style attributes, which the preview could only match by copying the string. They moved into gbti-v3.css so
+// style attributes, which the preview could only match by copying the string. They moved into gbti-v3-detail.css (.art-c-card) so
 // both hosts get them from the class. An inline style creeping back would silently un-share the geometry.
 test('DRIFT: the card layout carries no inline geometry, and the design system owns it instead', () => {
   const src = componentSrc('ArticleCard');
@@ -253,7 +253,7 @@ test('DRIFT: the preview reads the layout from the contract rather than hard-cod
     assert.ok(src.includes(token), `preview-shells.mjs stopped reading ${token}, so a layout can drift again`);
   }
   const preview = previewSource(); // the page plus src/lib/preview-page.ts, where the call now lives
-  assert.match(preview, /^\s*applyPreviewShell\(document,/m, 'preview.astro no longer runs the reshape at all');
+  assert.match(preview, /^\s*applyPreviewShell\(document,/m, 'the preview page script (src/lib/preview-page.ts) no longer runs the reshape at all');
 });
 
 // sow-352 (owner, 2026-09-16): "on single col mobile view the sidebar arrives after the article content, not before."

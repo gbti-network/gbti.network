@@ -38,11 +38,11 @@ import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.m
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../membership/cta-edits.mjs'; // sow-281
-import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFiles } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap); sow-337 the card image
+import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFiles } from './membership-admin-ctas.mjs'; // sow-281: the validators (kept out of this file when it was at the size cap); sow-337 the card image
 import { addOutboundLink, updateOutboundLink, setOutboundLinkStatus } from '../../membership/outbound-link-edits.mjs'; // sow-359
-import { outboundAddInput, outboundUpdateInput, outboundStatusInput } from './membership-admin-outbound.mjs'; // sow-359: the validators (this file is at the size cap)
-import { contentFlagOps } from './membership-admin-flags.mjs'; // sow-274: the content-flag ops (this file is at the size cap)
-import { skillInstallMultiOps } from './membership-admin-skills.mjs'; // sow-109: Skill install, superadmin (this file is past the size cap)
+import { outboundAddInput, outboundUpdateInput, outboundStatusInput } from './membership-admin-outbound.mjs'; // sow-359: the validators (kept out of this file when it was at the size cap)
+import { contentFlagOps } from './membership-admin-flags.mjs'; // sow-274: the content-flag ops (kept out of this file when it was at the size cap)
+import { skillInstallMultiOps } from './membership-admin-skills.mjs'; // sow-109: Skill install, superadmin (kept out of this file when it was past the size cap)
 import { applyFile, decodeContent } from './membership-admin-files.mjs'; // sow-337: moved out for the size cap; writes a binary entry too
 import { leadingComment, loadHouseYaml, loadRawFile } from './membership-admin-files.mjs'; // the house-file reads, moved there at the 900-line limit
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops

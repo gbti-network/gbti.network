@@ -206,7 +206,7 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--fg-mute); cursor: pointer; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
-/* sow-395 (owner, 2026-09-24): the Post a Share dialog matches the website's (.share-modal in gbti-v3.css): no
+/* sow-395 (owner, 2026-09-24): the Post a Share dialog matches the website's (.share-modal in gbti-v3-feed.css): no
    panel of its own, the composer's card is the dialog (square, 2px, set inside the composer), and a round close
    button floats on its top-right corner. margin:auto centres it and stays safe when a step is taller than the
    window (the overlay scrolls). */

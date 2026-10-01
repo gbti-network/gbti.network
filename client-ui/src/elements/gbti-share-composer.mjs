@@ -40,7 +40,7 @@ const NEXT_LABEL = { 1: 'Fetch details', 2: 'Looks good', 3: 'Continue' };
 // the indistinguishable pair the SOW originally described.
 //
 // The information to explain a failure was already arriving and being discarded: both hosts throw an error
-// carrying `.code` and `.message` (WorkbenchClientError in src/lib/workbench-client.ts, GbtiClientError in
+// carrying `.code` and `.message` (WorkbenchClientError in src/lib/workbench-client-transport.ts, GbtiClientError in
 // client-ui/src/client.mjs), and the old bare `catch` dropped both.
 //
 // Pure and exported so every branch is unit-testable: the element modules guard customElements for node, so

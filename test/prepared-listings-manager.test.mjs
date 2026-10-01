@@ -200,7 +200,7 @@ test('workbench-client spreads the prepared methods with one line, beside the ot
   const src = read('src/lib/workbench-client.ts');
   assert.match(src, /import \{ preparedMethods \} from '\.\/workbench-prepared';/);
   assert.match(src, /\.\.\.preparedMethods\(\{ workerGet, workerPost, isSuperadmin \}\),/);
-  assert.equal(src.split('\n').filter((l) => l.includes('sow-427')).length, 2, 'hook lines only in a file over the cap');
+  assert.equal(src.split('\n').filter((l) => l.includes('sow-427')).length, 2, 'hook lines only: the prepared methods live in workbench-prepared.ts');
 });
 
 // ---- the coupon manager hook and the element -------------------------------------------------------------------

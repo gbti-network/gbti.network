@@ -5,7 +5,7 @@
 // fail closed); this panel is UX. Every value from the Worker is written with textContent, never as markup.
 //
 // Site only, so no client-ui bundle. The panel makes its own credentialed GET rather than adding a method to the shared
-// workbench client, which is already past the repository's file-size cap.
+// workbench client, which was past the repository's file-size cap when this was written.
 //
 // The nodes below the static root are built at runtime and never receive Astro's scoped attribute, so every rule for
 // them is written as `.ml :global(...)`, anchored on the static root.

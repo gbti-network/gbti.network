@@ -53,7 +53,7 @@ const ROLE_LABEL: Record<string, string> = { author: 'author', contributor: 'acc
 // It missed for every commit in the repository: automation and owner commits are authored as `gbtilabs`,
 // while that profile's links.github points at github.com/gbti-network, so `byLogin` is keyed 'gbti-network'
 // and never matched. The username IS 'gbtilabs', so the second lookup resolves it. This mirrors the
-// resolution chain the reconcile already needed for the same reason (scripts/reconcile.mjs resolveUsername,
+// resolution chain the reconcile already needed for the same reason (resolveUsername in scripts/lib/reconcile-members.mjs,
 // where folder 'hudson' has login 'atwellpub'), and it fixes the general case rather than one account.
 function who(login: string | null, name: string) {
   // Every change published through the network (sow-274: one publishing path) is committed by our GitHub App,
