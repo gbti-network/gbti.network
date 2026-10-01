@@ -66,11 +66,19 @@ export function buildStamp({ sha = '', branch = '', mode = '', runId = '', runUr
   return { commit: sha, branch, target: mode === 'preview' ? PREVIEW_BRANCH : 'production', mode, run: runId, runUrl, builtAt: now.toISOString() };
 }
 
-/** A preview build must not be indexed: append a site-wide noindex rule to Cloudflare's _headers. */
-export const NOINDEX_RULE = '\n# sow-295: a preview build (preview.gbti.network) is never indexed.\n/*\n  X-Robots-Tag: noindex\n';
+/** A preview build must not be indexed: add a site-wide noindex header to Cloudflare's _headers. */
+export const NOINDEX_HEADER = '  X-Robots-Tag: noindex';
+export const NOINDEX_RULE = `\n# sow-295: a preview build (preview.gbti.network) is never indexed.\n/*\n${NOINDEX_HEADER}\n`;
+// sow-437: the header goes INTO the existing `/*` rule. Pages keeps only the last rule for a repeated path, so an
+// appended second `/*` rule silently replaced the site Content-Security-Policy on every preview page.
 export function withNoindex(headers) {
   const base = String(headers ?? '');
-  return base.includes('X-Robots-Tag: noindex') ? base : base.replace(/\n*$/, '\n') + NOINDEX_RULE;
+  if (base.includes('X-Robots-Tag: noindex')) return base;
+  const lines = base.split('\n');
+  const at = lines.findIndex((l) => l.trimEnd() === '/*');
+  if (at === -1) return base.replace(/\n*$/, '\n') + NOINDEX_RULE;
+  lines.splice(at + 1, 0, NOINDEX_HEADER);
+  return lines.join('\n');
 }
 
 function writeOutputs(outputs, file) {

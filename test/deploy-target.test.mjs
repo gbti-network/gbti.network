@@ -73,10 +73,26 @@ test('runStamp writes build.json, and a preview build gains exactly one noindex 
 
   runStamp({ env: { SHA: 'abc', REF_NAME: 'feature', MODE: 'preview' }, distDir: dist, now, log: quietLog() });
   const headers = fs.readFileSync(path.join(dist, '_headers'), 'utf8');
-  assert.ok(headers.startsWith('/*\n  Content-Security-Policy'), 'the existing rules are kept');
-  assert.ok(headers.endsWith(NOINDEX_RULE));
+  assert.equal(headers, '/*\n  X-Robots-Tag: noindex\n  Content-Security-Policy: default-src \'self\'\n',
+    'the noindex header joins the existing /* rule, which keeps its Content-Security-Policy');
+  assert.equal(headers.match(/^\/\*$/gm).length, 1, 'never a second /* rule: Pages keeps only the last one, dropping the CSP');
   assert.equal(JSON.parse(fs.readFileSync(path.join(dist, 'build.json'), 'utf8')).target, 'preview');
   assert.equal(withNoindex(headers), headers, 'stamping twice does not add a second rule');
+});
+
+test('a headers file with no /* rule gets one for noindex', () => {
+  const headers = withNoindex('/embed\n  X-Frame-Options: DENY\n');
+  assert.ok(headers.startsWith('/embed\n  X-Frame-Options: DENY\n'));
+  assert.ok(headers.endsWith(NOINDEX_RULE));
+});
+
+test('the real site headers keep their CSP on the /* rule after the preview stamp', () => {
+  const real = fs.readFileSync(new URL('../public/_headers', import.meta.url), 'utf8');
+  const stamped = withNoindex(real);
+  assert.equal(stamped.match(/^\/\*\s*$/gm).length, 1);
+  const rule = stamped.split(/\n(?=\S)/).find((b) => b.split('\n')[0].trimEnd() === '/*');
+  assert.match(rule, /^  X-Robots-Tag: noindex$/m);
+  assert.match(rule, /^  Content-Security-Policy: default-src 'self'/m);
 });
 
 test('the summary says a refused run deployed nothing', () => {
