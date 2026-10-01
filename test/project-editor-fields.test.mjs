@@ -9,9 +9,10 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 
 import { fieldsFor } from '../client/src/form-fields.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const editorSrc = fs.readFileSync(path.join(ROOT, 'client-ui/src/elements/gbti-content-editor.mjs'), 'utf8');
+const editorSrc = contentEditorSource();
 const pageSrc = fs.readFileSync(path.join(ROOT, 'src/pages/projects/[slug].astro'), 'utf8');
 
 // Keys the save path writes itself rather than reading from a form field: `type` and `author` are stamped by

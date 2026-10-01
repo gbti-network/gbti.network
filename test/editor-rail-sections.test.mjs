@@ -2,12 +2,11 @@
 // the MCP ID with the value shown beside it. The split is pure; the placement and the button are source pins.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import { splitRailSections } from '../client-ui/src/editor-rail-sections.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
-const ROOT = new URL('..', import.meta.url).pathname;
-const src = readFileSync(ROOT + 'client-ui/src/elements/gbti-content-editor.mjs', 'utf8');
+const src = contentEditorSource();
 const code = src.replace(/\/\*[\s\S]*?\*\//g, '');
 
 // The three schemas as the editor declares them today (the pin below proves the editor still declares them).

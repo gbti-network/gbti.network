@@ -16,6 +16,7 @@ import {
   preparedToolbarHtml, preparedParts, preparedTextProblem, buildPreparedPayload, preparedAfterSave, savePrepared,
   setPreparedMode, preparedImageReader, preparedClient, imageClientFor, PREPARED_CSS,
 } from '../client-ui/src/prepared-editor.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const ID = 'ABCDEFGHJKMNPQRS'; // 16 characters of the invite alphabet
@@ -406,13 +407,14 @@ test('every button class prepared mode renders names its own hover background (B
 // ---- the hook lines ----------------------------------------------------------------------------------------------
 
 test('the content editor carries hook lines only: every prepared behaviour is in prepared-editor.mjs', () => {
-  const ed = read('client-ui/src/elements/gbti-content-editor.mjs');
+  const ed = contentEditorSource();
   assert.match(ed, /import \{ PREPARED_CSS, preparedFromLoad, preparedParts, wirePrepared, imageClientFor \} from '\.\.\/prepared-editor\.mjs';/);
   assert.match(ed, /load\(type, input, body, path, \{[^}]*prepared = null \} = \{\}\)/);
   assert.match(ed, /this\._prepared = preparedFromLoad\(prepared\);/);
   assert.match(ed, /this\._statusRole = st\?\.role \?\? null;/);
   assert.match(ed, /const prep = await preparedParts\(this\);/);
-  assert.match(ed, /SKILL_EDITOR_CSS : ''\) \+ PREPARED_CSS \+ `/);
+  // The component's own rules follow PREPARED_CSS; they moved from an inline template to content-editor-css.mjs.
+  assert.match(ed, /SKILL_EDITOR_CSS : ''\) \+ PREPARED_CSS \+ CONTENT_EDITOR_CSS\)/);
   assert.match(ed, /\$\{prep\.toolbar\}/);
   assert.match(ed, /<aside class="rail">\s*\$\{prep\.rail\}/);
   assert.match(ed, /wirePrepared\(this\);/);

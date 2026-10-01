@@ -13,6 +13,7 @@ import { itemTokenOf } from '../membership/draft-images.mjs';
 import { hostedItemId } from '../client/src/hosted-publish.mjs';
 import { postSchema, productSchema, promptSchema } from '../client/src/schemas.mjs';
 import { SLUG_RE as RENAME_SLUG_RE } from '../client/src/operations-publish.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const ROOT = new URL('..', import.meta.url);
 const GITHUB_ID = '125175036';
@@ -100,6 +101,6 @@ test('the site schema and the editor field use the same limit', () => {
   const config = readFileSync(new URL('src/content.config.ts', ROOT), 'utf8');
   assert.match(config, /import \{ SLUG_MAX \} from '\.\.\/membership\/item-id\.mjs';/);
   assert.equal(config.split('slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG)').length - 1, 3, 'post, project and prompt slugs are capped');
-  const editor = readFileSync(new URL('client-ui/src/elements/gbti-content-editor.mjs', ROOT), 'utf8');
+  const editor = contentEditorSource();
   assert.match(editor, /<input id="slugfield" type="text" spellcheck="false" maxlength="\$\{SLUG_MAX\}"/);
 });

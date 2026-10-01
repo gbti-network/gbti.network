@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { z } from 'zod';
 import { schemaFor } from '../client/src/schemas.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 
@@ -156,7 +157,7 @@ test('every post still carrying an unquoted YAML date renders through the field 
 // DRIFT: the expression above is a copy. If the component's own changes, this test would keep passing while the
 // editor broke again, which is the whole failure mode being fixed.
 test('DRIFT: the component still handles Date before the generic object branch', () => {
-  const s = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const s = contentEditorSource();
   const i = s.indexOf('value instanceof Date');
   const j = s.indexOf("typeof value === 'object' ? JSON.stringify(value)");
   assert.ok(i > -1, 'fieldHtml no longer special-cases Date, so a YAML date will JSON.stringify again');

@@ -13,6 +13,7 @@ import { treeNodesFromJson, highlightParts, pickerRows, valueDisplay, moveActive
 import { GbtiCategoryPicker } from '../client-ui/src/elements/gbti-category-picker.mjs';
 import { TOKENS } from '../client-ui/src/tokens.mjs';
 import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const REAL_TREE = yaml.load(read('house/taxonomy.yml')).tree;
@@ -215,7 +216,7 @@ test('the share composer uses the picker, not a flat select, and no longer loads
 });
 
 test('the editor Category field renders the tree picker and writes the path back on change', () => {
-  const src = read('client-ui/src/elements/gbti-content-editor.mjs');
+  const src = contentEditorSource();
   assert.match(src, /if \(f\.key === 'categories'\) return wrap\(`\$\{label\}\$\{categoryFieldHtml\(arr\)\}`\);/);
   assert.match(src, /\[data-cat-picker\]'\)\?\.addEventListener\('change', \(e\) => \{ const h = this\.\$\('input\[data-key="categories"\]'\); if \(h\) h\.value = \(e\.detail\?\.path \|\| \[\]\)\.join\(', '\); this\._markDirty\(\); \}\);/);
   const fields = read('client/src/form-fields.mjs');

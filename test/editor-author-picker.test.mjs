@@ -17,8 +17,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
-const src = readFileSync(new URL('../client-ui/src/elements/gbti-content-editor.mjs', import.meta.url), 'utf8');
+const src = contentEditorSource();
 
 test('the starting selection comes from the item path, not from the frontmatter author', () => {
   assert.match(src, /authorSelectValue\(\{\s*itemPath:\s*this\.itemPath/, 'the picker no longer derives its owner from the path');

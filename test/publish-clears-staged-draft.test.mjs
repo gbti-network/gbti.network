@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 const CLIENT = 'src/lib/workbench-client.ts';
@@ -25,7 +26,6 @@ const CLIENT = 'src/lib/workbench-client.ts';
 // two of them are ORDER checks inside publish: read beside the client, the first author POST found could be
 // flipStatus's rather than publish's, and the check would pass while measuring the wrong function.
 const PUBLISH = 'src/lib/workbench-client-publish.ts';
-const EDITOR = 'client-ui/src/elements/gbti-content-editor.mjs';
 
 // ---------------------------------------------------------------- the record dies on publish
 
@@ -67,7 +67,7 @@ test('the npm and extension host clears the record too, or it resurrects what th
 // ---------------------------------------------------------------- the flag clears in-session
 
 test('a successful publish clears the staged flag on the editor', () => {
-  const s = src(EDITOR);
+  const s = contentEditorSource();
   const pub = s.slice(s.indexOf('async doPublish()'), s.indexOf('} catch (err) {', s.indexOf('async doPublish()')));
   assert.ok(pub.includes('this.staged = false'),
     'load() is the only other writer, so without this the banner returns on the next repaint of an editor that just published');
@@ -86,7 +86,7 @@ test('the workspace clears ITS copy of staged, which is re-fed into load on ever
 // rather than lazy: a whole-file grep for the retired phrase trips on the comment that explains why it was
 // retired (it did, on the first run), and the no-dash rule exempts prose in code comments.
 const bannerLine = () => {
-  const line = src(EDITOR).split('\n').find((l) => l.includes('class="pubinfo warn" id="pubbanner"'));
+  const line = contentEditorSource().split('\n').find((l) => l.includes('class="pubinfo warn" id="pubbanner"'));
   assert.ok(line, 'the staged banner markup moved; these assertions no longer measure anything');
   return line;
 };
@@ -109,19 +109,19 @@ test('the saved author note is carried from the store into the editor', () => {
   assert.match(w, /authorNote: typeof full\.authorNote === 'string'/, '_openDraft used to drop the field readDraft returns');
   const load = w.split('\n').find((l) => l.includes('ed.load(e.type, e.frontmatter'));
   assert.match(load, /authorNote: e\.authorNote/, 'the second hop dropped it too, so both have to carry it');
-  const e = src(EDITOR);
+  const e = contentEditorSource();
   assert.match(e, /load\(type, input, body, path, \{[^}]*authorNote = null/s, 'load must accept it');
   assert.match(e, /this\.preset = \{ input: input \|\| \{\}, body: body \|\| '', authorNote:/, 'and fold it into the preset it reads back');
 });
 
 test('an EMPTY stored note stays empty, because clearing it is deliberate', () => {
-  const s = src(EDITOR);
+  const s = contentEditorSource();
   assert.ok(s.includes("typeof this.preset?.authorNote === 'string' ? this.preset.authorNote : null"),
     'testing the TYPE is what distinguishes an explicit clear ("") from an absent note (fall back and read the live one)');
 });
 
 test('the note fallback reads the ITEM owner folder, not the caller folder', () => {
-  const e = src(EDITOR);
+  const e = contentEditorSource();
   const from = e.indexOf('const staged = typeof this.preset?.authorNote');
   const block = e.slice(from, e.indexOf('.catch(() => {});', from));
   assert.ok(from > 0 && block.length > 200, 'the prefill block moved; this assertion measures nothing');
@@ -149,13 +149,13 @@ test('an element can decline a client-broadcast re-render', () => {
 });
 
 test('the editor declines only while dirty, so the client-ready load race still works', () => {
-  const s = src(EDITOR);
+  const s = contentEditorSource();
   assert.match(s, /skipClientRender\(\) \{ return this\._dirty === true; \}/,
     'a wider guard would strand a one-shot connectedCallback load on "Loading..."');
 });
 
 test('the illustrated pickers write the preset, not only the DOM', () => {
-  const s = src(EDITOR);
+  const s = contentEditorSource();
   const gs = s.slice(s.indexOf("this.$$('[data-gscards]')"), s.indexOf("const be = this.$('#body')"));
   assert.match(gs, /this\.preset\.input\[gsKey\] = btn\.dataset\.gs/,
     'render() rebuilds every control from the preset, so a DOM-only choice was reverted by any repaint');

@@ -24,6 +24,7 @@ import { avatarLayers, attachAvatarFallback } from '../client-ui/src/member-avat
 import { composeRedirects, avatarRows } from '../scripts/compose-redirects.mjs';
 import { parseMembersIndex } from '../membership/hosted-author.mjs';
 import { freshIndexAdditions, syncEnrollments } from '../scripts/lib/enroll-members.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const ID = '900000001';
 const INDEX = `members:\n  "2002207": atwellpub\n  "${ID}": jane-doe\n`;
@@ -266,7 +267,8 @@ test('no avatar surface falls back to a letter disc or builds github.com/<folder
   // A news CHANNEL keeps its letter icon in the follow list (gbti-subscriptions): a channel is not a person.
   const channelIcon = /const ini = esc\(\(c\.name \|\| '\?'\)/;
   for (const f of surfaces) {
-    const src = read(f).replace(channelIcon, '');
+    // The content editor is split across several modules; read all of them, or a moved avatar line goes unchecked.
+    const src = (f === 'client-ui/src/elements/gbti-content-editor.mjs' ? contentEditorSource() : read(f)).replace(channelIcon, '');
     assert.match(src, /memberBlob|avatarLayers|blobSrc/, `${f}: draws the blobatar`);
     assert.doesNotMatch(src, /\b(ini|initial|authorInitial)\b *=/, `${f}: no letter-disc initial`);
     assert.doesNotMatch(src, /github\.com\/\$\{/, `${f}: no github.com/<name> avatar`);

@@ -15,6 +15,7 @@ import { visibleTabs, resolveTab, visibleTiles, prAttention } from '../client-ui
 import { setClient } from '../client-ui/src/index.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
 import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
+import { CONTENT_EDITOR_FILES } from './lib/content-editor-source.mjs'; // the editor element plus the modules it was split into
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -161,7 +162,7 @@ test('the extension has no Pull requests menu item at all', () => {
 // ---- nothing else points members at pull requests ----
 
 test('member-facing pages and notes no longer send people to pull requests', () => {
-  for (const f of ['src/pages/account.astro', 'src/pages/index.astro', 'client-ui/src/elements/gbti-discussion.mjs', 'client-ui/src/elements/gbti-content-editor.mjs']) {
+  for (const f of ['src/pages/account.astro', 'src/pages/index.astro', 'client-ui/src/elements/gbti-discussion.mjs', ...CONTENT_EDITOR_FILES]) {
     const src = read(f);
     assert.equal(/#tab=prs/.test(src), false, `${f} links the Pull requests tab`);
     assert.equal(/under Pull requests/.test(src), false, `${f} tells members to track pull requests`);

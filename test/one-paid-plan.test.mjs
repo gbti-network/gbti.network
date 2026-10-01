@@ -16,6 +16,7 @@ import { TIER, TIER_LABEL, tierLabel } from '../membership/tiers.mjs';
 import { tierCta } from '../src/lib/tier-cta.mjs';
 import { audienceControl, AUDIENCE_MODES } from '../client-ui/src/one-click-public-core.mjs';
 import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -132,7 +133,7 @@ test('the audience control: a trusted author chooses, a supporter does not, and 
   assert.equal(audienceControl({ paidTier: 'creator' }).publicStub, undefined, 'the switch leaves the flag to the author\'s own toggle');
   // The editor must actually SUBMIT it: the locked branch renders the flag as a hidden, checked [data-key] input,
   // which is what gather() reads. A source pin, because the element cannot be rendered under node --test.
-  assert.match(read('client-ui/src/elements/gbti-content-editor.mjs'),
+  assert.match(contentEditorSource(),
     /aud\.publicStub === true \? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden \/>'/);
   // THE CASE THAT LOSES A PAGE IF IT IS WRONG. The editor submits the whole frontmatter on every save, so an
   // already-public item must keep submitting public or its author's typo fix takes the live page down.

@@ -5,9 +5,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const editor = read('client-ui/src/elements/gbti-content-editor.mjs');
+const editor = contentEditorSource();
 
 test('STAT_DEFS is exactly the three real tiles, in order', () => {
   const block = editor.slice(editor.indexOf('const STAT_DEFS = ['), editor.indexOf('];', editor.indexOf('const STAT_DEFS = [')));

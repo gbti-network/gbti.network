@@ -18,6 +18,7 @@ import {
   publishChanges, frontmatterChanges, blockChanges, changeLabel, fieldLabel, formatValue, snippet,
   sameValue, IGNORED_FIELDS, DIFF_CELL_CAP,
 } from '../client-ui/src/publish-diff.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 
@@ -181,7 +182,7 @@ test('the author note is compared only when its live value is known', () => {
 // ---------------------------------------------------------------- the wiring
 
 test('the banner carries the control, and only inside the staged branch', () => {
-  const e = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const e = contentEditorSource();
   const line = e.split('\n').find((l) => l.includes('id="pubbanner"') && l.includes('warn'));
   assert.ok(line.includes('id="whatchanged"'), 'the control belongs to the staged banner, not to the info one');
   assert.ok(line.includes('id="changedlist"'));
@@ -189,7 +190,7 @@ test('the banner carries the control, and only inside the staged branch', () => 
 });
 
 test('the live file is read on click, never on render', () => {
-  const e = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const e = contentEditorSource();
   const fn = e.slice(e.indexOf('async _toggleChanges()'), e.indexOf('_changesHtml(res) {'));
   assert.ok(fn.length > 400, 'the method moved; this assertion measures nothing');
   assert.match(fn, /await this\.client\?\.getContentItem\?\.\(\{ path: this\.itemPath \}\)/,
@@ -201,7 +202,7 @@ test('the live file is read on click, never on render', () => {
 });
 
 test('the list asks the body editor to highlight, rather than reaching into its shadow root', () => {
-  const e = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const e = contentEditorSource();
   assert.match(e, /this\.\$\('#body'\)\?\.highlightBlock\?\.\(Number\(el\.dataset\.jump\)\)/);
   const d = src('client-ui/src/elements/gbti-doc-editor.mjs');
   assert.match(d, /\n  highlightBlock\(i\) \{/, 'the method must be PUBLIC on the body editor (no underscore)');
@@ -211,7 +212,7 @@ test('the list asks the body editor to highlight, rather than reaching into its 
 });
 
 test('a removed block offers no jump, because there is nothing to jump to', () => {
-  const e = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const e = contentEditorSource();
   const fn = e.slice(e.indexOf('_changesHtml(res)'), e.indexOf('async doPublish()'));
   assert.match(fn, /it\.op !== 'removed'/);
 });

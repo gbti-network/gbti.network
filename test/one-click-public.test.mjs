@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { oneClickPublicView, makePublicRequest, makePublicPrompt, ONE_CLICK_STATES } from '../client-ui/src/one-click-public-core.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const view = (o) => oneClickPublicView(o);
 const PATH = 'members/ada/posts/hello/index.md';
@@ -95,8 +96,7 @@ test('every returned state is a declared one', () => {
 // unreachable from node --test, which is exactly why the decision core above was extracted in the first place.
 // They pin the two things that would silently undo the design.
 test('the control renders ONLY inside the superadmin-gated Author section', async () => {
-  const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-content-editor.mjs', import.meta.url), 'utf8');
+  const src = contentEditorSource();
 
   // `authorMembers` is the superadmin signal: client.authorTargets() only ever resolves for one. The control
   // sits inside that branch so there is no SECOND, weaker role test that could drift away from this one.
@@ -116,8 +116,7 @@ test('sow-323: one-click public APPROVES, and never republishes the open documen
   // TEASER, and the real body is encrypted where only the Worker can read it. Publishing what is on screen
   // therefore published the teaser as the whole article, left the ciphertext orphaned, kept `publicStub`
   // beside `public` (which the content check refuses) and restamped the dates. Approval is a Worker job now.
-  const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../client-ui/src/elements/gbti-content-editor.mjs', import.meta.url), 'utf8');
+  const src = contentEditorSource();
   const fn = /async _makePublic\(\) \{([\s\S]*?)\n  \}/.exec(src);
   assert.ok(fn, '_makePublic was not found: this check is broken, not the subject');
 

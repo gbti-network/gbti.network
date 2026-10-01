@@ -15,6 +15,7 @@ import { draftRecordForEditor } from '../src/lib/workbench-client-core.mjs';
 import { madeForRows, toggleTarget, mainHeading, mainHeadingHtml, kindSectionHtml, skillSectionsHtml, skillFileFrom, siteFor, normalizeKind } from '../client-ui/src/editor-skill.mjs';
 import { FIELDS } from '../client/src/form-fields.mjs';
 import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const src = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const FILE = '---\nname: farley\ndescription: remembers people\n---\n# Farley\n';
@@ -239,7 +240,7 @@ test('the choice, the headings and the skill file field', () => {
 test('the editor and workspace carry kind and the skill file end to end', () => {
   assert.equal(FIELDS.prompt[0].key, 'kind');
   assert.equal(FIELDS.prompt.find((f) => f.key === 'targets').label, 'Works with');
-  const ed = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const ed = contentEditorSource();
   assert.match(ed, /prompt: new Set\(\['kind'\]\)/, 'kind renders as the cards, not in the hidden block');
   assert.match(ed, /const skillFile = this\.type === 'prompt' \? skillFileFrom\(this\.root\) : undefined;/);
   assert.equal((ed.match(/const \{ type, input, body, skillFile \} = this\.gather\(\);/g) || []).length, 2, 'publish and draft both read it');

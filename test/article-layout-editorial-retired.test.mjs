@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ARTICLE_LAYOUTS, ARTICLE_SHELL, articleShell } from '../src/lib/article-page.mjs';
 import { schemaFor } from '../client/src/schemas.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 
@@ -66,7 +67,7 @@ test('neither authoring form offers Editorial', () => {
   assert.ok(line.includes("options: ['journal', 'card']"));
   assert.ok(!line.includes('Editorial:'), 'the hint still describes it');
 
-  const ed = src('client-ui/src/elements/gbti-content-editor.mjs');
+  const ed = contentEditorSource();
   const picker = ed.slice(ed.indexOf("f.key === 'layout'"), ed.indexOf("f.key === 'sidebarPosition'"));
   assert.ok(picker.length > 200, 'the picker moved; this assertion measures nothing');
   assert.ok(!picker.includes("key: 'editorial'"), 'the Editorial card is still offered in the WorkBench');

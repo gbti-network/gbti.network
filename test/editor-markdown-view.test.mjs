@@ -2,10 +2,9 @@
 // wiring (the panel layer, which the helper tests do not reach); the round trip is driven in the harness.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
-const ROOT = new URL('..', import.meta.url).pathname;
-const src = readFileSync(ROOT + 'client-ui/src/elements/gbti-content-editor.mjs', 'utf8');
+const src = contentEditorSource();
 const method = (name) => { const i = src.indexOf(`\n  ${name}(`); const j = src.indexOf('\n  }\n', i); return src.slice(i, j); };
 
 test('the textarea is editable and the bar says what it holds', () => {

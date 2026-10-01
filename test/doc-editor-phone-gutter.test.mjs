@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -13,7 +14,7 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
 // the 900-line cap. These assertions are about the COMPONENT, which is now two files, so they read both.
 const doc = strip(readFileSync(ROOT + 'client-ui/src/elements/gbti-doc-editor.mjs', 'utf8')
   + readFileSync(ROOT + 'client-ui/src/doc-editor-css.mjs', 'utf8'));
-const editor = strip(readFileSync(ROOT + 'client-ui/src/elements/gbti-content-editor.mjs', 'utf8'));
+const editor = strip(contentEditorSource());
 
 test('the doc editor is a size container and keeps its measured 142px gutter for wide layouts', () => {
   assert.match(doc, /:host \{[^}]*--blk-gutter:142px;[^}]*container-type:inline-size/, 'the gutter stays for hover layouts; the container makes the phone rule possible');

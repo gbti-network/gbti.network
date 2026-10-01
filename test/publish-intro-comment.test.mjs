@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { publish, saveDraft, authorContent, buildIntroCommentFile, describeContentPublish, AUTHOR_NOTE_TYPES, OperationError } from '../client/src/operations.mjs';
 import { buildContentFile } from '../client/src/content-ops.mjs';
 import { AUTHOR_NOTE_TYPES as WEB_AUTHOR_NOTE_TYPES } from '../src/lib/workbench-client-core.mjs';
+import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
 
 const repoFile = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 
@@ -21,7 +22,7 @@ const repoFile = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, imp
 // bug this work fixed. Reading the editor's SOURCE is the only way to hold the third copy to the other two.
 test('DRIFT: the client core, the website core and the editor agree on which types carry an author note', () => {
   assert.deepEqual([...AUTHOR_NOTE_TYPES].sort(), [...WEB_AUTHOR_NOTE_TYPES].sort(), 'the two cores disagree');
-  const src = repoFile('client-ui/src/elements/gbti-content-editor.mjs');
+  const src = contentEditorSource();
   const m = /const AUTHOR_NOTE_TYPES = new Set\(\[([^\]]*)\]\)/.exec(src);
   assert.ok(m, 'the editor no longer declares AUTHOR_NOTE_TYPES as a literal Set; update this test with it');
   const editorTypes = m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).sort();
