@@ -240,7 +240,7 @@ export function preparedCardHtml(p, campaigns = []) {
       <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc(s.githubLogin)}"${locked ? ' readonly' : ''} />
         <p class="pnote">${locked ? 'The free year was already taken through this link, so the account it is tied to can no longer change.' : 'Ties the invitation to that one account. Leave it empty and whoever opens the link first can claim it.'}</p></div>
       <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc(s.message)}</textarea>
-        <p class="pnote">Shown to them as plain text above the listing. Their author note is theirs to write when they claim it.</p></div>
+        <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to write when they claim it.</p></div>
       <div class="pfld"><label for="prep-camp">Campaign</label>${campaignField}</div>
       ${link}
     </div>

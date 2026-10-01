@@ -273,7 +273,7 @@ export const TOOLS = [
         input: { type: 'object', description: 'The project frontmatter, with image fields as ./images/<name> references.' },
         body: { type: 'string', description: 'The project description in markdown: facts about the work.' },
         recipientName: { type: 'string', description: 'The name the invitation greets, at most 60 characters.' },
-        message: { type: 'string', description: 'Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page.' },
+        message: { type: 'string', description: 'Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page, after a greeting the page adds on its own ("Hi <recipientName>,"), so do not open with a greeting.' },
         githubLogin: { type: 'string', description: 'Optional. The GitHub account of the recipient. Only that account can claim the listing or its free year.' },
         campaign: { type: 'string', description: 'The coupon campaign whose free year the invitation grants. It must be active.' },
         images: {
