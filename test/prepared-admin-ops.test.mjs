@@ -555,7 +555,14 @@ test('race: a claim taken while a revoke writes the invitation keeps its lock; a
 // ---- the Worker's route lines --------------------------------------------------------------------------------
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
-const block = (src, route, len = 1300) => src.slice(src.indexOf(route), src.indexOf(route) + len);
+// A route's own block: from its pathname test to its closing brace at the route-block indent (two spaces). This was a
+// fixed-length window, which reads past the end of the block: after the 900-line split put a credentialed neighbour
+// right after the prepared route, the neighbour's `credentials: true` satisfied this route's assertion (2026-09-30).
+const block = (src, route) => {
+  const at = src.indexOf(route);
+  const end = at < 0 ? -1 : src.indexOf('\n  }', at);
+  return at < 0 || end < 0 ? '' : src.slice(at, end + 4);
+};
 
 test('the admin route: both verbs, the cookie session with credentialed CORS, and never cached', () => {
   const idx = workerSource();
@@ -573,7 +580,7 @@ test('the admin route: both verbs, the cookie session with credentialed CORS, an
 
 test('the public read routes: wildcard CORS with no credentials, no-store and Vary on the bearer', () => {
   const idx = workerSource();
-  const b = block(idx, "pathname === '/invite/listing'", 700);
+  const b = block(idx, "pathname === '/invite/listing'");
   assert.match(b, /pathname === '\/invite\/listing-image'/);
   assert.match(b, /inviteListingRead\(request, env\)/);
   assert.match(b, /inviteListingImage\(request, env\)/);

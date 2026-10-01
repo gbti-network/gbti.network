@@ -12,11 +12,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  shimmedNames, classLists, collisionsIn, baseName, checkTree, GROUPS,
+  shimmedNames, classLists, collisionsIn, baseName, checkTree, GROUPS, designSystemFiles,
 } from '../scripts/check-utility-shim-collisions.mjs';
+import os from 'node:os';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const CSS = path.join(ROOT, 'src/styles/gbti-v3.css');
+// The whole design system, not its first file: it was split into ordered parts at the 900-line limit (2026-09-30).
+const CSS = designSystemFiles(ROOT);
 
 const SHIM = '.grid { display: grid; }\n.flex { display: flex; }\n'
   + '.items-center{align-items:center}.items-start{align-items:flex-start}\n'
@@ -125,4 +127,31 @@ test('the seven elements it was built for are fixed and stay fixed', () => {
       }
     }
   }
+});
+
+test('a shimmed rule in a LATER part of the design system is still seen, and the error names that part', () => {
+  // The guard read only gbti-v3.css until 2026-09-30, after the split had moved four fifths of the design system
+  // into later parts: a bare `.justify-center` added to any of them would have shipped its collisions unseen.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shim-parts-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'gbti-v3.css'), '.card { padding: 1rem; }\n');
+    fs.writeFileSync(path.join(dir, 'gbti-v3-feed.css'), '.justify-center{justify-content:center}\n');
+    const src = path.join(dir, 'src');
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, 'Page.astro'), '<div class="flex justify-center sm:justify-start">x</div>\n');
+    const both = checkTree({ root: dir, cssFile: [path.join(dir, 'gbti-v3.css'), path.join(dir, 'gbti-v3-feed.css')], srcDir: src });
+    assert.equal(both.errors.length, 1, both.errors.join('\n'));
+    assert.match(both.errors[0], /defined unlayered in gbti-v3-feed\.css/);
+    // The control: the first part alone sees nothing, which is exactly what the old guard did.
+    const first = checkTree({ root: dir, cssFile: path.join(dir, 'gbti-v3.css'), srcDir: src });
+    assert.equal(first.errors.length, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the design system is read from global.css in load order, all of its parts', () => {
+  const files = designSystemFiles(ROOT).map((f) => path.basename(f));
+  assert.equal(files[0], 'gbti-v3.css');
+  assert.ok(files.length >= 5, `only ${files.length} parts found: ${files.join(', ')}`);
 });

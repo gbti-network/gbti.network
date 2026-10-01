@@ -44,8 +44,10 @@ export function overCap(files, read) {
   return out;
 }
 
+// NUL-separated: plain `git ls-files` C-quotes a path holding a non-ASCII byte, a quote or a backslash
+// ("src/caf\303\251.mjs" with the quotes), which no extension test matches, so that file would skip the cap.
 function trackedFiles() {
-  return execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  return execSync('git ls-files -z', { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean);
 }
 
 test(`no hand-written source file is over ${CAP} lines`, () => {

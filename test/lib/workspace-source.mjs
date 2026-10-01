@@ -2,7 +2,7 @@
 // limit (owner, 2026-09-30), workspace-css.mjs (the stylesheet) and workspace-data.mjs (the loaders, the caches, the
 // scope helpers and the pull request status poll). A test that read only the element would quietly stop seeing every
 // line that moved: a check that something is ABSENT would pass on nothing. Read the workspace through this instead
-// of by path. The size ratchet in test/profile-editing.test.mjs still measures the element file alone.
+// of by path. The size ratchet in test/profile-editing.test.mjs gives each of the three files its own ceiling.
 //
 // Not a test file (no .test. in the name), so the test runner never runs it on its own.
 import fs from 'node:fs';

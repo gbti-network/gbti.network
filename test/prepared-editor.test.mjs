@@ -440,7 +440,7 @@ test('the workspace routes both prepare links and keeps the prepared state acros
   assert.ok(ws.split('\n').filter((l) => l.includes('sow-427')).length <= 8, 'hook lines only');
   // The element is held to its size by a ratchet (test/profile-editing.test.mjs). These hooks are paid for by moving
   // the #new= boot into workspace-core (editingFromHash), so the element did not grow at all. Since the split at the
-  // 900-line limit (2026-09-30) the ceiling is the element file alone, the figure that ratchet measures.
+  // 900-line limit (2026-09-30) each of its three files has its own ceiling in that ratchet; this is the element's.
   const el = read('client-ui/src/elements/gbti-workspace.mjs');
   const newlines = (el.match(/\n/g) || []).length; // the figure wc -l reports, and the one the ratchet measures
   assert.ok(newlines <= 718, `the WorkBench element grew: ${newlines} lines`);

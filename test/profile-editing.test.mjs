@@ -251,13 +251,18 @@ test('the element wiring: the tab mounts one kept editor, the strip opens the ta
   // workspace-core). Now it means what it says: a ratchet that refuses growth and welcomes a reduction.
   // Lower the ceiling deliberately when the file shrinks; never raise it without splitting the file.
   // The file was split at the 900-line limit on 2026-09-30 (it stood at 1114 lines): the stylesheet moved to
-  // workspace-css.mjs and the loaders to workspace-data.mjs. The ratchet measures the element file ALONE, so the
-  // modules cannot hide its growth; the pins above read all three through workspaceSource().
-  const el = read('client-ui/src/elements/gbti-workspace.mjs');
-  assert.ok(el.split('\n').length - 1 <= 718, `the WorkBench element grew past its size: ${el.split('\n').length - 1} lines`);
+  // workspace-css.mjs and the loaders to workspace-data.mjs. Each of the three files keeps its OWN ceiling, so growth
+  // cannot hide in a module or move between files unnoticed; before the split this one ratchet covered all 1114 lines,
+  // and measuring the element alone would have left 412 of them unguarded. A new module needs a ceiling here.
+  const CEILING = {
+    'client-ui/src/elements/gbti-workspace.mjs': 718,
+    'client-ui/src/elements/workspace-css.mjs': 104,
+    'client-ui/src/elements/workspace-data.mjs': 308,
+  };
+  assert.deepEqual(Object.keys(CEILING), WORKSPACE_FILES, 'every workspace file has a ceiling, and no other file does');
   for (const f of WORKSPACE_FILES) {
     const lines = read(f).split('\n').length - 1;
-    assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
+    assert.ok(lines <= CEILING[f], `${f} grew past its size: ${lines} lines (ceiling ${CEILING[f]})`);
   }
 });
 

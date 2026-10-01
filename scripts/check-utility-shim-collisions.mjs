@@ -19,8 +19,10 @@
 // change to fix a one-page bug. The fix was local (`max-sm:` variants, which have no unlayered twin) and this
 // guard exists because the cause is still there for the next element that meets it.
 //
-// SELF-UPDATING. The shimmed names are read from gbti-v3.css itself, not copied here. Remove an entry from
-// the shim and this guard stops flagging that property, with no edit.
+// SELF-UPDATING. The shimmed names are read from the design system itself, not copied here. Remove an entry from
+// the shim and this guard stops flagging that property, with no edit. The design system is gbti-v3.css AND the
+// parts global.css imports after it (split at the 900-line limit, 2026-09-30): reading only the first part let a bare
+// rule added to any later part ship unseen, so the parts are read from global.css's own @import lines.
 //
 //   node scripts/check-utility-shim-collisions.mjs
 
@@ -107,22 +109,36 @@ function walk(dir, exts) {
   return out;
 }
 
-/** Scan a source tree. Returns { errors, scanned } where scanned is the number of class lists read. */
+/** The design-system stylesheets, in load order: gbti-v3.css and every `@import "./gbti-v3*.css"` global.css makes. */
+export function designSystemFiles(root) {
+  const dir = path.join(root, 'src/styles');
+  const global = fs.readFileSync(path.join(dir, 'global.css'), 'utf8');
+  const files = [...global.matchAll(/^@import "\.\/(gbti-v3[\w-]*\.css)";/gm)].map((m) => path.join(dir, m[1]));
+  if (path.basename(files[0] || '') !== 'gbti-v3.css') throw new Error(`global.css no longer imports gbti-v3.css first (found ${files.map((f) => path.basename(f)).join(', ') || 'nothing'}), so this guard would read no shim`);
+  return files;
+}
+
+/** Scan a source tree. `cssFile` is one stylesheet or a list (the design system's parts). Returns { errors, scanned }
+ *  where scanned is the number of class lists read. */
 export function checkTree({ root, cssFile, srcDir } = {}) {
   const errors = [];
-  const css = fs.readFileSync(cssFile, 'utf8');
-  const shimmed = shimmedNames(css);
+  const cssFiles = [].concat(cssFile);
+  // Which part defines each shimmed name, so an error sends the reader to the right file.
+  const where = new Map();
+  for (const f of cssFiles) for (const n of shimmedNames(fs.readFileSync(f, 'utf8'))) if (!where.has(n)) where.set(n, path.basename(f));
+  const shimmed = new Set(where.keys());
+  const sheets = cssFiles.map((f) => path.basename(f)).join(', ');
   if (shimmed.size === 0) {
     // The shim is gone, so the whole class of bug is gone with it. Say so rather than passing silently, since
     // a zero here and a zero from a broken scan look identical.
-    return { errors, scanned: 0, shimmed, note: `${path.basename(cssFile)} defines no bare Tailwind-named utilities any more, so this guard has nothing to protect against. If that was deliberate, delete this guard.` };
+    return { errors, scanned: 0, shimmed, note: `${sheets} define${cssFiles.length > 1 ? '' : 's'} no bare Tailwind-named utilities any more, so this guard has nothing to protect against. If that was deliberate, delete this guard.` };
   }
   let scanned = 0;
   for (const f of walk(srcDir, ['.astro', '.html', '.tsx', '.jsx'])) {
     for (const { line, value } of classLists(fs.readFileSync(f, 'utf8'))) {
       scanned += 1;
       for (const c of collisionsIn(value, shimmed)) {
-        errors.push(`${path.relative(root, f)}:${line}: "${c.beaten}" can never apply: "${c.shimmed}" is defined unlayered in ${path.basename(cssFile)} and beats every layered utility for ${c.property}. Use the inverse variant (max-sm:) instead of a base plus an override.`);
+        errors.push(`${path.relative(root, f)}:${line}: "${c.beaten}" can never apply: "${c.shimmed}" is defined unlayered in ${where.get(c.shimmed)} and beats every layered utility for ${c.property}. Use the inverse variant (max-sm:) instead of a base plus an override.`);
       }
     }
   }
@@ -135,7 +151,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
   const { errors, scanned, shimmed, note } = checkTree({
     root: ROOT,
-    cssFile: path.join(ROOT, 'src/styles/gbti-v3.css'),
+    cssFile: designSystemFiles(ROOT),
     srcDir: path.join(ROOT, 'src'),
   });
   if (note) { console.log('· ' + note); process.exit(0); }
