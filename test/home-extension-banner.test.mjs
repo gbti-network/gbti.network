@@ -44,3 +44,40 @@ test('sow-400: still behind the one extension CTA switch, gated inside the compo
   assert.ok(CTA_MARKERS.some(([, m]) => m === 'class="xbn"'), 'the build guard marker for this banner');
   assert.match(bannerMarkup, /class="xbn"/, 'the markup still carries the marker the build guard looks for');
 });
+
+// sow-433 (owner, 2026-09-30, design A2 on the canvas "Homepage Extension Banner"): much bigger, an angled screenshot of
+// the extension's network feed, and a Chrome blue "Add to Chrome" with the colour Chrome logo. The dark screenshot shows
+// in both themes for now. Driven in a browser in light, dark, a laptop, a tablet and a phone before shipping.
+const css = banner.split('<style>')[1] || '';
+
+test('sow-433: the button is Chrome blue and carries the colour Chrome logo', () => {
+  assert.match(css, /\.xbn-cta \{[^}]*background: #1a73e8;[^}]*color: #fff;/);
+  assert.match(css, /\.xbn:hover \.xbn-cta \{ background: #1765cc; \}/);
+  for (const colour of ['#EA4335', '#34A853', '#FBBC04', '#1A73E8']) assert.ok(bannerMarkup.includes(`"${colour}"`), `the logo has ${colour}`);
+  assert.match(bannerMarkup, /<span class="xbn-logo" aria-hidden="true">/);
+});
+
+test('sow-433: the screenshot is the shipped asset, decorative, inside the angled frame', () => {
+  assert.match(banner, /import newtabShot from '\.\.\/\.\.\/assets\/extension\/newtab-network\.webp';/);
+  assert.match(bannerMarkup, /<span class="xbn-shot" aria-hidden="true">[\s\S]*?<Image class="xbn-img" src=\{newtabShot\} alt="" widths=\{\[480, 720, 1280\]\}[^>]*loading="lazy" \/>/);
+  assert.match(css, /\.xbn-shot \{[^}]*transform: perspective\(1800px\) rotateY\(-15deg\) rotateX\(6deg\) rotate\(-1deg\);/);
+  const asset = new URL('../src/assets/extension/newtab-network.webp', import.meta.url);
+  const size = readFileSync(asset).length;
+  assert.ok(size > 10_000 && size < 250_000, `the screenshot is a real, optimized image (${size} bytes)`);
+});
+
+test('sow-433: the copy the owner kept', () => {
+  assert.match(bannerMarkup, /<span class="xbn-title">Launch the Chrome Extension<\/span>/);
+  assert.match(bannerMarkup, /<span class="xbn-eyebrow">Thanks for paying attention<\/span>/);
+  assert.match(bannerMarkup, /<span class="xbn-lead">Every new tab opens on the network: what members are making, curated developer news, and a reader for all of it\.<\/span>/);
+  assert.match(bannerMarkup, /<span class="xbn-note">Free · one click<\/span>/);
+});
+
+test('sow-433: dark mode keeps the near-black panel, and a phone stacks the text above the screenshot', () => {
+  assert.match(css, /:global\(\[data-theme="dark"\]\) \.xbn \{\s*background: #141218;/);
+  assert.match(css, /:global\(\[data-theme="dark"\]\) \.xbn-title \{ color: #f3f2f0; \}/);
+  const phone = /@media \(max-width: 640px\) \{([\s\S]*?)\n  \}/.exec(css)?.[1] || '';
+  assert.match(phone, /\.xbn \{ height: auto;/);
+  assert.match(phone, /\.xbn-text \{ position: static;/);
+  assert.match(phone, /\.xbn-shot \{\s*position: relative;/);
+});

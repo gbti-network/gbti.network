@@ -10,12 +10,21 @@
 // installers). So it no longer carries [data-home-joincard], and it hides itself when the extension's content
 // script stamps <html data-gbti-extension> (extension/src/content.mjs). That stamp lands at document_idle, and
 // the banner sits below the whole feed, so it is gone before a reader can scroll to it.
+//
+// sow-433 (owner, 2026-09-30, design A2 on the canvas "Homepage Extension Banner"): much bigger, with an angled
+// screenshot of the extension's network feed on the right and a Chrome blue "Add to Chrome" carrying the colour
+// Chrome logo. The dark screenshot shows in both themes for now (owner). The wrapper, the link and the switch are
+// unchanged, because the install rule below, the sow-400 tests and the build guard all read them.
+import { Image } from 'astro:assets';
 import { EXTENSION } from '../../lib/extension';
+import newtabShot from '../../assets/extension/newtab-network.webp'; // the 0.5.3 store screenshot, taken as gbtilabs
 // sow-271: this banner is pure extension ADVERTISING, so the superadmin site setting governs it. The gate lives
 // HERE rather than at the mount in index.astro so any future mount point inherits it automatically -- the failure
 // this protects against is the next promo placement being added without anyone remembering the switch exists.
 import { extensionCtaEnabled } from '../../lib/site-settings';
 const show = extensionCtaEnabled();
+// The Chrome logo, drawn once: one segment, turned for the other two, then the white ring and the blue centre.
+const SEG = 'M43.6 14A22 22 0 0 0 5.54 12.03L15.34 29A10 10 0 0 1 24 14Z';
 ---
 {show && (
 <div class="wrap xbn-wrap">
@@ -26,45 +35,83 @@ const show = extensionCtaEnabled();
   rel="noopener"
   aria-label="Launch the Chrome Extension: add GBTI Network to Chrome"
 >
-  <span class="xbn-chip" aria-hidden="true">
-    <span class="xbn-prompt">&gt;_</span><span class="xbn-word">gbti</span>
-  </span>
-  <span class="xbn-copy">
+  <span class="xbn-glow" aria-hidden="true"></span>
+  <span class="xbn-text">
+    <span class="xbn-top">
+      <span class="xbn-chip" aria-hidden="true"><span class="xbn-prompt">&gt;_</span><span class="xbn-word">gbti</span></span>
+      <span class="xbn-eyebrow">Thanks for paying attention</span>
+    </span>
     <span class="xbn-title">Launch the Chrome Extension</span>
-    <span class="xbn-eyebrow">Thanks for paying attention</span>
+    <span class="xbn-lead">Every new tab opens on the network: what members are making, curated developer news, and a reader for all of it.</span>
+    <span class="xbn-actions">
+      <span class="xbn-cta">
+        <span class="xbn-logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="28" height="28">
+            <path fill="#EA4335" d={SEG}/>
+            <path fill="#34A853" transform="rotate(-120 24 24)" d={SEG}/>
+            <path fill="#FBBC04" transform="rotate(120 24 24)" d={SEG}/>
+            <circle cx="24" cy="24" r="10" fill="#fff"/>
+            <circle cx="24" cy="24" r="8" fill="#1A73E8"/>
+          </svg>
+        </span>
+        Add to Chrome
+      </span>
+      <span class="xbn-note">Free · one click</span>
+    </span>
   </span>
-  <span class="xbn-cta">
-    <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
-      <circle cx="24" cy="24" r="23" fill="none" stroke="#fff" stroke-width="3"/>
-      <circle cx="24" cy="24" r="9.4" fill="none" stroke="#fff" stroke-width="3"/>
-      <path d="M43.9 12.6H24M13.9 18.7L4 35.9M34.1 29.4L24.2 46.6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    </svg>
-    Add to Chrome
+  <span class="xbn-shot" aria-hidden="true">
+    <span class="xbn-bar"><span class="xbn-dot"></span><span class="xbn-dot"></span><span class="xbn-dot"></span><span class="xbn-url"></span></span>
+    <Image class="xbn-img" src={newtabShot} alt="" widths={[480, 720, 1280]} sizes="(max-width: 640px) 420px, 700px" loading="lazy" />
   </span>
 </a>
 </div>
 )}
 
 <style>
-  /* Light-mode default: a clean white promo card that sits with the other rail/feed cards. */
+  /* Light-mode default: a white promo card. Everything inside is positioned against it; the screenshot runs off its
+     right and bottom edges, which the card's overflow clips. */
   .xbn {
-    display: flex;
-    align-items: center;
-    gap: 24px;
+    position: relative;
+    display: block;
+    height: 460px;
     margin: 18px 0;
-    padding: 20px 26px;
+    overflow: hidden;
     background: var(--paper);
     border: 1.5px solid var(--line);
-    border-radius: 12px;
-    box-shadow: var(--sh-sm);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(37, 35, 43, 0.06), 0 12px 32px rgba(37, 35, 43, 0.06);
+    color: var(--fg);
     text-decoration: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .xbn:hover { border-color: rgba(31, 158, 95, 0.55); box-shadow: var(--sh); }
+  .xbn:hover { border-color: rgba(26, 115, 232, 0.45); box-shadow: var(--sh); }
   .xbn[hidden] { display: none !important; } /* explicit display beats the UA [hidden] rule */
   /* sow-400: a reader who already has the extension never sees the promotion for it. :global() keeps Astro from
      demanding its scope id on <html>, as in the dark-mode rules below. */
   :global(html[data-gbti-extension]) .xbn-wrap { display: none; }
+
+  .xbn-glow {
+    position: absolute;
+    right: -160px;
+    top: -220px;
+    width: 820px;
+    height: 820px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(31, 158, 95, 0.14), rgba(31, 158, 95, 0));
+    pointer-events: none;
+  }
+
+  .xbn-text {
+    position: absolute;
+    z-index: 1;
+    left: 56px;
+    top: 58px;
+    width: 440px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .xbn-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
   /* Skewed terminal chip: >_ gbti. Light-mode default = a soft tinted chip; the dark chip is restored below. */
   .xbn-chip {
@@ -72,65 +119,128 @@ const show = extensionCtaEnabled();
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 18px;
+    padding: 9px 16px;
     background: var(--tint-warm);
     border: 1px solid var(--line-2);
     border-radius: 6px;
     transform: skewX(-11deg);
   }
-  .xbn-prompt { font: 600 19px var(--f-mono); color: var(--green); transform: skewX(11deg); }
-  .xbn-word { font: 500 15px var(--f-mono); color: var(--fg-mute); transform: skewX(11deg); }
-
-  .xbn-copy { flex: 1; min-width: 0; }
-  .xbn-title {
-    display: block;
-    font: 700 26px/1.1 var(--f-display);
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
+  .xbn-prompt { font: 600 17px var(--f-mono); color: var(--green); transform: skewX(11deg); }
+  .xbn-word { font: 500 14px var(--f-mono); color: var(--fg-mute); transform: skewX(11deg); }
   .xbn-eyebrow {
-    display: block;
-    margin-top: 6px;
-    font: 500 10px var(--f-mono);
+    font: 500 11.5px var(--f-mono);
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--fg-mute);
   }
+  .xbn-title { display: block; font: 800 48px/1.04 var(--f-display); letter-spacing: -0.01em; color: var(--ink); }
+  .xbn-lead { display: block; font: 400 17px/1.6 var(--f-sans); color: var(--fg-soft); }
 
+  .xbn-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+  /* sow-433: Chrome blue with the colour logo (the owner's pick of four), so it reads as installing from the Chrome
+     Web Store and does not compete with the green join button above it. */
   .xbn-cta {
     flex: none;
     display: inline-flex;
     align-items: center;
-    gap: 9px;
-    padding: 13px 24px;
-    background: #1f9e5f;
-    border-radius: 8px;
+    gap: 10px;
+    height: 54px;
+    box-sizing: border-box;
+    padding: 0 26px 0 12px;
+    border-radius: 10px;
+    background: #1a73e8;
     color: #fff;
-    font: 700 14px var(--f-sans);
+    font: 700 17px var(--f-sans);
     white-space: nowrap;
+    box-shadow: 0 8px 20px rgba(26, 115, 232, 0.3);
     transition: background 0.15s ease;
   }
-  .xbn:hover .xbn-cta { background: #23b06b; }
-  .xbn-cta svg { display: block; flex: none; }
+  .xbn:hover .xbn-cta { background: #1765cc; }
+  .xbn-logo {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  .xbn-logo svg { display: block; }
+  .xbn-note { font: 400 12px var(--f-mono); color: var(--fg-mute); }
 
-  /* Dark mode: restore the near-black promo panel from the design. The theme selector is wrapped in
-     :global() so Astro scopes ONLY the trailing .xbn; without it Astro appends the component cid to the
-     [data-theme] compound too, which then demands the cid on <html> and the rule never matches. */
+  /* The screenshot in a plain browser frame, turned toward the reader. */
+  .xbn-shot {
+    position: absolute;
+    left: 556px;
+    top: 66px;
+    width: 700px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #1b1a20;
+    box-shadow: 0 40px 80px rgba(20, 18, 24, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transform: perspective(1800px) rotateY(-15deg) rotateX(6deg) rotate(-1deg);
+    transform-origin: 0 50%;
+    pointer-events: none;
+  }
+  .xbn-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 12px;
+    background: #26242c;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .xbn-dot { width: 10px; height: 10px; border-radius: 50%; background: #4a4752; }
+  .xbn-url { width: 180px; height: 18px; margin-left: 14px; border-radius: 6px; background: #1b1a20; }
+  .xbn-shot :global(.xbn-img) { display: block; width: 100%; height: auto; }
+
+  /* Dark mode: the near-black promo panel. The theme selector is wrapped in :global() so Astro scopes ONLY the
+     trailing class; without it Astro appends the component cid to the [data-theme] compound too, which then demands
+     the cid on <html> and the rule never matches. */
   :global([data-theme="dark"]) .xbn {
     background: #141218;
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow: none;
   }
-  :global([data-theme="dark"]) .xbn:hover { border-color: rgba(31, 158, 95, 0.55); box-shadow: none; }
+  :global([data-theme="dark"]) .xbn:hover { border-color: rgba(26, 115, 232, 0.55); box-shadow: none; }
+  :global([data-theme="dark"]) .xbn-glow { background: radial-gradient(closest-side, rgba(31, 158, 95, 0.22), rgba(31, 158, 95, 0)); }
   :global([data-theme="dark"]) .xbn-chip { background: #232029; border-color: transparent; }
   :global([data-theme="dark"]) .xbn-prompt { color: #5fd49a; }
-  :global([data-theme="dark"]) .xbn-word { color: #847f8d; }
+  :global([data-theme="dark"]) .xbn-word { color: #9a95a3; }
   :global([data-theme="dark"]) .xbn-title { color: #f3f2f0; }
-  :global([data-theme="dark"]) .xbn-eyebrow { color: #847f8d; }
+  :global([data-theme="dark"]) .xbn-lead { color: rgba(243, 242, 240, 0.72); }
+  :global([data-theme="dark"]) .xbn-eyebrow,
+  :global([data-theme="dark"]) .xbn-note { color: #9a95a3; }
 
+  /* A tablet: a narrower text column and a smaller screenshot. */
+  @media (max-width: 900px) {
+    .xbn { height: 420px; }
+    .xbn-text { left: 40px; top: 48px; width: 360px; }
+    .xbn-title { font-size: 40px; }
+    .xbn-lead { font-size: 16px; }
+    .xbn-shot { left: 430px; top: 70px; width: 560px; }
+  }
+
+  /* A phone: the text, a full-width button, then the screenshot below, still angled and running off the edges. */
   @media (max-width: 640px) {
-    .xbn { flex-wrap: wrap; gap: 16px; }
-    .xbn-copy { flex-basis: calc(100% - 90px); }
-    .xbn-cta { width: 100%; justify-content: center; }
+    .xbn { height: auto; padding: 28px 24px 0; }
+    .xbn-glow { top: auto; right: -200px; bottom: -200px; width: 600px; height: 600px; }
+    .xbn-text { position: static; width: auto; gap: 14px; }
+    .xbn-title { font-size: 34px; line-height: 1.06; }
+    .xbn-lead { font-size: 16px; line-height: 1.55; }
+    .xbn-actions { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 4px; }
+    .xbn-cta { justify-content: center; }
+    .xbn-note { text-align: center; }
+    .xbn-shot {
+      position: relative;
+      left: auto;
+      top: auto;
+      display: block;
+      width: 420px;
+      margin: 34px 0 -40px;
+      transform: perspective(1200px) rotateY(-14deg) rotateX(6deg) rotate(-1.5deg);
+    }
   }
 </style>
