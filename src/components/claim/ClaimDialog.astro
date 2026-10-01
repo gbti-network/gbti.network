@@ -83,7 +83,7 @@ for (const [key, t] of [['member', tierDisplay('member')], ['creator', tierDispl
     border: 0; padding: 0; margin: auto; width: calc(100% - 32px); max-width: 560px;
     /* margin:auto + fit-content height re-centre the modal: Tailwind preflight resets the UA dialog centring. */
     height: fit-content; max-height: calc(100dvh - 32px);
-    background: var(--paper); color: var(--fg); border-radius: var(--r-lg); box-shadow: var(--sh-lg); overflow: hidden;
+    background: var(--paper); color: var(--fg); border-radius: 0; box-shadow: var(--sh-lg); overflow: hidden; /* square corners: owner, 2026-09-30 */
   }
   .cld[open] { display: flex; }
   .cld::backdrop { background: rgba(32, 30, 38, .62); backdrop-filter: blur(2px); }
