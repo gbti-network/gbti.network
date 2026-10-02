@@ -9028,11 +9028,128 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return dialogOpen;
   }
 
-  // extension/src/shell.mjs
+  // extension/src/submit-content.mjs
   var SITE7 = "https://gbti.network";
+  var HOW_PUBLISHING_URL = `${SITE7}/submit-content/`;
+  var SUBMIT_CHOICES = Object.freeze([
+    Object.freeze({ key: "post", title: "Article", desc: "A tutorial, a write-up or an opinion for the network.", href: `${SITE7}/workbench/#new=post`, icon: "pencil" }),
+    Object.freeze({ key: "project", title: "Project", desc: "Something you built: a plugin, an app, a tool.", href: `${SITE7}/workbench/#new=project`, icon: "box" }),
+    Object.freeze({ key: "prompt", title: "Prompt & Skill", desc: "A prompt or an agent skill others can reuse.", href: `${SITE7}/workbench/#new=prompt`, icon: "bot" }),
+    Object.freeze({ key: "share", title: "Share", desc: "A link worth reading, with a note on why.", href: null, icon: "link" })
+  ]);
+  function submitDialogKind(status) {
+    if (!status) return "loading";
+    const m = status.membership;
+    if (m === "paid" || m === "unknown" || m == null) return "choose";
+    if (m === "trialing") return "join";
+    return upgradePromptKind(m) || "restricted";
+  }
+  var copyFor = (membership) => lockedAccountCopy(membership === "trialing" ? "none" : membership);
+  var escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var SVG = {
+    pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    bot: '<rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4.5M12 4.5h-1.5M9 13h.01M15 13h.01M9.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    link: '<path d="M10.5 13.5a3 3 0 0 0 4.5.3l2.4-2.4a3.2 3.2 0 0 0-4.5-4.5l-1.4 1.4M13.5 10.5a3 3 0 0 0-4.5-.3l-2.4 2.4a3.2 3.2 0 0 0 4.5 4.5l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    out: '<path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    chev: '<path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    arrow: '<path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+  };
+  var svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>`;
+  var PENCIL_SVG = SVG.pencil;
+  var howLink = (cls) => `<a class="${cls}" href="${HOW_PUBLISHING_URL}" target="_blank" rel="noopener">How publishing works ${svg2("out")}</a>`;
+  function choiceHtml(ch) {
+    const tag = ch.href ? `Opens the website editor ${svg2("out")}` : "Opens the share box here";
+    const inner = `<span class="sc-tile">${svg2(ch.icon)}</span>
+      <span class="sc-txt"><b class="sc-title">${escHtml(ch.title)}</b><span class="sc-desc">${escHtml(ch.desc)}</span><span class="sc-tag">${tag}</span></span>
+      <span class="sc-chev">${svg2("chev")}</span>`;
+    return ch.href ? `<li><a class="sc-choice" href="${ch.href}" target="_blank" rel="noopener" data-sc-choice="${ch.key}">${inner}</a></li>` : `<li><button class="sc-choice" type="button" data-sc-choice="${ch.key}">${inner}</button></li>`;
+  }
+  function submitDialogHtml(kind2, membership) {
+    const head = `<button class="share-x" type="button" aria-label="Close" data-sc-close>${svg2("x")}</button>
+    <p class="sc-eyebrow"><span class="sc-dot" aria-hidden="true"></span>Submit content</p>`;
+    if (kind2 === "choose") {
+      return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="choose">${head}
+    <h2 id="sc-title">What would you like to create?</h2>
+    <p class="sc-lead">Articles, projects and prompts open the editor on gbti.network in a new tab. A share is posted from here.</p>
+    <ul class="sc-choices">${SUBMIT_CHOICES.map(choiceHtml).join("")}</ul>
+    <div class="sc-foot">${howLink("sc-how")}</div>
+  </div>`;
+    }
+    if (kind2 === "loading") {
+      const row = '<li class="sc-skrow"><span class="sc-sk sc-sk-tile"></span><span class="sc-sk-lines"><span class="sc-sk sc-sk-a"></span><span class="sc-sk sc-sk-b"></span></span></li>';
+      return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-label="Submit content" aria-busy="true" data-sc-kind="loading">${head}
+    <span class="sc-sk sc-sk-h"></span><span class="sc-sk sc-sk-p"></span>
+    <ul class="sc-choices" aria-hidden="true">${row.repeat(4)}</ul>
+    <p class="sc-checking" role="status">Checking your membership&hellip;</p>
+  </div>`;
+    }
+    const copy = copyFor(membership);
+    const cta = copy.cta ? `<a class="sc-cta" href="${escHtml(copy.cta.href)}" target="_blank" rel="noopener">${escHtml(copy.cta.label)} ${svg2("arrow")}</a>` : "";
+    const how = kind2 === "join" ? howLink("sc-how") : "";
+    const close = copy.cta ? "" : '<button class="sc-close" type="button" data-sc-close>Close</button>';
+    return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="${escHtml(kind2)}">${head}
+    <h2 id="sc-title">${escHtml(copy.heading)}</h2>
+    <p class="sc-body">${escHtml(copy.body)}</p>
+    <div class="sc-acts">${cta}${how}${close}</div>
+  </div>`;
+  }
+  function openSubmitDialog({ status = null, statusReady = null, onShare = () => {
+  }, returnFocus = null } = {}) {
+    if (document.querySelector(".submit-modal")) return null;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal submit-modal";
+    const onEsc = (e) => {
+      if (e.key === "Escape") close();
+    };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+      returnFocus?.focus?.();
+    };
+    const render2 = (st2) => {
+      overlay.innerHTML = submitDialogHtml(submitDialogKind(st2), st2?.membership);
+      (overlay.querySelector(".sc-choice, .sc-cta, .sc-close") || overlay.querySelector("[data-sc-close]"))?.focus?.();
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        close();
+        return;
+      }
+      const t = e.target.closest?.('[data-sc-close], [data-sc-choice="share"], a');
+      if (!t) return;
+      if (t.matches("[data-sc-close]")) {
+        close();
+        return;
+      }
+      if (t.matches('[data-sc-choice="share"]')) {
+        close();
+        onShare();
+        return;
+      }
+      setTimeout(close, 0);
+    });
+    document.addEventListener("keydown", onEsc);
+    document.body.appendChild(overlay);
+    render2(status);
+    if (!status && statusReady) {
+      statusReady.then((st2) => {
+        if (!overlay.isConnected) return;
+        if (st2) render2(st2);
+        else close();
+      }, () => {
+        if (overlay.isConnected) render2({ membership: "unknown" });
+      });
+    }
+    return overlay;
+  }
+
+  // extension/src/shell.mjs
+  var SITE8 = "https://gbti.network";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var esc5 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var SVG = {
+  var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
     // inkwell + quill (Articles)
@@ -9064,13 +9181,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
     pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
+    pencil: PENCIL_SVG,
+    // sow-396: the Submit content button's folded (narrow window) form
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
-  var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
+  var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
   function controlsHtml({ compose = false } = {}) {
     return `<div class="nt-controls" data-controls>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
+    <button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content"><span class="nt-submit-dot" aria-hidden="true"></span><span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"></span><span class="nt-submit-tx">Submit content</span></button>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
@@ -9081,12 +9201,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="${SITE7}/workbench/" target="_blank" rel="noopener">Workbench</a>
+        <a class="mi" role="menuitem" href="${SITE8}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
-        <a class="mi" role="menuitem" href="${SITE7}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
-        <a class="mi" role="menuitem" href="${SITE7}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
-        <a class="mi" role="menuitem" href="${SITE7}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE8}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE8}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
+        <a class="mi" role="menuitem" href="${SITE8}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -9122,7 +9242,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       });
       const folder2 = status.identity.username || String(login).toLowerCase();
       root.querySelectorAll("[data-me-profile]").forEach((a) => {
-        a.href = `${SITE7}/members/${encodeURIComponent(folder2)}/`;
+        a.href = `${SITE8}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;
@@ -9353,6 +9473,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function wireCompose(root) {
     root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
   }
+  function wireSubmit(root, statusReady) {
+    const btn = root.querySelector("[data-submit-content]");
+    if (!btn) return;
+    let status = null;
+    statusReady.then((st2) => {
+      status = st2;
+    }, () => {
+    });
+    btn.addEventListener("click", () => openSubmitDialog({ status, statusReady, onShare: openComposeModal, returnFocus: btn }));
+  }
   function wireApps(root) {
     mountQuickLaunch(root.querySelector("[data-apps]")).catch(() => {
     });
@@ -9384,7 +9514,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
-    loadShellAccount(root).then((status) => {
+    const statusReady = loadShellAccount(root);
+    wireSubmit(root, statusReady);
+    statusReady.then((status) => {
       if (!status) {
         mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
         return;
@@ -10689,7 +10821,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "image", label: "Image", icon: "img", desc: "Upload or embed a picture" },
     { key: "embed", label: "Video / embed", icon: "video", desc: "YouTube or Vimeo" }
   ];
-  var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg2(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc2(c.label)}</span><span class="mi-ds">${esc2(c.desc)}</span></span></div>`;
+  var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg3(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc2(c.label)}</span><span class="mi-ds">${esc2(c.desc)}</span></span></div>`;
   var convertKey = (b) => b.type === "heading" ? `h${Math.min(3, Math.max(1, b.level || 2))}` : b.type === "list" ? b.ordered ? "ol" : "ul" : b.type;
   var blockFromKey = (key) => {
     const c = CONVERT.find((x) => x.key === key) || CONVERT[0];
@@ -10720,7 +10852,7 @@ ${listStyleProseCss(".doc-blocks")}
     listul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
     listol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
   };
-  var svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
+  var svg3 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
   var GbtiDocEditor = class extends GbtiElement {
     // sow-165: the owning editor sets this so a repo-relative body image resolves against the item's folder.
     set itemPath(v2) {
@@ -10880,8 +11012,8 @@ ${listStyleProseCss(".doc-blocks")}
         return this._blockHtml(b, inMem);
       });
       const addRow = `<div class="add-row">
-      <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg2("plus")} Add block</button><div class="add-pop" data-addpop hidden></div></div>
-      ${hasMembers ? "" : `<button class="add-btn" data-addmembers type="button">${svg2("lock")} Add members-only section</button>`}
+      <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg3("plus")} Add block</button><div class="add-pop" data-addpop hidden></div></div>
+      ${hasMembers ? "" : `<button class="add-btn" data-addmembers type="button">${svg3("lock")} Add members-only section</button>`}
     </div>`;
       this._slash = null;
       this.set(this.css(EDITOR_SURFACE + DOC_EDITOR_CSS) + `<div class="doc-blocks">${parts.join("")}${addRow}</div>`);
@@ -10891,11 +11023,11 @@ ${listStyleProseCss(".doc-blocks")}
       const id = b._id;
       const cur = CONVERT.find((c) => c.key === convertKey(b)) || CONVERT[0];
       return `<div class="blk-tools">
-      <span class="bt grip" draggable="true" data-grip="${id}" title="Drag to reorder">${svg2("grip")}</span>
-      <button class="bt" type="button" data-convert="${id}" title="Turn into (now: ${esc2(cur.label)})">${svg2(cur.icon)}</button>
-      <button class="bt" type="button" data-up="${id}" title="Move up">${svg2("up")}</button>
-      <button class="bt" type="button" data-down="${id}" title="Move down">${svg2("down")}</button>
-      <button class="bt danger" type="button" data-del="${id}" title="Delete">${svg2("x")}</button>
+      <span class="bt grip" draggable="true" data-grip="${id}" title="Drag to reorder">${svg3("grip")}</span>
+      <button class="bt" type="button" data-convert="${id}" title="Turn into (now: ${esc2(cur.label)})">${svg3(cur.icon)}</button>
+      <button class="bt" type="button" data-up="${id}" title="Move up">${svg3("up")}</button>
+      <button class="bt" type="button" data-down="${id}" title="Move down">${svg3("down")}</button>
+      <button class="bt danger" type="button" data-del="${id}" title="Delete">${svg3("x")}</button>
     </div>`;
     }
     _blockHtml(b, inMem) {
@@ -10912,8 +11044,8 @@ ${listStyleProseCss(".doc-blocks")}
           return this._ce("ce-q", "text", b, "Quote");
         case "callout": {
           const v2 = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : "note";
-          const bar = `<div class="cvar"><span class="cvar-lab">${svg2("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
-          return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg2("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
+          const bar = `<div class="cvar"><span class="cvar-lab">${svg3("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
+          return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg3("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
         case "code":
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
@@ -10929,17 +11061,17 @@ ${listStyleProseCss(".doc-blocks")}
           const alignStyle = (c) => aligns[c] ? ` style="text-align:${aligns[c]}"` : "";
           const alignLabel = (c) => ({ "": "None", left: "L", center: "C", right: "R" })[aligns[c] || ""];
           const cell = (r, c, v2) => `<div class="tc" contenteditable="true" data-edit="cell" data-id="${b._id}" data-r="${r}" data-c="${c}" data-ph="">${inlineMdToHtml(v2 || "")}</div>`;
-          const headCells = Array.from({ length: cols }, (_, c) => `<th${alignStyle(c)}>${cell(-1, c, head[c])}<div class="th-ctl"><button type="button" class="tbtn" data-talign="${b._id}" data-c="${c}" title="Cycle column alignment">${alignLabel(c)}</button><button type="button" class="tbtn del" data-tcolrm="${b._id}" data-c="${c}" title="Delete this column">${svg2("x")}</button></div></th>`).join("");
-          const bodyRows = rows.map((row, r) => `<tr>` + Array.from({ length: cols }, (_, c) => `<td${alignStyle(c)}>${cell(r, c, row[c])}</td>`).join("") + `<td class="row-ctl"><button type="button" class="tbtn del" data-trowrm="${b._id}" data-r="${r}" title="Delete this row">${svg2("x")}</button></td></tr>`).join("");
-          return `<div class="card tbl-card"><div class="card-h">${svg2("table")} Table</div><div class="tbl-scroll"><table class="tbl"><thead><tr>${headCells}<th class="corner"></th></tr></thead><tbody>${bodyRows || ""}</tbody></table></div><div class="tbl-ctl"><button type="button" class="tadd" data-taddrow="${b._id}">${svg2("plus")} Row</button><button type="button" class="tadd" data-taddcol="${b._id}">${svg2("plus")} Column</button></div></div>`;
+          const headCells = Array.from({ length: cols }, (_, c) => `<th${alignStyle(c)}>${cell(-1, c, head[c])}<div class="th-ctl"><button type="button" class="tbtn" data-talign="${b._id}" data-c="${c}" title="Cycle column alignment">${alignLabel(c)}</button><button type="button" class="tbtn del" data-tcolrm="${b._id}" data-c="${c}" title="Delete this column">${svg3("x")}</button></div></th>`).join("");
+          const bodyRows = rows.map((row, r) => `<tr>` + Array.from({ length: cols }, (_, c) => `<td${alignStyle(c)}>${cell(r, c, row[c])}</td>`).join("") + `<td class="row-ctl"><button type="button" class="tbtn del" data-trowrm="${b._id}" data-r="${r}" title="Delete this row">${svg3("x")}</button></td></tr>`).join("");
+          return `<div class="card tbl-card"><div class="card-h">${svg3("table")} Table</div><div class="tbl-scroll"><table class="tbl"><thead><tr>${headCells}<th class="corner"></th></tr></thead><tbody>${bodyRows || ""}</tbody></table></div><div class="tbl-ctl"><button type="button" class="tadd" data-taddrow="${b._id}">${svg3("plus")} Row</button><button type="button" class="tadd" data-taddcol="${b._id}">${svg3("plus")} Column</button></div></div>`;
         }
         case "image": {
           const hasUrl = !!b.url;
           const src = hasUrl ? esc2(this._stagedSrc && this._stagedSrc[b.url] || resolveContentAsset(b.url, this.itemPath)) : "";
-          return `<div class="card"><div class="card-h">${svg2("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc2(b.caption)}</figcaption>` : ""}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg2("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc2(b.alt || "")}" placeholder="Alt text" /><input data-edit="caption" data-id="${b._id}" value="${esc2(b.caption || "")}" placeholder="Caption (shown under the image)" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg2("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg2("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
+          return `<div class="card"><div class="card-h">${svg3("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc2(b.caption)}</figcaption>` : ""}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg3("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc2(b.alt || "")}" placeholder="Alt text" /><input data-edit="caption" data-id="${b._id}" value="${esc2(b.caption || "")}" placeholder="Caption (shown under the image)" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg3("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg3("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
         }
         case "embed":
-          return `<div class="card"><div class="card-h">${svg2("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
+          return `<div class="card"><div class="card-h">${svg3("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
         case "paragraph":
         default:
           return this._ce("ce-p", "text", b, "Write, or use the Add block button");
@@ -10975,7 +11107,7 @@ ${listStyleProseCss(".doc-blocks")}
       return null;
     }
     _memberDivider(b) {
-      return `<div class="mem-div" data-id="${b._id}">${svg2("lock")} Members only <span>· only members see the content below</span><button class="bt danger rm" type="button" data-del="${b._id}" title="Remove the members-only split">${svg2("x")}</button></div>`;
+      return `<div class="mem-div" data-id="${b._id}">${svg3("lock")} Members only <span>· only members see the content below</span><button class="bt danger rm" type="button" data-del="${b._id}" title="Remove the members-only split">${svg3("x")}</button></div>`;
     }
     _wire() {
       this.$$("[data-edit]").forEach((el) => {
@@ -11968,7 +12100,7 @@ ${listStyleProseCss(".doc-blocks")}
     video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
-  var svg3 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
+  var svg4 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
   var CSS8 = `
   :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
   .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
@@ -12027,7 +12159,7 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       if (this._rendered) return;
       this._rendered = true;
-      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg3(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
+      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg4(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
       this.set(this.css(CSS8) + `<div class="box" data-box>
       <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
       <div class="vid" data-vid hidden>
@@ -12058,7 +12190,7 @@ ${listStyleProseCss(".doc-blocks")}
         x.className = "pe-x";
         x.title = "Remove video";
         x.setAttribute("aria-label", "Remove video");
-        x.innerHTML = svg3("x");
+        x.innerHTML = svg4("x");
         x.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -12875,8 +13007,8 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-discussion", GbtiDiscussion);
 
   // client-ui/src/elements/gbti-cta-assignment.mjs
-  var SITE8 = "https://gbti.network";
-  var ADMIN = `${SITE8}/admin/`;
+  var SITE9 = "https://gbti.network";
+  var ADMIN = `${SITE9}/admin/`;
   var CSS11 = `
   :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
   b { color:var(--fg); font-weight:600; }
@@ -12901,7 +13033,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._loading = true;
       this._failed = false;
       try {
-        const r = await fetch(`${SITE8}/ctas.json`, { cache: "no-cache" });
+        const r = await fetch(`${SITE9}/ctas.json`, { cache: "no-cache" });
         if (!r.ok) throw new Error(`ctas.json ${r.status}`);
         const j2 = await r.json();
         this._ctas = Array.isArray(j2?.ctas) ? j2.ctas : [];
@@ -13075,7 +13207,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/editor-skill.mjs
   var normalizeKind = (v2) => v2 === "skill" ? "skill" : "prompt";
-  var svg4 = (d, size, width = 2.4) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  var svg5 = (d, size, width = 2.4) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   var ICON2 = {
     prompt: '<path d="M4 6h16M4 12h11M4 18h7"/>',
     skill: '<path d="M4 17l6-5-6-5"/><path d="M12 19h8"/>',
@@ -13096,7 +13228,7 @@ ${listStyleProseCss(".doc-blocks")}
   function kindSectionHtml(kind2) {
     const cur = normalizeKind(kind2);
     const cards = CARDS.map((c) => `<button type="button" class="kind-card${c.kind === cur ? " on" : ""}" role="radio" aria-checked="${c.kind === cur}" data-kind-pick="${c.kind}">
-      <span class="kc-top"><span class="kc-ico kc-${c.kind}">${svg4(ICON2[c.kind], 18)}</span><span class="kc-name">${esc2(c.name)}</span><span class="kc-check">${svg4(ICON2.check, 13, 3.2)}</span></span>
+      <span class="kc-top"><span class="kc-ico kc-${c.kind}">${svg5(ICON2[c.kind], 18)}</span><span class="kc-name">${esc2(c.name)}</span><span class="kc-check">${svg5(ICON2.check, 13, 3.2)}</span></span>
       <span class="kc-desc">${esc2(c.desc)}</span></button>`).join("");
     return `<section class="kind-sec" aria-labelledby="kindh"><h2 id="kindh" class="kind-h">What are you sharing?</h2>
     <div class="kind-cards" role="radiogroup" aria-labelledby="kindh">${cards}</div>
@@ -13116,10 +13248,10 @@ ${listStyleProseCss(".doc-blocks")}
     return list.includes(label) ? list.filter((t) => t !== label) : [...list, label];
   }
   var madeForButtonsHtml = (rows) => rows.map((r) => `<button type="button" class="mf-tool${r.on ? " on" : ""}" aria-pressed="${r.on}" data-mf-tool="${esc2(r.label)}">
-    <span class="mf-box">${svg4(ICON2.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc2(r.label)}</span><span class="mf-note">${esc2(r.note)}</span></span></button>`).join("");
+    <span class="mf-box">${svg5(ICON2.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc2(r.label)}</span><span class="mf-note">${esc2(r.note)}</span></span></button>`).join("");
   function skillSectionsHtml({ kind: kind2, skillFile = "" } = {}) {
     const hide = normalizeKind(kind2) === "skill" ? "" : " hidden";
-    return `<div class="skill-note" data-skill-only${hide}><span class="sn-ico">${svg4(ICON2.install, 17)}</span><div><b>No install steps needed</b>
+    return `<div class="skill-note" data-skill-only${hide}><span class="sn-ico">${svg5(ICON2.install, 17)}</span><div><b>No install steps needed</b>
       <span class="sn-text">Your skill page shows the standard install steps for every tool you tick below, and readers pick theirs. Write about what your skill does, not how to install it.</span></div></div>
     <section class="mf-sec" aria-labelledby="mfh" data-skill-only${hide}><h2 id="mfh" class="kind-h">Made for</h2>
       <p class="mf-sub">Tick every tool your skill works in. Readers get the install steps for the one they use.</p>
@@ -16497,7 +16629,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-account.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
@@ -16635,7 +16767,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS12) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE9}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS12) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE10}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -16728,7 +16860,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE9}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE10}/join?ref=${r.code}` : null);
       const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc2(label)}</div>${desc ? `<div class="d">${esc2(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc2(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
@@ -16823,7 +16955,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-account", GbtiAccount);
 
   // client-ui/src/elements/gbti-mod-actions.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var ACTION_LABEL = { hide: "Hide", unhide: "Unhide", remove: "Remove", stale: "Mark stale", unstale: "Unmark stale", unindex: "Unindex", reindex: "Reindex" };
   var ACTION_API = { hide: "deplatform", unhide: "republish", remove: "remove", stale: "stale", unstale: "unstale", unindex: "unindex", reindex: "reindex" };
   var ACTION_DONE = { hide: "Hidden", unhide: "Republished", remove: "Removed", stale: "Marked stale", unstale: "Stale cleared", unindex: "Unindexed", reindex: "Reindexed" };
@@ -16840,7 +16972,7 @@ ${listStyleProseCss(".doc-blocks")}
   var FLAGS = null;
   function loadFlags() {
     if (!FLAGS) {
-      FLAGS = fetch(`${SITE10}/content-flags.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error(`http-${r.status}`))).then((d) => d && typeof d.flags === "object" && d.flags ? d.flags : {}).catch(() => {
+      FLAGS = fetch(`${SITE11}/content-flags.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error(`http-${r.status}`))).then((d) => d && typeof d.flags === "object" && d.flags ? d.flags : {}).catch(() => {
         FLAGS = null;
         return null;
       });
@@ -17186,7 +17318,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -17269,7 +17401,7 @@ ${listStyleProseCss(".doc-blocks")}
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE11}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE12}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
           for (const it2 of items) {
             const a = String(it2?.author || "").toLowerCase();
@@ -17654,7 +17786,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-category-manager", GbtiCategoryManager);
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
-  var SITE12 = "https://gbti.network";
+  var SITE13 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
@@ -17854,7 +17986,7 @@ ${listStyleProseCss(".doc-blocks")}
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE12}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE13}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           items[type] = Array.isArray(data) ? data : data?.items || [];
         } catch {
@@ -18073,7 +18205,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<button class="cbtab${t === this._cbType ? " on" : ""}" type="button" data-cbtab="${t}">${TYPE_LABEL3[t]}<span class="n">${n}</span></button>`;
       }).join("");
       const rows = pg.items.map((it2) => `<div class="cbrow">
-        <div style="min-width:0"><a href="${SITE12}${esc2(it2.url || "")}" target="_blank" rel="noopener">${esc2(it2.title || it2.slug || "")}</a>
+        <div style="min-width:0"><a href="${SITE13}${esc2(it2.url || "")}" target="_blank" rel="noopener">${esc2(it2.title || it2.slug || "")}</a>
         <div class="sub">@${esc2(it2.author || "")}${it2.publishedAt ? ` · ${esc2(relAge(Number(it2.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from} to ${pg.to} of ${pg.total}</span>
@@ -18308,7 +18440,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE14 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
@@ -18486,7 +18618,7 @@ ${listStyleProseCss(".doc-blocks")}
       const byTag = /* @__PURE__ */ new Map();
       await Promise.all(Object.entries(INDEXES2).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE13}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE14}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           for (const it2 of Array.isArray(data) ? data : data?.items || []) {
             for (const raw of it2.tags || []) {
@@ -18579,7 +18711,7 @@ ${listStyleProseCss(".doc-blocks")}
           <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
-        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE13}${esc2(i.url || "")}" target="_blank" rel="noopener">
+        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE14}${esc2(i.url || "")}" target="_blank" rel="noopener">
           <div class="ititle">${esc2(i.title)}</div>
           <div class="isub"><span class="badge ${esc2(i.type)}">${esc2(i.type)}</span><span class="iauth">@${esc2(i.author || "")}</span></div>
         </a>`).join("")}</div>
@@ -20871,7 +21003,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE14 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var GbtiOutboundLinkManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -20884,11 +21016,11 @@ ${SKILL_BOX_CSS}`;
       this.render();
       try {
         const [links, clicks] = await Promise.all([
-          fetch(`${SITE14}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE15}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`links ${r.status}`);
             return r.json();
           }),
-          fetch(`${SITE14}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE15}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`clicks ${r.status}`);
             return r.json();
           })
@@ -21657,7 +21789,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/cta-manager-view.mjs
   var esc9 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  var SVG2 = {
+  var SVG3 = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     shield: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -21740,7 +21872,7 @@ ${SKILL_BOX_CSS}`;
     let body;
     if (img.kind === "none") {
       body = `<div class="${st2.drag ? "drop on" : err ? "drop err" : "drop"}" data-drop>
-      <span class="drop-ic">${SVG2.upload}</span>
+      <span class="drop-ic">${SVG3.upload}</span>
       <div class="imgmeta"><p class="drop-t">Drop an image here, or choose one</p>
         <p class="imginfo">JPEG, PNG, WebP, GIF or AVIF. Saved as WebP, with camera and location data removed before it leaves your browser.</p></div>
       <label class="lk pick-file">Choose image<input type="file" accept="${ACCEPT}" data-file></label>
@@ -21753,7 +21885,7 @@ ${SKILL_BOX_CSS}`;
       ${img.url ? `<img src="${esc9(img.url)}" alt="" data-stored-img>` : ""}
       <div class="imgmeta"><p class="imgname">${esc9(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
-        <p class="imginfo"><span class="shield">${SVG2.shield}Camera and location data removed</span></p></div>
+        <p class="imginfo"><span class="shield">${SVG3.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
         <button class="lk danger" type="button" data-act="remove-image">Remove</button></div>
     </div>`;
@@ -21776,7 +21908,7 @@ ${SKILL_BOX_CSS}`;
     const sel = st2.d.icon;
     const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc9(s.id)}">${esc9(s.name)}</button>`).join("") : "";
     const pop = st2.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc9(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG3.search}<input type="text" data-q="icons" value="${esc9(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st2)}</div>
     </div>` : "";
@@ -21784,7 +21916,7 @@ ${SKILL_BOX_CSS}`;
     <div class="ip-row">
       <button class="${st2.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st2.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc9(sel ? sel.name : "Choose an icon")}</b><span>${esc9(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
+        <span class="ip-name"><b>${esc9(sel ? sel.name : "Choose an icon")}</b><span>${esc9(sel ? sel.set : "No icon on the button")}</span></span>${SVG3.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
@@ -21798,7 +21930,7 @@ ${SKILL_BOX_CSS}`;
     const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc9(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc9(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
-    <div class="warnbox">${SVG2.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
+    <div class="warnbox">${SVG3.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
@@ -21823,7 +21955,7 @@ ${SKILL_BOX_CSS}`;
     const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc9(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc9(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc9(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG3.search}<input type="text" data-q="pages" value="${esc9(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st2)}</div></div>`;
   }
   function previewCard(st2) {
@@ -21860,7 +21992,7 @@ ${SKILL_BOX_CSS}`;
     const u = layoutUses(st2.d.layout);
     return `<div class="mgr">
     <div class="ed-head">
-      <button class="lk" type="button" data-act="back">${SVG2.back}All call-to-actions</button>
+      <button class="lk" type="button" data-act="back">${SVG3.back}All call-to-actions</button>
       <h3 class="ed-title" data-region="title">${esc9(editTitle(st2))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st2.saving ? " disabled" : ""}>${st2.saving ? "Saving…" : st2.isNew ? "Add call-to-action" : "Save"}</button></div>
@@ -22204,7 +22336,7 @@ ${SKILL_BOX_CSS}`;
 `;
 
   // client-ui/src/elements/gbti-cta-manager.mjs
-  var SITE15 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var SUBMITTED = "Submitted. It merges automatically and appears shortly. Track it in your WorkBench.";
   var FIELD_KEYS = ["id", "label", "partner", "line", "button", "destination", "image", "html"];
   var GbtiCtaManager = class extends GbtiElement {
@@ -22224,7 +22356,7 @@ ${SKILL_BOX_CSS}`;
     get site() {
       const o = this.dataset?.siteOrigin;
       if (o === "page" && typeof location !== "undefined") return location.origin;
-      return SITE15;
+      return SITE16;
     }
     get icons() {
       if (!this._icons) this._icons = createIconLibrary({ base: this.site });
@@ -25962,7 +26094,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -26027,7 +26159,7 @@ ${BLOCKED_PILL_CSS}
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE16}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE17}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -26094,7 +26226,7 @@ ${BLOCKED_PILL_CSS}
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc2(item.title);
-      const t = item.url ? `<a class="t" href="${SITE16}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE17}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc2(cid)}" data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc2(rowLabel(item))}</span>${t}${rm}</li>`;
     }
@@ -26139,7 +26271,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE17 = "https://gbti.network";
+  var SITE18 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
@@ -26179,7 +26311,7 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const data = await (await fetch(`${SITE17}/topics.json`, { cache: "no-cache" })).json();
+        const data = await (await fetch(`${SITE18}/topics.json`, { cache: "no-cache" })).json();
         this._topics = topicsFromJson(data);
         this._groupOrder = groupOrderFromJson(data);
       } catch {
@@ -26303,7 +26435,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE18 = "https://gbti.network";
+  var SITE19 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS40 = `
@@ -26411,20 +26543,20 @@ ${BLOCKED_PILL_CSS}
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE18}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE19}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE18}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE19}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc2(f.username);
         return `<li class="row">
         <span class="av">${avatarLayers(f.username)}</span>
-        <a class="nm" href="${SITE18}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE19}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE18}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE19}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -26740,7 +26872,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-profile-editor.mjs
-  var SITE19 = "https://gbti.network";
+  var SITE20 = "https://gbti.network";
   var STATUS_LABEL2 = {
     paid: "Paid member",
     trialing: "Free trial",
@@ -26945,7 +27077,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE20}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
@@ -27617,7 +27749,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // client-ui/src/elements/gbti-workspace.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -28004,7 +28136,7 @@ ${BLOCKED_PILL_CSS}
       const flip = it2.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it2.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it2.status === "published" ? publicPathFor({ type: it2.type, path: it2.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE20 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE21 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it2) ? `<span class="tag who">@${esc2(authorOf(it2))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -28486,7 +28618,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
@@ -28596,7 +28728,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS44) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE21}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS44) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE22}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
@@ -28620,7 +28752,7 @@ ${BLOCKED_PILL_CSS}
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE21}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE22}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
       this.set(this.css(CSS44) + `
@@ -28711,8 +28843,8 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE22 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE22}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE23 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE23}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc4 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -28817,7 +28949,7 @@ ${BLOCKED_PILL_CSS}
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE22}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE23}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -29891,7 +30023,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/members-index.mjs
-  var SITE23 = "https://gbti.network";
+  var SITE24 = "https://gbti.network";
   var lc6 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -29900,7 +30032,7 @@ ${BLOCKED_PILL_CSS}
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE23}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j2) => directoryMap(j2)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE24}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j2) => directoryMap(j2)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
@@ -29909,7 +30041,7 @@ ${BLOCKED_PILL_CSS}
   var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE24 = "https://gbti.network";
+  var SITE25 = "https://gbti.network";
   var KIND_ICON = {
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -29929,7 +30061,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc2(what)} is for members. <a href="${SITE24}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc2(what)} is for members. <a href="${SITE25}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
@@ -30178,12 +30310,12 @@ ${BLOCKED_PILL_CSS}
       if (String(it2.visibility || fm.visibility || "public") !== "public") {
         if (typeof fm.encryptedSkill !== "string" || !fm.encryptedSkill || typeof this.client?.decrypt !== "function") return null;
         try {
-          return await loadMembersSkillBox({ site: SITE24, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
+          return await loadMembersSkillBox({ site: SITE25, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
         } catch {
           return null;
         }
       }
-      return loadSkillBox({ site: SITE24, slug: fm.slug || promptSlugOf(it2.url), targets, fileHref });
+      return loadSkillBox({ site: SITE25, slug: fm.slug || promptSlugOf(it2.url), targets, fileHref });
     }
     // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
     _backfillFromFrontmatter(it2) {
@@ -30320,11 +30452,11 @@ ${BLOCKED_PILL_CSS}
       const note = e.headline ? `<p class="a-note">${esc2(e.headline)}</p>` : "";
       let follow = "";
       const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const wsBase = inExt ? `${SITE24}/workbench/` : "/workbench/";
+      const wsBase = inExt ? `${SITE25}/workbench/` : "/workbench/";
       const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
       if (a.isSelf) follow = ["post", "project", "prompt"].includes(it2.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc2(it2.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it2.type === "share" && it2.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it2.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE24}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE25}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -30350,13 +30482,13 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE24 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE25 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
       const meta = this._metaHtml(it2, when);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
       const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE24}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE25}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -30495,7 +30627,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE25 = "https://gbti.network";
+  var SITE26 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
@@ -30567,7 +30699,7 @@ ${BLOCKED_PILL_CSS}
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE25}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE26}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc9(status?.identity?.username || status?.identity?.login || "");
@@ -30597,8 +30729,8 @@ ${BLOCKED_PILL_CSS}
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE25}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc2(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE25}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const action = this._isSelf ? `<a class="edit" href="${SITE26}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc2(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE26}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
       const actions = `<div class="actions">${action}<a class="site" href="${esc2(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc2(prettyRole3(r))}</span>`);
@@ -30656,7 +30788,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE26 = "https://gbti.network";
+  var SITE27 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -30769,7 +30901,7 @@ ${BLOCKED_PILL_CSS}
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE26}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE27}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -31262,7 +31394,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // extension/src/newtab.mjs
-  var SITE27 = "https://gbti.network";
+  var SITE28 = "https://gbti.network";
   var $ = (sel) => document.querySelector(sel);
   var authorName5 = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
   async function initVersionIndicator() {
@@ -31282,7 +31414,7 @@ ${BLOCKED_PILL_CSS}
     };
     paint(0);
     try {
-      const res = await fetch(`${SITE27}/changelog.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE28}/changelog.json`, { cache: "no-cache" });
       if (res.ok) {
         const data = await res.json();
         const build = Number(data?.build);
@@ -31555,7 +31687,7 @@ ${BLOCKED_PILL_CSS}
     if (!(t in DIRECTORY) || DIRECTORY[t] || DIRECTORY_LOADING.has(t)) return;
     DIRECTORY_LOADING.add(t);
     try {
-      const res = await fetch(`${SITE27}/${DIRECTORY_URL[t]}`, { cache: "no-cache" });
+      const res = await fetch(`${SITE28}/${DIRECTORY_URL[t]}`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       DIRECTORY[t] = Array.isArray(data?.items) ? data.items : [];
@@ -31650,13 +31782,13 @@ ${BLOCKED_PILL_CSS}
   async function loadActivity() {
     const status = $("[data-feed-status]");
     try {
-      const res = await fetch(`${SITE27}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE28}/activity-index.json`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       ENTRIES = Array.isArray(data?.entries) ? data.entries : [];
       renderFeed($("[data-filter]")?.value || "");
     } catch {
-      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE27}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
+      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE28}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
     }
   }
   function forgetRetiredWelcomeFlag() {

@@ -30711,11 +30711,128 @@ ${BLOCKED_PILL_CSS}
     return dialogOpen;
   }
 
-  // extension/src/shell.mjs
+  // extension/src/submit-content.mjs
   var SITE26 = "https://gbti.network";
+  var HOW_PUBLISHING_URL = `${SITE26}/submit-content/`;
+  var SUBMIT_CHOICES = Object.freeze([
+    Object.freeze({ key: "post", title: "Article", desc: "A tutorial, a write-up or an opinion for the network.", href: `${SITE26}/workbench/#new=post`, icon: "pencil" }),
+    Object.freeze({ key: "project", title: "Project", desc: "Something you built: a plugin, an app, a tool.", href: `${SITE26}/workbench/#new=project`, icon: "box" }),
+    Object.freeze({ key: "prompt", title: "Prompt & Skill", desc: "A prompt or an agent skill others can reuse.", href: `${SITE26}/workbench/#new=prompt`, icon: "bot" }),
+    Object.freeze({ key: "share", title: "Share", desc: "A link worth reading, with a note on why.", href: null, icon: "link" })
+  ]);
+  function submitDialogKind(status) {
+    if (!status) return "loading";
+    const m = status.membership;
+    if (m === "paid" || m === "unknown" || m == null) return "choose";
+    if (m === "trialing") return "join";
+    return upgradePromptKind(m) || "restricted";
+  }
+  var copyFor = (membership) => lockedAccountCopy(membership === "trialing" ? "none" : membership);
+  var escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var SVG2 = {
+    pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    bot: '<rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4.5M12 4.5h-1.5M9 13h.01M15 13h.01M9.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    link: '<path d="M10.5 13.5a3 3 0 0 0 4.5.3l2.4-2.4a3.2 3.2 0 0 0-4.5-4.5l-1.4 1.4M13.5 10.5a3 3 0 0 0-4.5-.3l-2.4 2.4a3.2 3.2 0 0 0 4.5 4.5l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    out: '<path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    chev: '<path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    arrow: '<path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+  };
+  var svg5 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>`;
+  var PENCIL_SVG = SVG2.pencil;
+  var howLink = (cls) => `<a class="${cls}" href="${HOW_PUBLISHING_URL}" target="_blank" rel="noopener">How publishing works ${svg5("out")}</a>`;
+  function choiceHtml(ch) {
+    const tag = ch.href ? `Opens the website editor ${svg5("out")}` : "Opens the share box here";
+    const inner = `<span class="sc-tile">${svg5(ch.icon)}</span>
+      <span class="sc-txt"><b class="sc-title">${escHtml(ch.title)}</b><span class="sc-desc">${escHtml(ch.desc)}</span><span class="sc-tag">${tag}</span></span>
+      <span class="sc-chev">${svg5("chev")}</span>`;
+    return ch.href ? `<li><a class="sc-choice" href="${ch.href}" target="_blank" rel="noopener" data-sc-choice="${ch.key}">${inner}</a></li>` : `<li><button class="sc-choice" type="button" data-sc-choice="${ch.key}">${inner}</button></li>`;
+  }
+  function submitDialogHtml(kind2, membership) {
+    const head = `<button class="share-x" type="button" aria-label="Close" data-sc-close>${svg5("x")}</button>
+    <p class="sc-eyebrow"><span class="sc-dot" aria-hidden="true"></span>Submit content</p>`;
+    if (kind2 === "choose") {
+      return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="choose">${head}
+    <h2 id="sc-title">What would you like to create?</h2>
+    <p class="sc-lead">Articles, projects and prompts open the editor on gbti.network in a new tab. A share is posted from here.</p>
+    <ul class="sc-choices">${SUBMIT_CHOICES.map(choiceHtml).join("")}</ul>
+    <div class="sc-foot">${howLink("sc-how")}</div>
+  </div>`;
+    }
+    if (kind2 === "loading") {
+      const row = '<li class="sc-skrow"><span class="sc-sk sc-sk-tile"></span><span class="sc-sk-lines"><span class="sc-sk sc-sk-a"></span><span class="sc-sk sc-sk-b"></span></span></li>';
+      return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-label="Submit content" aria-busy="true" data-sc-kind="loading">${head}
+    <span class="sc-sk sc-sk-h"></span><span class="sc-sk sc-sk-p"></span>
+    <ul class="sc-choices" aria-hidden="true">${row.repeat(4)}</ul>
+    <p class="sc-checking" role="status">Checking your membership&hellip;</p>
+  </div>`;
+    }
+    const copy = copyFor(membership);
+    const cta = copy.cta ? `<a class="sc-cta" href="${escHtml(copy.cta.href)}" target="_blank" rel="noopener">${escHtml(copy.cta.label)} ${svg5("arrow")}</a>` : "";
+    const how = kind2 === "join" ? howLink("sc-how") : "";
+    const close = copy.cta ? "" : '<button class="sc-close" type="button" data-sc-close>Close</button>';
+    return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="${escHtml(kind2)}">${head}
+    <h2 id="sc-title">${escHtml(copy.heading)}</h2>
+    <p class="sc-body">${escHtml(copy.body)}</p>
+    <div class="sc-acts">${cta}${how}${close}</div>
+  </div>`;
+  }
+  function openSubmitDialog({ status = null, statusReady = null, onShare = () => {
+  }, returnFocus = null } = {}) {
+    if (document.querySelector(".submit-modal")) return null;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal submit-modal";
+    const onEsc = (e) => {
+      if (e.key === "Escape") close();
+    };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+      returnFocus?.focus?.();
+    };
+    const render2 = (st2) => {
+      overlay.innerHTML = submitDialogHtml(submitDialogKind(st2), st2?.membership);
+      (overlay.querySelector(".sc-choice, .sc-cta, .sc-close") || overlay.querySelector("[data-sc-close]"))?.focus?.();
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        close();
+        return;
+      }
+      const t = e.target.closest?.('[data-sc-close], [data-sc-choice="share"], a');
+      if (!t) return;
+      if (t.matches("[data-sc-close]")) {
+        close();
+        return;
+      }
+      if (t.matches('[data-sc-choice="share"]')) {
+        close();
+        onShare();
+        return;
+      }
+      setTimeout(close, 0);
+    });
+    document.addEventListener("keydown", onEsc);
+    document.body.appendChild(overlay);
+    render2(status);
+    if (!status && statusReady) {
+      statusReady.then((st2) => {
+        if (!overlay.isConnected) return;
+        if (st2) render2(st2);
+        else close();
+      }, () => {
+        if (overlay.isConnected) render2({ membership: "unknown" });
+      });
+    }
+    return overlay;
+  }
+
+  // extension/src/shell.mjs
+  var SITE27 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var esc9 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var SVG2 = {
+  var SVG3 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
     // inkwell + quill (Articles)
@@ -30747,13 +30864,16 @@ ${BLOCKED_PILL_CSS}
     gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
     pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
+    pencil: PENCIL_SVG,
+    // sow-396: the Submit content button's folded (narrow window) form
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
-  var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
+  var ico = (k) => SVG3[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG3[k]}</svg>` : "";
   function controlsHtml({ compose = false } = {}) {
     return `<div class="nt-controls" data-controls>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
+    <button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content"><span class="nt-submit-dot" aria-hidden="true"></span><span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"></span><span class="nt-submit-tx">Submit content</span></button>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
@@ -30764,12 +30884,12 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="${SITE26}/workbench/" target="_blank" rel="noopener">Workbench</a>
+        <a class="mi" role="menuitem" href="${SITE27}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
-        <a class="mi" role="menuitem" href="${SITE26}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
-        <a class="mi" role="menuitem" href="${SITE26}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
-        <a class="mi" role="menuitem" href="${SITE26}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE27}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE27}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
+        <a class="mi" role="menuitem" href="${SITE27}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -30805,7 +30925,7 @@ ${BLOCKED_PILL_CSS}
       });
       const folder2 = status.identity.username || String(login).toLowerCase();
       root.querySelectorAll("[data-me-profile]").forEach((a) => {
-        a.href = `${SITE26}/members/${encodeURIComponent(folder2)}/`;
+        a.href = `${SITE27}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc9(login)}</b>`;
@@ -31036,6 +31156,16 @@ ${BLOCKED_PILL_CSS}
   function wireCompose(root) {
     root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
   }
+  function wireSubmit(root, statusReady) {
+    const btn = root.querySelector("[data-submit-content]");
+    if (!btn) return;
+    let status = null;
+    statusReady.then((st2) => {
+      status = st2;
+    }, () => {
+    });
+    btn.addEventListener("click", () => openSubmitDialog({ status, statusReady, onShare: openComposeModal, returnFocus: btn }));
+  }
   function wireApps(root) {
     mountQuickLaunch(root.querySelector("[data-apps]")).catch(() => {
     });
@@ -31067,7 +31197,9 @@ ${BLOCKED_PILL_CSS}
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
-    loadShellAccount(root).then((status) => {
+    const statusReady = loadShellAccount(root);
+    wireSubmit(root, statusReady);
+    statusReady.then((status) => {
       if (!status) {
         mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
         return;

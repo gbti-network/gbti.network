@@ -16,6 +16,7 @@ import { makePkce, startUrl, readRedirectResult, REDIRECT_PATH } from './web-sig
 import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 import { mountQuickLaunch } from './quick-launch.mjs'; // sow-397: the quick launch pill + its settings popup
+import { openSubmitDialog, PENCIL_SVG } from './submit-content.mjs'; // sow-396: the top-bar Submit content dialog
 
 const SITE = 'https://gbti.network';
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -51,6 +52,7 @@ export const SVG = {
   gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
+  pencil: PENCIL_SVG, // sow-396: the Submit content button's folded (narrow window) form
   network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
 };
 export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : '');
@@ -69,10 +71,13 @@ export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"
 // sow-296: the "+" is for the pages with no other way to post (Shares, Admin tools: they pass compose:true). The new
 // tab leaves it off, because its hero share bar is the compose affordance there and two controls for one action
 // beside each other is worse than one. wireCompose binds whichever of the two exists.
+// sow-396 (owner, 2026-10-02, design A): "Submit content" sits beside the bell on EVERY page, like the website header's
+// button. It opens a chooser (src/submit-content.mjs); in a narrow window it folds into a pencil with the green dot.
 function controlsHtml({ compose = false } = {}) {
   return `<div class="nt-controls" data-controls>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
+    <button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content"><span class="nt-submit-dot" aria-hidden="true"></span><span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"></span><span class="nt-submit-tx">Submit content</span></button>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
@@ -389,6 +394,16 @@ function wireCompose(root) {
   root.querySelector('[data-compose]')?.addEventListener('click', () => openComposeModal());
 }
 
+// sow-396: the Submit content button. The dialog it opens depends on the membership in the status the shell already
+// loads; a press before that answer shows a short "checking" state that turns into the right dialog when it lands.
+function wireSubmit(root, statusReady) {
+  const btn = root.querySelector('[data-submit-content]');
+  if (!btn) return;
+  let status = null;
+  statusReady.then((st) => { status = st; }, () => {});
+  btn.addEventListener('click', () => openSubmitDialog({ status, statusReady, onShare: openComposeModal, returnFocus: btn }));
+}
+
 // sow-397: the pill used to be a daily.dev switcher that asked chrome.management whether daily.dev was installed. The
 // extension never had that permission, so it could not tell and always showed. It is now the quick launch, and
 // daily.dev is one of its destinations, switched on once when the content script on gbti.network detects it.
@@ -424,7 +439,9 @@ export function initShell({ compose = false } = {}) {
   wireCompose(root);
   // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
-  loadShellAccount(root).then((status) => {
+  const statusReady = loadShellAccount(root);
+  wireSubmit(root, statusReady);
+  statusReady.then((status) => {
     if (!status) { mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); return; }
     maybeShowExpiryPopup(status).catch(() => {}); // SOW-119 QA: the coupon-expiry countdown (all shell pages)
   });

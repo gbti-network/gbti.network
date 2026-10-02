@@ -394,3 +394,87 @@ body.gbti-editing .nt-main { background: #f4f2ef; }
 .ql-confirm { font-size: 13.5px; line-height: 1.5; color: var(--fg-soft); }
 .ql-sr { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 560px) { .ql-dialog { padding: 20px 16px 18px; } }
+
+/* ============================ sow-396: Submit content (the top-bar button + its dialog) ============================ */
+/* The approved canvas (claude.ai/artifact/7Re1RMKVCivm1pGemywtHr), design A: the website header's button beside the
+   bell, and a dialog in the share dialog's look (sow-395): square 2px corners, the round close (.share-x) on its corner.
+   Lines are drawn from the text color, as the quick launch popup does, because the glass layout's line tokens are white
+   in light mode and vanish on a white card. */
+.nt-submit { display: inline-flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px; flex: none; box-sizing: border-box;
+  border: 1.5px solid var(--line-2); border-radius: 2px; background: var(--paper); color: var(--fg);
+  font: 700 12px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); transition: border-color .15s; }
+.nt-submit:hover, .nt-submit:focus-visible { border-color: var(--fg); background: var(--paper); color: var(--fg); }
+.nt-submit:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.nt-submit-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+.nt-submit-pen { display: none; }
+
+.submit-modal .sc-dialog { --sc-line: color-mix(in srgb, var(--fg) 12%, transparent); --sc-line-2: color-mix(in srgb, var(--fg) 22%, transparent);
+  position: relative; width: 100%; max-width: 560px; margin: auto; box-sizing: border-box; padding: 24px 24px 22px;
+  background: var(--paper); color: var(--fg); border: 1.5px solid var(--sc-line-2); border-radius: 2px; box-shadow: var(--sh-md);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.sc-dialog :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.sc-eyebrow { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 11px/1.4 var(--f-mono); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--green-700); }
+.sc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+.sc-dialog h2 { margin: 8px 0 4px; font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.15; color: var(--fg); }
+.sc-lead { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: var(--fg-soft); }
+.sc-choices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sc-choice { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1.5px solid var(--sc-line); border-radius: 2px; background: transparent; color: var(--fg);
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: background .12s, border-color .12s; }
+.sc-choice:hover, .sc-choice:focus-visible { background: var(--green-tint); border-color: var(--green); color: var(--fg); }
+.sc-tile { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 2px; background: var(--paper-3); color: var(--green-700); }
+.sc-choice:hover .sc-tile, .sc-choice:focus-visible .sc-tile { background: var(--green); color: #fff; }
+.sc-tile svg { width: 21px; height: 21px; }
+.sc-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sc-title { font-size: 15px; font-weight: 700; }
+.sc-desc { font-size: 13.5px; line-height: 1.4; color: var(--fg-soft); }
+.sc-tag { margin-top: 2px; display: block; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--fg-soft); }
+.sc-choice:hover .sc-tag, .sc-choice:focus-visible .sc-tag { color: var(--green-700); }
+.sc-tag svg { display: inline-block; width: 11px; height: 11px; margin-left: 2px; vertical-align: -1px; } /* stays beside the text when it wraps */
+.sc-chev { flex: none; display: flex; color: var(--fg-soft); }
+.sc-choice:hover .sc-chev, .sc-choice:focus-visible .sc-chev { color: var(--green-700); }
+.sc-chev svg { width: 18px; height: 18px; }
+.sc-foot { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--sc-line); }
+.sc-how { display: inline-flex; align-items: center; gap: 6px; color: var(--green-700); font-size: 14px; font-weight: 600; text-decoration: none; }
+.sc-how:hover { text-decoration: underline; text-underline-offset: 3px; }
+.sc-how svg { width: 13px; height: 13px; }
+.sc-body { margin: 0; max-width: 480px; font-size: 15px; line-height: 1.6; color: var(--fg-soft); }
+.sc-acts { margin-top: 22px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.sc-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 2px;
+  background: var(--green); color: #fff; font-size: 14.5px; font-weight: 700; text-decoration: none; }
+.sc-cta:hover { background: #178a52; color: #fff; }
+.sc-cta svg { width: 15px; height: 15px; }
+.sc-close { padding: 10px 18px; border: 1.5px solid var(--sc-line-2); border-radius: 2px; background: transparent; color: var(--fg);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.sc-close:hover { border-color: var(--fg); background: transparent; color: var(--fg); }
+/* The "checking your membership" placeholder, shown only when the button beats the membership answer. */
+.sc-sk { display: block; border-radius: 2px; background: var(--sc-line); animation: sc-pulse 1.4s ease-in-out infinite; }
+.sc-sk-h { width: 62%; height: 22px; margin: 12px 0 6px; }
+.sc-sk-p { width: 84%; height: 12px; margin: 0 0 18px; }
+.sc-skrow { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1.5px solid var(--sc-line); border-radius: 2px; }
+.sc-sk-tile { width: 40px; height: 40px; flex: none; }
+.sc-sk-lines { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.sc-sk-a { width: 30%; height: 12px; }
+.sc-sk-b { width: 66%; height: 10px; }
+.sc-checking { margin: 14px 0 0; font: 11px/1.4 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--fg-soft); }
+@keyframes sc-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sc-sk { animation: none; } }
+
+/* A narrower window: the button folds into a pencil with the green dot. Measured 2026-10-02: with the full label the
+   top bar wrapped to a second row from about 660px to 880px, where it had held one row; folded, it holds. */
+@media (max-width: 880px) {
+  .nt-submit { position: relative; width: 40px; padding: 0; justify-content: center; }
+  .nt-submit-tx { display: none; }
+  .nt-submit-pen { display: flex; }
+  .nt-submit-pen svg { width: 18px; height: 18px; }
+  .nt-submit-dot { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; }
+}
+/* A phone: the pencil matches the smaller icon buttons, and the dialog tightens. */
+@media (max-width: 560px) {
+  .nt-submit { width: 36px; height: 36px; }
+  .submit-modal .sc-dialog { padding: 20px 16px 18px; }
+  .sc-dialog h2 { font-size: 22px; }
+  .sc-cta { width: 100%; }
+}
