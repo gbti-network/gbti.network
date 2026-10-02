@@ -19,20 +19,15 @@ import { authorizeNewsEditor } from './membership-admin.mjs';
 import { findNewsItemByGuid } from './membership-news.mjs';
 import { channelForCategory } from '../../membership/news-channels.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
+// sow-171: the message format lives with the news share rules, so the extension panel previews exactly what posts.
+import { formatNewsPost as formatPost } from '../../membership/news-share.mjs';
+import { readGuildChannels } from './membership-discord-channels.mjs';
+import { ROLE } from '../../membership/overrides-core.mjs';
 
 export const NEWS_POSTED_KEY = (guid) => `news-posted:${String(guid).slice(0, 480)}`;
 
 function channelMap(env) {
   try { return env.NEWS_CHANNELS ? JSON.parse(env.NEWS_CHANNELS) : null; } catch { return null; }
-}
-
-/** A safe, ping-free Discord post for a CANONICAL news item (the Discord client also defaults allowed_mentions to
- *  `{ parse: [] }`, so no @everyone/@here/role/user mention in any field is ever parsed). */
-function formatPost(item) {
-  const title = String(item?.title || 'News').slice(0, 280);
-  const link = String(item?.link || '').slice(0, 500);
-  const source = item?.source ? String(item.source).slice(0, 80) : '';
-  return `📰 **${title}**${source ? `\n_via ${source}_` : ''}${link ? `\n${link}` : ''}`;
 }
 
 /**
@@ -45,7 +40,7 @@ function formatPost(item) {
  *   { ok:false, reason:'discord_unavailable' | 'discord_failed' }           bot not configured / post failed
  *   { ok:true,  posted:true,  channelId, messageId, record }                posted + recorded
  */
-export async function postNewsItemOnce(env, { guid, source, by } = {}, {
+export async function postNewsItemOnce(env, { guid, source, by, channelId: chosen = null } = {}, {
   kv = env?.SIGNUP_KV,
   fetch = globalThis.fetch,
   discord = null,
@@ -64,7 +59,9 @@ export async function postNewsItemOnce(env, { guid, source, by } = {}, {
   const item = await findItem(env, { guid: g, source: source || undefined, fetch });
   if (!item) return { ok: false, reason: 'not_found' };
 
-  const channelId = channelForCategory(channelMap(env), item.category);
+  // sow-171: a superadmin may pick the channel in the extension's share panel (checked by the HTTP handler below);
+  // every other caller routes by the story's category, as before.
+  const channelId = chosen || channelForCategory(channelMap(env), item.category);
   if (!channelId) return { ok: true, posted: false, reason: 'unmapped' };
 
   if (!env.DISCORD_BOT_TOKEN) return { ok: false, reason: 'discord_unavailable' };
@@ -82,7 +79,7 @@ export async function postNewsItemOnce(env, { guid, source, by } = {}, {
 }
 
 /** POST /membership/news-publish { guid, source? } -> resolves the canonical item + posts to its mapped channel once. */
-export async function membershipNewsPublish(request, env, { authorize = authorizeNewsEditor, findItem = findNewsItemByGuid, fetch = globalThis.fetch, kv = env?.SIGNUP_KV, discord = null, now = () => new Date().toISOString() } = {}) {
+export async function membershipNewsPublish(request, env, { authorize = authorizeNewsEditor, findItem = findNewsItemByGuid, fetch = globalThis.fetch, kv = env?.SIGNUP_KV, discord = null, now = () => new Date().toISOString(), guildChannels = readGuildChannels } = {}) {
   const auth = await authorize(request, env);
   if (!auth.ok) return { status: auth.status, body: auth.body };
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the dedupe store is not configured' } };
@@ -93,7 +90,23 @@ export async function membershipNewsPublish(request, env, { authorize = authoriz
   const sourceHint = req?.source ? String(req.source) : undefined;
   if (!guid) return { status: 400, body: { error: 'bad_request', message: 'a news item guid is required' } };
 
-  const r = await postNewsItemOnce(env, { guid, source: sourceHint, by: auth.githubId }, { kv, fetch, discord, findItem, now });
+  // sow-171: the share panel lets a SUPERADMIN choose the Discord channel (the story's category channel is only the
+  // default, and "Other" stories have none). The choice must be a text or announcement channel of our own guild,
+  // read from the same cached list the picker showed, so a forged id cannot send the bot anywhere else.
+  const wanted = req?.channelId != null ? String(req.channelId).trim() : '';
+  let channelId = null;
+  if (wanted) {
+    if (auth.role !== ROLE.superadmin) return { status: 403, body: { error: 'forbidden', message: 'only a superadmin can choose the Discord channel' } };
+    if (!/^\d{5,25}$/.test(wanted)) return { status: 400, body: { error: 'bad_request', message: 'that is not a Discord channel id' } };
+    const g = await guildChannels(env, { fetchImpl: fetch });
+    if (!g?.ok) return { status: 502, body: { error: 'discord_unavailable', message: 'could not check the Discord channel right now' } };
+    if (!g.channels.some((c) => c.id === wanted && (c.type === 0 || c.type === 5))) {
+      return { status: 400, body: { error: 'bad_request', message: 'that is not one of our Discord channels' } };
+    }
+    channelId = wanted;
+  }
+
+  const r = await postNewsItemOnce(env, { guid, source: sourceHint, by: auth.githubId, channelId }, { kv, fetch, discord, findItem, now });
   if (r.ok && r.alreadyPosted) return { status: 200, body: { ok: true, posted: false, alreadyPosted: true, channelId: r.channelId, messageId: r.messageId } };
   if (!r.ok && r.reason === 'not_found') return { status: 404, body: { error: 'not_found', message: 'this news item is not in the current feed (cannot be verified)' } };
   if (r.ok && r.reason === 'unmapped') return { status: 200, body: { ok: true, posted: false, reason: 'no Discord channel is mapped for this category' } };

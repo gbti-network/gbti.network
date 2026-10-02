@@ -30,6 +30,7 @@ import { handleShoptalk } from './membership-shoptalk.mjs'; // sow-314: the Shop
 import { handleDigestSwitch } from './membership-digest.mjs'; // sow-202: the member's weekly digest switch
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
+import { handleNewsShareGet, handleNewsShareDone } from './membership-news-share.mjs'; // sow-171: share a news story to our channels
 import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SOW-046 D: reflect news discussion onto Discord
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
 import { membershipNewsFollowing } from './membership-news-following.mjs'; // sow-386: members-only news alerts for the bells
@@ -351,6 +352,17 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
     if (method === 'POST') {
       const r = await membershipNewsPublish(request, env);
+      return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+    }
+  }
+
+  // sow-171: the extension's "Share to our channels" panel on a news story. SUPERADMIN only (the Social Queue gate):
+  // GET reads where the story has gone, POST records a hand-made post as a done Social Queue task. Bearer only (the
+  // extension is the one caller), per-token, so never cached and varied on the bearer.
+  if (pathname === '/membership/news-share') {
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+    if (method === 'GET' || method === 'POST') {
+      const r = method === 'GET' ? await handleNewsShareGet(request, env) : await handleNewsShareDone(request, env);
       return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
     }
   }

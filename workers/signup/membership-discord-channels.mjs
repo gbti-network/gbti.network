@@ -12,14 +12,25 @@ export async function membershipDiscordChannels(request, env, { authorize = auth
   // gbti.network). Default false keeps the extension's bearer-only path unchanged; a GET carries no CSRF.
   const auth = await authorize(request, env, { allowCookie });
   if (!auth.ok) return { status: auth.status ?? 403, body: { error: auth.error ?? 'forbidden' } };
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) {
-    return { status: 200, body: { channels: [], reason: 'discord-not-provisioned' } };
-  }
+  const r = await readGuildChannels(env, { fetchImpl, now });
+  if (r.reason) return { status: 200, body: { channels: [], reason: r.reason } };
+  if (!r.ok) return { status: 502, body: { error: 'discord-unavailable', message: r.message } };
+  return { status: 200, body: { channels: r.channels, ...(r.cached ? { cached: r.cached } : {}) } };
+}
+
+/**
+ * The guild's channels (id, name, type, parent), through the one-hour KV cache. sow-171: split out of the route so
+ * the news publisher can check that a superadmin's chosen channel is really one of ours, from the same list the
+ * picker showed. Returns { ok:true, channels, cached? } | { ok:false, reason:'discord-not-provisioned' } |
+ * { ok:false, message }. A Discord failure serves the stale cache when one exists.
+ */
+export async function readGuildChannels(env, { fetchImpl = globalThis.fetch, now = Date.now } = {}) {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) return { ok: false, reason: 'discord-not-provisioned' };
   const kv = env.SIGNUP_KV;
   let cached = null;
   try { cached = kv ? await kv.get(CACHE_KEY, 'json') : null; } catch { cached = null; }
   if (cached && Array.isArray(cached.channels) && now() - (cached.generatedAt ?? 0) < TTL_MS) {
-    return { status: 200, body: { channels: cached.channels, cached: true } };
+    return { ok: true, channels: cached.channels, cached: true };
   }
   try {
     const res = await fetchImpl(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/channels`, {
@@ -33,9 +44,9 @@ export async function membershipDiscordChannels(request, env, { authorize = auth
       .map((c) => ({ id: String(c.id), name: String(c.name || ''), type: c.type, parentId: c.parent_id ? String(c.parent_id) : null }));
     const body = { channels, generatedAt: now() };
     try { if (kv) await kv.put(CACHE_KEY, JSON.stringify(body)); } catch { /* cache is best-effort */ }
-    return { status: 200, body: { channels } };
+    return { ok: true, channels };
   } catch (err) {
-    if (cached && Array.isArray(cached.channels)) return { status: 200, body: { channels: cached.channels, cached: 'stale' } };
-    return { status: 502, body: { error: 'discord-unavailable', message: String(err?.message ?? err) } };
+    if (cached && Array.isArray(cached.channels)) return { ok: true, channels: cached.channels, cached: 'stale' };
+    return { ok: false, message: String(err?.message ?? err) };
   }
 }
