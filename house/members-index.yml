@@ -59,3 +59,5 @@ members:
   # SOW-157: hosted-member enrollment appended by reconcile (2026-09-30).
   # sow-428: given a GBTI name by hand (2026-09-30), before the folder held any content.
   "113307118": mike-conley
+  # SOW-157: hosted-member enrollment appended by reconcile (2026-10-02).
+  "17553670": gbarrionuevo
