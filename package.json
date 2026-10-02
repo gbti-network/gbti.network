@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "The GBTI Network static Astro site plus the membership controller (SOW-001, SOW-002, SOW-005). Kills the WordPress bill.",
   "workspaces": [
     "client"

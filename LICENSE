@@ -1,0 +1,44 @@
+GBTI Network License
+
+Copyright (c) 2026 Gethsemane LLC. All rights reserved.
+
+This repository is public so that the GBTI Network can run on free infrastructure
+and so that its members can see how the network works. Being able to read this
+repository does not give you permission to use it.
+
+1. The code and design
+
+   Everything in this repository other than the member content described in
+   section 3 is the property of Gethsemane LLC. That includes the website and its
+   design, the servers, the browser extension, the agent server, the scripts, the
+   automation and the tests.
+
+   No license is granted to copy, modify, publish, distribute, host, sublicense or
+   sell any of it, to make derivative works from it, or to use it to run any
+   website, service, application or network, except with written permission from
+   Gethsemane LLC.
+
+2. Viewing and forking on GitHub
+
+   GitHub's Terms of Service allow GitHub users to view public repositories and to
+   fork them on GitHub. That is the only permission given. A fork carries no other
+   right under this license, and none of the restrictions in section 1 apply any
+   less to a fork.
+
+3. Member content
+
+   The files under members/ were written by members of the GBTI Network and belong
+   to them. They are published under the GBTI Network Terms of Service
+   (https://gbti.network/terms/), which give the public the right to view them and
+   nothing more. This license grants no right to them.
+
+4. Trademarks
+
+   GBTI, GBTI Network and the GBTI logos are trademarks of Gethsemane LLC. This
+   license grants no right to use them. See TRADEMARKS.md.
+
+5. No warranty
+
+   This repository is provided as is, without warranty of any kind.
+
+Permission requests: opportunities@gbti.network

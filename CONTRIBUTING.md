@@ -7,6 +7,10 @@ trial member can save drafts privately from the website, the extension or the ag
 them after upgrading. Among paid members, your membership controls whether your own-folder content stays
 published.
 
+**Code is not open for contributions.** This repository takes content from members, not code: a pull request
+that changes the site, the servers, the extension or the scripts is not accepted. The code is not licensed for reuse;
+see `LICENSE` and `TRADEMARKS.md`.
+
 ## Add or edit content
 
 1. Create your folder if it does not exist: `members/<your-github-username>/`.

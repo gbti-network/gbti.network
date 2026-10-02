@@ -5,7 +5,7 @@ slug: terms
 status: published
 visibility: public
 description: "The terms for using the GBTI Network: membership ($150 per year with a 90-day limited-access trial), publishing through the public repository, the referral and contribution revenue share, the personal invite commission, payments through Stripe, refunds, and the community Code of Conduct."
-updatedAt: 2026-07-18
+updatedAt: 2026-10-01
 redirectFrom: ["/terms/"]
 ---
 
@@ -13,9 +13,11 @@ redirectFrom: ["/terms/"]
 
 The GBTI Network is operated by **Gethsemane LLC**, a United States limited liability company ("GBTI", "we", "us"). Please read these Terms of Service carefully before accessing or using GBTI products and services. By using the service, you agree to these terms.
 
-## Usage License
+## Code and Trademarks
 
-Code published by the GBTI organization carries one of the following open-source licenses: MIT, GPL-3.0, or BSL. The applicable license is stated in each repository or product.
+The code behind the GBTI Network (this website and its design, its servers, the GBTI browser extension and the agent server) is owned by Gethsemane LLC, and all rights are reserved. It is kept in a public repository so that members can see how the network works. Being able to read it is not permission to copy it, reuse it or run it anywhere else. Other GBTI repositories and products state their own license where one applies.
+
+GBTI, GBTI Network and the GBTI logos are trademarks of Gethsemane LLC. They may not be used for another website, service, network or product, or in a way that suggests GBTI made or endorses something it did not.
 
 ## Membership
 

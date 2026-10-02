@@ -276,8 +276,9 @@ The authoring hosts have their own guides: see `client/README.md` for the npm CM
 ## Contribute
 
 See `CONTRIBUTING.md`. Members open a pull request that adds or edits files inside their own
-`members/<github-username>/` folder. Anyone can read and fork; membership decides what merges and stays
-published.
+`members/<github-username>/` folder. Membership decides what merges and stays published. The repository
+is public so that members can see how the network works; the code is not licensed for reuse (see License
+below).
 
 ## Project status
 
@@ -286,3 +287,9 @@ unit-tested against fixtures. Going live is a provisioning and deploy step: stan
 repo and branch protection, Cloudflare Pages and DNS, and the Stripe, Discord, GitHub OAuth, Turnstile,
 and Resend accounts, then publish the client. Referral attribution and accrual are on by design; live
 payouts switch on after the Stripe Connect platform is provisioned.
+
+## License
+
+All rights reserved. The code and design in this repository belong to Gethsemane LLC and are not licensed for
+copying, reuse or hosting; see `LICENSE`. Content under `members/` belongs to the members who wrote it. GBTI,
+GBTI Network and the GBTI logos are trademarks of Gethsemane LLC; see `TRADEMARKS.md`.

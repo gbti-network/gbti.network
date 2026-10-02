@@ -2,6 +2,7 @@
   "name": "@gbti/client-ui",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "description": "Shared web-components UI for the GBTI client. Consumed by BOTH the Chrome extension host and the npm server host; the public Astro site embeds the same custom-element tags inert. Components depend only on an injected GbtiClient contract (never on the core or a transport), so they run identically on both hosts.",
   "exports": {
