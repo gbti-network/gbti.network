@@ -19284,9 +19284,121 @@ ${BLOCKED_PILL_CSS}
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }
 
-  // client-ui/src/news.mjs
-  var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
-  var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
+  // membership/syndication-channels.mjs
+  var CHANNEL_LIMITS = Object.freeze({
+    discord: 2e3,
+    "discord-category": 2e3,
+    // SOW-087: the category-channel Discord post
+    x: 280,
+    linkedin: 3e3,
+    mastodon: 500,
+    bluesky: 300,
+    reddit: 300,
+    // the Reddit post-title cap (SOW-088: the template renders the title)
+    devto: 128,
+    // the dev.to title cap (the article body is not template-limited)
+    hashnode: 250,
+    // SOW-134: the Hashnode title cap (the article body is not template-limited)
+    dailydev: 300
+    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
+  });
+  var CHANNEL_SECRET_KEYS = Object.freeze({
+    discord: ["DISCORD_BOT_TOKEN"],
+    "discord-category": ["DISCORD_BOT_TOKEN"],
+    // SOW-087: the same bot posts the category-channel copy
+    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
+    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
+    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
+    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
+    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
+    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
+    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
+    // needs no credential at all, so listing dead keys here would only make a working channel report itself
+    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
+    reddit: ["REDDIT_SUBREDDIT"],
+    // SOW-088, narrowed by sow-260
+    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
+    // SOW-088: full-body crossposts to the GBTI dev.to organization
+    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
+    // SOW-134: PAT + the gbti.hashnode.dev publication id
+  });
+  var CHANNEL_MARKDOWN = Object.freeze({
+    discord: true,
+    // a Discord message, and Discord renders markdown natively
+    "discord-category": true,
+    // the same bot, the same rendering
+    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
+    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
+    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
+    // a plain-text field on both. Their article BODIES never pass through here: they are built by
+    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
+    // asterisks in an article title.
+    devto: false,
+    hashnode: false,
+    reddit: false,
+    // the manual rail is the rich-text composer, not the markdown editor
+    x: false,
+    bluesky: false,
+    mastodon: false,
+    linkedin: false,
+    dailydev: false
+  });
+  function rendersMarkdown(name) {
+    return CHANNEL_MARKDOWN[name] === true;
+  }
+  function channelLimit(name) {
+    return CHANNEL_LIMITS[name] ?? 280;
+  }
+
+  // membership/syndication-format.mjs
+  function toHashtag(label) {
+    const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
+    if (!parts.length) return "";
+    const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
+    return body ? `#${body}` : "";
+  }
+
+  // membership/social-queue.mjs
+  var ITEM_SNAPSHOT_KEYS = Object.freeze([
+    "id",
+    "source",
+    "targetType",
+    "targetSlug",
+    "author",
+    "authorName",
+    "authorDiscord",
+    "authorX",
+    "authorBluesky",
+    "authorMastodon",
+    "authorReddit",
+    "authorDevto",
+    "tags",
+    "authorNote",
+    "title",
+    "blurb",
+    "url",
+    "image",
+    "category",
+    "categoryPath",
+    "membersOnly",
+    "visibility",
+    "trigger",
+    "shortDescription",
+    "mention"
+  ]);
+
+  // membership/news-share.mjs
+  var NEWS_SHARE_CHANNELS = Object.freeze(["x", "bluesky", "linkedin", "reddit", "dailydev"]);
+  var NEWS_SHARE_LABELS = Object.freeze({
+    x: "X",
+    bluesky: "Bluesky",
+    linkedin: "LinkedIn",
+    reddit: "Reddit",
+    dailydev: "daily.dev",
+    discord: "Discord",
+    devto: "dev.to"
+  });
+  var SITE12 = "https://gbti.network";
   function newsTargetSlug(guid) {
     const s = String(guid ?? "");
     let h = 2166136261;
@@ -19296,6 +19408,78 @@ ${BLOCKED_PILL_CSS}
     }
     return `news-${(h >>> 0).toString(36)}${(s.length % 36).toString(36)}`;
   }
+  function newsShareUrl(story = {}, linkTo = "source") {
+    if (linkTo === "gbti") {
+      const g = String(story.guid || "");
+      if (!g) return "";
+      const s = String(story.source || "");
+      return `${SITE12}/news/item/?g=${encodeURIComponent(g)}${s ? `&s=${encodeURIComponent(s)}` : ""}`;
+    }
+    return isWebUrl(story.link) ? String(story.link) : "";
+  }
+  function isWebUrl(u) {
+    try {
+      const x = new URL(String(u || ""));
+      return x.protocol === "https:" || x.protocol === "http:";
+    } catch {
+      return false;
+    }
+  }
+  function newsHashtag(category) {
+    const c = String(category || "").trim();
+    if (!c || c.toLowerCase() === "other") return "";
+    return toHashtag(c);
+  }
+  function fitTitle(title, tail, limit) {
+    const full = `${title}${tail}`;
+    if (full.length <= limit) return full;
+    const room = limit - tail.length - 1;
+    if (room < 12) return full.slice(0, limit);
+    return `${title.slice(0, room).trimEnd()}…${tail}`;
+  }
+  function newsShareDraft(channel, story = {}, { linkTo = "source", publisher = "" } = {}) {
+    const title = String(story.title || "News").replace(/\s+/g, " ").trim();
+    const pub = String(publisher || story.source || "").trim();
+    const url = newsShareUrl(story, linkTo);
+    const tag = newsHashtag(story.category);
+    const via = pub ? `, via ${pub}` : "";
+    const limit = channelLimit(channel);
+    if (channel === "x" || channel === "bluesky") return fitTitle(title, `${via} ${url}${tag ? ` ${tag}` : ""}`, limit);
+    if (channel === "dailydev") return fitTitle(title, `${via} ${url}`, limit);
+    if (channel === "reddit") return fitTitle(title, pub ? ` (${pub})` : "", limit);
+    if (channel === "linkedin") {
+      const lead = String(story.excerpt || "").trim() || title;
+      const tail = `
+
+Read the full story${pub ? ` on ${pub}` : ""}:
+${url}${tag ? `
+
+${tag}` : ""}`;
+      return fitTitle(lead, tail, limit);
+    }
+    return "";
+  }
+  function newsRedditComment(story = {}, { linkTo = "source", publisher = "" } = {}) {
+    const pub = String(publisher || story.source || "").trim() || "the publication";
+    const where = linkTo === "gbti" ? "our page links to the full story." : "the link above is the full story.";
+    return `Shared from the GBTI Network news feed. The reporting is by ${pub}; ${where}`;
+  }
+  function swapLink(text2, fromUrl, toUrl) {
+    const t = String(text2 ?? "");
+    return fromUrl && toUrl && fromUrl !== toUrl ? t.split(fromUrl).join(toUrl) : t;
+  }
+  function formatNewsPost(item) {
+    const title = String(item?.title || "News").slice(0, 280);
+    const link = String(item?.link || "").slice(0, 500);
+    const source = item?.source ? String(item.source).slice(0, 80) : "";
+    return `📰 **${title}**${source ? `
+_via ${source}_` : ""}${link ? `
+${link}` : ""}`;
+  }
+
+  // client-ui/src/news.mjs
+  var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
+  var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
   function utmLink(link, params = UTM) {
     if (typeof link !== "string" || !link) return "";
     try {
@@ -22891,7 +23075,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE12 = "https://gbti.network";
+  var SITE13 = "https://gbti.network";
   var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -22956,7 +23140,7 @@ ${BLOCKED_PILL_CSS}
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE12}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE13}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -23023,7 +23207,7 @@ ${BLOCKED_PILL_CSS}
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc2(item.title);
-      const t = item.url ? `<a class="t" href="${SITE12}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE13}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc2(cid)}" data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc2(rowLabel(item))}</span>${t}${rm}</li>`;
     }
@@ -23068,7 +23252,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE14 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
@@ -23108,7 +23292,7 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const data = await (await fetch(`${SITE13}/topics.json`, { cache: "no-cache" })).json();
+        const data = await (await fetch(`${SITE14}/topics.json`, { cache: "no-cache" })).json();
         this._topics = topicsFromJson(data);
         this._groupOrder = groupOrderFromJson(data);
       } catch {
@@ -23232,7 +23416,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE14 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS36 = `
@@ -23340,20 +23524,20 @@ ${BLOCKED_PILL_CSS}
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc2(f.username);
         return `<li class="row">
         <span class="av">${avatarLayers(f.username)}</span>
-        <a class="nm" href="${SITE14}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE15}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -23822,7 +24006,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-profile-editor.mjs
-  var SITE15 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var STATUS_LABEL2 = {
     paid: "Paid member",
     trialing: "Free trial",
@@ -24027,7 +24211,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
@@ -24699,7 +24883,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // client-ui/src/elements/gbti-workspace.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -25086,7 +25270,7 @@ ${BLOCKED_PILL_CSS}
       const flip = it2.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it2.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it2.status === "published" ? publicPathFor({ type: it2.type, path: it2.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE16 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE17 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it2) ? `<span class="tag who">@${esc2(authorOf(it2))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -25583,7 +25767,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE17 = "https://gbti.network";
+  var SITE18 = "https://gbti.network";
   var POLL_MS2 = 12e4;
   var LEGACY_SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -25756,7 +25940,7 @@ ${BLOCKED_PILL_CSS}
           title: it2.title || it2.targetSlug || "Untitled",
           sub: why === "flagged" ? `Flagged ${type.toLowerCase()}: approve or cancel it` : `${type} did not post on its own: approve to send it`,
           // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
-          href: `${SITE17}/admin/#tab=syndication&sub=activity`
+          href: `${SITE18}/admin/#tab=syndication&sub=activity`
         };
       });
     }
@@ -25766,7 +25950,7 @@ ${BLOCKED_PILL_CSS}
     // everything (the system default), and a refused news read (a free account) means no news rows.
     async _siteList(path) {
       try {
-        const res = await fetch(`${SITE17}${path}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE18}${path}`, { cache: "no-cache" });
         const data = res.ok ? await res.json() : {};
         return Array.isArray(data?.entries) ? data.entries : [];
       } catch {
@@ -25794,7 +25978,7 @@ ${BLOCKED_PILL_CSS}
         ts: r.ts,
         title: r.target || "New activity",
         sub: r.kind === "news" ? r.actor : `@${r.actor}`,
-        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE17}${r.url || ""}`
+        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE18}${r.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -26148,7 +26332,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE18 = "https://gbti.network";
+  var SITE19 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
@@ -26258,7 +26442,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
@@ -26282,7 +26466,7 @@ ${BLOCKED_PILL_CSS}
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE19}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
       this.set(this.css(CSS41) + `
@@ -26373,8 +26557,8 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE19 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE19}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE20 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE20}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc4 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -26479,7 +26663,7 @@ ${BLOCKED_PILL_CSS}
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE19}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE20}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -26819,9 +27003,399 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-news-admin", GbtiNewsAdmin);
 
+  // client-ui/src/social-composer.mjs
+  var REDDIT_SUB = "GBTI_network";
+  var composeUrl = (task) => {
+    const channel = task?.channel;
+    const text2 = String(task?.text || "");
+    const t = encodeURIComponent(text2);
+    if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
+    if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
+    if (channel === "bluesky") return `https://bsky.app/intent/compose?text=${t}`;
+    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
+    if (channel === "hashnode") return "https://hashnode.com/draft";
+    if (channel === "reddit") {
+      const u = String(task?.url || "");
+      return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ""}`;
+    }
+    return null;
+  };
+
+  // client-ui/src/elements/gbti-news-share.mjs
+  var PILLS = [...NEWS_SHARE_CHANNELS, "discord", "devto"];
+  var NOTES = {
+    x: "Opens X with this text filled in. Post it there, then press Mark done.",
+    bluesky: "Opens Bluesky with this text filled in. Post it there, then press Mark done.",
+    linkedin: "Opens LinkedIn with this text. LinkedIn does not always fill it in, so press Copy text first. The link becomes an article card.",
+    reddit: "Opens r/GBTI_network with the title and link filled in. Post it, paste the first comment under it, then press Mark done.",
+    dailydev: "Copies the text and opens the GBTI squad on daily.dev, which cannot be filled in. Paste it there, then press Mark done.",
+    discord: "Posts straight to Discord as the GBTI bot. A story goes to Discord once."
+  };
+  var DONE_MSG = "Marked done. It is listed in the Social Queue under Manual done, so nobody posts it twice.";
+  var hostOf4 = (u) => {
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  };
+  var fmtWhen = (v2) => {
+    try {
+      const d = new Date(v2);
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
+  var discordPreviewHtml = (msg) => String(msg || "").split("\n").map((line) => esc2(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^_(.+)_$/, "<em>$1</em>")).join("<br>");
+  var listOr = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} or ${a[a.length - 1]}`;
+  var listAnd = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
+  var CSS44 = `
+  :host { display:block; margin:16px 0 0; }
+  :host([hidden]) { display:none !important; } /* the host's own display would otherwise beat the hidden attribute */
+  .ns { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; display:flex; flex-direction:column; gap:14px;
+    -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .hd { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .eyebrow { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+  .who { font-size:11.5px; color:var(--fg-mute, var(--muted)); }
+  .cov, .hint, .note { margin:0; font-size:12.5px; line-height:1.5; color:var(--muted); }
+  .note { font-size:12px; }
+  .pills { display:flex; flex-wrap:wrap; gap:8px; }
+  button.pill { display:inline-flex; align-items:center; gap:7px; min-height:40px; padding:0 13px; border-radius:999px; font-size:13px; font-weight:600;
+    background:transparent; color:var(--fg); border:1px solid var(--line-2, var(--line)); }
+  button.pill:hover:not([disabled]) { background:transparent; border-color:var(--accent); }
+  button.pill[aria-pressed="true"] { border:1.5px solid var(--accent); background:var(--green-tint); }
+  button.pill[aria-pressed="true"]:hover { background:var(--green-tint); }
+  button.pill[disabled] { opacity:1; color:var(--fg-mute, var(--muted)); border-style:dashed; cursor:not-allowed; }
+  .pst { font-size:11.5px; font-weight:700; color:var(--accent); }
+  .pst.soft { color:var(--muted); font-weight:600; }
+  .sep { height:1px; background:var(--line); }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .flab { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  label, .lab { display:block; margin:0; font-size:13px; font-weight:700; color:var(--fg); }
+  .count { font-size:12px; font-weight:700; color:var(--fg-mute, var(--muted)); font-variant-numeric:tabular-nums; }
+  .count.over { color:var(--danger); }
+  textarea, input, select { font-family:var(--font-body); font-size:14px; line-height:1.55; color:var(--fg); background:var(--bg); border:1px solid var(--line-2, var(--line)); }
+  textarea { min-height:0; }
+  .linkline { font-size:13px; color:var(--muted); padding:9px 12px; border-radius:8px; border:1px dashed var(--line-2, var(--line)); word-break:break-all; }
+  .linkto { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .linkto .lab { margin-right:4px; }
+  button.seg { min-height:40px; padding:0 14px; border-radius:9px; font-size:13px; font-weight:600; background:transparent; color:var(--fg); border:1px solid var(--line-2, var(--line)); }
+  button.seg:hover { background:transparent; border-color:var(--accent); }
+  button.seg[aria-checked="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  button.seg[aria-checked="true"]:hover { background:var(--accent); }
+  .preview { font-size:14px; line-height:1.6; padding:12px 14px; border-radius:8px; border:1px solid var(--line); background:var(--bg); word-break:break-word; }
+  .preview em { color:var(--muted); }
+  .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  button.pri { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 18px; border-radius:9px; font-size:13.5px; font-weight:700;
+    background:var(--accent); color:var(--on-accent); border:1px solid var(--accent); }
+  button.pri:hover:not([disabled]) { background:var(--accent); filter:brightness(1.08); }
+  button.sec { min-height:44px; padding:0 16px; border-radius:9px; font-size:13.5px; font-weight:600; background:transparent; color:var(--fg); border:1px solid var(--line-2, var(--line)); }
+  button.sec:hover:not([disabled]) { background:transparent; border-color:var(--accent); color:var(--accent); }
+  button.pri[disabled], button.sec[disabled] { opacity:.6; cursor:default; }
+  button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:700; text-decoration:underline; }
+  button.link:hover { background:none; }
+  .msg { margin:0; font-size:12.5px; color:var(--accent); } .msg.err { color:var(--danger); }
+`;
+  var GbtiNewsShare = class extends GbtiElement {
+    constructor() {
+      super();
+      this._story = null;
+      this._publisher = "";
+      this._reset();
+    }
+    /** The story this panel shares: { guid, title, link, source, category, excerpt }. A new story starts fresh. */
+    set story(s) {
+      this._story = s || null;
+      this._status = null;
+      this._statusErr = null;
+      this._reset();
+      if (this.isConnected) this.render();
+    }
+    get story() {
+      return this._story;
+    }
+    /** The publication's display name for "via <Publisher>" (the reader learns it after the story opens). */
+    set publisher(p) {
+      this._publisher = String(p || "");
+      if (this.isConnected) this.render();
+    }
+    _reset() {
+      this._target = "";
+      this._linkTo = "source";
+      this._drafts = {};
+      this._comment = null;
+      this._opened = {};
+      this._msg = null;
+      this._discordChoice = "";
+    }
+    /** Shown by the reader's toggle: reveal, then read where the story has gone (each time, so another superadmin's
+     *  posts show) and the Discord channels (once). */
+    open() {
+      this.hidden = false;
+      this.render();
+      this._loadStatus();
+      if (!this._channels) this._loadChannels();
+    }
+    /** Hidden again by the toggle. The pick, the drafts and the message are forgotten. */
+    close() {
+      this.hidden = true;
+      this._reset();
+      this.render();
+    }
+    async _loadStatus() {
+      const story = this._story;
+      if (!story?.guid || !this.client?.newsShareStatus) return;
+      this._statusErr = null;
+      this.render();
+      try {
+        const r = await this.client.newsShareStatus(story.guid, story.category || "");
+        if (this._story !== story) return;
+        this._status = { discord: r?.discord || {}, channels: r?.channels || {} };
+      } catch (e) {
+        if (this._story !== story) return;
+        this._statusErr = e?.message || "Could not check where this story has been posted.";
+      }
+      this.render();
+    }
+    async _loadChannels() {
+      if (!this.client?.discordChannels) {
+        this._channels = [];
+        return;
+      }
+      try {
+        const r = await this.client.discordChannels();
+        this._channels = (r?.channels || []).filter((c) => c.type === 0 || c.type === 5);
+      } catch {
+        this._channels = [];
+      }
+      this.render();
+    }
+    _posted(ch) {
+      if (ch === "discord") return Boolean(this._status?.discord?.posted);
+      return Boolean(this._status?.channels?.[ch]);
+    }
+    _url() {
+      return newsShareUrl(this._story || {}, this._linkTo);
+    }
+    _draft(ch) {
+      if (this._drafts[ch] != null) return this._drafts[ch];
+      return newsShareDraft(ch, this._story || {}, { linkTo: this._linkTo, publisher: this._publisher });
+    }
+    _commentText() {
+      return this._comment != null ? this._comment : newsRedditComment(this._story || {}, { linkTo: this._linkTo, publisher: this._publisher });
+    }
+    _coverage() {
+      if (this._statusErr) return "";
+      if (!this._status) return "Checking where this story has been posted...";
+      const live = [...NEWS_SHARE_CHANNELS, "discord"];
+      const posted = live.filter((c) => this._posted(c)).map((c) => NEWS_SHARE_LABELS[c]);
+      const not = live.filter((c) => !this._posted(c)).map((c) => NEWS_SHARE_LABELS[c]);
+      return `${posted.length ? `Posted to ${listAnd(posted)}. ` : "Not posted anywhere yet. "}${not.length ? `Not yet on ${listOr(not)}.` : "Every channel has it."}`;
+    }
+    _pill(ch) {
+      const label = NEWS_SHARE_LABELS[ch];
+      if (ch === "devto") {
+        return `<button type="button" class="pill" disabled title="dev.to takes pages we publish ourselves">${socialIcon("devto", 15)}<span>${label}</span><span class="pst soft">GBTI pages only</span></button>`;
+      }
+      const st2 = this._posted(ch) ? '<span class="pst">Posted</span>' : this._opened[ch] ? '<span class="pst soft">Opened</span>' : "";
+      return `<button type="button" class="pill" data-pick="${ch}" aria-pressed="${this._target === ch}">${socialIcon(ch, 15)}<span>${label}</span>${st2}</button>`;
+    }
+    _linkChoice() {
+      const host = hostOf4(this._story?.link) || "the publication";
+      const seg = (v2, text2) => `<button type="button" class="seg" role="radio" data-link="${v2}" aria-checked="${this._linkTo === v2}">${esc2(text2)}</button>`;
+      return `<div class="linkto" role="radiogroup" aria-labelledby="ns-linkto"><span class="lab" id="ns-linkto">Link to</span>` + seg("source", `The article on ${host}`) + seg("gbti", "Our news page on gbti.network") + "</div>";
+    }
+    _counter(ch, text2) {
+      const limit = channelLimit(ch);
+      const over = text2.length > limit;
+      return `<span class="count${over ? " over" : ""}" data-count>${text2.length} / ${limit}${over ? " (too long)" : ""}</span>`;
+    }
+    _composer(ch) {
+      const label = NEWS_SHARE_LABELS[ch];
+      if (ch === "discord") {
+        const d = this._status?.discord || {};
+        const chosen = this._discordChoice || d.channelId || d.mappedChannelId || "";
+        const opts = (this._channels || []).map((c) => `<option value="${esc2(c.id)}"${c.id === chosen ? " selected" : ""}>#${esc2(c.name)}</option>`).join("");
+        const picker = this._channels == null ? '<p class="note">Loading the Discord channels...</p>' : opts ? `<select id="ns-dc" data-dc ${d.posted ? "disabled" : ""}>${chosen ? "" : '<option value="" selected>Pick a channel</option>'}${opts}</select>` : '<p class="note">Could not load the Discord channels, so the story goes to the channel for its category.</p>';
+        return `<div class="field"><label for="ns-dc">Channel</label>${picker}</div><div class="field"><span class="lab">Message</span><div class="preview">${discordPreviewHtml(formatNewsPost(this._story || {}))}</div></div>`;
+      }
+      if (ch === "reddit") {
+        const title = this._draft("reddit");
+        return `<div class="field"><div class="flab"><label for="ns-title">Title for r/GBTI_network</label>${this._counter("reddit", title)}</div><input id="ns-title" type="text" data-draft value="${esc2(title)}"></div><div class="field"><span class="lab">Link</span><div class="linkline">${esc2(this._url())}</div></div><div class="field"><label for="ns-comment">First comment</label><textarea id="ns-comment" rows="3" data-comment>${esc2(this._commentText())}</textarea></div>`;
+      }
+      const text2 = this._draft(ch);
+      return `<div class="field"><div class="flab"><label for="ns-text">Post text for ${esc2(label)}</label>${this._counter(ch, text2)}</div><textarea id="ns-text" rows="${ch === "linkedin" ? 7 : 4}" data-draft>${esc2(text2)}</textarea></div>`;
+    }
+    _actions(ch) {
+      const label = NEWS_SHARE_LABELS[ch];
+      if (ch === "discord") {
+        const posted = this._posted("discord");
+        return `<div class="acts"><button type="button" class="pri" data-discord${posted || this._busy ? " disabled" : ""}>${socialIcon("discord", 15)} ${posted ? "Posted to Discord" : this._busy ? "Posting..." : "Post now to Discord"}</button></div>`;
+      }
+      const done = this._posted(ch);
+      return `<div class="acts"><button type="button" class="pri" data-assist>${socialIcon(ch, 15)} Assist post to ${esc2(label)}</button><button type="button" class="sec" data-copy>${ch === "reddit" ? "Copy comment" : "Copy text"}</button><button type="button" class="sec" data-done${done ? " disabled" : ""}>${done ? "Done" : "Mark done"}</button></div>`;
+    }
+    _postedLine(ch) {
+      if (ch === "discord") {
+        const at3 = this._status?.discord?.postedAt;
+        return this._posted("discord") ? `<p class="note">Posted to Discord${at3 ? ` on ${esc2(fmtWhen(at3))}` : ""}.</p>` : "";
+      }
+      const rec = this._status?.channels?.[ch];
+      if (!rec) return "";
+      const when = rec.doneAt ? ` on ${esc2(fmtWhen(rec.doneAt))}` : "";
+      return `<p class="note">Marked done${rec.doneBy ? ` by ${esc2(rec.doneBy)}` : ""}${when}. You can still post it again.</p>`;
+    }
+    render() {
+      if (!this._story) {
+        this.set(this.css(CSS44));
+        return;
+      }
+      const ch = this._target;
+      const cov = this._statusErr ? `<p class="cov msg err" role="status">${esc2(this._statusErr)} <button type="button" class="link" data-retry>Try again</button></p>` : `<p class="cov">${esc2(this._coverage())}</p>`;
+      const body = ch ? '<div class="sep"></div>' + (ch === "discord" ? "" : this._linkChoice()) + this._composer(ch) + `<p class="note">${esc2(NOTES[ch] || "")}</p>` + (this._msg?.text === DONE_MSG ? "" : this._postedLine(ch)) + this._actions(ch) + (this._msg ? `<p class="msg${this._msg.err ? " err" : ""}" role="status">${esc2(this._msg.text)}</p>` : "") : '<p class="hint">Pick a channel to write its post.</p>';
+      this.set(this.css(CSS44) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
+      this._wire();
+    }
+    _wire() {
+      this.$$("[data-pick]").forEach((b) => b.addEventListener("click", () => {
+        this._target = b.dataset.pick;
+        this._msg = null;
+        this.render();
+      }));
+      this.$$("[data-link]").forEach((b) => b.addEventListener("click", () => this._setLink(b.dataset.link)));
+      const draft = this.$("[data-draft]");
+      draft?.addEventListener("input", () => {
+        this._drafts[this._target] = draft.value;
+        const counter = this.$("[data-count]");
+        if (counter) counter.outerHTML = this._counter(this._target, draft.value);
+      });
+      const comment = this.$("[data-comment]");
+      comment?.addEventListener("input", () => {
+        this._comment = comment.value;
+      });
+      const dc = this.$("[data-dc]");
+      dc?.addEventListener("change", () => {
+        this._discordChoice = dc.value;
+      });
+      this.$("[data-assist]")?.addEventListener("click", () => this._assist());
+      this.$("[data-copy]")?.addEventListener("click", () => this._copy());
+      this.$("[data-done]")?.addEventListener("click", () => this._markDone());
+      this.$("[data-discord]")?.addEventListener("click", () => this._postDiscord());
+      this.$("[data-retry]")?.addEventListener("click", () => this._loadStatus());
+    }
+    /** Switching the link keeps edits: the old address inside an edited draft becomes the new one. */
+    _setLink(v2) {
+      if (v2 === this._linkTo) return;
+      const from = this._url();
+      this._linkTo = v2 === "gbti" ? "gbti" : "source";
+      const to = this._url();
+      for (const k of Object.keys(this._drafts)) this._drafts[k] = swapLink(this._drafts[k], from, to);
+      this._msg = null;
+      this.render();
+    }
+    _assist() {
+      const ch = this._target;
+      const text2 = this._draft(ch);
+      const copied = ch === "dailydev" ? navigator.clipboard?.writeText?.(text2) : null;
+      const url = composeUrl({ channel: ch, text: text2, url: this._url() });
+      if (url) {
+        try {
+          window.open(url, "_blank", "noopener");
+        } catch {
+        }
+      }
+      this._opened[ch] = true;
+      const label = NEWS_SHARE_LABELS[ch];
+      this._msg = { text: ch === "reddit" ? "Opened Reddit with the title and link filled in. Post it, paste the first comment, then press Mark done." : ch === "dailydev" ? "Copied the post text and opened the GBTI squad. Paste it there, then press Mark done." : `Opened ${label} with the text. Post it there, then press Mark done.` };
+      this.render();
+      Promise.resolve(copied).catch(() => {
+        this._msg = { text: "Opened the GBTI squad, but the text did not copy. Press Copy text, then paste it there.", err: true };
+        this.render();
+      });
+    }
+    async _copy() {
+      const ch = this._target;
+      const text2 = ch === "reddit" ? this._commentText() : this._draft(ch);
+      try {
+        await navigator.clipboard.writeText(text2);
+        this._msg = { text: ch === "reddit" ? "Copied the first comment." : "Copied the post text." };
+      } catch {
+        this._msg = { text: "Could not copy automatically; select the text to copy it.", err: true };
+      }
+      this.render();
+    }
+    /** Shows as done at once, then settles with the Worker; a refusal puts it back and says why. */
+    async _markDone() {
+      const ch = this._target;
+      const story = this._story;
+      if (!ch || !story?.guid || !this.client?.newsShareDone) return;
+      const url = this._url();
+      if (!url) {
+        this._msg = { text: "This story has no web address to post, so it cannot be marked done.", err: true };
+        this.render();
+        return;
+      }
+      const status = this._status || { discord: {}, channels: {} };
+      const prev = status.channels[ch] ?? null;
+      this._status = { ...status, channels: { ...status.channels, [ch]: { doneAt: Date.now(), doneBy: null } } };
+      this._msg = { text: DONE_MSG };
+      this.render();
+      try {
+        const r = await this.client.newsShareDone({
+          guid: story.guid,
+          channel: ch,
+          title: story.title || "",
+          url,
+          category: story.category || "",
+          text: this._draft(ch),
+          ...ch === "reddit" ? { commentText: this._commentText() } : {}
+        });
+        if (this._story !== story) return;
+        if (r?.done) this._status = { ...this._status, channels: { ...this._status.channels, [ch]: r.done } };
+      } catch (e) {
+        if (this._story !== story) return;
+        this._status = { ...this._status, channels: { ...this._status.channels, [ch]: prev } };
+        this._msg = { text: e?.message || "Could not record the post. Try again in a minute.", err: true };
+      }
+      this.render();
+    }
+    async _postDiscord() {
+      const story = this._story;
+      if (!story?.guid || this._busy || !this.client?.publishNews) return;
+      const d = this._status?.discord || {};
+      const channelId = this._discordChoice && this._discordChoice !== d.mappedChannelId ? this._discordChoice : "";
+      if (!channelId && !d.mappedChannelId && (this._channels || []).length) {
+        this._msg = { text: "Pick a Discord channel first.", err: true };
+        this.render();
+        return;
+      }
+      this._busy = true;
+      this._msg = null;
+      this.render();
+      try {
+        const r = await this.client.publishNews(story, channelId ? { channelId } : {});
+        if (this._story !== story) return;
+        if (r?.posted || r?.alreadyPosted) {
+          this._status = { ...this._status || { channels: {} }, discord: { ...d, posted: true, postedAt: d.postedAt || (/* @__PURE__ */ new Date()).toISOString(), channelId: r.channelId ?? channelId } };
+          this._msg = { text: r.posted ? "Posted to Discord." : "Already posted to Discord." };
+        } else {
+          const cat = story.category ? ` (category: ${story.category})` : "";
+          this._msg = { text: `${r?.reason || "No Discord channel is set for this story."}${cat}`, err: true };
+        }
+      } catch (e) {
+        if (this._story !== story) return;
+        this._msg = { text: e?.message || "Could not post to Discord.", err: true };
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  define("gbti-news-share", GbtiNewsShare);
+
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -26840,6 +27414,12 @@ ${BLOCKED_PILL_CSS}
   a.src:hover { border-color:var(--accent); color:var(--accent); }
   button.disc { font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
   button.disc[disabled] { opacity:.6; cursor:default; }
+  /* sow-171: the superadmin toggle. --accent with --on-accent, because white on brand green is under AA. */
+  button.share-toggle { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px;
+    border:1px solid var(--accent); border-radius:9px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  button.share-toggle:hover { background:var(--accent); filter:brightness(1.08); }
+  button.share-toggle .chev { transition:transform .15s ease; }
+  button.share-toggle[aria-expanded="true"] .chev { transform:rotate(180deg); }
   .note { font-size:12.5px; margin:12px 0 0; } .note.ok { color:var(--brand); } .note.err { color:#d4495a; }
 
   /* the news channel meta as a sidebar card, above the discussion (7px, frosts in glass like the reader author card) */
@@ -26894,6 +27474,8 @@ ${BLOCKED_PILL_CSS}
       this._removed = false;
       this._restore = "idle";
       this._restoreErr = null;
+      this._share = null;
+      this._shareOpen = false;
       this.render();
       if (!item || !this.client) return;
       if (item.guid && this.client.newsOpened) Promise.resolve(this.client.newsOpened(item.guid, item.source)).catch(() => {
@@ -26905,9 +27487,13 @@ ${BLOCKED_PILL_CSS}
           this.client.getPrefs?.().catch(() => null)
         ]);
         this._canCurate = Boolean(status?.canCurate);
-        if (status?.role === "superadmin" && item.guid && this._item === item) this._mountAdmin(item);
+        if (status?.role === "superadmin" && item.guid && this._item === item) {
+          this._mountAdmin(item);
+          this._mountShare(item);
+        }
         const sid = lc5(item.source);
         this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
+        if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.source || "";
         this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
@@ -26941,6 +27527,23 @@ ${BLOCKED_PILL_CSS}
         this.render();
       });
       this._admin = card;
+    }
+    /** sow-171: the share panel for this story. One node per story (drafts survive re-renders), hidden until the
+     *  toggle is pressed, so nothing beyond the button shows at first. */
+    _mountShare(item) {
+      if (typeof document === "undefined") return;
+      const panel = document.createElement("gbti-news-share");
+      panel.id = "news-share";
+      panel.hidden = true;
+      panel.story = { guid: item.guid, title: item.title, link: item.link, source: item.source, category: item.category, excerpt: item.excerpt };
+      this._share = panel;
+    }
+    _toggleShare() {
+      if (!this._share) return;
+      this._shareOpen = !this._shareOpen;
+      if (this._shareOpen) this._share.open();
+      else this._share.close();
+      this.render();
     }
     /** sow-420: Undo on the removed-story notice puts the story back in the news index. */
     async _undoRemove() {
@@ -26980,12 +27583,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -26993,7 +27596,7 @@ ${BLOCKED_PILL_CSS}
       const followable = Boolean(this.client?.setPrefs && it2.source && this._followed);
       const followed = followable && this._followed.has(lc5(it2.source));
       const open = it2.openHref || (it2.link ? utmLink(it2.link) : "");
-      const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
+      const disc = this._share ? `<button class="share-toggle" data-share-toggle type="button" aria-expanded="${this._shareOpen}" aria-controls="news-share"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>Share to our channels<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
       const slug = it2.guid ? newsTargetSlug(it2.guid) : "";
       const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
@@ -27003,9 +27606,10 @@ ${BLOCKED_PILL_CSS}
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc2(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
-      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
+      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
+      if (this._share) this.$("[data-share-slot]")?.replaceWith(this._share);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -27015,6 +27619,7 @@ ${BLOCKED_PILL_CSS}
       }
       this.$("[data-follow]")?.addEventListener("click", (e) => this._toggleFollow(e.currentTarget));
       this.$("[data-disc]")?.addEventListener("click", (e) => this._publishToDiscord(e.currentTarget));
+      this.$("[data-share-toggle]")?.addEventListener("click", () => this._toggleShare());
       this.$("[data-nr-undo]")?.addEventListener("click", () => this._undoRemove());
     }
   };
@@ -27038,7 +27643,7 @@ ${BLOCKED_PILL_CSS}
   var SUBSTACK_RESERVED = /* @__PURE__ */ new Set(["open", "www", "about", "help", "on", "support"]);
   var HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
   var DIGITS_RE = /^\d+$/;
-  var hostOf4 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+  var hostOf5 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
   function parse(raw) {
     let u;
     try {
@@ -27053,14 +27658,14 @@ ${BLOCKED_PILL_CSS}
     const u = parse(raw);
     if (!u || u.protocol !== "https:") return null;
     const hosts = PLATFORMS[platform]?.hosts || [];
-    const host = hostOf4(u);
+    const host = hostOf5(u);
     if (!hosts.some((h) => host === h || host.endsWith(`.${h}`))) return null;
     return u.toString();
   }
   function creatorFrom(rawUrl, stored = {}) {
     const u = parse(rawUrl);
     if (!u) return null;
-    const host = hostOf4(u);
+    const host = hostOf5(u);
     const seg = u.pathname.split("/").filter(Boolean);
     const stamped = typeof stored?.creatorName === "string" && stored.creatorName.trim() ? stored.creatorName.trim() : "";
     const made = (platform, url, handle = "") => url ? { url, name: stamped || handle || "", platform, label: PLATFORMS[platform].label, verb: PLATFORMS[platform].verb } : null;
@@ -27125,7 +27730,7 @@ ${BLOCKED_PILL_CSS}
   function sourceCardModel({ url, memberName, creatorUrl = "", creatorName = "" } = {}) {
     const u = parse(url);
     if (!u) return null;
-    const host = hostOf4(u);
+    const host = hostOf5(u);
     const who = String(memberName || "").trim();
     const creator = creatorFrom(url, { creatorUrl, creatorName });
     if (!creator) {
@@ -27150,7 +27755,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/members-index.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var lc6 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -27159,7 +27764,7 @@ ${BLOCKED_PILL_CSS}
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE20}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j2) => directoryMap(j2)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE21}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j2) => directoryMap(j2)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
@@ -27168,12 +27773,12 @@ ${BLOCKED_PILL_CSS}
   var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var KIND_ICON = {
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS45 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS46 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -27188,7 +27793,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc2(what)} is for members. <a href="${SITE21}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc2(what)} is for members. <a href="${SITE22}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
@@ -27232,7 +27837,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -27437,12 +28042,12 @@ ${BLOCKED_PILL_CSS}
       if (String(it2.visibility || fm.visibility || "public") !== "public") {
         if (typeof fm.encryptedSkill !== "string" || !fm.encryptedSkill || typeof this.client?.decrypt !== "function") return null;
         try {
-          return await loadMembersSkillBox({ site: SITE21, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
+          return await loadMembersSkillBox({ site: SITE22, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
         } catch {
           return null;
         }
       }
-      return loadSkillBox({ site: SITE21, slug: fm.slug || promptSlugOf(it2.url), targets, fileHref });
+      return loadSkillBox({ site: SITE22, slug: fm.slug || promptSlugOf(it2.url), targets, fileHref });
     }
     // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
     _backfillFromFrontmatter(it2) {
@@ -27579,11 +28184,11 @@ ${BLOCKED_PILL_CSS}
       const note = e.headline ? `<p class="a-note">${esc2(e.headline)}</p>` : "";
       let follow = "";
       const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const wsBase = inExt ? `${SITE21}/workbench/` : "/workbench/";
+      const wsBase = inExt ? `${SITE22}/workbench/` : "/workbench/";
       const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
       if (a.isSelf) follow = ["post", "project", "prompt"].includes(it2.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc2(it2.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it2.type === "share" && it2.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it2.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE21}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE22}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -27609,13 +28214,13 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE21 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE22 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
       const meta = this._metaHtml(it2, when);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
       const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE21}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE22}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -27754,11 +28359,11 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE22 = "https://gbti.network";
+  var SITE23 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -27826,7 +28431,7 @@ ${BLOCKED_PILL_CSS}
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE22}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE23}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc9(status?.identity?.username || status?.identity?.login || "");
@@ -27856,8 +28461,8 @@ ${BLOCKED_PILL_CSS}
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE22}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc2(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE22}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const action = this._isSelf ? `<a class="edit" href="${SITE23}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc2(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE23}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
       const actions = `<div class="actions">${action}<a class="site" href="${esc2(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc2(prettyRole3(r))}</span>`);
@@ -27882,7 +28487,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS47) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -27890,7 +28495,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS47) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -27915,7 +28520,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE23 = "https://gbti.network";
+  var SITE24 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -27934,7 +28539,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS47 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -28028,7 +28633,7 @@ ${BLOCKED_PILL_CSS}
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE23}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE24}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -28068,7 +28673,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS48) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -28081,7 +28686,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS48) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -28291,8 +28896,13 @@ ${BLOCKED_PILL_CSS}
       // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
       setPrefs: (patch) => request("POST", "/api/prefs", patch),
       // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
-      publishNews: (item) => request("POST", "/api/news-publish", { item }),
-      // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
+      publishNews: (item, { channelId } = {}) => request("POST", "/api/news-publish", { item, ...channelId ? { channelId } : {} }),
+      // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }; sow-171: a superadmin may name the channel
+      // sow-171: the news reader's "Share to our channels" panel (superadmin; the Worker is the gate).
+      newsShareStatus: (guid, category) => request("GET", `/api/news-share${qs({ guid, category })}`),
+      // -> { discord, channels }
+      newsShareDone: (record) => request("POST", "/api/news-share", record),
+      // "Mark done" for one hand-made post
       newsDiscussed: (guid) => request("POST", "/api/news-discussed", { guid }),
       // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
       newsOpened: (guid, source) => request("POST", "/api/news-opened", { guid, ...source ? { source } : {} }),
@@ -28557,69 +29167,6 @@ ${BLOCKED_PILL_CSS}
     return next;
   }
 
-  // membership/syndication-channels.mjs
-  var CHANNEL_LIMITS = Object.freeze({
-    discord: 2e3,
-    "discord-category": 2e3,
-    // SOW-087: the category-channel Discord post
-    x: 280,
-    linkedin: 3e3,
-    mastodon: 500,
-    bluesky: 300,
-    reddit: 300,
-    // the Reddit post-title cap (SOW-088: the template renders the title)
-    devto: 128,
-    // the dev.to title cap (the article body is not template-limited)
-    hashnode: 250,
-    // SOW-134: the Hashnode title cap (the article body is not template-limited)
-    dailydev: 300
-    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
-  });
-  var CHANNEL_SECRET_KEYS = Object.freeze({
-    discord: ["DISCORD_BOT_TOKEN"],
-    "discord-category": ["DISCORD_BOT_TOKEN"],
-    // SOW-087: the same bot posts the category-channel copy
-    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
-    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
-    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
-    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
-    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
-    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
-    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
-    // needs no credential at all, so listing dead keys here would only make a working channel report itself
-    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
-    reddit: ["REDDIT_SUBREDDIT"],
-    // SOW-088, narrowed by sow-260
-    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
-    // SOW-088: full-body crossposts to the GBTI dev.to organization
-    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
-    // SOW-134: PAT + the gbti.hashnode.dev publication id
-  });
-  var CHANNEL_MARKDOWN = Object.freeze({
-    discord: true,
-    // a Discord message, and Discord renders markdown natively
-    "discord-category": true,
-    // the same bot, the same rendering
-    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
-    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
-    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
-    // a plain-text field on both. Their article BODIES never pass through here: they are built by
-    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
-    // asterisks in an article title.
-    devto: false,
-    hashnode: false,
-    reddit: false,
-    // the manual rail is the rich-text composer, not the markdown editor
-    x: false,
-    bluesky: false,
-    mastodon: false,
-    linkedin: false,
-    dailydev: false
-  });
-  function rendersMarkdown(name) {
-    return CHANNEL_MARKDOWN[name] === true;
-  }
-
   // membership/markdown-plain.mjs
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
@@ -28817,25 +29364,9 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-social-queue.mjs
-  var REDDIT_SUB = "GBTI_network";
-  var composeUrl = (task) => {
-    const channel = task?.channel;
-    const text2 = String(task?.text || "");
-    const t = encodeURIComponent(text2);
-    if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
-    if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
-    if (channel === "bluesky") return `https://bsky.app/intent/compose?text=${t}`;
-    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
-    if (channel === "hashnode") return "https://hashnode.com/draft";
-    if (channel === "reddit") {
-      const u = String(task?.url || "");
-      return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ""}`;
-    }
-    return null;
-  };
   var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
   var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky" };
-  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
+  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", news: "News" };
   var PAGE_SIZE = 12;
   var fmtDate2 = (ms) => {
     try {
@@ -28844,7 +29375,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var CSS48 = `
+  var CSS49 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -28965,19 +29496,19 @@ ${BLOCKED_PILL_CSS}
       const keepScroll = this._resetScroll ? 0 : this.$(".body")?.scrollTop || 0;
       this._resetScroll = false;
       if (!this.client) {
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS48) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -28991,7 +29522,7 @@ ${BLOCKED_PILL_CSS}
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v2, l, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS48) + this._shell(`
+      this.set(this.css(CSS49) + this._shell(`
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc2(hint)}</p>
       <div class="fbar">
@@ -29205,7 +29736,7 @@ ${BLOCKED_PILL_CSS}
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS49 = `
+  var CSS50 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -29312,7 +29843,7 @@ ${BLOCKED_PILL_CSS}
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc2(e.realm || "app")}</span></td>
             <td>${esc2(e.area)}</td><td class="msg">${esc2(e.msg)}</td>
             <td class="data">${esc2(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS49) + `
+      this.set(this.css(CSS50) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -29349,10 +29880,10 @@ ${BLOCKED_PILL_CSS}
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/elements/gbti-signin-splash.mjs
-  var SITE24 = "https://gbti.network";
+  var SITE25 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS50 = `
+  var CSS51 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
@@ -29400,7 +29931,7 @@ ${BLOCKED_PILL_CSS}
            <p class="note">Waiting for GitHub&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc2(who)}` : "Sign in with GitHub"}</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS50) + `<div class="splashwrap">
+      this.set(this.css(CSS51) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -29408,7 +29939,7 @@ ${BLOCKED_PILL_CSS}
       </div>
       <div class="card">
         ${expired}${this._note ? `<p class="problem" role="alert">${esc2(this._note)}</p>` : ""}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE24}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE25}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start", { method: "web" }));
     }
@@ -30181,7 +30712,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // extension/src/shell.mjs
-  var SITE25 = "https://gbti.network";
+  var SITE26 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var esc9 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
@@ -30233,12 +30764,12 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="${SITE25}/workbench/" target="_blank" rel="noopener">Workbench</a>
+        <a class="mi" role="menuitem" href="${SITE26}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
-        <a class="mi" role="menuitem" href="${SITE25}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
-        <a class="mi" role="menuitem" href="${SITE25}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
-        <a class="mi" role="menuitem" href="${SITE25}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE26}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE26}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
+        <a class="mi" role="menuitem" href="${SITE26}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -30274,7 +30805,7 @@ ${BLOCKED_PILL_CSS}
       });
       const folder2 = status.identity.username || String(login).toLowerCase();
       root.querySelectorAll("[data-me-profile]").forEach((a) => {
-        a.href = `${SITE25}/members/${encodeURIComponent(folder2)}/`;
+        a.href = `${SITE26}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc9(login)}</b>`;

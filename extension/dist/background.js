@@ -19049,15 +19049,48 @@ async function workerSetPrefs({ token, signupBase, fetch: fetch2 = globalThis.fe
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
 }
-async function workerPublishNews({ token, signupBase, fetch: fetch2 = globalThis.fetch, item } = {}) {
+async function workerPublishNews({ token, signupBase, fetch: fetch2 = globalThis.fetch, item, channelId } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
   const guid3 = String(item?.guid || "").trim();
   if (!guid3) throw new NewsClientError("a news item is required");
-  const payload = { guid: guid3, source: item?.source ?? "" };
+  const chosen = channelId != null && String(channelId).trim() ? String(channelId).trim() : "";
+  const payload = { guid: guid3, source: item?.source ?? "", ...chosen ? { channelId: chosen } : {} };
   const res = await fetch2(`${base2(signupBase)}/membership/news-publish`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (chosen && !res.ok) {
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+    }
+    throw new NewsClientError(data?.message || "could not publish to Discord (" + res.status + ")");
+  }
   if (res.status === 401 || res.status === 403) throw new NewsClientError("publishing to Discord requires a news curator role");
   if (!res.ok) throw new NewsClientError("could not publish to Discord (" + res.status + ")");
   return res.json();
+}
+async function workerGetNewsShare({ token, signupBase, fetch: fetch2 = globalThis.fetch, guid: guid3, category } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const g = String(guid3 || "").trim();
+  if (!g) throw new NewsClientError("a news item is required");
+  const res = await fetch2(`${base2(signupBase)}/membership/news-share${qs({ guid: g, category })}`, { headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new NewsClientError(data?.message || "could not read where this story has been posted (" + res.status + ")");
+  return data;
+}
+async function workerNewsShareDone({ token, signupBase, fetch: fetch2 = globalThis.fetch, record: record2 } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch2(`${base2(signupBase)}/membership/news-share`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(record2 ?? {}) });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new NewsClientError(data?.message || "could not record the post (" + res.status + ")");
+  return data;
 }
 async function workerNewsDiscussed({ token, signupBase, fetch: fetch2 = globalThis.fetch, guid: guid3 } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
@@ -19509,6 +19542,28 @@ async function newsItemDecideOp(ctx, { action, guid: guid3 } = {}) {
     throw new OperationError("admin-op-failed", err?.message || "the news store did not answer; please try again");
   }
 }
+async function getNewsShareOp(ctx, { guid: guid3, category } = {}) {
+  requireIdentity(ctx);
+  const g = String(guid3 ?? "").trim();
+  if (!g) throw new OperationError("bad-request", "a story guid is required");
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerGetNewsShare({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid: g, category });
+  } catch (err) {
+    throw new OperationError("news-failed", err?.message || "could not read where this story has been posted");
+  }
+}
+async function newsShareDoneOp(ctx, record2 = {}) {
+  requireIdentity(ctx);
+  if (!String(record2?.guid ?? "").trim()) throw new OperationError("bad-request", "a story guid is required");
+  if (!String(record2?.channel ?? "").trim()) throw new OperationError("bad-request", "a channel is required");
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerNewsShareDone({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, record: record2 });
+  } catch (err) {
+    throw new OperationError("news-failed", err?.message || "could not record the post");
+  }
+}
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
@@ -19580,11 +19635,11 @@ async function setPrefs(ctx, { categories, followChannel, publicFavorites, notif
     mapNewsErr(err, "save your preferences");
   }
 }
-async function publishNews(ctx, { item } = {}) {
+async function publishNews(ctx, { item, channelId } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
-    return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item });
+    return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item, channelId });
   } catch (err) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in to publish to Discord.");
     if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError("forbidden", "Publishing news to Discord requires a curator role.");
@@ -21406,6 +21461,11 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/news-item":
         if (method !== "POST") return { status: 404, json: { error: "not_found" } };
         return ok(await newsItemDecideOp(ctx, body ?? {}));
+      // sow-171 (owner, 2026-10-01): the news reader's "Share to our channels" panel. GET reads where the story has been
+      // posted, POST records a post made by hand. The Worker's /membership/news-share is the superadmin gate. This is
+      // a news-only panel, not the website's Manually syndicate tool, which stays off the extension (sow-399).
+      case "/api/news-share":
+        return ok(method === "POST" ? await newsShareDoneOp(ctx, body ?? {}) : await getNewsShareOp(ctx, { guid: query.guid, category: query.category }));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.
