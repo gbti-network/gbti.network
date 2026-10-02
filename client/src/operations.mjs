@@ -71,6 +71,7 @@ export {
   getSocialQueue,
   socialQueueAction,
   newsItemDecideOp, // sow-420
+  getNewsShareOp, newsShareDoneOp, // sow-171
   getSyndicateNowInfo,
   syndicateNow,
   getNews,

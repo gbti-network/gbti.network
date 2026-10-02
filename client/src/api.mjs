@@ -56,6 +56,7 @@ import {
   getSocialQueue,
   socialQueueAction,
   newsItemDecideOp, // sow-420
+  getNewsShareOp, newsShareDoneOp, // sow-171
   getCouponUsageOp,
   listInvitesOp,
   listEditorialOp,
@@ -192,6 +193,8 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/social-queue') return run(() => getSocialQueue(ctx)); // SOW-121: superadmin Social Queue
   if (method === 'POST' && pathname === '/api/social-queue') return run(() => socialQueueAction(ctx, body ?? {})); // SOW-121: done/delete
   if (method === 'POST' && pathname === '/api/news-item') return run(() => newsItemDecideOp(ctx, body ?? {})); // sow-420: remove/restore a news story (superadmin)
+  if (method === 'GET' && pathname === '/api/news-share') return run(() => getNewsShareOp(ctx, { guid: query.guid, category: query.category })); // sow-171: where a news story has been shared (superadmin)
+  if (method === 'POST' && pathname === '/api/news-share') return run(() => newsShareDoneOp(ctx, body ?? {})); // sow-171: record a hand-made post of a news story
   if (method === 'GET' && pathname === '/api/syndicate-now') return run(() => getSyndicateNowInfo(ctx)); // SOW-088: manual syndicate readiness
   if (method === 'POST' && pathname === '/api/syndicate-now') return run(() => syndicateNow(ctx, body)); // SOW-088: post one item to one destination now
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger

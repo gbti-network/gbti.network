@@ -6,11 +6,14 @@
 // Mirrors <gbti-reader>.open(item) so the new-tab opens it the same way. Host-agnostic; inert without a client.
 // sow-420: a superadmin also gets the website's superadmin card (source weight + Remove this story) under the channel
 // card, and a removed story is replaced in place by the website's notice and an Undo.
+// sow-171: a superadmin's "Add to Discord" becomes "Share to our channels", which reveals <gbti-news-share> under the
+// summary (hidden until pressed). An admin or news editor who is not a superadmin keeps "Add to Discord".
 import { GbtiElement, define, esc } from '../base.mjs';
 import { newsTargetSlug, utmLink } from '../news.mjs';
 import { faviconFor } from './gbti-card-list.mjs';
 import { NEWS_ADMIN_COPY } from './gbti-news-admin.mjs';
 import './gbti-discussion.mjs';
+import './gbti-news-share.mjs'; // sow-171: the superadmin "Share to our channels" panel
 
 const lc = (s) => String(s ?? '').toLowerCase();
 
@@ -33,6 +36,12 @@ const CSS = `
   a.src:hover { border-color:var(--accent); color:var(--accent); }
   button.disc { font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
   button.disc[disabled] { opacity:.6; cursor:default; }
+  /* sow-171: the superadmin toggle. --accent with --on-accent, because white on brand green is under AA. */
+  button.share-toggle { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px;
+    border:1px solid var(--accent); border-radius:9px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  button.share-toggle:hover { background:var(--accent); filter:brightness(1.08); }
+  button.share-toggle .chev { transition:transform .15s ease; }
+  button.share-toggle[aria-expanded="true"] .chev { transform:rotate(180deg); }
   .note { font-size:12.5px; margin:12px 0 0; } .note.ok { color:var(--brand); } .note.err { color:#d4495a; }
 
   /* the news channel meta as a sidebar card, above the discussion (7px, frosts in glass like the reader author card) */
@@ -90,6 +99,8 @@ class GbtiNewsReader extends GbtiElement {
     this._removed = false;   // sow-420: the story was just removed from the news index
     this._restore = 'idle';  // idle | restoring | restored
     this._restoreErr = null;
+    this._share = null;      // sow-171: the share panel, created once per story for a superadmin
+    this._shareOpen = false;
     this.render();
     if (!item || !this.client) return;
     // SOW-111: the detail-open engagement beacon (fire-and-forget; the Worker answers a clean no-op for an
@@ -105,9 +116,10 @@ class GbtiNewsReader extends GbtiElement {
       ]);
       this._canCurate = Boolean(status?.canCurate);
       // sow-420: presentation only. The Worker re-checks superadmin on every weight and removal call.
-      if (status?.role === 'superadmin' && item.guid && this._item === item) this._mountAdmin(item);
+      if (status?.role === 'superadmin' && item.guid && this._item === item) { this._mountAdmin(item); this._mountShare(item); }
       const sid = lc(item.source);
       this._publisher = (srcs?.sources || []).find((s) => lc(s.id) === sid || lc(s.name) === sid) || null;
+      if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.source || '';
       this._followed = new Set((prefs?.followedChannels || []).map(lc));
     } catch { /* keep the basics */ }
     this.render();
@@ -138,6 +150,24 @@ class GbtiNewsReader extends GbtiElement {
       this.render();
     });
     this._admin = card;
+  }
+
+  /** sow-171: the share panel for this story. One node per story (drafts survive re-renders), hidden until the
+   *  toggle is pressed, so nothing beyond the button shows at first. */
+  _mountShare(item) {
+    if (typeof document === 'undefined') return;
+    const panel = document.createElement('gbti-news-share');
+    panel.id = 'news-share';
+    panel.hidden = true;
+    panel.story = { guid: item.guid, title: item.title, link: item.link, source: item.source, category: item.category, excerpt: item.excerpt };
+    this._share = panel;
+  }
+
+  _toggleShare() {
+    if (!this._share) return;
+    this._shareOpen = !this._shareOpen;
+    if (this._shareOpen) this._share.open(); else this._share.close();
+    this.render();
   }
 
   /** sow-420: Undo on the removed-story notice puts the story back in the news index. */
@@ -184,7 +214,12 @@ class GbtiNewsReader extends GbtiElement {
     const followable = Boolean(this.client?.setPrefs && it.source && this._followed); // prefs loaded (paid) -> followable
     const followed = followable && this._followed.has(lc(it.source));
     const open = it.openHref || (it.link ? utmLink(it.link) : '');
-    const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : '';
+    // sow-171: a superadmin gets the share toggle in its place; a curator who is not a superadmin keeps the button.
+    const disc = this._share
+      ? `<button class="share-toggle" data-share-toggle type="button" aria-expanded="${this._shareOpen}" aria-controls="news-share">`
+        + `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>`
+        + `Share to our channels<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`
+      : this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : '';
     const note = this._postNote ? `<p class="note ${this._postNote.ok ? 'ok' : 'err'}">${esc(this._postNote.msg)}</p>` : '';
     const slug = it.guid ? newsTargetSlug(it.guid) : '';
     const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
@@ -212,19 +247,22 @@ class GbtiNewsReader extends GbtiElement {
         // SOW-111 QA: reveal the classifier category (it decides the Discord channel the item routes to).
         + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : '')
         + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
-        + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`;
+        + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`
+        + (this._share ? '<div data-share-slot></div>' : '');
     this.set(this.css(CSS)
       + `<div class="wrap"><div class="cols"><div class="main">`
       + story
       + `</div><aside class="side">${chanCard}${this._admin ? '<div data-admin-slot></div>' : ''}${discussion}</aside></div></div>`);
     // sow-420: the same card node every time, so a step held for its save or a removal in flight is not reset.
     if (this._admin) this.$('[data-admin-slot]')?.replaceWith(this._admin);
+    if (this._share) this.$('[data-share-slot]')?.replaceWith(this._share); // sow-171: the same node, so drafts survive
     if (!this._wiredErr) { // a broken favicon drops to the empty disc, a broken hero removes itself (CSP-safe capture phase)
       this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && (t.classList?.contains('avimg') || t.classList?.contains('hero'))) t.remove(); }, true);
       this._wiredErr = true;
     }
     this.$('[data-follow]')?.addEventListener('click', (e) => this._toggleFollow(e.currentTarget));
     this.$('[data-disc]')?.addEventListener('click', (e) => this._publishToDiscord(e.currentTarget));
+    this.$('[data-share-toggle]')?.addEventListener('click', () => this._toggleShare());
     this.$('[data-nr-undo]')?.addEventListener('click', () => this._undoRemove());
   }
 }

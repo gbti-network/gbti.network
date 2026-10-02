@@ -9,7 +9,7 @@ import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetFollowedNews, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
+import { workerGetNews, workerGetNewsSources, workerGetFollowedNews, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, workerGetNewsShare, workerNewsShareDone, NewsClientError } from './news-client.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { getBellSeen as workerGetBellSeen, markBellSeen as workerMarkBellSeen } from './member-bell-seen-client.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
@@ -179,6 +179,30 @@ export async function newsItemDecideOp(ctx, { action, guid } = {}) {
 }
 
 
+/**
+ * sow-171: the superadmin "Share to our channels" panel on a news story. The read says where the story has gone; the
+ * write records one hand-made post ("Mark done"). The shape is checked here so a bad call is a clear 400; the Worker
+ * is the only gate on WHO may do it.
+ */
+export async function getNewsShareOp(ctx, { guid, category } = {}) {
+  requireIdentity(ctx);
+  const g = String(guid ?? '').trim();
+  if (!g) throw new OperationError('bad-request', 'a story guid is required');
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerGetNewsShare({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid: g, category }); }
+  catch (err) { throw new OperationError('news-failed', err?.message || 'could not read where this story has been posted'); }
+}
+
+export async function newsShareDoneOp(ctx, record = {}) {
+  requireIdentity(ctx);
+  if (!String(record?.guid ?? '').trim()) throw new OperationError('bad-request', 'a story guid is required');
+  if (!String(record?.channel ?? '').trim()) throw new OperationError('bad-request', 'a channel is required');
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerNewsShareDone({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, record }); }
+  catch (err) { throw new OperationError('news-failed', err?.message || 'could not record the post'); }
+}
+
+
 /** SOW-088: the Manually Syndicate readiness read (SUPERADMIN only; the Worker enforces). */
 export async function getSyndicateNowInfo(ctx) {
   requireIdentity(ctx);
@@ -280,10 +304,10 @@ export async function setPrefs(ctx, { categories, followChannel, publicFavorites
 
 // SOW-046 C: curator-only "Add to Discord". The Worker holds the bot token + re-checks the curator capability, so
 // a non-curator member gets a clean membership-required-style error rather than a generic failure.
-export async function publishNews(ctx, { item } = {}) {
+export async function publishNews(ctx, { item, channelId } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
-  try { return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item }); }
+  try { return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item, channelId }); }
   catch (err) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in to publish to Discord.');
     if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError('forbidden', 'Publishing news to Discord requires a curator role.');

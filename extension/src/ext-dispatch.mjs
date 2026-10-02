@@ -11,7 +11,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getBellSeen, markBellSeen, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
-  listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction, newsItemDecideOp } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419; sow-420
+  listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction, newsItemDecideOp, getNewsShareOp, newsShareDoneOp } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419; sow-420; sow-171
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
@@ -205,6 +205,11 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       case '/api/news-item':
         if (method !== 'POST') return { status: 404, json: { error: 'not_found' } };
         return ok(await newsItemDecideOp(ctx, body ?? {}));
+      // sow-171 (owner, 2026-10-01): the news reader's "Share to our channels" panel. GET reads where the story has been
+      // posted, POST records a post made by hand. The Worker's /membership/news-share is the superadmin gate. This is
+      // a news-only panel, not the website's Manually syndicate tool, which stays off the extension (sow-399).
+      case '/api/news-share':
+        return ok(method === 'POST' ? await newsShareDoneOp(ctx, body ?? {}) : await getNewsShareOp(ctx, { guid: query.guid, category: query.category }));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.

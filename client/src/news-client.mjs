@@ -75,15 +75,44 @@ export async function workerSetPrefs({ token, signupBase, fetch = globalThis.fet
 // the Discord bot token, and resolves the CANONICAL item from the upstream feed itself, so we POST only the item's
 // IDENTITY (guid + a source hint to widen the server-side lookup) — never the display metadata (the Worker does not
 // trust client-supplied title/link/category). The 403 path is normal for a non-curator, so we surface it clearly.
-export async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, item } = {}) {
+export async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, item, channelId } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const guid = String(item?.guid || '').trim();
   if (!guid) throw new NewsClientError('a news item is required');
-  const payload = { guid, source: item?.source ?? '' };
+  // sow-171: a superadmin's share panel may name the Discord channel; the Worker checks the role and the channel.
+  const chosen = channelId != null && String(channelId).trim() ? String(channelId).trim() : '';
+  const payload = { guid, source: item?.source ?? '', ...(chosen ? { channelId: chosen } : {}) };
   const res = await fetch(`${base(signupBase)}/membership/news-publish`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (chosen && !res.ok) { // the Worker's own words say which check failed (role, channel, or Discord itself)
+    let data = null;
+    try { data = await res.json(); } catch { /* ignore */ }
+    throw new NewsClientError(data?.message || 'could not publish to Discord (' + res.status + ')');
+  }
   if (res.status === 401 || res.status === 403) throw new NewsClientError('publishing to Discord requires a news curator role');
   if (!res.ok) throw new NewsClientError('could not publish to Discord (' + res.status + ')');
   return res.json();
+}
+
+// sow-171: the superadmin "Share to our channels" panel on a news story. GET reads where the story has gone (Discord
+// and every channel marked done); POST records one hand-made post. The Worker is the gate (superadmin only).
+export async function workerGetNewsShare({ token, signupBase, fetch = globalThis.fetch, guid, category } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const g = String(guid || '').trim();
+  if (!g) throw new NewsClientError('a news item is required');
+  const res = await fetch(`${base(signupBase)}/membership/news-share${qs({ guid: g, category })}`, { headers: { Authorization: 'Bearer ' + token } });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new NewsClientError(data?.message || 'could not read where this story has been posted (' + res.status + ')');
+  return data;
+}
+
+export async function workerNewsShareDone({ token, signupBase, fetch = globalThis.fetch, record } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const res = await fetch(`${base(signupBase)}/membership/news-share`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(record ?? {}) });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new NewsClientError(data?.message || 'could not record the post (' + res.status + ')');
+  return data;
 }
 
 // SOW-046 D: tell the Worker a member started discussing a news item, so it appends a one-time "members are

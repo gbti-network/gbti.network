@@ -109,7 +109,8 @@ test('sow-420: the reader creates the card for a superadmin and for nobody else'
   assert.equal((src.match(/createElement\('gbti-news-admin'\)/g) || []).length, 1);
   const calls = src.match(/this\._mountAdmin\(/g) || [];
   assert.equal(calls.length, 1, 'one call site, so the role check below covers every way the card is created');
-  assert.match(src, /if \(status\?\.role === 'superadmin' && item\.guid && this\._item === item\) this\._mountAdmin\(item\);/);
+  // sow-171: the same superadmin check now also creates the news share panel, in one block.
+  assert.match(src, /if \(status\?\.role === 'superadmin' && item\.guid && this\._item === item\) \{ this\._mountAdmin\(item\); this\._mountShare\(item\); \}/);
   // Every open() starts without a card, so a card from a superadmin session never carries over to another story.
   const open = src.slice(src.indexOf('async open(item)'), src.indexOf('this.render();', src.indexOf('async open(item)')));
   assert.match(open, /this\._admin = null;/);

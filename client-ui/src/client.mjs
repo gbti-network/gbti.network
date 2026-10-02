@@ -86,7 +86,10 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     markBellSeen: (bellSeen) => request('POST', '/api/bell-seen', { bellSeen }), // -> the merged { bellSeen }
     getPrefs: () => request('GET', '/api/prefs'), // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
     setPrefs: (patch) => request('POST', '/api/prefs', patch), // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
-    publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
+    publishNews: (item, { channelId } = {}) => request('POST', '/api/news-publish', { item, ...(channelId ? { channelId } : {}) }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }; sow-171: a superadmin may name the channel
+    // sow-171: the news reader's "Share to our channels" panel (superadmin; the Worker is the gate).
+    newsShareStatus: (guid, category) => request('GET', `/api/news-share${qs({ guid, category })}`), // -> { discord, channels }
+    newsShareDone: (record) => request('POST', '/api/news-share', record), // "Mark done" for one hand-made post
     newsDiscussed: (guid) => request('POST', '/api/news-discussed', { guid }), // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
     newsOpened: (guid, source) => request('POST', '/api/news-opened', { guid, ...(source ? { source } : {}) }), // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
     setContentStatus: ({ path, status }) => request('POST', '/api/content/status', { path, status }), // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
