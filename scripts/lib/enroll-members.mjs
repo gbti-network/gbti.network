@@ -43,8 +43,11 @@ export function enrollmentCandidates(members, membersIndex) {
   return out;
 }
 
-/** Re-resolve github_id -> current login via the GitHub API (immutable key). Returns the login or null. */
-export async function resolveLoginById(githubId, { token, fetchImpl = globalThis.fetch } = {}) {
+/**
+ * The current login and display name for a GitHub account number (immutable key), or null. One GET /user/{id}.
+ * sow-439 widened this from the login alone: the starter profile page shows the member's display name.
+ */
+export async function resolveGithubUser(githubId, { token, fetchImpl = globalThis.fetch } = {}) {
   try {
     const res = await fetchImpl(`https://api.github.com/user/${encodeURIComponent(String(githubId))}`, {
       headers: {
@@ -55,10 +58,15 @@ export async function resolveLoginById(githubId, { token, fetchImpl = globalThis
     });
     if (!res?.ok) return null;
     const data = await res.json();
-    return data?.login ? String(data.login) : null;
+    return data?.login ? { login: String(data.login), name: data.name ? String(data.name) : null } : null;
   } catch {
     return null;
   }
+}
+
+/** Re-resolve github_id -> current login via the GitHub API (immutable key). Returns the login or null. */
+export async function resolveLoginById(githubId, opts = {}) {
+  return (await resolveGithubUser(githubId, opts))?.login ?? null;
 }
 
 /**

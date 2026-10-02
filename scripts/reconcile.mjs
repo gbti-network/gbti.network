@@ -40,6 +40,7 @@ import { syncOutboundClicks, readClicksFromDisk } from './lib/outbound-clicks.mj
 import { outboundRows } from './lib/outbound-links-store.mjs'; // sow-289: the paths the rollup queries, from the store, never a prefix
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
 import { syncEnrollments } from './lib/enroll-members.mjs'; // SOW-157: hosted-member index enrollment
+import { syncStarterProfiles } from './lib/starter-profiles.mjs'; // sow-439: a starter profile page for every paying member
 import { syncFollowerIndex } from './lib/follower-index.mjs'; // SOW-186 phase 3: build/heal followers:<github_id> from the forward graph
 // Member gathering and plan enactment live in these two modules (split out at the 900-line limit). Every public
 // name that moved is re-exported here, so importers of scripts/reconcile.mjs keep working.
@@ -501,6 +502,26 @@ async function main() {
     }
   } catch (e) {
     console.error('reconcile: enrollment sync FAILED:', e?.message ?? e);
+    process.exitCode = 1;
+  }
+
+  // sow-439 (owner, 2026-10-02): every paying member gets a starter profile page, so their profile link never leads to
+  // "We could not find that page". Runs right after enrollment so a member enrolled in this run gets their page in the
+  // same run. It only ADDS files a member does not have, so a targeted one-member run can never remove anyone's page.
+  try {
+    const r = await syncStarterProfiles({ members, root: ROOT, env, github, now, dryRun });
+    if (r.additions?.length) {
+      console.log(
+        r.synced
+          ? `reconcile: wrote ${r.additions.length} starter profile(s) (PR #${r.prNumber}): ${r.additions.map((a) => a.folder).join(', ')}.`
+          : `reconcile: ${dryRun ? 'DRY RUN would write' : 'planned'} ${r.additions.length} starter profile(s): ${r.additions.map((a) => `${a.folder} (${a.displayName})`).join(', ')}${r.reason && !dryRun ? ` (SKIPPED: ${r.reason})` : ''}.`,
+      );
+    } else if (r.reason !== 'every paying member has a profile') {
+      console.log(`reconcile: starter profiles SKIPPED (${r.reason}).`);
+    }
+    for (const s of r.skipped ?? []) console.warn(`reconcile: starter profile for ${s.folder} skipped: ${s.reason}.`);
+  } catch (e) {
+    console.error('reconcile: starter profiles FAILED:', e?.message ?? e);
     process.exitCode = 1;
   }
 
