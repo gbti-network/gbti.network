@@ -30854,7 +30854,6 @@ ${BLOCKED_PILL_CSS}
     return `<div class="nt-controls" data-controls>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
-    <button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content"><span class="nt-submit-dot" aria-hidden="true"></span><span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"></span><span class="nt-submit-tx">Submit content</span></button>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
@@ -30880,6 +30879,7 @@ ${BLOCKED_PILL_CSS}
       </div>
     </div>
     ${compose ? '<button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>' : ""}
+    <button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content"><span class="nt-submit-dot" aria-hidden="true"></span><span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"></span><span class="nt-submit-tx">Submit content</span></button>
   </div>`;
   }
   function brandHtml() {

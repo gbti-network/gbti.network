@@ -1,5 +1,6 @@
-// sow-396 (owner, 2026-09-24; placement A chosen 2026-10-02): the extension's "Submit content" dialog, opened from the
-// top-bar button beside the bell on every extension page (the button itself is in shell.mjs controlsHtml).
+// sow-396 (owner, 2026-09-24; placement A chosen 2026-10-02, moved to the far right the same day): the extension's
+// "Submit content" dialog, opened from the top-bar button at the right end of every extension page's controls (the
+// button itself is in shell.mjs controlsHtml).
 //
 // The extension stays a READER (sow-204, sow-406): articles, projects and prompts are written on the website, so three
 // of the four choices open the website editor in a new tab through the WorkBench's own `#new=<type>` deep link

@@ -104,16 +104,21 @@ test('the approved membership wording has one home: the dialog borrows it, it ne
   assert.match(src, /import \{ upgradePromptKind, lockedAccountCopy \} from '\.\.\/\.\.\/client\/src\/membership\.mjs';/);
 });
 
-test('every extension page gets the button beside the bell, and Share hands over to the share box', () => {
+test('every extension page gets the button at the very right of the controls, and Share hands over to the share box', () => {
   const shell = read('extension/src/shell.mjs');
   const controls = /function controlsHtml\([\s\S]*?\n\}/.exec(shell)?.[0] || '';
   assert.ok(controls, 'control: found controlsHtml');
   const btn = controls.indexOf('data-submit-content');
-  assert.ok(btn > controls.indexOf('data-modes-slot') && btn < controls.indexOf('<gbti-activity-bell>'), 'between the view modes and the bell');
+  // Owner, 2026-10-02: moved from beside the bell to the very right. The last control in the row: after the account
+  // menu and after the "+" a compose page adds, with nothing but the row's closing tag behind it.
+  assert.ok(btn > controls.indexOf('data-me-wrap') && btn > controls.indexOf('data-compose'), 'after the account menu and the "+"');
+  assert.match(controls.slice(btn), /^data-submit-content[^\n]*<\/button>\n {2}<\/div>`;/, 'nothing after it in the row');
   assert.match(controls, /<button class="nt-submit" type="button" data-submit-content aria-haspopup="dialog" aria-label="Submit content">/);
   assert.match(controls, /<span class="nt-submit-tx">Submit content<\/span>/);
   assert.match(controls, /<span class="nt-submit-pen" data-ico="pencil" aria-hidden="true"><\/span>/, 'the folded form');
-  assert.doesNotMatch(controls.slice(0, controls.indexOf('data-submit-content')), /\$\{compose/, 'not behind the compose switch: every page');
+  const composeSwitch = /\$\{compose \?[\s\S]*?: ''\}/.exec(controls)?.[0] || '';
+  assert.ok(composeSwitch.includes('data-compose'), 'control: found the compose switch');
+  assert.ok(!composeSwitch.includes('data-submit-content'), 'not behind the compose switch: every page');
   assert.match(shell, /const statusReady = loadShellAccount\(root\);\n  wireSubmit\(root, statusReady\);/, 'wired on every page from the one status load');
   assert.match(shell, /openSubmitDialog\(\{ status, statusReady, onShare: openComposeModal, returnFocus: btn \}\)/);
 });
