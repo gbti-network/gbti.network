@@ -124,6 +124,9 @@ test('repoUrl: finds the repository link and nothing else', () => {
   assert.equal(repoUrl([{ type: 'download', url: 'https://d' }, { type: 'repository', url: 'https://gh' }]), 'https://gh');
   assert.equal(repoUrl([{ type: 'download', url: 'https://d' }]), null);
   assert.equal(repoUrl(undefined), null);
+  // sow-441: a members-only repository is not the page's public "View on GitHub" button (SOW-014: it renders inert).
+  assert.equal(repoUrl([{ type: 'repository', url: 'https://gh/private', visibility: 'members' }]), null);
+  assert.equal(repoUrl([{ type: 'repository', url: 'https://gh/private', visibility: 'members' }, { type: 'repository', url: 'https://gh/public' }]), 'https://gh/public');
 });
 
 test('resolvePrimaryCta: an author-marked primary wins, and the repository never does', () => {
@@ -314,4 +317,13 @@ test('resolveHeroForType: a product delegates to resolveHero unchanged, preset p
   assert.deepEqual(resolveHeroForType('project', uploaded), { image: './images/b.webp', preset: null, alt: '' });
   // an unknown type is treated as a product rather than throwing
   assert.deepEqual(resolveHeroForType(undefined, uploaded), { image: './images/b.webp', preset: null, alt: '' });
+});
+
+test('sow-441: safeHref, lockedHint and railDate live here now, and claim-core re-exports the same functions', async () => {
+  const core = await import('../src/lib/claim-core.mjs');
+  const page = await import('../src/lib/project-page.mjs');
+  for (const k of ['safeHref', 'lockedHint', 'railDate']) {
+    assert.equal(typeof page[k], 'function', `${k} is exported here`);
+    assert.equal(core[k], page[k], `claim-core's ${k} is the same function`);
+  }
 });

@@ -22,6 +22,8 @@ const CSS = `
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
   .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
+  /* sow-441: the pinned author note as a green card, as on the website's project and prompt pages. */
+  .comment.note { border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); padding:14px 16px; }
   .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
@@ -196,7 +198,9 @@ class GbtiDiscussion extends GbtiElement {
       const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}"${noteFlag}>${TRASH} Delete</button>`
         : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH} Delete</button>` : '';
       const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : '';
-      return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
+      // sow-441: the pinned author note draws as the website's green "From the author" card (Comments.astro).
+      const noteCard = c.authorNote ? ' note' : '';
+      return `<div class="comment${reply}${noteCard}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
         ${bodyHtml}${pendNote}${acts}
       </div></div>`;

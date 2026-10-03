@@ -19,7 +19,7 @@
 
 import {
   normalizeGallery, hasCaptions, repoUrl, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHero, iconForUrl,
-  resolveGalleryStyle, buildToc,
+  resolveGalleryStyle, buildToc, safeHref, lockedHint, railDate,
 } from './project-page.mjs';
 import { slugifyHeading } from './pd-enhance.mjs';
 import { embedUrl } from '../../client/src/video-embed.mjs';
@@ -225,19 +225,8 @@ export function tierLine({ tier, freeDays } = {}, tiers = {}) {
 // ---------------------------------------------------------------------------------------------------------------
 // Links and images: http(s) only, and the listing's own image store
 
-/**
- * An href the page may render: an absolute http or https URL, normalized. Everything else (javascript:, data:,
- * vbscript:, a relative path, a protocol-relative `//host`, anything the URL parser refuses) is null, and the page
- * renders the label without a link. The Worker already refuses these at save (amendment 8); this is the second wall.
- */
-export function safeHref(raw) {
-  if (typeof raw !== 'string') return null;
-  const s = raw.trim();
-  if (!s || /[\u0000-\u001f\u007f]/.test(s) || !/^https?:\/\//i.test(s)) return null;
-  let u;
-  try { u = new URL(s); } catch { return null; }
-  return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
-}
+// safeHref (an href the page may render: absolute http or https only) lives in project-page.mjs since sow-441, so the
+// extension's project view can share it without this module's imports; it is imported above and re-exported below.
 
 /** A listing image file name, as the Worker stores it (isListingImageName). */
 export function isImageName(name) {
@@ -412,18 +401,9 @@ export function listingModel(listing, { labels = {}, images = {}, licenses = nul
   };
 }
 
-/** The published page's tooltip on a members-only link, word for word (src/pages/projects/[slug].astro lockedHint). */
-export function lockedHint(link) {
-  if (!isLockedLink(link)) return '';
-  return link.encrypted
-    ? 'Encrypted member content. Open in the GBTI client to unlock.'
-    : 'Members only. Open in the GBTI client to unlock.';
-}
-
-/** A rail date the way the published page writes its Updated and Published rows ("1 Oct 2026"). */
-export function railDate(d) {
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
+// lockedHint and railDate moved to project-page.mjs with safeHref (sow-441); re-exported here so every caller of this
+// module, and its tests, keep working unchanged.
+export { safeHref, lockedHint, railDate };
 
 // ---------------------------------------------------------------------------------------------------------------
 // sow-434: the parts of the published page the preview now draws (crumbs, contents, byline, the author note)

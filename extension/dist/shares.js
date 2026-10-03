@@ -5234,6 +5234,8 @@ ${listStyleProseCss(".doc-blocks")}
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
   .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
+  /* sow-441: the pinned author note as a green card, as on the website's project and prompt pages. */
+  .comment.note { border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); padding:14px 16px; }
   .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
@@ -5404,7 +5406,8 @@ ${listStyleProseCss(".doc-blocks")}
         const own = this._me && String(c.author || "").toLowerCase() === String(this._me).toLowerCase() && c.path && c.id && !c.authorNote;
         const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc2(modPath)}" data-key="${esc2(modPath)}"${noteFlag}>${TRASH2} Delete</button>` : own ? `<button class="abtn danger" type="button" data-delown="${esc2(c.id)}" data-key="${esc2(c.path)}">${TRASH2} Delete</button>` : "";
         const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : "";
-        return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
+        const noteCard = c.authorNote ? " note" : "";
+        return `<div class="comment${reply}${noteCard}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta">${foldBtn}<span class="cname">${esc2(authorName(c.author))}</span><span class="cwhen">${esc2(relTime(c.createdAt))}</span>${badge}</div>
         ${bodyHtml}${pendNote}${acts}
       </div></div>`;
@@ -7724,6 +7727,77 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // src/lib/project-page.mjs
+  var REPOSITORY = "repository";
+  function isImageValue(v2) {
+    if (!v2 || typeof v2 !== "object") return false;
+    return typeof v2.src === "string" && typeof v2.width === "number" && typeof v2.height === "number";
+  }
+  function normalizeGallery(gallery) {
+    if (!Array.isArray(gallery)) return [];
+    const out = [];
+    for (const entry of gallery) {
+      if (!entry) continue;
+      if (typeof entry === "string") {
+        out.push({ src: entry, caption: "" });
+        continue;
+      }
+      if (isImageValue(entry)) {
+        out.push({ src: entry, caption: "" });
+        continue;
+      }
+      if (typeof entry === "object" && entry.src) {
+        out.push({ src: entry.src, caption: typeof entry.caption === "string" ? entry.caption : "" });
+      }
+    }
+    return out;
+  }
+  function hasCaptions(entries) {
+    return (entries ?? []).some((e) => Boolean(e && e.caption));
+  }
+  function resolvePrimaryCta(links, pricingUrl) {
+    const candidates = (links ?? []).filter((l) => l && l.url && l.type !== REPOSITORY);
+    const isPublic = (l) => (l.visibility ?? "public") !== "members";
+    const ladder = (pool) => pool.find((l) => l.primary === true) ?? pool.find((l) => l.type === "download") ?? pool.find((l) => l.type === "homepage") ?? pool[0];
+    const hit = ladder(candidates.filter(isPublic)) ?? ladder(candidates);
+    if (hit) return hit;
+    if (pricingUrl) return { type: "pricing", url: pricingUrl, label: "Pricing", visibility: "public" };
+    return null;
+  }
+  var LINK_LABELS = {
+    homepage: "Homepage",
+    repository: "Repository",
+    mirror: "Mirror",
+    download: "Download",
+    documentation: "Documentation",
+    support: "Support",
+    pricing: "Pricing"
+  };
+  function linkLabel(link) {
+    if (!link) return "";
+    return link.label ?? LINK_LABELS[link.type] ?? link.type;
+  }
+  function isLockedLink(link) {
+    return Boolean(link) && link.visibility === "members";
+  }
+  function lockedHint(link) {
+    if (!isLockedLink(link)) return "";
+    return link.encrypted ? "Encrypted member content. Open in the GBTI client to unlock." : "Members only. Open in the GBTI client to unlock.";
+  }
+  function safeHref(raw) {
+    if (typeof raw !== "string") return null;
+    const s = raw.trim();
+    if (!s || /[\u0000-\u001f\u007f]/.test(s) || !/^https?:\/\//i.test(s)) return null;
+    let u;
+    try {
+      u = new URL(s);
+    } catch {
+      return null;
+    }
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  }
+  function railDate(d) {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  }
   function detectLinkSource(url) {
     if (!url) return null;
     let u;
@@ -8478,8 +8552,8 @@ ${listStyleProseCss(".doc-blocks")}
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
-    const str6 = String(s ?? "");
-    return str6.length > max ? `${str6.slice(0, max - 1).trimEnd()}…` : str6;
+    const str7 = String(s ?? "");
+    return str7.length > max ? `${str7.slice(0, max - 1).trimEnd()}…` : str7;
   }
   function snippet(md, max = 120) {
     const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
@@ -22320,8 +22394,8 @@ ${link}` : ""}`;
     function generateNextLine(state, level) {
       return "\n" + common.repeat(" ", state.indent * level);
     }
-    function testImplicitResolving(state, str6) {
-      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str6)) return true;
+    function testImplicitResolving(state, str7) {
+      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str7)) return true;
       return false;
     }
     function isWhitespace(c) {
@@ -24157,19 +24231,19 @@ ${link}` : ""}`;
       }
     }
     _modelFromFm(fm, body) {
-      const str6 = (v2) => v2 == null ? "" : String(v2);
+      const str7 = (v2) => v2 == null ? "" : String(v2);
       const links = {};
-      for (const [k, v2] of Object.entries(fm.links || {})) links[k] = str6(v2);
+      for (const [k, v2] of Object.entries(fm.links || {})) links[k] = str7(v2);
       return {
-        displayName: str6(fm.displayName),
-        headline: str6(fm.headline),
-        avatar: str6(fm.avatar),
-        location: str6(fm.location),
+        displayName: str7(fm.displayName),
+        headline: str7(fm.headline),
+        avatar: str7(fm.avatar),
+        location: str7(fm.location),
         // preserved, never surfaced (owner decision)
         forHire: fm.forHire === true,
         directory: fm.directory === true,
-        skills: Array.isArray(fm.skills) ? fm.skills.map(str6) : [],
-        roles: Array.isArray(fm.roles) ? fm.roles.map(str6) : [],
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str7) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str7) : [],
         links,
         visibility: fm.visibility || "public",
         body: body || ""
@@ -27772,6 +27846,221 @@ ${BLOCKED_PILL_CSS}
   var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
   var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
 
+  // client-ui/src/project-view.mjs
+  var REPOSITORY2 = "repository";
+  var PRICING_LABELS = { free: "Free", freemium: "Freemium", paid: "Paid" };
+  var str6 = (v2) => typeof v2 === "string" ? v2.trim() : "";
+  var strings = (v2) => Array.isArray(v2) ? v2.map(str6).filter(Boolean) : [];
+  var hostOf6 = (href) => {
+    try {
+      return new URL(href).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  };
+  function categoryLabelsFrom(taxonomy, categories) {
+    const keys = strings(categories);
+    if (!keys.length) return [];
+    const node = treeNodesFromJson(taxonomy).find((n) => n.key === keys.join("/"));
+    return node ? [...node.crumbs, node.label] : [];
+  }
+  function toDate(v2) {
+    const d = v2 instanceof Date ? v2 : (typeof v2 === "number" || typeof v2 === "string") && v2 !== "" ? new Date(v2) : null;
+    return d && !Number.isNaN(d.valueOf()) ? d : null;
+  }
+  function linkView(link, { paid = false, repository = false } = {}) {
+    if (!link || typeof link !== "object") return null;
+    const href = safeHref(link.url);
+    const members = isLockedLink(link);
+    const locked = members && (paid !== true || link.encrypted === true);
+    if (!locked && !href) return null;
+    const host = href ? hostOf6(href) : "";
+    const fallback = repository && host === "github.com" ? "View on GitHub" : linkLabel(link);
+    const label = str6(link.label) || fallback || "Link";
+    const kind2 = link.type === "download" ? "download" : host === "github.com" ? "github" : "link";
+    return { label, href: locked ? null : href, locked, hint: locked ? lockedHint(link) : "", kind: kind2 };
+  }
+  function projectViewModel({ item = {}, frontmatter = null, itemPath = "", paid = false } = {}) {
+    const it2 = item && typeof item === "object" ? item : {};
+    const fm = frontmatter && typeof frontmatter === "object" ? frontmatter : {};
+    const path = str6(itemPath) || str6(it2.path);
+    const asset = (v2) => typeof v2 === "string" && v2 ? resolveContentAsset(v2, path) : "";
+    const title = str6(fm.title) || str6(it2.title);
+    const labels = strings(it2.categoryLabels);
+    const eyebrow = labels.length ? labels[labels.length - 1] : "";
+    const pitch = str6(fm.shortDescription) || str6(it2.description) || str6(it2.excerpt);
+    const icon3 = asset(fm.iconLarge) || asset(fm.icon) || asset(it2.thumbCard) || asset(it2.thumb);
+    const pricing = PRICING_LABELS[str6(fm.pricing)] || "";
+    const platforms = strings(fm.platforms);
+    const links = Array.isArray(fm.links) ? fm.links.filter((l) => l && typeof l === "object") : [];
+    const opts = { paid };
+    const repoLink = links.find((l) => l.type === REPOSITORY2 && l.url && !isLockedLink(l)) || links.find((l) => l.type === REPOSITORY2 && l.url);
+    const repo = linkView(repoLink, { ...opts, repository: true });
+    const primary = linkView(resolvePrimaryCta(links, safeHref(fm.pricingUrl)), opts);
+    const requires = str6(fm.requires);
+    const version = str6(fm.version);
+    const published = toDate(fm.publishedAt) || toDate(it2.publishedAt);
+    const updated = toDate(fm.updatedAt);
+    const facts = [
+      ["Works with", platforms.join(", ")],
+      ["Price", pricing],
+      ["Category", eyebrow],
+      ["Version", version],
+      ["Requires", requires],
+      ["Published", published ? railDate(published) : ""],
+      ["Updated", updated && (!published || railDate(updated) !== railDate(published)) ? railDate(updated) : ""]
+    ].filter(([, v2]) => v2).map(([k, v2]) => ({ k, v: v2 }));
+    const shots = normalizeGallery(fm.gallery).map((g) => ({ src: asset(typeof g.src === "string" ? g.src : g.src?.src), caption: str6(g.caption) })).filter((g) => g.src);
+    return {
+      title,
+      eyebrow,
+      pitch,
+      icon: icon3,
+      pricing,
+      platforms,
+      repo,
+      primary,
+      hasBar: Boolean(pricing || platforms.length || repo || primary),
+      install: primary || repo ? { sub: [pricing, requires].filter(Boolean).join(" · ") } : null,
+      facts,
+      tags: strings(fm.tags).length ? strings(fm.tags) : strings(it2.tags),
+      gallery: shots,
+      galleryCaptions: hasCaptions(shots)
+    };
+  }
+
+  // client-ui/src/elements/reader-project.mjs
+  var ICON2 = {
+    github: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12 1.6a10.4 10.4 0 0 0-3.29 20.27c.52.1.71-.22.71-.5l-.01-1.75c-2.9.63-3.51-1.4-3.51-1.4-.47-1.2-1.16-1.52-1.16-1.52-.95-.65.07-.64.07-.64 1.05.08 1.6 1.08 1.6 1.08.93 1.6 2.44 1.13 3.04.87.09-.68.36-1.13.66-1.39-2.31-.26-4.74-1.16-4.74-5.14 0-1.14.4-2.06 1.07-2.79-.11-.27-.46-1.32.1-2.76 0 0 .87-.28 2.85 1.06a9.8 9.8 0 0 1 5.19 0c1.98-1.34 2.85-1.06 2.85-1.06.57 1.44.21 2.49.1 2.76.67.73 1.07 1.65 1.07 2.79 0 3.99-2.43 4.87-4.75 5.13.38.32.71.95.71 1.92l-.01 2.85c0 .28.19.61.72.5A10.4 10.4 0 0 0 12 1.6Z"/></svg>',
+    download: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+    link: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>'
+  };
+  var PROJECT_CSS = `
+  .pv-hero { display:grid; grid-template-columns:104px minmax(0,1fr); gap:26px; align-items:center; padding:28px 30px; margin:0 0 14px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+  .pv-icon { display:block; width:104px; height:104px; border-radius:22%; object-fit:cover; background:var(--hover); }
+  .pv-eyebrow { font-family:ui-monospace, "JetBrains Mono", monospace; font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
+  .pv-hero h1 { font-size:34px; line-height:1.1; margin:6px 0 10px; }
+  .pv-pitch { margin:0; font-size:16px; line-height:1.55; color:var(--muted); max-width:64ch; }
+  .pv-bar { display:flex; align-items:center; gap:12px 16px; flex-wrap:wrap; padding:14px 18px; margin:0 0 28px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+  .pv-price { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--accent); background:var(--green-tint); border-radius:999px; padding:4px 11px; }
+  .pv-plat { font-size:13.5px; color:var(--muted); }
+  .pv-acts { margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; }
+  .pv-btn { display:inline-flex; align-items:center; justify-content:center; gap:9px; padding:11px 16px; border-radius:9px; border:1px solid var(--line-2); background:transparent; color:var(--fg); font-size:14.5px; font-weight:600; text-decoration:none; }
+  .pv-btn:hover { border-color:var(--accent); color:var(--fg); }
+  .pv-btn.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:700; }
+  .pv-btn.primary:hover { filter:brightness(1.07); color:var(--on-accent); }
+  .pv-btn.locked { opacity:.75; cursor:not-allowed; }
+  .pv-btn svg { width:17px; height:17px; flex:none; }
+  .pv-install { display:flex; align-items:center; gap:14px 10px; flex-wrap:wrap; margin:34px 0 0; padding:22px 24px; border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); }
+  .pv-install-t { flex:1 1 100%; }
+  .pv-install-h { font-weight:700; font-size:18px; color:var(--fg); }
+  .pv-install-s { margin-top:4px; font-size:14px; color:var(--muted); }
+  .pv-shots { margin-top:40px; padding-top:30px; border-top:1px solid var(--line); }
+  .pv-label { font-family:ui-monospace, "JetBrains Mono", monospace; font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-mute); }
+  /* The reader styles a body h2 as a small grey caps label; this heading is a real title, as on the website. */
+  .pv-shots h2 { font-family:var(--font-display); font-size:24px; margin:6px 0 20px; text-transform:none; letter-spacing:normal; color:var(--fg); }
+  .pv-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:22px 20px; }
+  .pv-grid figure { margin:0; }
+  /* An explicit background and its own :hover, because BASE_CSS paints every bare button brand green and
+     button:hover outranks a single class. */
+  .pv-shot { display:block; width:100%; padding:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#0b0b0d; cursor:zoom-in; }
+  .pv-shot:hover, .pv-shot:focus-visible { background:#0b0b0d; border-color:var(--accent); }
+  .pv-shot img { display:block; width:100%; aspect-ratio:16 / 10; object-fit:contain; }
+  .pv-grid figcaption { margin-top:8px; font-size:13.5px; line-height:1.5; color:var(--fg-mute); }
+  .pv-facts { padding:18px 20px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+  .pv-facts dl { margin:8px 0 0; }
+  .pv-fact { display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .pv-fact dt { color:var(--fg-mute); }
+  .pv-fact dd { margin:0; text-align:right; font-weight:600; color:var(--fg); }
+  .pv-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+  .pv-tag { font-family:ui-monospace, "JetBrains Mono", monospace; font-size:12px; color:var(--muted); border:1px solid var(--line-2); border-radius:6px; padding:3px 8px; }
+  @media (max-width:760px) {
+    .pv-hero { grid-template-columns:72px minmax(0,1fr); gap:18px; padding:22px; }
+    .pv-icon { width:72px; height:72px; }
+    .pv-hero h1 { font-size:26px; }
+    .pv-acts { margin-left:0; width:100%; }
+    .pv-acts .pv-btn { flex:1 1 220px; }
+  }
+  @media (max-width:520px) {
+    .pv-hero { grid-template-columns:56px minmax(0,1fr); align-items:start; }
+    .pv-icon { width:56px; height:56px; }
+    .pv-grid { grid-template-columns:minmax(0,1fr); }
+  }
+`;
+  function projectButtonHtml(v2, { primary = false } = {}) {
+    if (!v2) return "";
+    const cls = `pv-btn${primary ? " primary" : ""}`;
+    if (v2.locked) return `<span class="${cls} locked" title="${esc2(v2.hint)}" aria-disabled="true">${ICON2.lock}${esc2(v2.label)}</span>`;
+    return `<a class="${cls}" href="${esc2(v2.href)}" target="_blank" rel="noopener nofollow">${ICON2[v2.kind] || ICON2.link}${esc2(v2.label)}</a>`;
+  }
+  function projectHeroHtml(m, fallbackTitle = "") {
+    const icon3 = m.icon ? `<img class="pv-icon" src="${esc2(m.icon)}" alt="" width="104" height="104">` : '<span class="pv-icon" aria-hidden="true"></span>';
+    return `<section class="pv-hero">${icon3}<div>` + (m.eyebrow ? `<div class="pv-eyebrow">${esc2(m.eyebrow)}</div>` : "") + `<h1>${esc2(m.title || fallbackTitle || "")}</h1>` + (m.pitch ? `<p class="pv-pitch">${esc2(m.pitch)}</p>` : "") + "</div></section>";
+  }
+  function projectBarHtml(m) {
+    if (!m.hasBar) return "";
+    const acts = projectButtonHtml(m.repo) + projectButtonHtml(m.primary, { primary: true });
+    return '<section class="pv-bar">' + (m.pricing ? `<span class="pv-price">${esc2(m.pricing)}</span>` : "") + (m.platforms.length ? `<span class="pv-plat">${m.platforms.map(esc2).join(" &middot; ")}</span>` : "") + (acts ? `<div class="pv-acts">${acts}</div>` : "") + "</section>";
+  }
+  function projectInstallHtml(m) {
+    if (!m.install) return "";
+    const acts = (m.primary && !m.primary.locked ? projectButtonHtml(m.primary, { primary: true }) : "") + projectButtonHtml(m.repo);
+    if (!acts) return "";
+    return `<section class="pv-install"><div class="pv-install-t"><div class="pv-install-h">Ready to install?</div>` + (m.install.sub ? `<div class="pv-install-s">${esc2(m.install.sub)}</div>` : "") + `</div>${acts}</section>`;
+  }
+  function projectGalleryHtml(m) {
+    if (!m.gallery.length) return "";
+    const shots = m.gallery.map((g, i) => `<figure><button class="pv-shot" type="button" data-pv-shot="${i}" aria-label="Open screenshot ${i + 1} full size"><img src="${esc2(g.src)}" alt="${esc2(g.caption || `Screenshot ${i + 1}`)}" loading="lazy"></button>` + (g.caption ? `<figcaption>${esc2(g.caption)}</figcaption>` : "") + "</figure>").join("");
+    return `<section class="pv-shots"><div class="pv-label">Screenshots</div><h2>See ${esc2(m.title || "it")} in action</h2><div class="pv-grid">${shots}</div></section>`;
+  }
+  function projectFactsHtml(m) {
+    if (!m.facts.length && !m.tags.length) return "";
+    const rows = m.facts.map((f) => `<div class="pv-fact"><dt>${esc2(f.k)}</dt><dd>${esc2(f.v)}</dd></div>`).join("");
+    const tags = m.tags.length ? `<div class="pv-tags">${m.tags.map((t) => `<span class="pv-tag">${esc2(t)}</span>`).join("")}</div>` : "";
+    return `<section class="pv-facts"><div class="pv-label">About this project</div>${rows ? `<dl>${rows}</dl>` : ""}${tags}</section>`;
+  }
+  var taxonomyLoad = null;
+  function loadTaxonomy(fetchImpl = globalThis.fetch) {
+    if (!taxonomyLoad) {
+      taxonomyLoad = Promise.resolve().then(() => fetchImpl("https://gbti.network/taxonomy.json")).then((r) => r && r.ok ? r.json() : null).catch(() => null);
+    }
+    return taxonomyLoad;
+  }
+  var VIEWER_ID = "gbti-image-viewer";
+  function viewer() {
+    let dlg = document.getElementById(VIEWER_ID);
+    if (dlg) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.id = VIEWER_ID;
+    dlg.setAttribute("aria-label", "Screenshot");
+    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
+    dlg.innerHTML = `<style>#${VIEWER_ID}::backdrop{background:rgba(20,19,24,.9)}#${VIEWER_ID}[open]{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}#${VIEWER_ID} img{max-width:min(94vw,1600px);max-height:82vh;object-fit:contain;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.55);background:#0b0b0d}#${VIEWER_ID} p{margin:0;max-width:min(90vw,900px);text-align:center;color:#f3f2f0;font:14.5px/1.5 system-ui,sans-serif}#${VIEWER_ID} .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><img alt=""><p></p>`;
+    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    document.body.appendChild(dlg);
+    return dlg;
+  }
+  function openImageViewer(src, caption = "") {
+    if (!src || typeof document === "undefined") return;
+    const dlg = viewer();
+    const img = dlg.querySelector("img");
+    img.src = src;
+    img.alt = caption || "Screenshot";
+    const p = dlg.querySelector("p");
+    p.textContent = caption || "";
+    p.hidden = !caption;
+    if (!dlg.open) dlg.showModal();
+  }
+  function wireProjectView(root, m) {
+    root.querySelectorAll("[data-pv-shot]").forEach((b) => b.addEventListener("click", () => {
+      const g = m.gallery[Number(b.dataset.pvShot)];
+      if (g) openImageViewer(g.src, g.caption);
+    }));
+  }
+
   // client-ui/src/elements/gbti-reader.mjs
   var SITE22 = "https://gbti.network";
   var KIND_ICON = {
@@ -27994,6 +28283,7 @@ ${BLOCKED_PILL_CSS}
       this._rawBody = null;
       this._fm = null;
       this._skill = null;
+      this._paid = false;
       this.render();
       this._resolve();
     }
@@ -28010,8 +28300,30 @@ ${BLOCKED_PILL_CSS}
         this._author = author;
       }
       this._skill = await this._resolveSkill(this._item || it2);
+      this._paid = await this._resolvePaid(this._item || it2);
+      await this._backfillCategoryLabels();
       this.render();
       this._applyDo(this._item || it2);
+    }
+    // sow-441: whether the viewer is a paying member, asked only for a project that HAS a members-only link (the one
+    // thing it decides: such a link is live only for a paying member). Fail closed: any failure is "not paid".
+    async _resolvePaid(it2) {
+      const links = Array.isArray(this._fm?.links) ? this._fm.links : [];
+      if (it2?.type !== "project" || !links.some((l) => l && l.visibility === "members") || !this.client?.status) return false;
+      try {
+        return (await this.client.status())?.membership === "paid";
+      } catch {
+        return false;
+      }
+    }
+    // sow-441: only the content index carries category labels, so a project opened from a link showed no category
+    // while the same project opened from the list did. Read the labels from the public category tree instead.
+    async _backfillCategoryLabels() {
+      const cur = this._item || {};
+      if (cur.type !== "project" || Array.isArray(cur.categoryLabels) && cur.categoryLabels.length) return;
+      if (!Array.isArray(this._fm?.categories) || !this._fm.categories.length) return;
+      const labels = categoryLabelsFrom(await loadTaxonomy(), this._fm.categories);
+      if (labels.length) this._item = { ...cur, categoryLabels: labels };
     }
     // sow-109: prompt or skill. The feed item carries it (the indexes do); a deep link has only the frontmatter.
     _kind(it2) {
@@ -28216,11 +28528,12 @@ ${BLOCKED_PILL_CSS}
       const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
       const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE22 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
-      const meta = this._metaHtml(it2, when);
+      const proj = it2.type === "project" ? projectViewModel({ item: it2, frontmatter: this._fm, itemPath: it2.path, paid: this._paid === true }) : null;
+      const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
       const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE22}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = proj ? "" : shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE22}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -28237,9 +28550,14 @@ ${BLOCKED_PILL_CSS}
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"${Array.isArray(it2.aliases) && it2.aliases.length ? ` data-gbti-target-aliases="${esc2(it2.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const srcCard = it2.type === "share" && it2.url ? sourceCardModel({ url: it2.url, memberName: this._author?.entry?.displayName || authorName4(it2.author), creatorUrl: it2.creatorUrl, creatorName: it2.creatorName }) : null;
       const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc2(faviconFor(it2.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc2(srcCard.name)}</div><p class="ss-note">${esc2(srcCard.credit)}</p><a class="side-open" href="${esc2(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc2(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc2(srcCard.action.text)}</a></div>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it2)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+      const facts = proj ? projectFactsHtml(proj) : "";
+      const side = resolved ? `<aside class="side">${facts}${this._authorCardHtml(it2)}${sideLink}${discussion}</aside>` : `<aside class="side">${facts}</aside>`;
       const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc2(this._skill.text)}</pre>` : "";
-      this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc2(it2.title || "")}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
+      const top = proj ? projectHeroHtml(proj, it2.title) + projectBarHtml(proj) : "";
+      const title = proj ? "" : `<h1>${esc2(it2.title || "")}</h1>`;
+      const tail = proj ? projectInstallHtml(proj) + projectGalleryHtml(proj) : "";
+      this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : "")) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tail}${view}${copyAll}</article>${side}</div></div>`);
+      if (proj) wireProjectView(this.root, proj);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it2);
@@ -29155,7 +29473,7 @@ ${BLOCKED_PILL_CSS}
   function esc7(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  function safeHref(url) {
+  function safeHref2(url) {
     const u = String(url || "").replace(/\u200B/g, "").trim();
     return /^(https?:\/\/|mailto:)/i.test(u) ? u : "";
   }
@@ -29304,7 +29622,7 @@ ${BLOCKED_PILL_CSS}
         italic: (t) => `<em>${t}</em>`,
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
-          const href = safeHref(resolve(url));
+          const href = safeHref2(resolve(url));
           const inner = String(label || "").trim() || esc7(resolve(url));
           return href ? `<a href="${esc7(href)}">${inner}</a>` : inner;
         }
@@ -30008,8 +30326,8 @@ ${BLOCKED_PILL_CSS}
   var MAX_STRING = 200;
   var MAX_DEPTH = 3;
   function clip(s) {
-    const str6 = String(s);
-    return str6.length > MAX_STRING ? `${str6.slice(0, MAX_STRING)}…(${str6.length})` : str6;
+    const str7 = String(s);
+    return str7.length > MAX_STRING ? `${str7.slice(0, MAX_STRING)}…(${str7.length})` : str7;
   }
   function redactDeep(value, depth = 0) {
     if (value == null) return value;

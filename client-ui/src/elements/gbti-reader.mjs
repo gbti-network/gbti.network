@@ -12,6 +12,10 @@
 // card (avatar, name, the headline "author note"), a Follow control, the author's public social links (Discord
 // revealed on inspection), and the discussion thread beneath it. Fenced code blocks upgrade into code cards with
 // a language label + Copy button.
+//
+// sow-441: a PROJECT has no cover any more. It renders the website's project layout instead (./reader-project.mjs,
+// modelled by ../project-view.mjs): the icon beside the title, the action bar, "Ready to install?", the screenshots and
+// "About this project". Every other type keeps the layout above.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { sourceCardModel } from '../../../client/src/share-source.mjs'; // sow-222: the shared source-card decision
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
@@ -36,6 +40,9 @@ import { SKILL_READER_CSS, loadSkillBox, loadMembersSkillBox, promptSlugOf } fro
 import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
 import { KIND_LABEL } from '../../../membership/prompt-kind.mjs';
 import { avatarLayers, memberAvatarUrl } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
+// sow-441: a project renders the website's project layout (icon hero, action bar, install box, screenshots, facts).
+import { projectViewModel, categoryLabelsFrom } from '../project-view.mjs';
+import { PROJECT_CSS, projectHeroHtml, projectBarHtml, projectInstallHtml, projectGalleryHtml, projectFactsHtml, wireProjectView, loadTaxonomy } from './reader-project.mjs';
 
 const SITE = 'https://gbti.network';
 // The kind marks, drawn inline because a shadow root cannot see the site's icon sprite (IconSprite's ico-kind-*).
@@ -258,7 +265,7 @@ class GbtiReader extends GbtiElement {
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
   open(item) {
-    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this._skill = null; this.render(); this._resolve();
+    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this._skill = null; this._paid = false; this.render(); this._resolve();
   }
 
   async _resolve() {
@@ -279,8 +286,28 @@ class GbtiReader extends GbtiElement {
       this._author = author;
     }
     this._skill = await this._resolveSkill(this._item || it);
+    this._paid = await this._resolvePaid(this._item || it);
+    await this._backfillCategoryLabels();
     this.render();
     this._applyDo(this._item || it);
+  }
+
+  // sow-441: whether the viewer is a paying member, asked only for a project that HAS a members-only link (the one
+  // thing it decides: such a link is live only for a paying member). Fail closed: any failure is "not paid".
+  async _resolvePaid(it) {
+    const links = Array.isArray(this._fm?.links) ? this._fm.links : [];
+    if (it?.type !== 'project' || !links.some((l) => l && l.visibility === 'members') || !this.client?.status) return false;
+    try { return (await this.client.status())?.membership === 'paid'; } catch { return false; }
+  }
+
+  // sow-441: only the content index carries category labels, so a project opened from a link showed no category
+  // while the same project opened from the list did. Read the labels from the public category tree instead.
+  async _backfillCategoryLabels() {
+    const cur = this._item || {};
+    if (cur.type !== 'project' || (Array.isArray(cur.categoryLabels) && cur.categoryLabels.length)) return;
+    if (!Array.isArray(this._fm?.categories) || !this._fm.categories.length) return;
+    const labels = categoryLabelsFrom(await loadTaxonomy(), this._fm.categories);
+    if (labels.length) this._item = { ...cur, categoryLabels: labels };
   }
 
   // sow-109: prompt or skill. The feed item carries it (the indexes do); a deep link has only the frontmatter.
@@ -535,7 +562,10 @@ class GbtiReader extends GbtiElement {
       ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf(it.url))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
-    const meta = this._metaHtml(it, when);
+    // sow-441: a project's model (null for every other type). Its category moves into the hero, so the meta line
+    // carries none.
+    const proj = it.type === 'project' ? projectViewModel({ item: it, frontmatter: this._fm, itemPath: it.path, paid: this._paid === true }) : null;
+    const meta = this._metaHtml(proj ? { ...it, categoryLabels: [] } : it, when);
     // SOW-090: a whole-prompt Copy for PROMPT items (a prompt is a copyable artifact; the public site has
     // this and the extension reader did not). Copies the raw markdown body.
     // sow-109: not on a skill, whose page text is not the thing to paste; its install box copies the skill file.
@@ -548,7 +578,9 @@ class GbtiReader extends GbtiElement {
     const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
     // The player loads through the site's /embed/ relay: YouTube rejects a referrer-less request (its
     // error 153) and a chrome-extension:// page can never send one, so the relay's https origin vouches.
-    const cover = shareEmbed
+    // sow-441: no cover on a project. For a project the index thumbnail IS the icon, which this stretched across the
+    // column; the project hero shows the icon at its own size instead.
+    const cover = proj ? '' : shareEmbed
       ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`${SITE}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
       : (coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '');
     let body;
@@ -593,12 +625,21 @@ class GbtiReader extends GbtiElement {
     // content pages (src/components/SyndicateNow.astro, attributes by src/lib/syndicate-attrs.mjs) with the rest of
     // syndication. The extension is a reader.
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
-    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+    // sow-441: a project's "About this project" card leads the side column (it needs only the model, so it shows as
+    // soon as the frontmatter does).
+    const facts = proj ? projectFactsHtml(proj) : '';
+    const side = resolved ? `<aside class="side">${facts}${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : `<aside class="side">${facts}</aside>`;
 
 
     // sow-109: a public skill's install box sits above the author's text, as on the website's skill page.
     const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc(this._skill.text)}</pre>` : '';
-    this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
+    // sow-441: a project's hero and action bar span both columns above them, and its install box and screenshots
+    // follow the body; every other type keeps the title at the top of the article.
+    const top = proj ? projectHeroHtml(proj, it.title) + projectBarHtml(proj) : '';
+    const title = proj ? '' : `<h1>${esc(it.title || '')}</h1>`;
+    const tail = proj ? projectInstallHtml(proj) + projectGalleryHtml(proj) : '';
+    this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : '')) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tail}${view}${copyAll}</article>${side}</div></div>`);
+    if (proj) wireProjectView(this.root, proj);
     if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); if (this._skill) wireSkillPage(this.root); }
   }
 

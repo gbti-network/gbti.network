@@ -108,9 +108,16 @@ export function buildToc(headings, opts = {}) {
   return entries.length >= TOC_MIN_ENTRIES ? entries : [];
 }
 
-/** The repository URL, which the page surfaces as its own "View on GitHub" button rather than a Get row. */
+/**
+ * The repository URL, which the page surfaces as its own "View on GitHub" button rather than a Get row.
+ *
+ * sow-441: PUBLIC repository links only. A members-only repository link used to come back here, and the published
+ * page then rendered it as a live public "View on GitHub" button (and asked the GitHub API about it at build), the one
+ * place SOW-014's "a members-only link renders inert" did not hold. A surface that can unlock a members-only link for a
+ * paying member (the extension's project view) finds it itself.
+ */
 export function repoUrl(links) {
-  const hit = (links ?? []).find((l) => l && l.type === REPOSITORY && l.url);
+  const hit = (links ?? []).find((l) => l && l.type === REPOSITORY && l.url && !isLockedLink(l));
   return hit ? hit.url : null;
 }
 
@@ -182,6 +189,34 @@ export function linkLabel(link) {
 /** True when a link must render inert on the public static site (SOW-014). */
 export function isLockedLink(link) {
   return Boolean(link) && link.visibility === 'members';
+}
+
+/** The published page's tooltip on a members-only link, word for word (src/pages/projects/[slug].astro lockedHint). */
+export function lockedHint(link) {
+  if (!isLockedLink(link)) return '';
+  return link.encrypted
+    ? 'Encrypted member content. Open in the GBTI client to unlock.'
+    : 'Members only. Open in the GBTI client to unlock.';
+}
+
+/**
+ * An href a page may render: an absolute http or https URL, normalized. Everything else (javascript:, data:,
+ * vbscript:, a relative path, a protocol-relative `//host`, anything the URL parser refuses) is null, and the page
+ * renders the label without a link. The Worker already refuses these at save (amendment 8); this is the second wall.
+ * (Moved here from claim-core.mjs in sow-441, which re-exports it, so the extension's project view shares it.)
+ */
+export function safeHref(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s || /[\u0000-\u001f\u007f]/.test(s) || !/^https?:\/\//i.test(s)) return null;
+  let u;
+  try { u = new URL(s); } catch { return null; }
+  return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+}
+
+/** A rail date the way the published page writes its Updated and Published rows ("1 Oct 2026"). */
+export function railDate(d) {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 /**
