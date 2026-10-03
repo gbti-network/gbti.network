@@ -58,13 +58,14 @@ export interface Props {
     meta?: string[];
   };
   claimStyle?: 'classic' | 'panel';
+  /** sow-442: the claim button's label, which names where the press goes. Default "Claim with GitHub". */
   claimCtaLabel?: string;
   faqs: readonly (readonly [string, string])[];
   faqHeading?: string;
 }
 const {
   title, description, tierLabel, tierPriceLabel, benefits, benefitsHeading, benefitsLead, benefitsLayout = 'grid2',
-  nav, navCta, hero, claimStyle = 'classic', claimCtaLabel = 'Claim your free year', faqs, faqHeading = 'Network FAQ',
+  nav, navCta, hero, claimStyle = 'classic', claimCtaLabel = 'Claim with GitHub', faqs, faqHeading = 'Network FAQ',
 } = Astro.props;
 const panel = claimStyle === 'panel';
 const year = new Date().getFullYear();
@@ -99,7 +100,12 @@ const year = new Date().getFullYear();
           <h1 set:html={hero.titleHtml} />
           <p class="lead">{hero.lead}</p>
           <div class="ci-cta-row">
-            <a href="#claim" class="btn-primary">{hero.ctaLabel}</a>
+            <!-- sow-442: on desktop the claim box is already beside this button, so it starts the claim (or points
+                 at the human check); on a narrow screen it keeps its page's own label and scrolls to the box. -->
+            <a href="#claim" class="btn-primary ci-hero-claim" data-hero-claim>
+              <span class="ci-idle"><span class="ci-lbl-wide"><svg class="ci-gh" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-github" /></svg>{claimCtaLabel}</span><span class="ci-lbl-narrow">{hero.ctaLabel}</span></span>
+              <span class="ci-busy"><span class="ci-spin" aria-hidden="true"></span>Taking you to GitHub&hellip;</span>
+            </a>
             {hero.secondaryCta && <a href={hero.secondaryCta.href} class="btn-ghost">{hero.secondaryCta.label}</a>}
           </div>
           {hero.ticks && hero.ticks.length > 0 && (
@@ -112,6 +118,14 @@ const year = new Date().getFullYear();
         <!-- STICKY on desktop: the claim card is the only place the coupon is confirmed, so it stays on screen
              while the reader scrolls. Below the hero breakpoint the grid is one column and sticky is dropped. -->
         <div id="claim" class="ci-claim">
+          <!-- sow-442: shown to someone who pressed the button, went to GitHub and came back without finishing. -->
+          <div class="ci-back" data-claim-back role="status" hidden>
+            <svg class="ci-back-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+            <div>
+              <div class="ci-back-h">Welcome back</div>
+              <p class="ci-back-b">You left GitHub before it finished. <span data-claim-back-coupon>Your coupon is still applied, so press</span><span data-claim-back-plain hidden>Press</span> the button again whenever you are ready.</p>
+            </div>
+          </div>
           {panel && (
             <div class="ci-claim-top">
               <span class="ci-tier">{tierLabel}</span>
@@ -150,12 +164,25 @@ const year = new Date().getFullYear();
           )}
           <div class="signup-cta">
             <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileFail" data-theme="auto"></div>
-            <button id="signup-go" type="button" class="btn-primary btn-claim" disabled>{claimCtaLabel}</button>
+            <button id="signup-go" type="button" class="btn-primary btn-claim" disabled>
+              <span class="ci-idle"><svg class="ci-gh" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-github" /></svg>{claimCtaLabel}</span>
+              <span class="ci-busy"><span class="ci-spin" aria-hidden="true"></span>Taking you to GitHub&hellip;</span>
+            </button>
+            <p class="ci-wait" data-ts-wait>The button turns on once the check above finishes.</p>
+            <p class="ci-tick" data-ts-tick hidden>Tick the box above, then press {claimCtaLabel}.</p>
             <p class="ci-ts-note" data-ts-note hidden>The human verification did not load, so the button stays
               disabled. If you use a content blocker, allow challenges.cloudflare.com and refresh this page.</p>
           </div>
-          <p class="ci-fine">Sign in with GitHub. No card at any point during the free year, and nothing
-            bills automatically.</p>
+          <!-- sow-442: GitHub's own sign-in and approval screens are where people stalled (a week of sign-in records,
+               2026-10-02), so the card says what comes next before the press. -->
+          <div class="ci-next">
+            <div class="ci-next-h">What happens next</div>
+            <ol>
+              <li><span class="ci-next-n" aria-hidden="true">1</span><span>GitHub asks you to sign in, if you are not already, and to approve read-only access to your profile and email.</span></li>
+              <li><span class="ci-next-n" aria-hidden="true">2</span><span>You come straight back to set up your account, and your free year starts.</span></li>
+            </ol>
+          </div>
+          <p class="ci-fine">No card at any point during the free year, and nothing bills automatically.</p>
           {panel && benefits.length > 0 && (
             <!-- The design's quick wins, from the registry labels, so they cannot drift from the list they summarize. -->
             <div class="ci-wins">
@@ -254,11 +281,72 @@ const year = new Date().getFullYear();
 
     var btn = document.getElementById('signup-go');
     var tsNote = document.querySelector('[data-ts-note]');
+    var waitNote = document.querySelector('[data-ts-wait]');
+    var tickNote = document.querySelector('[data-ts-tick]');
+    var claimBox = document.getElementById('claim');
+    var heroBtn = document.querySelector('[data-hero-claim]');
+    var backNote = document.querySelector('[data-claim-back]');
+    var pending = false;
     window.gbtiTurnstileOk = function (token) {
       if (btn) { btn.disabled = false; btn.dataset.token = token; }
       if (tsNote) tsNote.hidden = true;
+      if (waitNote) waitNote.hidden = true;
+      if (tickNote) tickNote.hidden = true;
     };
     window.gbtiTurnstileReset = function () { if (btn) { btn.disabled = true; delete btn.dataset.token; } };
+    // sow-442: while no check has passed (the first load, an expired token), the line under the button says why it is
+    // off; never during a press, which has its own state.
+    var resetButton = window.gbtiTurnstileReset;
+    window.gbtiTurnstileReset = function () { resetButton(); if (waitNote && !pending) waitNote.hidden = false; };
+
+    // sow-442: a press always answers. Both claim buttons hold a spinner and "Taking you to GitHub" until the browser
+    // leaves; if it has not left in 15 seconds (offline, a blocked navigation) they come back and the check runs again,
+    // so nobody is left with a dead button. The press is remembered in this tab for the Welcome back note below.
+    var PENDING_MS = 15000;
+    var LEFT_KEY = 'gbti-claim-left';
+    function setPending(on) {
+      pending = on;
+      [btn, heroBtn].forEach(function (b) {
+        if (!b) return;
+        b.classList.toggle('is-pending', on);
+        if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+      });
+      if (on) { if (waitNote) waitNote.hidden = true; if (tickNote) tickNote.hidden = true; }
+    }
+    function showPending() {
+      setPending(true);
+      try { sessionStorage.setItem(LEFT_KEY, String(Date.now())); } catch (e) { /* storage blocked: no Welcome back */ }
+      setTimeout(function () {
+        if (!pending) return;
+        setPending(false);
+        window.gbtiTurnstileReset();
+        try { if (window.turnstile) window.turnstile.reset(); } catch (err) { /* widget not mounted */ }
+      }, PENDING_MS);
+    }
+
+    // sow-442: someone who pressed, reached GitHub and came back without finishing is told their place is kept. Only in
+    // this tab (sessionStorage), only within 30 minutes of the press, and never once a sign-in has finished (the readable
+    // gbti_csrf cookie), which clears the flag instead.
+    var BACK_MS = 30 * 60 * 1000;
+    function checkBack() {
+      if (!backNote) return;
+      var at = 0;
+      try { at = Number(sessionStorage.getItem(LEFT_KEY)) || 0; } catch (e) { at = 0; }
+      if (cookie('gbti_csrf')) {
+        try { sessionStorage.removeItem(LEFT_KEY); } catch (e) { /* nothing to clear */ }
+        backNote.hidden = true;
+        return;
+      }
+      var show = at > 0 && Date.now() - at < BACK_MS;
+      backNote.hidden = !show;
+      if (!show) return;
+      var hasCode = Boolean(input && input.value.trim());
+      var withCode = backNote.querySelector('[data-claim-back-coupon]');
+      var plain = backNote.querySelector('[data-claim-back-plain]');
+      if (withCode) withCode.hidden = !hasCode;
+      if (plain) plain.hidden = hasCode;
+    }
+    checkBack();
     // Widget error (network failure, blocked frame): reset the button and explain why it is disabled.
     window.gbtiTurnstileFail = function () {
       window.gbtiTurnstileReset();
@@ -277,6 +365,7 @@ const year = new Date().getFullYear();
       var token = btn.dataset.token;
       if (!token) return;
       window.gbtiTurnstileReset();
+      showPending();
       var u = new URL(signupBase + '/signup/start');
       u.searchParams.set('cf-turnstile-response', token);
       var code = input && input.value ? input.value.trim() : '';
@@ -290,8 +379,28 @@ const year = new Date().getFullYear();
     // was frozen, not running), so the normal way back from GitHub would replay a spent token. Force a fresh check.
     window.addEventListener('pageshow', function (e) {
       if (!e.persisted) return;
+      setPending(false); // sow-442: the restored page is no longer leaving
       window.gbtiTurnstileReset();
       try { if (window.turnstile) window.turnstile.reset(); } catch (err) { /* widget not mounted yet */ }
+      checkBack();
+    });
+
+    // sow-442: on desktop the claim box sits beside the hero, so the hero's button starts the claim when the check has
+    // passed and points at the check when it has not (it used to scroll the page a few pixels). On a narrow screen the
+    // box is further down, so the link keeps its page's label and scrolls there as before.
+    var wide = window.matchMedia ? window.matchMedia('(min-width: 961px)') : null;
+    if (heroBtn) heroBtn.addEventListener('click', function (e) {
+      if (!wide || !wide.matches) return;
+      e.preventDefault();
+      if (pending) return;
+      if (btn && btn.dataset.token) { btn.click(); return; }
+      if (claimBox) {
+        claimBox.classList.remove('ci-attn');
+        void claimBox.offsetWidth; // restart the highlight on a second press
+        claimBox.classList.add('ci-attn');
+        setTimeout(function () { claimBox.classList.remove('ci-attn'); }, 1800);
+      }
+      if (tickNote && !(tsNote && !tsNote.hidden)) { tickNote.hidden = false; if (waitNote) waitNote.hidden = true; }
     });
 
     // The design's theme toggle, wired to the site's html[data-theme] + the persisted gbti-theme key.
@@ -331,13 +440,14 @@ const year = new Date().getFullYear();
     --ci-surface: #ffffff; --ci-hero: #fbfbfa; --ci-panel: #f5f4f2; --ci-sunk: #f5f4f2; --ci-chip: #ffffff;
     --ci-line: rgba(20,17,26,.10); --ci-line2: rgba(20,17,26,.2); --ci-navline: rgba(20,17,26,.08);
     --ci-fg: #1a1720; --ci-soft: #55505c; --ci-mute: #847f8d; --ci-faint: #a7a2ad;
+    --ci-mute2: #6c6976; /* sow-442: small text that must be read (AA on the panel); --ci-mute is for labels */
     --ci-green: #178a50; --ci-green-ink: #1f9e5f; --ci-amber: #a9781c; --ci-pill: #ffffff; --ci-bg: #f2f0ee;
     background: var(--ci-bg); color: var(--ci-fg); min-height: 100vh;
   }
   html[data-theme="dark"] .ci {
     --ci-surface: #232029; --ci-hero: #232029; --ci-panel: #2a2731; --ci-sunk: #1d1a23; --ci-chip: #17151c;
     --ci-line: rgba(255,255,255,.09); --ci-line2: rgba(255,255,255,.16); --ci-navline: rgba(255,255,255,.07);
-    --ci-fg: #f3f2f0; --ci-soft: #bdbac4; --ci-mute: #847f8d; --ci-faint: #5c5865;
+    --ci-fg: #f3f2f0; --ci-soft: #bdbac4; --ci-mute: #847f8d; --ci-faint: #5c5865; --ci-mute2: #a7a3ae;
     --ci-green: #5fd49a; --ci-amber: #f0c883; --ci-pill: #2a2731; --ci-bg: #17151c;
   }
   .ci .mark-dark { display: none; }
@@ -426,8 +536,36 @@ const year = new Date().getFullYear();
   .ci .ci-chip .applied { flex: none; color: var(--ci-green); font-size: 13px; font-weight: 600; }
   .ci .signup-cta .cf-turnstile { margin: 16px auto 0; min-height: 65px; }
   .ci .btn-claim { width: 100%; text-align: center; font-size: 15.5px; padding: 15px; margin-top: 12px; box-shadow: 0 6px 20px rgba(31,158,95,.3); }
-  .ci .ci-fine { font-size: 11.5px; line-height: 1.5; color: var(--ci-mute); text-align: center; margin: 14px 0 0; }
+  .ci .ci-fine { font-size: 11.5px; line-height: 1.5; color: var(--ci-mute2); text-align: center; margin: 14px 0 0; }
   .ci .ci-ts-note { font-size: 12px; line-height: 1.5; color: var(--ci-amber); text-align: center; margin: 10px 0 0; }
+  /* sow-442: the claim buttons' idle and busy contents, the waiting and tick notes, the highlight, what happens next,
+     and Welcome back. A busy button is not faded: it is working, not off. */
+  .ci .ci-gh { width: 18px; height: 18px; flex: none; fill: currentColor; }
+  .ci .ci-idle, .ci .ci-busy { align-items: center; justify-content: center; gap: 10px; }
+  .ci .ci-idle { display: inline-flex; }
+  .ci .ci-busy { display: none; }
+  .ci .is-pending .ci-idle { display: none; }
+  .ci .is-pending .ci-busy { display: inline-flex; }
+  .ci .btn-primary.is-pending, .ci .btn-primary.is-pending:disabled { opacity: 1; background: #178a50; cursor: progress; pointer-events: none; }
+  .ci .ci-spin { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #fff; animation: ci-spin .9s linear infinite; }
+  @keyframes ci-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .ci .ci-spin { animation-duration: 2.4s; } }
+  .ci .ci-lbl-wide { display: inline-flex; align-items: center; gap: 10px; }
+  .ci .ci-lbl-narrow { display: none; }
+  @media (max-width: 960px) { .ci .ci-lbl-wide { display: none; } .ci .ci-lbl-narrow { display: inline; } }
+  .ci .ci-wait { font-size: 13px; line-height: 1.5; color: var(--ci-mute2); text-align: center; margin: 10px 0 0; }
+  .ci .ci-tick { font-size: 13.5px; line-height: 1.5; color: var(--ci-green); font-weight: 700; text-align: center; margin: 10px 0 0; }
+  .ci .ci-claim.ci-attn { box-shadow: 0 0 0 4px rgba(31,158,95,.45), 0 12px 32px rgba(31,158,95,.18); transition: box-shadow .2s; }
+  .ci .ci-next { margin-top: 18px; padding: 16px; background: var(--ci-chip); border: 1px solid var(--ci-line); border-radius: 7px; }
+  .ci .ci-next-h { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ci-mute2); margin-bottom: 12px; }
+  .ci .ci-next ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .ci .ci-next li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--ci-soft); }
+  .ci .ci-next-n { flex: none; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--ci-green-ink) 14%, transparent); color: var(--ci-green); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .ci .ci-back { display: flex; gap: 12px; align-items: flex-start; border: 1.5px solid var(--ci-green-ink); background: color-mix(in srgb, var(--ci-green-ink) 10%, transparent); border-radius: 7px; padding: 12px 14px; margin-bottom: 18px; }
+  .ci .ci-back[hidden] { display: none; }
+  .ci .ci-back-ico { width: 20px; height: 20px; flex: none; margin-top: 1px; fill: none; stroke: var(--ci-green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ci .ci-back-h { font-weight: 700; font-size: 14px; color: var(--ci-fg); }
+  .ci .ci-back-b { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ci-soft); }
 
   /* sections */
   .ci .ci-sec { max-width: 1160px; margin: 0 auto; padding: 84px 40px 20px; }
