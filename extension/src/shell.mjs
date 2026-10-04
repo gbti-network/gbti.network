@@ -73,7 +73,7 @@ export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"
 // tab leaves it off, because its hero share bar is the compose affordance there and two controls for one action
 // beside each other is worse than one. wireCompose binds whichever of the two exists.
 // sow-396 (owner, 2026-10-02, design A): "Submit content" is on EVERY page, like the website header's button. It opens
-// a chooser (src/submit-content.mjs); in a narrow window it folds into a pencil with the green dot. The owner moved it
+// a chooser (src/submit-content.mjs); in a narrow window it folds into a plain pencil (the green dot stays with the label, owner 2026-10-04). The owner moved it
 // the same day from beside the bell to the very right, after the account menu (and after the "+" where a page has one).
 function controlsHtml({ compose = false } = {}) {
   return `<div class="nt-controls" data-controls>

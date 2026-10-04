@@ -138,6 +138,9 @@ test('below 880px the button folds into the pencil (the full label wrapped the b
   assert.match(narrow, /\.nt-submit-pen \{ display: flex; \}/);
   // Owner, 2026-10-04: folded, it is round like the bell and theme buttons beside it; the full-label button stays square.
   assert.match(narrow, /\.nt-submit \{[^}]*border-radius: 50%;/, 'the folded pencil is round');
+  // Owner, 2026-10-04: no green dot on the folded pencil (in its corner it read as a notification badge).
+  assert.match(narrow, /\.nt-submit-dot \{ display: none; \}/, 'the folded pencil has no dot');
+  assert.match(css.slice(at), /\n\.nt-submit-dot \{[^}]*background: var\(--green\);/, 'control: the full label keeps its dot');
   assert.match(css, /\.nt-icobtn \{[^}]*border-radius: 50%;/, 'control: the icon buttons it matches are round');
   assert.match(css.slice(at), /\n\.nt-submit \{[^}]*border-radius: 2px;/, 'the full-label button keeps its square corners');
   assert.match(css.slice(at).match(/@media \(max-width: 560px\) \{([\s\S]*?)\n\}/)?.[1] || '', /\.nt-submit \{ width: 36px; height: 36px; \}/, 'phone size matches the icon buttons');
