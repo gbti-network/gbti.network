@@ -471,9 +471,11 @@ body.gbti-editing .nt-main { background: #f4f2ef; }
 @media (prefers-reduced-motion: reduce) { .sc-sk { animation: none; } }
 
 /* A narrower window: the button folds into a pencil with the green dot. Measured 2026-10-02: with the full label the
-   top bar wrapped to a second row from about 660px to 880px, where it had held one row; folded, it holds. */
+   top bar wrapped to a second row from about 660px to 880px, where it had held one row; folded, it holds.
+   Owner, 2026-10-04: folded, it is round like the bell and theme buttons beside it ("make the border radius match other
+   items in the header toolbar"). The full-label button keeps its square corners. */
 @media (max-width: 880px) {
-  .nt-submit { position: relative; width: 40px; padding: 0; justify-content: center; }
+  .nt-submit { position: relative; width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
   .nt-submit-tx { display: none; }
   .nt-submit-pen { display: flex; }
   .nt-submit-pen svg { width: 18px; height: 18px; }

@@ -136,6 +136,10 @@ test('below 880px the button folds into the pencil (the full label wrapped the b
   const narrow = css.slice(at).match(/@media \(max-width: 880px\) \{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(narrow, /\.nt-submit-tx \{ display: none; \}/);
   assert.match(narrow, /\.nt-submit-pen \{ display: flex; \}/);
+  // Owner, 2026-10-04: folded, it is round like the bell and theme buttons beside it; the full-label button stays square.
+  assert.match(narrow, /\.nt-submit \{[^}]*border-radius: 50%;/, 'the folded pencil is round');
+  assert.match(css, /\.nt-icobtn \{[^}]*border-radius: 50%;/, 'control: the icon buttons it matches are round');
+  assert.match(css.slice(at), /\n\.nt-submit \{[^}]*border-radius: 2px;/, 'the full-label button keeps its square corners');
   assert.match(css.slice(at).match(/@media \(max-width: 560px\) \{([\s\S]*?)\n\}/)?.[1] || '', /\.nt-submit \{ width: 36px; height: 36px; \}/, 'phone size matches the icon buttons');
   assert.match(css.slice(at), /\.nt-submit-pen \{ display: none; \}/, 'the pencil is hidden at full width');
   assert.match(css.slice(at), /\.submit-modal \.sc-dialog \{[^}]*border-radius: 2px;/, 'square corners like the share dialog');
