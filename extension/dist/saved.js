@@ -31029,6 +31029,86 @@ ${BLOCKED_PILL_CSS}
     return dialogOpen;
   }
 
+  // extension/src/topbar-fit.mjs
+  var FIT_STEPS = Object.freeze([
+    { brand: "full", quickLaunch: true },
+    { brand: "mark", quickLaunch: true },
+    { brand: "none", quickLaunch: true },
+    { brand: "none", quickLaunch: false }
+  ]);
+  function decideTopbarFit({ row = 0, rowGap = 0, brandFull = 0, brandMark = 0, controls = 0, quickLaunch = 0, clusterGap = 0, slack = 1 } = {}) {
+    const brandOf = (b) => b === "full" ? brandFull : b === "mark" ? brandMark : 0;
+    for (const step of FIT_STEPS) {
+      const brand = brandOf(step.brand);
+      const ql = step.quickLaunch && quickLaunch > 0 ? quickLaunch + clusterGap : 0;
+      if (brand + (brand > 0 ? rowGap : 0) + controls + ql <= row - slack) return { ...step };
+    }
+    return { ...FIT_STEPS[FIT_STEPS.length - 1] };
+  }
+  function reservedQuickLaunchWidth(measured = 0, more = null) {
+    if (!more || !(measured > 0)) return Math.max(0, measured || 0);
+    const now = (more.width || 0) + (more.marginRight || 0);
+    return measured + Math.max(0, (more.openWidth || 0) - now);
+  }
+  var px = (v2) => parseFloat(v2) || 0;
+  function watchTopbarFit(topbar) {
+    if (!topbar || typeof ResizeObserver !== "function") return () => {
+    };
+    const brand = topbar.querySelector(".nt-brand");
+    const controls = topbar.querySelector(".nt-controls");
+    if (!controls) return () => {
+    };
+    const mk = brand?.querySelector(".nt-brand-mk");
+    const tx = brand?.querySelector(".nt-brand-tx");
+    const measure = () => {
+      const cs = getComputedStyle(topbar);
+      const row = topbar.getBoundingClientRect().width - px(cs.paddingLeft) - px(cs.paddingRight);
+      const rowGap = px(cs.columnGap);
+      let brandFull = 0;
+      let brandMark = 0;
+      if (brand && getComputedStyle(brand).display !== "none") {
+        const bs = getComputedStyle(brand);
+        const pad = px(bs.paddingLeft) + px(bs.paddingRight);
+        const mkW = mk ? mk.getBoundingClientRect().width : 0;
+        const txW = tx && getComputedStyle(tx).display !== "none" ? tx.getBoundingClientRect().width : 0;
+        brandMark = pad + mkW;
+        brandFull = txW > 0 ? brandMark + px(bs.columnGap) + txW : brandMark;
+      }
+      const clusterGap = px(getComputedStyle(controls).columnGap);
+      let width = 0;
+      let count2 = 0;
+      let quickLaunch = 0;
+      for (const el2 of controls.children) {
+        if (getComputedStyle(el2).display === "none") continue;
+        const w2 = el2.getBoundingClientRect().width;
+        if (el2.matches(".nt-apps")) {
+          const more = el2.querySelector(".ql-more");
+          const ms = more ? getComputedStyle(more) : null;
+          quickLaunch = reservedQuickLaunchWidth(w2, more ? { width: more.getBoundingClientRect().width, marginRight: px(ms.marginRight), openWidth: more.scrollWidth } : null);
+          continue;
+        }
+        width += w2;
+        count2 += 1;
+      }
+      const controlsWidth = width + Math.max(0, count2 - 1) * clusterGap;
+      return { row, rowGap, brandFull, brandMark, controls: controlsWidth, quickLaunch, clusterGap: count2 > 0 ? clusterGap : 0 };
+    };
+    const apply2 = () => {
+      const fit = decideTopbarFit(measure());
+      if (topbar.dataset.fitBrand !== fit.brand) topbar.dataset.fitBrand = fit.brand;
+      const ql = fit.quickLaunch ? "on" : "off";
+      if (topbar.dataset.fitQl !== ql) topbar.dataset.fitQl = ql;
+    };
+    const ro = new ResizeObserver(apply2);
+    ro.observe(topbar);
+    if (tx) ro.observe(tx);
+    for (const el2 of controls.children) ro.observe(el2);
+    document.fonts?.ready?.then(apply2).catch(() => {
+    });
+    apply2();
+    return () => ro.disconnect();
+  }
+
   // extension/src/submit-content.mjs
   var SITE26 = "https://gbti.network";
   var HOW_PUBLISHING_URL = `${SITE26}/submit-content/`;
@@ -31503,6 +31583,7 @@ ${BLOCKED_PILL_CSS}
       }
       topbar.insertAdjacentHTML("afterbegin", brandHtml());
       topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose }));
+      watchTopbarFit(topbar);
     }
     root.querySelectorAll("[data-ico]").forEach((el2) => {
       el2.innerHTML = ico(el2.dataset.ico);

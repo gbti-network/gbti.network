@@ -16,6 +16,7 @@ import { makePkce, startUrl, readRedirectResult, REDIRECT_PATH } from './web-sig
 import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 import { mountQuickLaunch } from './quick-launch.mjs'; // sow-397: the quick launch pill + its settings popup
+import { watchTopbarFit } from './topbar-fit.mjs'; // sow-440: drop the word, the logo, then the quick launch before wrapping
 import { openSubmitDialog, PENCIL_SVG } from './submit-content.mjs'; // sow-396: the top-bar Submit content dialog
 
 const SITE = 'https://gbti.network';
@@ -427,6 +428,9 @@ export function initShell({ compose = false } = {}) {
     if (!topbar) { topbar = document.createElement('div'); topbar.className = 'nt-top'; topbar.setAttribute('data-topbar', ''); main.prepend(topbar); }
     topbar.insertAdjacentHTML('afterbegin', brandHtml());
     topbar.insertAdjacentHTML('beforeend', controlsHtml({ compose }));
+    // sow-440: the row stays ONE row. When the controls would wrap, the "GBTI" word goes, then the logo, then the
+    // quick launch, and each returns once there is room (measured, because the width depends on the member's sites).
+    watchTopbarFit(topbar);
   }
   // Fill the inline-SVG glyphs (controls + any static [data-ico] in the page main). Trusted constants.
   root.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = ico(el.dataset.ico); });

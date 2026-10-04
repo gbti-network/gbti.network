@@ -113,6 +113,14 @@ html[data-unauth] .compose-modal { display: none !important; }
 [data-topbar] { display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: nowrap; margin-bottom: 18px; }
 [data-topbar] > :first-child { min-width: 0; } /* let the heading block shrink so the controls hold its row */
 [data-topbar] h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* shrink the heading (never wrap the controls below it) until the 650px stack point */
+/* sow-440: what the fit check (src/topbar-fit.mjs) takes out of the row so it stays one row: the "GBTI" word first, then
+   the whole logo, then the quick launch. Hidden with visibility, not display:none, so each keeps its natural width for
+   the next measurement (no flicker), and drops out of the tab order. Positioned in the top bar so it cannot widen the
+   page. The quick launch selector matches .nt-apps.show so it out-specifies the rule that reveals the pill. */
+[data-topbar] { position: relative; }
+[data-topbar][data-fit-brand="mark"] .nt-brand-tx,
+[data-topbar][data-fit-brand="none"] .nt-brand,
+[data-topbar][data-fit-ql="off"] .nt-apps.show { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; }
 .nt-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-left: auto; }
 .nt-modes-slot { display: inline-flex; align-items: center; }
 .nt-modes-slot:empty { display: none; }
