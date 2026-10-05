@@ -226,6 +226,38 @@ test('validateHostedRequest: an image rejects bad base64, empty, and >1 MB; text
   assert.equal(validateHostedRequest({ files: [{ path: 'members/a/images/x.png', content: 'hi', contentBase64: Buffer.from('x').toString('base64') }], itemId: 'x', folder: 'a' }).ok, false);
 });
 
+// THE DEFECT THIS PINS. These messages used to say "an uploaded image", which identifies nothing when a
+// request carries several images: the caller cannot tell which upload to re-encode. Measured cost, 2026-10-05:
+// a malformed base64 payload in a three-image listing read as a fault in the TOOL rather than in the payload,
+// and was "diagnosed" by removing images one at a time until it passed, producing a confident and wrong bug
+// report. The sibling check in prepared-claim-files.mjs already names the file ("The image <name> is missing");
+// these now agree with it.
+test('validateHostedRequest: an image fault names the offending file, not just "an image"', () => {
+  const good = Buffer.from('a fake png payload').toString('base64');
+  const req = (files) => validateHostedRequest({ files, itemId: 'x', folder: 'a' });
+
+  // The case that matters: ONE bad image among several good ones.
+  const r = req([
+    { path: 'members/a/images/first.png', contentBase64: good },
+    { path: 'members/a/images/broken.webp', contentBase64: 'not*base64!' },
+    { path: 'members/a/images/third.png', contentBase64: good },
+  ]);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /broken\.webp/, 'the error must name the image that actually failed');
+  assert.doesNotMatch(r.error, /first\.png|third\.png/, 'and must not implicate the images that were fine');
+
+  // The oversized fault names its file too.
+  const overMb = 'A'.repeat(Math.ceil((1_048_577 * 4) / 3 / 4) * 4);
+  const big = req([{ path: 'members/a/images/huge.png', contentBase64: overMb }]);
+  assert.match(big.error, /huge\.png/);
+  // ...and KEEPS the word prepared-claim-files.mjs routes a 413 on (/exceeds|too many/). Without this, a
+  // too-large listing would start reporting as merely invalid, which is a worse answer, not a cosmetic one.
+  assert.match(big.error, /exceeds/, 'the 413 routing in preparedSizeProblem keys on this word');
+
+  // A name is only useful if it is the caller's own: the basename they supplied, not the server-side path.
+  assert.doesNotMatch(r.error, /members\/a\/images/, 'the repo path is server-side detail');
+});
+
 test('base64DecodedBytes: exact decoded length, -1 on malformed', async () => {
   const { base64DecodedBytes } = await import('../membership/hosted-author.mjs');
   assert.equal(base64DecodedBytes(Buffer.from('hello').toString('base64')), 5);

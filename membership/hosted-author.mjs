@@ -231,10 +231,17 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
       const tail = f.path.slice(matchedPrefix.length);
       const imageProblem = imagePathProblem(tail);
       if (imageProblem) return bad(imageProblem);
+      // NAME THE IMAGE. These three used to say "an uploaded image", which tells a caller holding several
+      // images only that one of them is wrong, not which. The sibling check in prepared-claim-files.mjs
+      // ("The image <name> is missing") already names it, and the difference is not academic: a malformed
+      // upload read as a fault in the tool rather than in the payload, and cost an afternoon of bisecting
+      // by removing images one at a time. The basename is what the caller supplied, so it is what they can
+      // act on; the full path is server-side detail.
+      const imageName = f.path.slice(f.path.lastIndexOf('/') + 1);
       const bytes = base64DecodedBytes(f.contentBase64);
-      if (bytes < 0) return bad('an uploaded image is not valid base64');
-      if (bytes === 0) return bad('an uploaded image is empty');
-      if (bytes > HOSTED_MAX_IMAGE_BYTES) return bad(`an image exceeds ${HOSTED_MAX_IMAGE_BYTES} bytes (1 MB)`);
+      if (bytes < 0) return bad(`the image ${imageName} is not valid base64`);
+      if (bytes === 0) return bad(`the image ${imageName} is empty`);
+      if (bytes > HOSTED_MAX_IMAGE_BYTES) return bad(`the image ${imageName} exceeds ${HOSTED_MAX_IMAGE_BYTES} bytes (1 MB)`);
       imageBytes += bytes;
       if (imageBytes > HOSTED_MAX_IMAGE_TOTAL_BYTES) return bad(`the request exceeds ${HOSTED_MAX_IMAGE_TOTAL_BYTES} image bytes total`);
     } else if (f.content !== null) {
