@@ -12,8 +12,8 @@ tags:
   - quantum-gravity
   - spacetime
   - theoretical-physics
-image: >-
-  https://www.quantamagazine.org/wp-content/uploads/2026/09/Qualia-Holography-cr.Ada-Zejun-Shen-Default.webp
+image: https://gbti.network/media/shares/gbtilabs/20261006213221-why-physicists-think-space-may-have-a-holographi-f1a0dcd3.webp
+imageSource: https://www.quantamagazine.org/wp-content/uploads/2026/09/Qualia-Holography-cr.Ada-Zejun-Shen-Default.webp
 id: 20261006213221-why-physicists-think-space-may-have-a-holographi
 createdAt: '2026-10-06T21:32:21.973Z'
 type: share
