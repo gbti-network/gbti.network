@@ -214,6 +214,10 @@ covers:
     file: 20260929165716-melissa-aldana-with-gonzalo-rubalcaba-tiny-desk--9be3235c.webp
     sha256: 9be3235c9dc23c5fc1b4ae807abac30a8daa1121d93161e15712acdfcc499db6
     copiedAt: '2026-09-29'
+  atwellpub/20261006152854-chatgpt-ads-don-t-work-yet-here-s-the-proof:
+    source: https://barn2.com/wp-content/uploads/2026/10/ChatGPT-ads-dont-work-yet.-Heres-the-proof-full-1.png
+    failed: http-403
+    triedAt: '2026-10-06'
   bomsn/20260928191738-chatgpt-no-longer-reads-your-page-before-recomme:
     source: https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
     file: 20260928191738-chatgpt-no-longer-reads-your-page-before-recomme-60d9158d.webp
