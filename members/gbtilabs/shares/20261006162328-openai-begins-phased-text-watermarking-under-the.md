@@ -13,8 +13,8 @@ tags:
   - ai-watermarking
   - eu-ai-act
   - ai-transparency
-image: >-
-  https://www.unite.ai/wp-content/uploads/2026/10/openai-begins-phased-text-watermarking-under-eu-ai-act-rules.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261006162328-openai-begins-phased-text-watermarking-under-the-543d3e23.webp
+imageSource: https://www.unite.ai/wp-content/uploads/2026/10/openai-begins-phased-text-watermarking-under-eu-ai-act-rules.jpg
 id: 20261006162328-openai-begins-phased-text-watermarking-under-the
 createdAt: '2026-10-06T16:23:28.953Z'
 type: share

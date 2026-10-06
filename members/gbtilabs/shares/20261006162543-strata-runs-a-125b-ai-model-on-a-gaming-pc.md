@@ -12,8 +12,8 @@ tags:
   - strata
   - openai
   - anthropic
-image: >-
-  https://opengraph.githubassets.com/859c9d90572cb90bf69b5e012ab9653d22c0731cf472997c9e4f5e175d00e0ac/Niko1221/Strata
+image: https://gbti.network/media/shares/gbtilabs/20261006162543-strata-runs-a-125b-ai-model-on-a-gaming-pc-8c72354c.webp
+imageSource: https://opengraph.githubassets.com/859c9d90572cb90bf69b5e012ab9653d22c0731cf472997c9e4f5e175d00e0ac/Niko1221/Strata
 id: 20261006162543-strata-runs-a-125b-ai-model-on-a-gaming-pc
 createdAt: '2026-10-06T16:25:43.692Z'
 type: share
