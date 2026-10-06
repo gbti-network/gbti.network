@@ -5270,6 +5270,58 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return /tiktok\.com\/embed\//.test(String(src || ""));
   }
 
+  // client/src/tweet-embed.mjs
+  var TWEET_FRAME_ORIGIN = "https://platform.twitter.com";
+  var TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
+  function tweetId(url) {
+    const m = String(url ?? "").trim().match(TWEET_RE);
+    return m ? m[1] : null;
+  }
+  function bareTweetLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return tweetId(s) ? s : null;
+  }
+  var tweetTheme = (t) => t === "dark" ? "dark" : "light";
+  function tweetFrameUrl(idOrUrl, { theme = "light" } = {}) {
+    const raw = String(idOrUrl ?? "").trim();
+    const id = /^\d{5,25}$/.test(raw) ? raw : tweetId(raw);
+    if (!id) return null;
+    return `${TWEET_FRAME_ORIGIN}/embed/Tweet.html?id=${id}&theme=${tweetTheme(theme)}&dnt=true`;
+  }
+  var escAttr3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  function tweetBlockHtml(url) {
+    const u = String(url ?? "").trim();
+    if (!tweetId(u)) return "";
+    const e = escAttr3(u);
+    return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
+  }
+  function parseTweetMessage(data) {
+    let d = data;
+    if (typeof d === "string") {
+      if (d.length > 2e4 || !d.includes("twttr.embed") && !d.includes("gbtiTweet")) return null;
+      try {
+        d = JSON.parse(d);
+      } catch {
+        return null;
+      }
+    }
+    if (!d || typeof d !== "object") return null;
+    const fwd = d.gbtiTweet;
+    if (fwd && typeof fwd === "object") return shaped(fwd.method, fwd.height);
+    const rpc = d["twttr.embed"];
+    if (!rpc || typeof rpc !== "object" || typeof rpc.method !== "string") return null;
+    const method = rpc.method.replace(/^twttr\.private\./, "");
+    const p = Array.isArray(rpc.params) ? rpc.params[0] : null;
+    return shaped(method, p && p.height);
+  }
+  function shaped(method, height) {
+    if (method === "rendered" || method === "no_results") return { method };
+    if (method !== "resize") return null;
+    const h = Number(height);
+    return Number.isFinite(h) && h > 0 && h < 2e4 ? { method, height: Math.ceil(h) } : null;
+  }
+
   // client/src/markdown.mjs
   var EMBED_RELAY = "https://gbti.network/embed/";
   function escapeHtml(s) {
@@ -5306,7 +5358,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
     return m ? m[1] : "";
   };
-  var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  var escAttr4 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   function emphasis(t) {
     const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
     return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
@@ -5325,7 +5377,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (blank2 && !rel.includes("noopener")) rel.push("noopener");
     const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
     const tgtAttr = blank2 ? ' target="_blank"' : "";
-    return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+    return `<a href="${escAttr4(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
   }
   function escapeKeepingLinks(s, keep) {
     const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
@@ -5546,6 +5598,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
           continue;
         }
+        const tweetUrl = bareTweetLine(line);
+        if (tweetUrl) {
+          flushList();
+          emit(tweetBlockHtml(tweetUrl), i, i);
+          i++;
+          continue;
+        }
       }
       const esc10 = escapeKeepingLinks(line, linkKeep);
       let m;
@@ -5618,7 +5677,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const paraStart = i;
       const para = [hardBreak(esc10, line)];
       i++;
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
         i++;
       }
@@ -11939,6 +11998,114 @@ ${listStyleProseCss(".doc-blocks")}
   .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
 `;
 
+  // client-ui/src/tweet-frames.mjs
+  var TWEET_RELAY = "https://gbti.network/embed/";
+  var TWEET_RELAY_ORIGIN = "https://gbti.network";
+  var TWEET_SLOW_MS = 15e3;
+  var TWEET_CSS = `
+  .md-tweet { margin:.6em 0 1em; max-width:550px; }
+  .md-tweet > iframe { display:block; width:100%; height:0; border:0; overflow:hidden; background:transparent; }
+  .md-tweet.is-ready > a { display:none; }
+  .md-tweet-share:not(.is-ready) { margin:0; }
+`;
+  function pageTheme(doc = globalThis.document) {
+    const t = doc?.documentElement?.getAttribute?.("data-theme");
+    if (t === "dark" || t === "light") return t;
+    try {
+      return globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  }
+  function usesRelay(via = "auto", protocol = globalThis.location?.protocol) {
+    if (via === "relay") return true;
+    if (via === "direct") return false;
+    return protocol === "chrome-extension:";
+  }
+  function tweetFrameSrc(url, { relay, theme }) {
+    if (relay) return `${TWEET_RELAY}?u=${encodeURIComponent(url)}&theme=${tweetTheme(theme)}`;
+    return tweetFrameUrl(url, { theme });
+  }
+  var FRAMES = /* @__PURE__ */ new Map();
+  var HEIGHTS = /* @__PURE__ */ new Map();
+  var listening2 = false;
+  function onMessage(e) {
+    const rec = FRAMES.get(e.source);
+    if (!rec || e.origin !== rec.origin) return;
+    const m = parseTweetMessage(e.data);
+    if (!m) return;
+    if (m.method === "no_results") {
+      drop(rec, "no_results");
+      return;
+    }
+    if (m.method === "resize") {
+      rec.iframe.style.height = `${m.height}px`;
+      HEIGHTS.set(rec.id, m.height);
+    }
+    if (!rec.ready && (m.method === "rendered" || m.method === "resize")) {
+      rec.ready = true;
+      clearTimeout(rec.timer);
+      rec.el.classList.add("is-ready");
+      rec.el.removeAttribute("data-tweet-why");
+      try {
+        rec.onReady?.(rec.el);
+      } catch {
+      }
+    }
+  }
+  function drop(rec, why) {
+    clearTimeout(rec.timer);
+    HEIGHTS.delete(rec.id);
+    FRAMES.delete(rec.iframe.contentWindow);
+    rec.iframe.remove();
+    rec.el.classList.remove("is-ready");
+    rec.el.classList.add("is-missing");
+    rec.el.setAttribute("data-tweet-why", why);
+  }
+  function wireTweets(root, { via = "auto", theme, onReady, slowMs = TWEET_SLOW_MS } = {}) {
+    if (!root?.querySelectorAll || typeof document === "undefined") return 0;
+    const relay = usesRelay(via);
+    const origin = relay ? TWEET_RELAY_ORIGIN : TWEET_FRAME_ORIGIN;
+    for (const [win, rec] of FRAMES) if (!rec.iframe.isConnected) {
+      clearTimeout(rec.timer);
+      FRAMES.delete(win);
+    }
+    let n = 0;
+    for (const el of root.querySelectorAll(".md-tweet:not([data-tweet-wired])")) {
+      const url = el.getAttribute("data-tweet-url") || el.querySelector("a[href]")?.getAttribute("href") || "";
+      const id = tweetId(url);
+      if (!id) continue;
+      el.setAttribute("data-tweet-wired", "");
+      const iframe = document.createElement("iframe");
+      iframe.title = "Post on X";
+      iframe.setAttribute("scrolling", "no");
+      iframe.setAttribute("allowtransparency", "true");
+      iframe.src = tweetFrameSrc(url, { relay, theme: theme || pageTheme() });
+      el.appendChild(iframe);
+      const rec = { el, iframe, id, origin, onReady, ready: false, timer: null };
+      FRAMES.set(iframe.contentWindow, rec);
+      const known = HEIGHTS.get(id);
+      if (known) {
+        iframe.style.height = `${known}px`;
+        el.classList.add("is-ready");
+        rec.ready = true;
+        try {
+          onReady?.(el);
+        } catch {
+        }
+      }
+      if (!rec.ready) rec.timer = setTimeout(() => {
+        if (!rec.ready) el.setAttribute("data-tweet-why", "slow");
+      }, slowMs);
+      n++;
+    }
+    if (n && !listening2) {
+      globalThis.addEventListener?.("message", onMessage);
+      listening2 = true;
+    }
+    return n;
+  }
+
   // client-ui/src/workbench-cache.mjs
   var WB_CACHE_PREFIX = "gbti:wb";
   var WB_DEFAULT_TTL_MS = 10 * 60 * 1e3;
@@ -12038,7 +12205,7 @@ ${listStyleProseCss(".doc-blocks")}
   var attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
   var kids = (n) => Array.from(n?.childNodes || []);
   var escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
+  var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
   var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
   var hasBlockChild = (n) => kids(n).some(isBlock);
   var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
@@ -12216,6 +12383,8 @@ ${listStyleProseCss(".doc-blocks")}
   ${EMBED_POSTER_CSS}
   .surface .md-embed { margin: .4em 0 .9em; }
   .surface .md-embed .md-embed-open { cursor: default; }
+  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
+  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
   .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
     padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
   .pe-x svg { width: 15px; height: 15px; }
@@ -12260,17 +12429,19 @@ ${listStyleProseCss(".doc-blocks")}
       this._decorateCards();
       this._syncEmpty();
     }
-    /** A video card is one atomic, non-editable thing with its own Remove; Backspace over it removes it whole. */
+    /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
+     *  removes it whole. */
     _decorateCards() {
-      for (const card of this.$$("[data-surface] .md-embed")) {
+      for (const card of this.$$("[data-surface] .md-embed, [data-surface] .md-tweet")) {
         if (card.dataset.peCard) continue;
         card.dataset.peCard = "1";
         card.setAttribute("contenteditable", "false");
+        const what = card.classList.contains("md-tweet") ? "Remove post" : "Remove video";
         const x = document.createElement("button");
         x.type = "button";
         x.className = "pe-x";
-        x.title = "Remove video";
-        x.setAttribute("aria-label", "Remove video");
+        x.title = what;
+        x.setAttribute("aria-label", what);
         x.innerHTML = svg4("x");
         x.addEventListener("click", (e) => {
           e.preventDefault();
@@ -12849,6 +13020,7 @@ ${listStyleProseCss(".doc-blocks")}
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -12862,7 +13034,7 @@ ${listStyleProseCss(".doc-blocks")}
   .ctomb.err { color:var(--s-danger, #e06c6c); border-color:var(--s-danger, #e06c6c); border-style:solid; }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
-  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
+  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; overflow-wrap:anywhere; } /* sow-443: a bare link ran past the card */
   .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
   .cbody a { color:var(--accent, var(--brand)); }
   .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
@@ -13017,6 +13189,7 @@ ${listStyleProseCss(".doc-blocks")}
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS10) + threadHtml + this._composeHtml(targetType, targetSlug));
       wireEmbedPosters(this.root);
+      wireTweets(this.root);
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
       this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc, b.dataset.authornote === "1")));
@@ -21446,8 +21619,8 @@ ${SKILL_BOX_CSS}`;
     if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
     return problems;
   }
-  var escAttr4 = (v2) => String(v2).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  var attrString = (attrs) => Object.entries(isMap(attrs) ? attrs : {}).map(([k, v2]) => ` ${k}="${escAttr4(v2)}"`).join("");
+  var escAttr5 = (v2) => String(v2).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  var attrString = (attrs) => Object.entries(isMap(attrs) ? attrs : {}).map(([k, v2]) => ` ${k}="${escAttr5(v2)}"`).join("");
   function shapesSvg(shapes) {
     return (Array.isArray(shapes) ? shapes : []).map((s) => {
       if (!isMap(s) || !ICON_TAGS.includes(s.tag)) return "";
@@ -21457,8 +21630,8 @@ ${SKILL_BOX_CSS}`;
   }
   function iconSvg(icon3, className = "") {
     if (iconProblems(icon3).length) return "";
-    const cls = className ? ` class="${escAttr4(className)}"` : "";
-    return `<svg${cls} viewBox="${escAttr4(icon3.viewBox)}"${attrString(icon3.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon3.shapes)}</svg>`;
+    const cls = className ? ` class="${escAttr5(className)}"` : "";
+    return `<svg${cls} viewBox="${escAttr5(icon3.viewBox)}"${attrString(icon3.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon3.shapes)}</svg>`;
   }
 
   // membership/cta-card-render.mjs
@@ -24229,6 +24402,7 @@ ${SKILL_BOX_CSS}`;
   }
   var PROSE = `
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   .state, .locked { color: var(--muted); font-size: 14px; padding: 10px 0; }
   .locked a { color: var(--accent); font-weight: 600; }
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
@@ -24283,6 +24457,7 @@ ${SKILL_BOX_CSS}`;
       this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
       this.decorateCode();
       wireEmbedPosters(this.root);
+      wireTweets(this.root);
       this.emit("gbti-unlocked", { encPath });
     }
     /**
@@ -25994,10 +26169,11 @@ ${BLOCKED_PILL_CSS}
   .meta { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); flex-wrap:wrap; }
   .name { font-weight:700; color:var(--fg); font-size:15px; }
   .badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; }
-  .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; }
+  .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; overflow-wrap:anywhere; } /* sow-443: long links wrap */
   .body p { margin:0 0 .6em; } .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
   .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
   .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }
@@ -26054,6 +26230,7 @@ ${BLOCKED_PILL_CSS}
       }).join("");
       this.set(this.css(CSS37) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
+      wireTweets(this.root);
       this._syncPage(this._rows.length);
     }
     async load() {
@@ -30881,7 +31058,7 @@ ${BLOCKED_PILL_CSS}
       const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
-      const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb);
+      const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb || (it2.type === "share" ? it2.image : null));
       const cover = proj ? "" : shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE25}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
@@ -30905,8 +31082,13 @@ ${BLOCKED_PILL_CSS}
       const top = proj ? projectHeroHtml(proj, it2.title) + projectBarHtml(proj) : "";
       const title = proj ? "" : `<h1>${esc2(it2.title || "")}</h1>`;
       const tail = proj ? projectInstallHtml(proj) + projectGalleryHtml(proj) : "";
-      this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : "")) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tail}${view}${copyAll}</article>${side}</div></div>`);
+      const tweet = it2.type === "share" && tweetId(it2.url) ? `<div class="md-tweet md-tweet-share" data-tweet-url="${esc2(it2.url)}"></div>` : "";
+      this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : "") + (tweet ? TWEET_CSS : "")) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
       if (proj) wireProjectView(this.root, proj);
+      if (tweet) wireTweets(this.root, { onReady: () => {
+        const c = this.$("img.cover");
+        if (c) c.style.display = "none";
+      } });
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it2);
@@ -31595,7 +31777,9 @@ ${BLOCKED_PILL_CSS}
       itemStats: ({ path }) => request("GET", `/api/item-stats${qs({ path })}`),
       // sow-232: the editor's Live revisions tile
       formFields: ({ type }) => request("GET", `/api/form-fields${qs({ type })}`),
-      preview: ({ body }) => request("POST", "/api/preview", { body }),
+      // sow-443: autoEmbed travels too. It was dropped here, so a comment's bare video line (and, with sow-261, its bare
+      // tweet line) rendered as a plain link in the extension while the website's in-page client kept it.
+      preview: ({ body, autoEmbed }) => request("POST", "/api/preview", { body, ...autoEmbed ? { autoEmbed: true } : {} }),
       stageImage: (b) => request("POST", "/api/image", b),
       listMembersOnly: () => request("GET", "/api/members-content"),
       decrypt: ({ encPath }) => request("POST", "/api/member-decrypt", { encPath }),

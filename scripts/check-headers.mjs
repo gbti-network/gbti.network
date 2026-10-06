@@ -160,6 +160,11 @@ export function checkHeaders({ root, distDir = path.join(root, 'dist'), headersF
     if (efa.some((t) => t === '*' || /^https?:/i.test(t))) {
       errors.push(`the \`${p}\` frame-ancestors must not admit a web origin; the relay is framable by extensions only.`);
     }
+    // sow-261: the relay frames X's tweet page for the extension; without it every tweet there stays a plain link.
+    const efs = parseCsp(embedEntry.value).get('frame-src')?.tokens || [];
+    if (!efs.includes('https://platform.twitter.com')) {
+      errors.push(`the \`${p}\` frame-src must include https://platform.twitter.com (the extension's tweets frame X through this relay).`);
+    }
     checked++;
   }
   for (const r of rules) {

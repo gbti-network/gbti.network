@@ -16,11 +16,16 @@ const byTime = (a, b) => String(a?.createdAt || a?.postedAt || '').localeCompare
  * @param {Array}  [a.deployed]   comments from the deployed build (authoritative), each `{ id, createdAt, ... }`.
  * @param {Array}  [a.echoes]     optimistic KV echoes, each `{ id, prNumber, postedAt, ...comment }`.
  * @param {(prNumber:any)=>('open'|'merged'|'closed'|'unknown')} [a.prState]  the echo's PR outcome (default 'unknown' = still in flight).
+ * @param {string} [a.viewer]     sow-443: the signed-in member's username (their folder). The store keys an echo by the
+ *   author's immutable github_id and only ever returns the viewer's OWN echoes, so every kept echo is shown under this
+ *   name; without it a posting comment read "2002207" with a blank avatar (owner, 2026-10-06). The stored key is
+ *   untouched, which is what reaping matches on.
  * @returns {{ comments: object[], reap: any[], pending: Set }} `comments` to render (deployed + still-pending echoes,
  *   deduped by id, oldest-first; each pending echo tagged `_pending: true`), `reap` = echo ids to DELETE from KV,
  *   `pending` = the set of echo ids still in flight (render them with a "posting" indicator).
  */
-export function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => 'unknown' } = {}) {
+export function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => 'unknown', viewer = '' } = {}) {
+  const shownAs = typeof viewer === 'string' && viewer.trim() ? viewer.trim() : null;
   const deployedIds = new Set((Array.isArray(deployed) ? deployed : []).map((c) => c && c.id).filter(Boolean));
   const reap = [];
   const pending = new Set();
@@ -31,7 +36,7 @@ export function mergeCommentEchoes({ deployed = [], echoes = [], prState = () =>
     seenEcho.add(e.id);
     if (deployedIds.has(e.id)) { reap.push(e.id); continue; }          // now in the deployed build -> echo is redundant
     if (prState(e.prNumber) === 'closed') { reap.push(e.id); continue; } // PR rejected/declined -> phantom, reap
-    kept.push({ ...e, _pending: true });                               // open OR merged-not-yet-deployed -> keep
+    kept.push({ ...e, ...(shownAs ? { author: shownAs } : {}), _pending: true }); // open OR merged-not-yet-deployed -> keep
     pending.add(e.id);
   }
   const comments = [...(Array.isArray(deployed) ? deployed : []), ...kept].sort(byTime);

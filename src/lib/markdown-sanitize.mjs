@@ -49,7 +49,7 @@ export const sanitizeSchema = {
   tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption'])], // figure: a captioned image
   attributes: {
     ...defaultSchema.attributes,
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$/]],
+    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^md-tweet$/]], // sow-261: a comment's tweet block
     iframe: [['src'], 'loading', 'allowFullScreen', 'title', 'allow', 'sandbox'],
     a: [...(defaultSchema.attributes?.a ?? []), 'target', ['rel', 'noopener', 'nofollow', 'noreferrer']],
     pre: [...(defaultSchema.attributes?.pre ?? []), 'style', 'tabIndex', 'dataLanguage'],

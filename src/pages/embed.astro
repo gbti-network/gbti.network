@@ -5,6 +5,9 @@
 // https referrer and plays. NOT an open iframe proxy: the ?u= value is validated through the ONE shared
 // embedUrl extractor, so only a normalized YouTube/Vimeo/TikTok/Rumble embed URL ever renders; anything
 // else shows a plain "cannot play here" note. No site chrome on purpose (this page exists to be framed).
+// sow-261: it relays TWEETS too. A ?u= tweet link (validated by the shared tweetId) frames X's own tweet page in the
+// requested theme, and the tweet's size and outcome messages are forwarded to the parent as { gbtiTweet }, so the
+// extension can size its frame to the tweet (a tweet has no fixed aspect ratio, unlike a player).
 ---
 <html lang="en">
   <head>
@@ -19,7 +22,7 @@
         the two in step: anything permitted here must also be permitted there. */}
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com; base-uri 'none'; object-src 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com; base-uri 'none'; object-src 'none'; form-action 'none'"
     />
     <title>Video</title>
     <style is:global>
@@ -31,9 +34,28 @@
   <body>
     <script>
       import { embedUrl } from '../../client/src/video-embed.mjs';
-      const u = new URLSearchParams(location.search).get('u') || '';
+      import { tweetId, tweetFrameUrl, parseTweetMessage, TWEET_FRAME_ORIGIN } from '../../client/src/tweet-embed.mjs';
+      const params = new URLSearchParams(location.search);
+      const u = params.get('u') || '';
       const src = embedUrl(u);
-      if (src) {
+      if (tweetId(u)) {
+        // sow-261: transparent, so the tweet's own rounded card sits on the parent page's background.
+        document.documentElement.style.background = 'transparent';
+        document.body.style.background = 'transparent';
+        document.title = 'Post on X';
+        const f = document.createElement('iframe');
+        f.title = 'Post on X';
+        f.setAttribute('scrolling', 'no');
+        f.src = tweetFrameUrl(u, { theme: params.get('theme') || 'light' });
+        document.body.appendChild(f);
+        // Forward only X's messages from THIS frame, reduced to the three the parent acts on (height, rendered,
+        // nothing to show). The payload is a number and a word, so the parent's origin needs no pinning.
+        addEventListener('message', (e) => {
+          if (e.origin !== TWEET_FRAME_ORIGIN || e.source !== f.contentWindow) return;
+          const m = parseTweetMessage(e.data);
+          if (m && parent !== window) parent.postMessage({ gbtiTweet: m }, '*');
+        });
+      } else if (src) {
         const f = document.createElement('iframe');
         f.src = src;
         f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';

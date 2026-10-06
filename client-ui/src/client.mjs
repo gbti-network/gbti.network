@@ -104,7 +104,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     prStatus: ({ number }) => request('GET', `/api/pr-status${qs({ number })}`),
     itemStats: ({ path }) => request('GET', `/api/item-stats${qs({ path })}`), // sow-232: the editor's Live revisions tile
     formFields: ({ type }) => request('GET', `/api/form-fields${qs({ type })}`),
-    preview: ({ body }) => request('POST', '/api/preview', { body }),
+    // sow-443: autoEmbed travels too. It was dropped here, so a comment's bare video line (and, with sow-261, its bare
+    // tweet line) rendered as a plain link in the extension while the website's in-page client kept it.
+    preview: ({ body, autoEmbed }) => request('POST', '/api/preview', { body, ...(autoEmbed ? { autoEmbed: true } : {}) }),
     stageImage: (b) => request('POST', '/api/image', b),
     listMembersOnly: () => request('GET', '/api/members-content'),
     decrypt: ({ encPath }) => request('POST', '/api/member-decrypt', { encPath }), // SOW-016: returns { text }

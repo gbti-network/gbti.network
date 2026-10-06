@@ -42,15 +42,15 @@
 # breaks every developer load. Safe to loosen HERE and nowhere else: the page is session-less and form-less, and
 # ?u= only ever reaches iframe.src after passing the shared embedUrl() extractor, so no attacker-controlled text
 # reaches the DOM. Everything else is TIGHTER than the global policy (no Turnstile, no connect-src, no images, no
-# fonts) because the relay needs none of it. TWO rules: astro trailingSlash is 'ignore', so /embed serves the same
+# fonts) because the relay needs none of it. sow-261: it frames X's tweet page (platform.twitter.com) too. TWO rules: astro trailingSlash is 'ignore', so /embed serves the same
 # page and an /embed/* rule alone would miss it; /embed* is wrong (it would splat onto a future /embedded-*).
 /embed
   ! Content-Security-Policy
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'
 
 /embed/*
   ! Content-Security-Policy
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'
 
 # sow-427: the prepared-listing claim page, /claim/?code=<CODE>. The code in the address is a bearer credential (it
 # shows one person's prepared listing and grants a free year), so the page sends NO Referer: not to an image or a

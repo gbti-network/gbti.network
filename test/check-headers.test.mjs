@@ -19,7 +19,7 @@ const writeHeaders = (root, body) => fs.writeFileSync(path.join(root, 'dist/_hea
 // SOW-092 / sow-158: the /embed video relay removes the global CSP and resets a tighter one whose ONLY loosened
 // directive admits the chrome-extension: scheme, so the Chrome extension can frame it (it cannot send YouTube an
 // https referrer on its own). Two literal rules because trailingSlash 'ignore' serves /embed and /embed/ alike.
-const EMBED_CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'";
+const EMBED_CSP = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://platform.twitter.com; frame-ancestors 'self' chrome-extension:; base-uri 'none'; object-src 'none'; form-action 'none'";
 const embedRules = (headerName, csp = EMBED_CSP, extra = '') =>
   ['/embed', '/embed/*'].map((p) => `\n${p}\n  ! ${headerName}\n  ${headerName}: ${csp}\n${extra}`).join('');
 const block = (headerName, csp = CSP, embed = EMBED_CSP, extra = '') =>
@@ -139,6 +139,17 @@ test('the REAL public/_headers keeps the /embed relay framable by the extension'
   }
   // ...and every other page must NOT be framable cross-origin.
   assert.deepEqual(parseCsp(cspForPath(rules, '/account/')).get('frame-ancestors').tokens, ["'self'"]);
+});
+
+test('sow-261: errors when an /embed rule cannot frame X (the extension\'s tweets go through the relay)', () => {
+  const root = tmpRoot();
+  writeHeaders(root, block('Content-Security-Policy', CSP, EMBED_CSP.replace(' https://platform.twitter.com', '')));
+  const { errors } = checkHeaders({ root });
+  assert.ok(errors.some((e) => /`\/embed` frame-src must include https:\/\/platform\.twitter\.com/.test(e)), errors.join(' | '));
+  assert.ok(errors.some((e) => /`\/embed\/\*` frame-src must include/.test(e)), 'both rules');
+  writeHeaders(root, block('Content-Security-Policy'));
+  assert.ok(!checkHeaders({ root }).errors.some((e) => /platform\.twitter\.com/.test(e)), 'the fixture with X passes');
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('errors when the /embed rule is missing entirely', () => {

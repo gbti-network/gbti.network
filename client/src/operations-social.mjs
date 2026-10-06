@@ -13,6 +13,9 @@ import { addCommentEcho as workerAddCommentEcho } from './member-comment-echo-cl
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { hostedPublishFiles } from './hosted-publish.mjs';
 import { OperationError, membershipOf, requireIdentity } from './operations-core.mjs';
+
+/** sow-443: how long a comment post waits for its optimistic echo write before returning anyway. */
+const ECHO_WRITE_MS = 4000;
 import { planMemberFiles } from './operations-publish.mjs';
 import { decryptMemberAsset } from './operations-drafts.mjs';
 
@@ -133,13 +136,21 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   });
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   // SOW-076: optimistic echo so the AUTHOR's own comment appears instantly (read-your-writes) while the SOW-072 PR
-  // auto-merges + the site rebuilds behind it. Best-effort + fire-and-forget; the durable PR is the source of truth.
+  // auto-merges + the site rebuilds behind it. Best-effort; the durable PR is the source of truth.
+  // sow-443: AWAITED, with the same 4-second bound the website uses (workbench-client writeCommentEcho). Fire-and-forget
+  // let the discussion's reload on gbti-comment-posted ask for echoes before this write landed, so a fresh comment
+  // showed "No replies yet" until the next open (owner, 2026-10-06). A slow or failed write still never fails the post.
   const echoToken = ctx.store?.get?.('githubToken');
   if (echoToken && out.prNumber) {
-    workerAddCommentEcho({
-      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
-      token: echoToken, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
-    }).catch(() => {});
+    let timer;
+    await Promise.race([
+      workerAddCommentEcho({
+        echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+        token: echoToken, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
+      }),
+      new Promise((resolve) => { timer = setTimeout(resolve, ECHO_WRITE_MS); }),
+    ]).catch(() => {});
+    clearTimeout(timer);
   }
   return out;
 }

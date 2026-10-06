@@ -68,6 +68,15 @@ test('the video poster card reads back as its URL alone on a line', () => {
   assert.equal(domToMarkdown(surface('<p><br></p>')), '', 'and reads back as nothing');
 });
 
+test('sow-261: a tweet line is a card too, and reads back as its URL alone on a line (so it keeps embedding after an edit)', () => {
+  const url = 'https://x.com/KatieKeithBarn2/status/2107396191969562653';
+  const html = editorHtmlFromMarkdown(`Intro\n\n${url}\n\nOutro`);
+  assert.match(html, /class="md-tweet"/, 'the comment renderer draws the tweet block');
+  assert.equal(domToMarkdown(surface(html)), `Intro\n\n${url}\n\nOutro`);
+  const ed = fs.readFileSync(new URL('../client-ui/src/elements/gbti-prose-editor.mjs', import.meta.url), 'utf8');
+  assert.match(ed, /this\.\$\$\('\[data-surface\] \.md-embed, \[data-surface\] \.md-tweet'\)/, 'atomic, with its own Remove');
+});
+
 test('every construct the comment vocabulary allows round-trips through the renderer unchanged', () => {
   const cases = [
     'Just a paragraph.',

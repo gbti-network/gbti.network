@@ -44,8 +44,9 @@ const tagOf = (n) => String(n?.tagName || '').toUpperCase();
 const attr = (n, name) => (typeof n?.getAttribute === 'function' ? n.getAttribute(name) : null) || '';
 const kids = (n) => Array.from(n?.childNodes || []);
 const escapeText = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-/** The poster card the renderer emits for a video line; it carries the URL the markdown needs. */
-const isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, 'class')) && !!attr(n, 'data-embed-url');
+/** The poster card the renderer emits for a video line, or (sow-261) the block for a tweet line; either carries the
+ *  URL the markdown needs, so it reads back as the bare line it came from and keeps embedding after an edit. */
+const isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, 'class')) && !!attr(n, 'data-embed-url');
 const isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
 const hasBlockChild = (n) => kids(n).some(isBlock);
 /** A nested walk (inside a list item or a quote) wants plain strings: a quote object is its text there. */

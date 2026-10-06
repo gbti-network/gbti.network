@@ -56,6 +56,8 @@ const CSS = `
   ${EMBED_POSTER_CSS}
   .surface .md-embed { margin: .4em 0 .9em; }
   .surface .md-embed .md-embed-open { cursor: default; }
+  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
+  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
   .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
     padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
   .pe-x svg { width: 15px; height: 15px; }
@@ -97,14 +99,16 @@ class GbtiProseEditor extends GbtiElement {
     this._syncEmpty();
   }
 
-  /** A video card is one atomic, non-editable thing with its own Remove; Backspace over it removes it whole. */
+  /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
+   *  removes it whole. */
   _decorateCards() {
-    for (const card of this.$$('[data-surface] .md-embed')) {
+    for (const card of this.$$('[data-surface] .md-embed, [data-surface] .md-tweet')) {
       if (card.dataset.peCard) continue;
       card.dataset.peCard = '1';
       card.setAttribute('contenteditable', 'false');
+      const what = card.classList.contains('md-tweet') ? 'Remove post' : 'Remove video';
       const x = document.createElement('button');
-      x.type = 'button'; x.className = 'pe-x'; x.title = 'Remove video'; x.setAttribute('aria-label', 'Remove video');
+      x.type = 'button'; x.className = 'pe-x'; x.title = what; x.setAttribute('aria-label', what);
       x.innerHTML = svg('x');
       x.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); card.remove(); this._changed(); });
       card.appendChild(x);

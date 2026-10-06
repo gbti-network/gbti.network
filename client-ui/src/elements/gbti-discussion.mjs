@@ -6,6 +6,7 @@
 // when a comment for its target is posted/edited. The token never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
+import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { wbCacheGet, wbCacheSet } from '../workbench-cache.mjs'; // SOW-089: SWR for the thread
 // sow-221 follow-up: the private relTime that used to live here flattened everything under 24 hours to
 // "today". The shared one reports "3 hours ago", which is what the owner asked for and what the content
@@ -35,6 +36,7 @@ const CSS = `
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -48,7 +50,7 @@ const CSS = `
   .ctomb.err { color:var(--s-danger, #e06c6c); border-color:var(--s-danger, #e06c6c); border-style:solid; }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
-  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
+  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; overflow-wrap:anywhere; } /* sow-443: a bare link ran past the card */
   .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
   .cbody a { color:var(--accent, var(--brand)); }
   .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
@@ -208,6 +210,7 @@ class GbtiDiscussion extends GbtiElement {
     const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));
     wireEmbedPosters(this.root);
+    wireTweets(this.root);
     this.$$('[data-fold]').forEach((b) => b.addEventListener('click', () => this._toggleFold(b.dataset.fold)));
     this.$$('[data-hidec]').forEach((b) => b.addEventListener('click', () => this._hideComment(b.dataset.hidec, b.dataset.authornote === '1')));
     this.$$('[data-delc]').forEach((b) => b.addEventListener('click', () => this._deleteComment(b.dataset.delc, b.dataset.authornote === '1')));

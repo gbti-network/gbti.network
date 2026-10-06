@@ -32,6 +32,8 @@ import { loadMembersDirectory } from '../members-index.mjs'; // SOW-143: the sha
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
+import { tweetId } from '../../../client/src/tweet-embed.mjs'; // sow-261: an X share shows the live tweet
+import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs';
 // SOW-041: the comment/favorite key for an item (a post/project/prompt's slug, a Share's "<author>/<shareId>").
 // sow-398: it moved to ../target-slug.mjs so the feed cards key their heart and Save the same way.
 import { targetSlugFor } from '../target-slug.mjs';
@@ -575,7 +577,10 @@ class GbtiReader extends GbtiElement {
     // SOW-092: a share whose link is a recognized video (YouTube/Vimeo/TikTok/Rumble embed) plays INLINE —
     // the embed replaces the static share image (the image was usually just that video's thumbnail).
     const shareEmbed = it.type === 'share' && it.url ? embedUrl(it.url) : null;
-    const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
+    // sow-443: a share also falls back to its OWN image. Index thumbnails carry only a cover hosted on gbti.network (the
+    // email digest's rule, sow-283), so a share whose copy failed (barn2.com refused it, 2026-10-06) lost its cover on
+    // every open after the first, while the website's share page showed the original image.
+    const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb || (it.type === 'share' ? it.image : null));
     // The player loads through the site's /embed/ relay: YouTube rejects a referrer-less request (its
     // error 153) and a chrome-extension:// page can never send one, so the relay's https origin vouches.
     // sow-441: no cover on a project. For a project the index thumbnail IS the icon, which this stretched across the
@@ -638,8 +643,14 @@ class GbtiReader extends GbtiElement {
     const top = proj ? projectHeroHtml(proj, it.title) + projectBarHtml(proj) : '';
     const title = proj ? '' : `<h1>${esc(it.title || '')}</h1>`;
     const tail = proj ? projectInstallHtml(proj) + projectGalleryHtml(proj) : '';
-    this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : '')) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tail}${view}${copyAll}</article>${side}</div></div>`);
+    // sow-261 (owner, 2026-09-22): an X share shows the live tweet under the member's comment block. The quote stays;
+    // the scraped picture (usually a screenshot of the same tweet) hides once the tweet shows. A tweet X cannot show
+    // leaves the page as it was, picture included.
+    const tweet = it.type === 'share' && tweetId(it.url) ? `<div class="md-tweet md-tweet-share" data-tweet-url="${esc(it.url)}"></div>` : '';
+    this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : '') + (tweet ? TWEET_CSS : '')) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
     if (proj) wireProjectView(this.root, proj);
+    // An inline style, not [hidden]: the cover's own display rule outranks [hidden] inside a shadow root.
+    if (tweet) wireTweets(this.root, { onReady: () => { const c = this.$('img.cover'); if (c) c.style.display = 'none'; } });
     if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); if (this._skill) wireSkillPage(this.root); }
   }
 

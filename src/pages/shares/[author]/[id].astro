@@ -16,6 +16,7 @@ import VideoEmbed from '../../../components/VideoEmbed.astro';
 import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
 import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { embedUrl } from '../../../../client/src/video-embed.mjs';
+import { tweetId } from '../../../../client/src/tweet-embed.mjs'; // sow-261: an X share shows the live tweet
 import { linkKind } from '../../../../client/src/link-kind.mjs'; // sow-417: an audio link says Listen, not Read
 import { sourceCardModel } from '../../../../client/src/share-source.mjs'; // sow-222: who the source card points at
 import { getCollection } from 'astro:content';
@@ -57,6 +58,9 @@ const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 // (embedUrl fails closed to null). No relay needed here: unlike a chrome-extension:// page, this site sends
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
 const videoSrc = d.url ? embedUrl(d.url) : null;
+// sow-261 (owner, 2026-09-22): an X share shows the live tweet under the member's note, framed straight from X (the
+// site CSP admits platform.twitter.com); the scraped picture hides once it shows. Not on a video share.
+const tweetUrl = !videoSrc && d.url && tweetId(d.url) ? d.url : null;
 // sow-417: the button's verb. Audio first, so a YouTube Music link says Listen even though it still plays inline.
 const linkWords = { audio: 'Listen to it on', video: 'Watch video on', read: 'Read on' }[d.url ? linkKind(d.url) : 'read'];
 // sow-222: the sidebar source card, decided in one shared module so this page and the extension reader cannot
@@ -122,6 +126,8 @@ if (cover && cover.author === d.author && cover.id === d.id) {
           <div class="cmt-rich" style="margin-top:14px;color:var(--fg)" set:html={body} />
         </article>
       )}
+
+      {tweetUrl && <div class="share-tweet" data-share-tweet><div class="md-tweet md-tweet-share" data-tweet-url={tweetUrl}></div></div>}
 
       <div class="share-actions">
         {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-primary">{linkWords} {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
@@ -193,6 +199,14 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   wireEditAffordance('[data-share-edit]', 'data-author');
 </script>
 
+<script>
+  // sow-261: the X share's tweet. Shown once X reports its size; the scraped picture (usually a screenshot of the
+  // same tweet) then hides. A tweet X cannot show removes its frame and leaves the page as it was.
+  import { wireTweets } from '../../../../client-ui/src/tweet-frames.mjs';
+  const box = document.querySelector('[data-share-tweet]');
+  if (box) wireTweets(box, { via: 'direct', onReady: () => { const hero = document.querySelector<HTMLElement>('.share-hero'); if (hero) hero.style.display = 'none'; } });
+</script>
+
 <style>
   /* sow-304 */
   .share-edited { color: var(--fg-mute); }
@@ -202,4 +216,8 @@ if (cover && cover.author === d.author && cover.id === d.id) {
      radius + background come from VideoEmbed itself. Kept off src/styles/gbti-v3.css so this page owns
      the one rule it needs. */
   .share-player { margin-top: 26px; }
+  /* sow-261: the X share's tweet (the frame is created by the script, hence :global). */
+  .share-tweet { margin-top: 26px; max-width: 550px; }
+  .share-tweet:not(:has(.is-ready)) { margin-top: 0; } /* zero height until X reports a size; never display:none, which would leave X no width to lay the tweet out in */
+  .share-tweet :global(iframe) { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; }
 </style>

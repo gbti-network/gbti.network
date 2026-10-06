@@ -267,7 +267,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
       echoes = Array.isArray(r?.echoes) ? r.echoes : [];
     } catch { return deployed; }
     if (!echoes.length) return deployed;
-    const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+    const { comments, reap } = mergeCommentEchoes({ deployed, echoes, viewer: user }); // sow-443: shown under the member's folder name, not their id
     if (reap.length) workerPost('/membership/comment-echo', { action: 'reap', targetType, targetSlug, ids: reap }).catch(() => {});
     return comments;
   }

@@ -8,6 +8,7 @@
 // list for the merge outcome for a few minutes. Inert with no client (an anonymous visitor sees nothing).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs';
+import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { relTime } from '../time-core.mjs';
 import { pendingRows, pullOutcome, echoNote, pullsOf } from '../comment-echo-core.mjs';
 
@@ -26,10 +27,11 @@ const CSS = `
   .meta { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); flex-wrap:wrap; }
   .name { font-weight:700; color:var(--fg); font-size:15px; }
   .badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; }
-  .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; }
+  .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; overflow-wrap:anywhere; } /* sow-443: long links wrap */
   .body p { margin:0 0 .6em; } .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
   .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
   .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }
@@ -70,6 +72,7 @@ class GbtiCommentEchoes extends GbtiElement {
     }).join('');
     this.set(this.css(CSS) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
     wireEmbedPosters(this.root);
+    wireTweets(this.root);
     this._syncPage(this._rows.length);
   }
 

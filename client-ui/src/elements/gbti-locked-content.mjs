@@ -10,6 +10,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
+import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { loadMembersSkillBox, SKILL_READER_CSS } from '../skill-reader.mjs'; // sow-109 Phase 7: a members-only skill's install box
 import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
 
@@ -38,6 +39,7 @@ export function codeBlockPlan(lineCount) {
 
 const PROSE = `
   ${EMBED_POSTER_CSS}
+  ${TWEET_CSS}
   .state, .locked { color: var(--muted); font-size: 14px; padding: 10px 0; }
   .locked a { color: var(--accent); font-weight: 600; }
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
@@ -97,6 +99,7 @@ class GbtiLockedContent extends GbtiElement {
     this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
     this.decorateCode();
     wireEmbedPosters(this.root);
+    wireTweets(this.root);
     this.emit('gbti-unlocked', { encPath });
   }
 

@@ -5,6 +5,7 @@
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
+import { bareTweetLine, tweetBlockHtml } from './tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
 import { takeListRun, listHtml, isListLine } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
 import { underscoreEmphasis, UNDERSCORE_MARK } from './underscore-emphasis.mjs'; // sow-355: _x_ and __x__
@@ -373,6 +374,10 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       // A comment shows a POSTER (the lightbox opens the player on click); a body ```embed fence keeps the
       // inline player. The frame src is the https relay, as the fence uses (see renderFence).
       if (videoUrl) { flushList(); emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i); i++; continue; }
+      // sow-261: a line that is only a tweet link becomes the tweet block (the link, until the page's wiring adds the
+      // live tweet; client-ui/src/tweet-frames.mjs). Inline, not a poster: a tweet is read, not played.
+      const tweetUrl = bareTweetLine(line);
+      if (tweetUrl) { flushList(); emit(tweetBlockHtml(tweetUrl), i, i); i++; continue; }
     }
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;
@@ -446,7 +451,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     const paraStart = i;
     const para = [hardBreak(esc, line)]; // the FIRST line can carry a hard break too
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
       // CommonMark hard break: a line ending in TWO OR MORE spaces breaks the line. A marker is pushed rather
       // than a <br> because the line is about to go through inline(), and the marker carries no markdown
       // characters so nothing downstream can mangle it. Without this, every hard break in the repository was

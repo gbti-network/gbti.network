@@ -89,7 +89,7 @@ export async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deplo
   try { echoes = (await workerGetCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? []; }
   catch { return deployed; }
   if (!echoes.length) return deployed;
-  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes, viewer: ctx.identity?.()?.username }); // sow-443: shown under the member's name
   if (reap.length) workerReapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {}); // fire-and-forget
   return comments;
 }

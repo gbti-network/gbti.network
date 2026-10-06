@@ -18283,7 +18283,8 @@ async function reapCommentEchoes({ targetType, targetSlug, ids, ...opts }) {
 
 // membership/comment-echo.mjs
 var byTime = (a, b) => String(a?.createdAt || a?.postedAt || "").localeCompare(String(b?.createdAt || b?.postedAt || ""));
-function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown" } = {}) {
+function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown", viewer = "" } = {}) {
+  const shownAs = typeof viewer === "string" && viewer.trim() ? viewer.trim() : null;
   const deployedIds = new Set((Array.isArray(deployed) ? deployed : []).map((c) => c && c.id).filter(Boolean));
   const reap = [];
   const pending = /* @__PURE__ */ new Set();
@@ -18300,7 +18301,7 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
       reap.push(e.id);
       continue;
     }
-    kept.push({ ...e, _pending: true });
+    kept.push({ ...e, ...shownAs ? { author: shownAs } : {}, _pending: true });
     pending.add(e.id);
   }
   const comments = [...Array.isArray(deployed) ? deployed : [], ...kept].sort(byTime);
@@ -18617,7 +18618,7 @@ async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) 
     return deployed;
   }
   if (!echoes.length) return deployed;
-  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes, viewer: ctx.identity?.()?.username });
   if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
   });
   return comments;
@@ -18718,6 +18719,7 @@ async function getContentItemFile(ctx, { path } = {}) {
 }
 
 // client/src/operations-social.mjs
+var ECHO_WRITE_MS = 4e3;
 async function publishShare(ctx, { input = {}, body = "", removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx);
   const owner = typeof authorTarget === "string" && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : id.username;
@@ -18795,13 +18797,20 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   const echoToken = ctx.store?.get?.("githubToken");
   if (echoToken && out.prNumber) {
-    addCommentEcho({
-      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
-      token: echoToken,
-      signupBase: SIGNUP_BASE,
-      fetch: ctx.fetch ?? globalThis.fetch
-    }).catch(() => {
+    let timer;
+    await Promise.race([
+      addCommentEcho({
+        echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+        token: echoToken,
+        signupBase: SIGNUP_BASE,
+        fetch: ctx.fetch ?? globalThis.fetch
+      }),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, ECHO_WRITE_MS);
+      })
+    ]).catch(() => {
     });
+    clearTimeout(timer);
   }
   return out;
 }
@@ -20109,6 +20118,25 @@ function isPortraitEmbed(src) {
   return /tiktok\.com\/embed\//.test(String(src || ""));
 }
 
+// client/src/tweet-embed.mjs
+var TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
+function tweetId(url2) {
+  const m = String(url2 ?? "").trim().match(TWEET_RE);
+  return m ? m[1] : null;
+}
+function bareTweetLine(line) {
+  const s = String(line ?? "").trim();
+  if (!/^https?:\/\/\S+$/.test(s)) return null;
+  return tweetId(s) ? s : null;
+}
+var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+function tweetBlockHtml(url2) {
+  const u = String(url2 ?? "").trim();
+  if (!tweetId(u)) return "";
+  const e = escAttr2(u);
+  return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
+}
+
 // client/src/image-attrs.mjs
 var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
 var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
@@ -20423,7 +20451,7 @@ var attrOf = (attrs, name) => {
   const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
   return m ? m[1] : "";
 };
-var escAttr2 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function emphasis(t) {
   const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
@@ -20442,7 +20470,7 @@ function rawAnchorHtml(attrs, inner) {
   if (blank && !rel.includes("noopener")) rel.push("noopener");
   const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
   const tgtAttr = blank ? ' target="_blank"' : "";
-  return `<a href="${escAttr2(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
 }
 function escapeKeepingLinks(s, keep) {
   const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
@@ -20663,6 +20691,13 @@ function renderDoc(md, ids, opts = {}, nest = null) {
         i++;
         continue;
       }
+      const tweetUrl = bareTweetLine(line);
+      if (tweetUrl) {
+        flushList();
+        emit(tweetBlockHtml(tweetUrl), i, i);
+        i++;
+        continue;
+      }
     }
     const esc2 = escapeKeepingLinks(line, linkKeep);
     let m;
@@ -20735,7 +20770,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     const paraStart = i;
     const para = [hardBreak(esc2, line)];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
       para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
       i++;
     }

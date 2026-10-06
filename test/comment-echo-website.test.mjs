@@ -52,7 +52,7 @@ test('website client: postComment writes the echo (awaited, bounded) and names i
   assert.match(src, /return \{ items: await withCommentEchoes\(targetType, targetSlug, deployed\) \};/);
   assert.match(src, /if \(!readCsrf\(\)\) return deployed;/, 'no web session, no echo read');
   assert.match(src, /workerGet\(`\/membership\/comment-echo\?targetType=\$\{encodeURIComponent\(targetType\)\}&targetSlug=\$\{encodeURIComponent\(targetSlug\)\}`\)/);
-  assert.match(src, /const \{ comments, reap \} = mergeCommentEchoes\(\{ deployed, echoes \}\);/);
+  assert.match(src, /const \{ comments, reap \} = mergeCommentEchoes\(\{ deployed, echoes, viewer: user \}\);/); // sow-443: under the member's name
   assert.match(src, /workerPost\('\/membership\/comment-echo', \{ action: 'reap', targetType, targetSlug, ids: reap \}\)\.catch/);
   assert.match(src, /preview\(\{ body, autoEmbed \}: any\) \{ return \{ html: renderMarkdown\(body \?\? '', \{ autoEmbed: !!autoEmbed \}\) \}; \}/);
 });

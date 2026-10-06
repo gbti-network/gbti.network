@@ -130,6 +130,7 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
      presentation signal; the real gate stays server-side). */
   html.is-gbti-member-active .cmt-join-pitch { display: none; }
   /* Rendered comment / author-note markdown: give paragraphs real spacing and make links read as links. */
+  .cmt-rich { overflow-wrap: anywhere; } /* sow-443: a bare long link wraps instead of running past the card */
   .cmt-rich > :first-child { margin-top: 0; }
   .cmt-rich > :last-child { margin-bottom: 0; }
   .cmt-rich p { margin: 0.7em 0; }
@@ -145,6 +146,11 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
      which opens the page lightbox. Both shapes get the same box. */
   .cmt-rich .embed-wrap, .cmt-rich .md-embed { position: relative; width: 100%; margin: .6em 0 1em; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
   .cmt-rich .md-embed.md-embed-portrait { aspect-ratio: 9 / 16; max-width: 360px; }
+  /* sow-261: a bare tweet line. The link shows until X's frame reports the tweet's size, then the frame takes its
+     height (client-ui/src/tweet-frames.mjs TWEET_CSS, the same rules for the shadow-root comment surfaces). */
+  .cmt-rich .md-tweet { margin: .6em 0 1em; max-width: 550px; }
+  .cmt-rich .md-tweet > iframe { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; }
+  .cmt-rich .md-tweet.is-ready > a { display: none; }
   .cmt-rich .embed-wrap iframe, .cmt-rich .md-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .cmt-rich .md-embed-open { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0; border: 0; background: #111; cursor: pointer; }
   .cmt-rich .md-embed-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -167,6 +173,11 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
     const html = src ? embedPosterHtml(src, { frameSrc: src }) : '';
     if (html) wrap.outerHTML = html;
   });
+  // sow-261: a built comment's bare tweet line (the remark pass emits <div class="md-tweet"><a>) becomes the live
+  // tweet, framed straight from X (the site's CSP admits platform.twitter.com), sized from X's own messages.
+  import { wireTweets } from '../../../client-ui/src/tweet-frames.mjs';
+  const thread = document.querySelector('#comments');
+  if (thread) wireTweets(thread, { via: 'direct' });
 </script>
 
 <script>

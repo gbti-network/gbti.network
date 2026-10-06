@@ -5,6 +5,7 @@
 // no new dependency. Only a NORMALIZED provider URL (via the one shared embedUrl) becomes an iframe src -- never
 // author-supplied HTML -- and callout bodies are HTML-escaped, so no author script executes.
 import { embedUrl, bareVideoLine } from '../../client/src/video-embed.mjs';
+import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';      // - a {square} -> <ul class="list-square"> (sow-322)
 
@@ -63,25 +64,34 @@ function paragraphLines(p) {
   return lines;
 }
 
-// The video URL when a line is nothing but one: a plain text line, or (remark-gfm autolink literal) a link
-// whose label IS its URL. A titled link ([watch](url)) stays a link.
-function bareVideoOfLine(line) {
+// The URL when a line is nothing but one that `accepts` (bareVideoLine, bareTweetLine): a plain text line, or
+// (remark-gfm autolink literal) a link whose label IS its URL. A titled link ([watch](url)) stays a link.
+function bareUrlOfLine(line, accepts) {
   const nodes = line.filter((n) => !(n.type === 'text' && !n.value.trim()));
   if (nodes.length !== 1) return null;
   const n = nodes[0];
-  if (n.type === 'text') return bareVideoLine(n.value);
+  if (n.type === 'text') return accepts(n.value);
   if (n.type === 'link') {
     const label = (n.children || []).map((c) => (typeof c.value === 'string' ? c.value : '')).join('');
     if (label.trim() !== String(n.url || '').trim()) return null;
-    return bareVideoLine(n.url);
+    return accepts(n.url);
   }
   return null;
 }
+const bareVideoOfLine = (line) => bareUrlOfLine(line, bareVideoLine);
+const bareTweetOfLine = (line) => bareUrlOfLine(line, bareTweetLine); // sow-261
 
-/** Replace a paragraph holding bare video lines with [paragraph, embed, paragraph...]; null when it holds none. */
+/**
+ * sow-261: the tweet block a built comment carries for a bare tweet line. Only a class and the link, so the sanitizer
+ * needs nothing beyond admitting the class; the page's script (Comments.astro, client-ui/src/tweet-frames.mjs) adds
+ * X's frame and hides the link once the tweet shows. With no script, or a tweet X cannot show, the link remains.
+ */
+export const tweetBlockBuildHtml = (url) => `<div class="md-tweet"><a href="${esc(url)}">${esc(url)}</a></div>`;
+
+/** Replace a paragraph holding bare video or tweet lines with [paragraph, embed, paragraph...]; null when it holds none. */
 export function splitParagraphEmbeds(p) {
   const lines = paragraphLines(p);
-  if (!lines.some((l) => bareVideoOfLine(l))) return null;
+  if (!lines.some((l) => bareVideoOfLine(l) || bareTweetOfLine(l))) return null;
   const out = [];
   let buf = [];
   const flush = () => {
@@ -93,7 +103,9 @@ export function splitParagraphEmbeds(p) {
   };
   for (const l of lines) {
     const url = bareVideoOfLine(l);
+    const tweet = url ? null : bareTweetOfLine(l);
     if (url) { flush(); out.push({ type: 'html', value: renderBlock({ lang: 'embed', value: url }) }); }
+    else if (tweet) { flush(); out.push({ type: 'html', value: tweetBlockBuildHtml(tweet) }); }
     else buf.push(l);
   }
   flush();

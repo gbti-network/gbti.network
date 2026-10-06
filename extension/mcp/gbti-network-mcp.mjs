@@ -18542,7 +18542,8 @@ async function reapCommentEchoes({ targetType, targetSlug, ids, ...opts }) {
 
 // membership/comment-echo.mjs
 var byTime = (a, b) => String(a?.createdAt || a?.postedAt || "").localeCompare(String(b?.createdAt || b?.postedAt || ""));
-function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown" } = {}) {
+function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown", viewer = "" } = {}) {
+  const shownAs = typeof viewer === "string" && viewer.trim() ? viewer.trim() : null;
   const deployedIds = new Set((Array.isArray(deployed) ? deployed : []).map((c) => c && c.id).filter(Boolean));
   const reap = [];
   const pending = /* @__PURE__ */ new Set();
@@ -18559,7 +18560,7 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
       reap.push(e.id);
       continue;
     }
-    kept.push({ ...e, _pending: true });
+    kept.push({ ...e, ...shownAs ? { author: shownAs } : {}, _pending: true });
     pending.add(e.id);
   }
   const comments = [...Array.isArray(deployed) ? deployed : [], ...kept].sort(byTime);
@@ -19334,7 +19335,7 @@ async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed })
     return deployed;
   }
   if (!echoes.length) return deployed;
-  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes, viewer: ctx2.identity?.()?.username });
   if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
   });
   return comments;
@@ -19435,6 +19436,7 @@ function validateContent(ctx2, { type, input, body } = {}) {
 }
 
 // client/src/operations-social.mjs
+var ECHO_WRITE_MS = 4e3;
 async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx2);
   const owner = typeof authorTarget === "string" && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : id.username;
@@ -19512,13 +19514,20 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   const echoToken = ctx2.store?.get?.("githubToken");
   if (echoToken && out.prNumber) {
-    addCommentEcho({
-      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
-      token: echoToken,
-      signupBase: SIGNUP_BASE,
-      fetch: ctx2.fetch ?? globalThis.fetch
-    }).catch(() => {
+    let timer;
+    await Promise.race([
+      addCommentEcho({
+        echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+        token: echoToken,
+        signupBase: SIGNUP_BASE,
+        fetch: ctx2.fetch ?? globalThis.fetch
+      }),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, ECHO_WRITE_MS);
+      })
+    ]).catch(() => {
     });
+    clearTimeout(timer);
   }
   return out;
 }
