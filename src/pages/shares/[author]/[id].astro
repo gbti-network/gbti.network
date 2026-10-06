@@ -219,5 +219,5 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   /* sow-261: the X share's tweet (the frame is created by the script, hence :global). */
   .share-tweet { margin-top: 26px; max-width: 550px; }
   .share-tweet:not(:has(.is-ready)) { margin-top: 0; } /* zero height until X reports a size; never display:none, which would leave X no width to lay the tweet out in */
-  .share-tweet :global(iframe) { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; }
+  .share-tweet :global(iframe) { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; color-scheme: normal; } /* normal: no white backdrop on a dark page */
 </style>

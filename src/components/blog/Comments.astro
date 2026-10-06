@@ -149,7 +149,7 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   /* sow-261: a bare tweet line. The link shows until X's frame reports the tweet's size, then the frame takes its
      height (client-ui/src/tweet-frames.mjs TWEET_CSS, the same rules for the shadow-root comment surfaces). */
   .cmt-rich .md-tweet { margin: .6em 0 1em; max-width: 550px; }
-  .cmt-rich .md-tweet > iframe { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; }
+  .cmt-rich .md-tweet > iframe { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; color-scheme: normal; } /* normal: no white backdrop on a dark page */
   .cmt-rich .md-tweet.is-ready > a { display: none; }
   .cmt-rich .embed-wrap iframe, .cmt-rich .md-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .cmt-rich .md-embed-open { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0; border: 0; background: #111; cursor: pointer; }

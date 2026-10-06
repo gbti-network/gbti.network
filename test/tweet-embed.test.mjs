@@ -120,6 +120,12 @@ test('the frame wiring: X directly on the website, the https relay on an extensi
   assert.equal(TWEET_RELAY_ORIGIN, new URL(TWEET_RELAY).origin);
   assert.match(TWEET_CSS, /\.md-tweet\.is-ready > a \{ display:none; \}/, 'the link hides once the tweet shows');
   assert.match(TWEET_CSS, /\.md-tweet > iframe \{[^}]*height:0;/, 'and the frame takes no room until then');
+  // A frame that inherits a dark page's color-scheme gets an opaque WHITE backdrop behind X's rounded card (white
+  // corners, seen live 2026-10-06); 'normal' matches X's page and keeps it transparent. Every place that styles the frame.
+  assert.match(TWEET_CSS, /\.md-tweet > iframe \{[^}]*color-scheme:normal;/);
+  assert.match(read('src/components/blog/Comments.astro'), /\.cmt-rich \.md-tweet > iframe \{[^}]*color-scheme: normal;/);
+  assert.match(read('src/pages/shares/[author]/[id].astro'), /\.share-tweet :global\(iframe\) \{[^}]*color-scheme: normal;/);
+  assert.match(read('src/pages/embed.astro'), /f\.style\.colorScheme = 'normal';/);
 });
 
 test('the wiring trusts only its own frame\'s origin and window, drops a frame only on "no_results", and waits out a slow one', () => {

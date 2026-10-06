@@ -12004,7 +12004,9 @@ ${listStyleProseCss(".doc-blocks")}
   var TWEET_SLOW_MS = 15e3;
   var TWEET_CSS = `
   .md-tweet { margin:.6em 0 1em; max-width:550px; }
-  .md-tweet > iframe { display:block; width:100%; height:0; border:0; overflow:hidden; background:transparent; }
+  /* color-scheme:normal matches X's own page, so the frame stays transparent; inheriting a dark page's scheme makes
+     Chrome paint an opaque white backdrop, which showed as white corners around the dark tweet (measured 2026-10-06). */
+  .md-tweet > iframe { display:block; width:100%; height:0; border:0; overflow:hidden; background:transparent; color-scheme:normal; }
   .md-tweet.is-ready > a { display:none; }
   .md-tweet-share:not(.is-ready) { margin:0; }
 `;

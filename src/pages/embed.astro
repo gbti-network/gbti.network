@@ -46,6 +46,7 @@
         const f = document.createElement('iframe');
         f.title = 'Post on X';
         f.setAttribute('scrolling', 'no');
+        f.style.colorScheme = 'normal'; // matches X's page, so no opaque white backdrop behind the rounded card
         f.src = tweetFrameUrl(u, { theme: params.get('theme') || 'light' });
         document.body.appendChild(f);
         // Forward only X's messages from THIS frame, reduced to the three the parent acts on (height, rendered,
