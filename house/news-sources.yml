@@ -669,3 +669,8 @@ sources:
     url: https://newatlas.com/index.rss
     description: newatlas.com
     enabled: true
+  - id: noted
+    name: Noted
+    url: https://noted.lol/rss/
+    description: noted.lol
+    enabled: true
