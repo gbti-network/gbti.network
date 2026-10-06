@@ -12,7 +12,8 @@ tags:
   - wordpress-plugins
   - plugin-market
   - rivale
-image: https://rivale.io/wp-content/uploads/card-diff-cover.png
+image: https://gbti.network/media/shares/atwellpub/20261006155359-what-changed-across-the-wordpress-plugin-market--4f37b3dd.webp
+imageSource: https://rivale.io/wp-content/uploads/card-diff-cover.png
 id: 20261006155359-what-changed-across-the-wordpress-plugin-market-
 createdAt: '2026-10-06T15:53:59.908Z'
 type: share
