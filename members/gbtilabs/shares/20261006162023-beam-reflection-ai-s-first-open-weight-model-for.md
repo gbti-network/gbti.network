@@ -12,8 +12,8 @@ tags:
   - language-models
   - ai-agents
   - coding
-image: >-
-  https://cdn.sanity.io/images/sp40emik/production/771cfe201a3d24d7a340c3372e6a1654ec1a6e42-1800x1013.png
+image: https://gbti.network/media/shares/gbtilabs/20261006162023-beam-reflection-ai-s-first-open-weight-model-for-7ff5955a.webp
+imageSource: https://cdn.sanity.io/images/sp40emik/production/771cfe201a3d24d7a340c3372e6a1654ec1a6e42-1800x1013.png
 id: 20261006162023-beam-reflection-ai-s-first-open-weight-model-for
 createdAt: '2026-10-06T16:20:23.949Z'
 type: share
