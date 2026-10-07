@@ -10,8 +10,8 @@ category: marketing
 tags:
   - tiktok-ad-network
   - mobile-advertising
-image: >-
-  https://i0.wp.com/musically.com/wp-content/uploads/2024/10/TikTok-logo-on-black.png?fit=2000%2C1500&ssl=1
+image: https://gbti.network/media/shares/gbtilabs/20261007134535-tiktok-launches-an-external-ad-network-across-ne-a8d82116.webp
+imageSource: https://i0.wp.com/musically.com/wp-content/uploads/2024/10/TikTok-logo-on-black.png?fit=2000%2C1500&ssl=1
 id: 20261007134535-tiktok-launches-an-external-ad-network-across-ne
 createdAt: '2026-10-07T13:45:35.826Z'
 type: share
