@@ -84,7 +84,7 @@ test('the element: reads pending rows through listComments, renders bodies with 
   assert.match(el, /if \(this\._rows\.every\(\(row\) => echoNote\(\{ outcome: row\.outcome \}\)\.terminal\)\) this\._stopPolling\(\);/);
   assert.match(el, /if \(\+\+this\._polls > POLL_MAX\) \{ this\._stopPolling\(\); return; \}/);
   const locked = read('client-ui/src/elements/gbti-locked-content.mjs');
-  assert.match(locked, /const autoEmbed = \(this\.dataset\.gbtiKind \|\| this\.getAttribute\('data-gbti-kind'\) \|\| ''\) === 'comment';\s*html = \(await this\.client\.preview\(\{ body: text, autoEmbed \}\)\)/, 'a decrypted members comment (the share default) frames a bare video link');
+  assert.match(locked, /const autoEmbed = \(this\.dataset\.gbtiKind \|\| this\.getAttribute\('data-gbti-kind'\) \|\| ''\) === 'comment';\s*try \{\s*html = \(await this\.client\.preview\(\{ body: text, autoEmbed \}\)\)/, 'a decrypted members comment (the share default) frames a bare video link');
   const disc = read('client-ui/src/elements/gbti-discussion.mjs');
   assert.match(disc, /preview\(\{ body: c\.body, autoEmbed: true \}\)/, 'the reader frames a bare video link too');
   assert.match(disc, /c\._pending \? `<span class="cbadge">Posting<\/span>` : ''/);

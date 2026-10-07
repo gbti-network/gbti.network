@@ -8,7 +8,7 @@
 // list for the merge outcome for a few minutes. Inert with no client (an anonymous visitor sees nothing).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs';
-import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
+import { TWEET_CSS, COMMENT_EMBED_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { relTime } from '../time-core.mjs';
 import { pendingRows, pullOutcome, echoNote, pullsOf } from '../comment-echo-core.mjs';
 
@@ -20,11 +20,12 @@ const CSS = `
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
   :host { display:block; }
   .rows { list-style:none; padding:0; margin:24px 0 0; display:flex; flex-direction:column; gap:24px; }
-  .card { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:20px; display:flex; gap:14px; align-items:flex-start; }
+  .card { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:20px; display:flex; gap:14px; align-items:flex-start; --embed-out-l:78px; --embed-out-r:20px; } /* sow-444: padding 20 + avatar 44 + gap 14 */
   .cav { width:44px; height:44px; border-radius:999px; background:var(--hover); color:var(--muted); display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex:none; overflow:hidden; }
   .cav img { width:100%; height:100%; object-fit:cover; }
   .main { flex:1; min-width:0; }
   .meta { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); flex-wrap:wrap; }
+  .main:has(> .body > :is(.md-tweet.is-ready, .md-embed):first-child) > .meta { min-height:44px; } /* sow-444: an embed first starts below the avatar */
   .name { font-weight:700; color:var(--fg); font-size:15px; }
   .badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; }
   .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; overflow-wrap:anywhere; } /* sow-443: long links wrap */
@@ -32,6 +33,7 @@ const CSS = `
   .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
   ${EMBED_POSTER_CSS}
   ${TWEET_CSS}
+  ${COMMENT_EMBED_CSS}
   .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
   .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
   .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }

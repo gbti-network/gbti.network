@@ -6,7 +6,7 @@
 // when a comment for its target is posted/edited. The token never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
-import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
+import { TWEET_CSS, COMMENT_EMBED_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { wbCacheGet, wbCacheSet } from '../workbench-cache.mjs'; // SOW-089: SWR for the thread
 // sow-221 follow-up: the private relTime that used to live here flattened everything under 24 hours to
 // "today". The shared one reports "3 hours ago", which is what the owner asked for and what the content
@@ -21,13 +21,17 @@ const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
-  .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
+  /* sow-444: --embed-out-* = how far the text column sits in (padding 10 + avatar 22 + gap 9), so an embed spans the row */
+  .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; --embed-out-l:41px; --embed-out-r:0px; }
   .comment.reply { margin-left:16px; }
   /* sow-441: the pinned author note as a green card, as on the website's project and prompt pages. */
-  .comment.note { border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); padding:14px 16px; }
+  .comment.note { border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); padding:14px 16px; --embed-out-l:47px; --embed-out-r:16px; }
   .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
+  /* sow-444: a body that BEGINS with an embed (a ready tweet, a video poster) would start beside the avatar and, now that
+     the embed spans the row, run into it; the name row then takes the avatar's height, so the embed starts below it. */
+  .cmain:has(> .cbody > :is(.md-tweet.is-ready, .md-embed):first-child) > .cmeta { min-height:22px; }
   .cmeta .cwhen { white-space:nowrap; flex-shrink:0; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; flex-shrink:0; }
@@ -37,6 +41,7 @@ const CSS = `
   .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
   ${EMBED_POSTER_CSS}
   ${TWEET_CSS}
+  ${COMMENT_EMBED_CSS}
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }

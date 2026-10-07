@@ -10,7 +10,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
-import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
+import { TWEET_CSS, COMMENT_EMBED_CSS, wireTweets } from '../tweet-frames.mjs'; // sow-261: a comment's bare tweet line shows the tweet
 import { loadMembersSkillBox, SKILL_READER_CSS } from '../skill-reader.mjs'; // sow-109 Phase 7: a members-only skill's install box
 import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
 
@@ -88,18 +88,24 @@ class GbtiLockedContent extends GbtiElement {
       return;
     }
     let html = '';
+    // autoEmbed for a COMMENT body: a bare video link frames the player, as the built public comment does.
+    // Share comments are members-only, so this decrypted path is the one most comments actually render through.
+    const autoEmbed = (this.dataset.gbtiKind || this.getAttribute('data-gbti-kind') || '') === 'comment';
     try {
-      // autoEmbed for a COMMENT body: a bare video link frames the player, as the built public comment does.
-      // Share comments are members-only, so this decrypted path is the one most comments actually render through.
-      const autoEmbed = (this.dataset.gbtiKind || this.getAttribute('data-gbti-kind') || '') === 'comment';
       html = (await this.client.preview({ body: text, autoEmbed }))?.html ?? ''; // renderMarkdown escapes raw HTML, so this is safe
     } catch {
       html = '';
     }
-    this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
+    // sow-444: a comment's embeds follow the card they sit in (its --embed-out-* inherit into this shadow root); a
+    // members-only ARTICLE section takes none of it.
+    this.set(this.css(PROSE + (autoEmbed ? COMMENT_EMBED_CSS : '')) + `<div class="unlocked">${html}</div>`);
     this.decorateCode();
     wireEmbedPosters(this.root);
-    wireTweets(this.root);
+    // sow-444: the website card cannot see into this shadow root, so a comment whose body BEGINS with an embed says so
+    // on the host (data-embed-first); the card then gives its name row the avatar's height and the embed starts below.
+    const first = this.root.querySelector('.unlocked > :first-child');
+    if (autoEmbed && first?.classList.contains('md-embed')) this.setAttribute('data-embed-first', '');
+    wireTweets(this.root, { onReady: (el) => { if (autoEmbed && el === first) this.setAttribute('data-embed-first', ''); } });
     this.emit('gbti-unlocked', { encPath });
   }
 

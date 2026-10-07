@@ -25,6 +25,21 @@ export const TWEET_CSS = `
   .md-tweet-share:not(.is-ready) { margin:0; }
 `;
 
+/**
+ * sow-444 (owner, 2026-10-06): in a COMMENT, an embed sits under the avatar and runs card edge to card edge. A comment
+ * container declares how far its text column sits in from its edges, --embed-out-l (left padding + avatar + gap) and
+ * --embed-out-r (right padding); a ready tweet and a video poster break out by those amounts. Unset (anywhere else)
+ * they are 0. X renders a tweet at most 550px wide, flush left (measured 2026-10-06), so the frame is capped at 550px
+ * and centred when the card is wider (the owner's choice); a portrait video keeps its 360px frame, centred. Only comment
+ * surfaces include this, and after TWEET_CSS and EMBED_POSTER_CSS, whose rules it overrides.
+ */
+export const COMMENT_EMBED_CSS = `
+  .md-tweet.is-ready { margin-left:calc(-1 * var(--embed-out-l, 0px)); margin-right:calc(-1 * var(--embed-out-r, 0px)); max-width:none; }
+  .md-tweet.is-ready > iframe { max-width:550px; margin-inline:auto; }
+  .md-embed { width:auto; margin-left:calc(-1 * var(--embed-out-l, 0px)); margin-right:calc(-1 * var(--embed-out-r, 0px)); }
+  .md-embed.md-embed-portrait { width:min(360px, calc(100% + var(--embed-out-l, 0px) + var(--embed-out-r, 0px))); max-width:none; margin-right:0; margin-left:calc(max(0px, (100% + var(--embed-out-l, 0px) + var(--embed-out-r, 0px) - 360px) / 2) - var(--embed-out-l, 0px)); }
+`;
+
 /** The page's theme: the html data-theme the site and the extension both set, else the OS preference. */
 export function pageTheme(doc = globalThis.document) {
   const t = doc?.documentElement?.getAttribute?.('data-theme');

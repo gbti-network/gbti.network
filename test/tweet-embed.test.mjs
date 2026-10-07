@@ -154,7 +154,7 @@ test('the relay frames a tweet only through the shared validator and forwards on
 test('every comment surface wires its tweet blocks, and the share views mount the tweet', () => {
   for (const p of ['client-ui/src/elements/gbti-discussion.mjs', 'client-ui/src/elements/gbti-comment-echoes.mjs', 'client-ui/src/elements/gbti-locked-content.mjs']) {
     const s = read(p);
-    assert.match(s, /wireEmbedPosters\(this\.root\);\n\s*wireTweets\(this\.root\);/, `${p}: wired after every render`);
+    assert.match(s, /wireEmbedPosters\(this\.root\);(?:\n[^\n]*){0,5}\n\s*wireTweets\(this\.root[,)]/, `${p}: wired after every render`); // sow-444: the members body flags a first embed between the two
     assert.match(s, /\$\{TWEET_CSS\}/, `${p}: styled`);
   }
   const comments = read('src/components/blog/Comments.astro');

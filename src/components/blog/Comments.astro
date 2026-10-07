@@ -59,7 +59,7 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
 ---
 <section id="comments" class:list={[!wide && 'mx-auto']} style={`margin-top:48px${wide ? '' : ';max-width:800px'}`}>
   {intro && (
-    <article class="card" style="padding:24px;border-color:var(--green);background:var(--green-tint)">
+    <article class="card" style="padding:24px;border-color:var(--green);background:var(--green-tint);--embed-out-l:24px;--embed-out-r:24px">
       <div class="flex items-center g12">
         <a href={profileHref(intro.data.author)} class="shrink-0"><Avatar item={{ name: introName, avatar: avatarOf(intro.data.author), seed: intro.data.author }} size={44} class="rounded-full" /></a>
         <div>
@@ -92,10 +92,10 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   ) : (
     <ul style="list-style:none;padding:0;margin-top:24px;display:flex;flex-direction:column;gap:24px">
       {thread.map((c) => (
-        <li class="card" style="padding:20px;display:flex;gap:14px;align-items:flex-start">
+        <li class="card" style="padding:20px;display:flex;gap:14px;align-items:flex-start;--embed-out-l:78px;--embed-out-r:20px">
           <a href={profileHref(c.data.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(c.data.author), avatar: avatarOf(c.data.author), seed: c.data.author }} size={44} class="rounded-full" /></a>
-          <div style="flex:1;min-width:0">
-            <div class="flex items-center g8 body-sm muted">
+          <div class="cmt-col" style="flex:1;min-width:0">
+            <div class="cmt-meta flex items-center g8 body-sm muted">
               <a href={profileHref(c.data.author)} class="link" style="font-size:15px">{authorDisplay(c.data.author)}</a>
               <span aria-hidden="true">·</span>
               <time datetime={c.data.createdAt.toISOString()}>{formatDate(c.data.createdAt)}</time>
@@ -151,6 +151,18 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   .cmt-rich .md-tweet { margin: .6em 0 1em; max-width: 550px; }
   .cmt-rich .md-tweet > iframe { display: block; width: 100%; height: 0; border: 0; overflow: hidden; background: transparent; color-scheme: normal; } /* normal: no white backdrop on a dark page */
   .cmt-rich .md-tweet.is-ready > a { display: none; }
+  /* sow-444 (owner, 2026-10-06): in a comment card an embed sits under the avatar, card edge to card edge. The card
+     sets --embed-out-l / --embed-out-r (how far its text column sits in: padding 20 + avatar 44 + gap 14, and padding
+     20; the author intro 24 / 24); unset elsewhere, so nothing else moves. A tweet is at most 550px (X's own cap),
+     centred; a portrait video keeps 360px, centred. The same rules as COMMENT_EMBED_CSS in client-ui/src/tweet-frames.mjs. */
+  .cmt-rich .md-tweet.is-ready { margin-left: calc(-1 * var(--embed-out-l, 0px)); margin-right: calc(-1 * var(--embed-out-r, 0px)); max-width: none; }
+  .cmt-rich .md-tweet.is-ready > iframe { max-width: 550px; margin-inline: auto; }
+  .cmt-rich .md-embed, .cmt-rich .embed-wrap { width: auto; margin-left: calc(-1 * var(--embed-out-l, 0px)); margin-right: calc(-1 * var(--embed-out-r, 0px)); }
+  /* A body that BEGINS with an embed would start beside the avatar and run into it; the name row then takes the
+     avatar's height (44px), so the embed starts below it. A members-only body flags its host (data-embed-first). */
+  .cmt-col:has(> .cmt-rich > :is(.md-tweet.is-ready, .md-embed, .embed-wrap):first-child) > .cmt-meta,
+  .cmt-col:has(gbti-locked-content[data-embed-first]) > .cmt-meta { min-height: 44px; }
+  .cmt-rich .md-embed.md-embed-portrait { width: min(360px, calc(100% + var(--embed-out-l, 0px) + var(--embed-out-r, 0px))); max-width: none; margin-right: 0; margin-left: calc(max(0px, (100% + var(--embed-out-l, 0px) + var(--embed-out-r, 0px) - 360px) / 2) - var(--embed-out-l, 0px)); }
   .cmt-rich .embed-wrap iframe, .cmt-rich .md-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .cmt-rich .md-embed-open { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0; border: 0; background: #111; cursor: pointer; }
   .cmt-rich .md-embed-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
