@@ -12,7 +12,8 @@ tags:
   - seasonal-mixtape
   - melodic-house
   - this-never-happened
-image: https://i.ytimg.com/vi/412AHrISlqg/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20261007142535-lane-8-fall-2026-mixtape-live-from-the-castro-th-aa8753fc.webp
+imageSource: https://i.ytimg.com/vi/412AHrISlqg/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@thisneverhappened
 creatorName: This Never Happened
 id: 20261007142535-lane-8-fall-2026-mixtape-live-from-the-castro-th
