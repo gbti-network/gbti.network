@@ -17,11 +17,9 @@ tags:
   - workflow
 publishedAt: '2026-07-30T19:37:31.690Z'
 status: published
-visibility: members
-publicStub: true
+visibility: public
 kind: skill
 updatedAt: '2026-09-30T06:42:46.695Z'
-encryptedSkill: members/atwellpub/_enc/prompt-qa-skill-for-claude-code-and-codex-skillfile.enc
 type: prompt
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/prompt-qa-skill-for-claude-code-and-codex-body.enc
