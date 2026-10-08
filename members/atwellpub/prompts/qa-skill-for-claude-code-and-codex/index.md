@@ -3,9 +3,8 @@ kind: skill
 title: '/QA : An Agent Skill for Resolving Open Questions'
 slug: qa-skill-for-claude-code-and-codex
 shortDescription: >-
-  A drop-in `/qa` skill for Claude Code that collects the questions your agent just raised and asks
-  them in a single batch, in plan mode, before any code is written. By default, it reviews only the
-  last reply to keep usage low; `/qa deep` runs the full six-category review when needed.
+  `/qa` is an agent skill for Claude Code that collects the questions your agent just raised and
+  collects answers for them in plan mode.
 categories:
   - ai
   - prompts
@@ -21,7 +20,7 @@ tags:
   - planning
   - workflow
 publishedAt: '2026-07-30T19:37:31.690Z'
-updatedAt: '2026-10-08T22:15:54.332Z'
+updatedAt: '2026-10-08T22:20:40.359Z'
 type: prompt
 author: atwellpub
 ---
