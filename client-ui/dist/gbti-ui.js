@@ -10185,7 +10185,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE5}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE5}/membership/?ref=${r.code}` : null);
       const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc2(label)}</div>${desc ? `<div class="d">${esc2(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc2(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
@@ -10200,7 +10200,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<section class="danger">
       <div class="sec-h"><h3>Danger zone</h3><p>These actions end your access or remove your data. They cannot be undone here.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc2(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
+        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends. Your published work stays live, and your saves and follows are untouched.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc2(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
         <div class="row"><div class="rl"><div class="t">Delete account</div><div class="d">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</div></div><div class="rc"><div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /><button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div></div></div>
       </div>
       <div class="msg" data-danger-msg aria-live="polite"></div>

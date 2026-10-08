@@ -56,6 +56,8 @@
 /products/email-signature-generator/ /utilities/email-signature-generator/ 301
 # sow-359: the tracked partner links from house/outbound-links.yml are emitted here by scripts/compose-redirects.mjs.
 /shares/atwellpub/20260910215127-google-deepmind-releases-predictions-for-9-billi/ /shares/gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi/ 301
+/join /membership/ 301
+/join/ /membership/ 301
 /blog/* /articles/:splat 301
 
 # sow-196 (2026-09-02): the `product` content type became `project`. Per-item /products/<slug>/ 301s are

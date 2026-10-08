@@ -124,6 +124,16 @@ const EXTRA = [
   // old address rendered unstyled. A zone purge by URL did not evict that copy. A redirect does, because
   // Pages evaluates _redirects before it looks for the page.
   ['/shares/atwellpub/20260910215127-google-deepmind-releases-predictions-for-9-billi/', '/shares/gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi/'],
+
+  // The invite link a member copies from Settings in the extension was built as /join?ref=<code>, a page that never
+  // existed, so everyone a member referred that way landed on the not-found page and the referral was lost (found
+  // in the 0.6.0 release audit, 2026-10-07). The extension now builds /membership/?ref= directly, but every copy
+  // already shared, and every install still on an older version, keeps sending /join. Cloudflare Pages carries the
+  // query string through a redirect (measured live on the /author/ rules), and ReferralCapture on the membership
+  // page records ?ref on arrival, so the credit survives the hop. Both spellings, because a pasted link may carry
+  // the slash.
+  ['/join', '/membership/'],
+  ['/join/', '/membership/'],
 ];
 // A string entry is a raw line (the sow-359 outbound marker); a pair is a redirect.
 for (const e of EXTRA) {

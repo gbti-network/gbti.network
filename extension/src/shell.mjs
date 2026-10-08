@@ -487,9 +487,9 @@ async function maybeShowExpiryPopup(status) {
       <div class="expiry-count">${count}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ''}
-      <p class="expiry-note">Becoming a paying member keeps your profile, articles, projects, and prompts
-        published, your Discord access open, and your revenue share active. Nothing bills automatically;
-        if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
+      <p class="expiry-note">Becoming a paying member keeps your Discord access open and your revenue share
+        active, and lets you keep publishing. Nothing bills automatically. If you do nothing, your published
+        work stays live, and you can join again whenever you like.</p>
       <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>
       <button class="expiry-later" type="button">Remind me later</button>
     </div>

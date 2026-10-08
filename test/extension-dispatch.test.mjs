@@ -72,7 +72,7 @@ test('SOW-040: billing + referral routes (the account surface) work in the exten
   const referral = await dispatch(ctxFor(), { pathname: '/api/referral' });
   assert.equal(referral.status, 200);
   assert.equal(referral.json.code, '1'); // the immutable github_id keys the payout (SOW-007)
-  assert.match(referral.json.link, /\/join\?ref=1$/);
+  assert.match(referral.json.link, /\/membership\/\?ref=1$/); // a referral link must land on a page that exists and records ?ref
 });
 
 test('content + item: lists + reads via the async reader, own-folder scoped', async () => {

@@ -9700,9 +9700,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="expiry-count">${count2}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ""}
-      <p class="expiry-note">Becoming a paying member keeps your profile, articles, projects, and prompts
-        published, your Discord access open, and your revenue share active. Nothing bills automatically;
-        if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
+      <p class="expiry-note">Becoming a paying member keeps your Discord access open and your revenue share
+        active, and lets you keep publishing. Nothing bills automatically. If you do nothing, your published
+        work stays live, and you can join again whenever you like.</p>
       <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>
       <button class="expiry-later" type="button">Remind me later</button>
     </div>
@@ -17210,7 +17210,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE10}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE10}/membership/?ref=${r.code}` : null);
       const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc2(label)}</div>${desc ? `<div class="d">${esc2(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc2(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
@@ -17225,7 +17225,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<section class="danger">
       <div class="sec-h"><h3>Danger zone</h3><p>These actions end your access or remove your data. They cannot be undone here.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc2(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
+        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends. Your published work stays live, and your saves and follows are untouched.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc2(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
         <div class="row"><div class="rl"><div class="t">Delete account</div><div class="d">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</div></div><div class="rc"><div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /><button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div></div></div>
       </div>
       <div class="msg" data-danger-msg aria-live="polite"></div>

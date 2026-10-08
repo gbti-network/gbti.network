@@ -19875,7 +19875,8 @@ function getReferral(ctx) {
   const code = id?.githubId ?? null;
   return {
     code,
-    link: code ? `${SITE_BASE}/join?ref=${code}` : null,
+    link: code ? `${SITE_BASE}/membership/?ref=${code}` : null,
+    // the membership page records ?ref on arrival; /join was a 404 until the site redirect added 2026-10-08
     invitePct: "10%",
     connectOnboarding: `${SIGNUP_BASE}/referral/connect/start`,
     terms: `${SITE_BASE}/referral-terms/`,

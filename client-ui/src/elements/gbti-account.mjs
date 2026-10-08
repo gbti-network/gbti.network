@@ -249,7 +249,7 @@ class GbtiAccount extends GbtiElement {
     // The invite link keys on the immutable github_id, so a rename never misroutes a payout (SOW-007). A
     // human-friendly ?ref=<username> vanity link is a noted follow-up: it needs a join-side username->github_id
     // resolver (the members-index), and shipping it without one would break referral attribution.
-    const canonical = r.link || (r.code ? `${SITE}/join?ref=${r.code}` : null);
+    const canonical = r.link || (r.code ? `${SITE}/membership/?ref=${r.code}` : null); // /join never existed (found 2026-10-07); the site now redirects old /join links here
     // sow-356: only an account that may be in the server is offered the invite. The endpoint refuses a free or
     // lapsed account on its own, so this row would usually be empty anyway; asserting the rule here as well means
     // the offer does not depend on a request having failed.
@@ -268,7 +268,7 @@ class GbtiAccount extends GbtiElement {
     return `<section class="danger">
       <div class="sec-h"><h3>Danger zone</h3><p>These actions end your access or remove your data. They cannot be undone here.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ''}</div></div>
+        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends. Your published work stays live, and your saves and follows are untouched.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ''}</div></div>
         <div class="row"><div class="rl"><div class="t">Delete account</div><div class="d">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</div></div><div class="rc"><div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /><button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div></div></div>
       </div>
       <div class="msg" data-danger-msg aria-live="polite"></div>
