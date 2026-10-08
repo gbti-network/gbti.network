@@ -4,7 +4,9 @@
 // on the admin gate; a Discord failure serves the stale cache when one exists.
 import { authorizeAdmin } from './membership-admin.mjs';
 
-const CACHE_KEY = 'discord:channels';
+// v2 carries `position`, so the pickers can follow Discord's sidebar order. A new key rather than the old one, so the
+// first read after a deploy fetches the new shape instead of serving an hour of the old.
+const CACHE_KEY = 'discord:channels:v2';
 const TTL_MS = 60 * 60 * 1000;
 
 export async function membershipDiscordChannels(request, env, { authorize = authorizeAdmin, fetchImpl = globalThis.fetch, now = Date.now, allowCookie = false } = {}) {
@@ -38,10 +40,12 @@ export async function readGuildChannels(env, { fetchImpl = globalThis.fetch, now
     });
     if (!res.ok) throw new Error(`discord ${res.status}`);
     const raw = await res.json();
-    // type 0 = text, 5 = announcement, 4 = category group (kept so the UI can show the section a channel sits in)
+    // type 0 = text, 5 = announcement, 4 = category group (kept so the UI can show the section a channel sits in).
+    // position is Discord's sidebar order within each list (categories among categories, channels within one).
     const channels = (Array.isArray(raw) ? raw : [])
       .filter((c) => [0, 4, 5].includes(c.type))
-      .map((c) => ({ id: String(c.id), name: String(c.name || ''), type: c.type, parentId: c.parent_id ? String(c.parent_id) : null }));
+      .map((c) => ({ id: String(c.id), name: String(c.name || ''), type: c.type, parentId: c.parent_id ? String(c.parent_id) : null,
+        position: Number.isFinite(c.position) ? c.position : 0 }));
     const body = { channels, generatedAt: now() };
     try { if (kv) await kv.put(CACHE_KEY, JSON.stringify(body)); } catch { /* cache is best-effort */ }
     return { ok: true, channels };

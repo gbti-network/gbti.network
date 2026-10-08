@@ -14,6 +14,7 @@ import { renderTemplate, renderBodyTemplate, recordDestinations } from '../../..
 import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
 import { mdToPlain } from '../../../membership/markdown-plain.mjs'; // sow-300
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
+import { orderDiscordChannels, discordChannelOptionsHtml } from '../discord-channel-order.mjs'; // the picker follows Discord's categories
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn' }; // sow-159: mastodon retired; sow-217: hashnode retired
 // SOW-137 follow-up: dev.to cross-posts the FULL article body, so the "Message template" field is actually
@@ -322,19 +323,12 @@ class GbtiSyndicateNow extends GbtiElement {
     const preview = rendersMarkdown(dest) ? rawPreview : mdToPlain(rawPreview);
     let channelRow = '';
     if (dest === 'discord') {
-      const groups = new Map();
-      for (const c of this._channels || []) {
-        const sec = c.section || 'Channels';
-        if (!groups.has(sec)) groups.set(sec, []);
-        groups.get(sec).push(c);
-      }
+      // Grouped under Discord's categories, in the sidebar's order (uncategorized channels first, as in Discord).
       const selected = this._channelId || '';
-      const opts = [...groups.entries()].map(([sec, list]) =>
-        `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
+      const opts = discordChannelOptionsHtml(this._channels || [], selected);
       // When the name list is unavailable the picker degrades to a manual channel-id input, never a dead end.
       const fwdSelected = this._forwardId ?? '';
-      const fwdOpts = `<option value=""${fwdSelected ? '' : ' selected'}>Do not forward</option>` + [...groups.entries()].map(([sec, list]) =>
-        `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === fwdSelected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
+      const fwdOpts = `<option value=""${fwdSelected ? '' : ' selected'}>Do not forward</option>` + discordChannelOptionsHtml(this._channels || [], fwdSelected);
       const preNote = this._preselectedNote === 'featured'
         ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>`
         : this._preselectedNote === 'category' ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : '';
@@ -522,11 +516,7 @@ class GbtiSyndicateNow extends GbtiElement {
     if (dest === 'discord' && !this._channels) {
       try {
         const r = await this.client.discordChannels();
-        const all = r?.channels ?? [];
-        const sections = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
-        this._channels = all
-          .filter((c) => c.type === 0 || c.type === 5)
-          .map((c) => ({ ...c, section: sections.get(c.parentId) || 'Channels' }));
+        this._channels = orderDiscordChannels(r?.channels ?? []); // text + announcement channels, in sidebar order
         this._chErr = null;
       } catch (err) { this._channels = []; this._chErr = err?.message || 'request failed'; }
       // Owner-decided default: the per-type FEATURED channel (#prompts for a prompt, etc.); the

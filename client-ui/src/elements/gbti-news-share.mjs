@@ -13,6 +13,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
 import { composeUrl } from '../social-composer.mjs';
+import { orderDiscordChannels, discordChannelOptionsHtml } from '../discord-channel-order.mjs'; // the picker follows Discord's categories
 import { channelLimit } from '../../../membership/syndication-channels.mjs';
 import {
   NEWS_SHARE_CHANNELS, NEWS_SHARE_LABELS, newsShareUrl, newsShareDraft, newsRedditComment, swapLink, formatNewsPost,
@@ -145,7 +146,7 @@ class GbtiNewsShare extends GbtiElement {
     if (!this.client?.discordChannels) { this._channels = []; return; }
     try {
       const r = await this.client.discordChannels();
-      this._channels = (r?.channels || []).filter((c) => c.type === 0 || c.type === 5);
+      this._channels = orderDiscordChannels(r?.channels || []); // text + announcement channels, in sidebar order
     } catch { this._channels = []; }
     this.render();
   }
@@ -199,7 +200,7 @@ class GbtiNewsShare extends GbtiElement {
     if (ch === 'discord') {
       const d = this._status?.discord || {};
       const chosen = this._discordChoice || d.channelId || d.mappedChannelId || '';
-      const opts = (this._channels || []).map((c) => `<option value="${esc(c.id)}"${c.id === chosen ? ' selected' : ''}>#${esc(c.name)}</option>`).join('');
+      const opts = discordChannelOptionsHtml(this._channels || [], chosen); // grouped under Discord's categories
       const picker = this._channels == null
         ? '<p class="note">Loading the Discord channels...</p>'
         : opts

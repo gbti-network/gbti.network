@@ -22641,11 +22641,11 @@ ${link}` : ""}`;
     function isPlainSafeLast(c) {
       return !isWhitespace(c) && c !== CHAR_COLON;
     }
-    function codePointAt(string, pos) {
-      const first = string.charCodeAt(pos);
+    function codePointAt(string, pos2) {
+      const first = string.charCodeAt(pos2);
       let second;
-      if (first >= 55296 && first <= 56319 && pos + 1 < string.length) {
-        second = string.charCodeAt(pos + 1);
+      if (first >= 55296 && first <= 56319 && pos2 + 1 < string.length) {
+        second = string.charCodeAt(pos2 + 1);
         if (second >= 56320 && second <= 57343) return (first - 55296) * 1024 + second - 56320 + 65536;
       }
       return first;
@@ -27305,6 +27305,46 @@ ${BLOCKED_PILL_CSS}
     return null;
   };
 
+  // client-ui/src/discord-channel-order.mjs
+  var TEXT2 = /* @__PURE__ */ new Set([0, 5]);
+  var CATEGORY = 4;
+  var pos = (c) => Number.isFinite(c?.position) ? c.position : 0;
+  var byId = (a, b) => {
+    const x = String(a?.id ?? "");
+    const y2 = String(b?.id ?? "");
+    return x.length - y2.length || (x < y2 ? -1 : x > y2 ? 1 : 0);
+  };
+  var byOrder = (a, b) => pos(a) - pos(b) || byId(a, b);
+  var escHtml = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  function orderDiscordChannels(channels) {
+    const all = Array.isArray(channels) ? channels.filter(Boolean) : [];
+    const cats = all.filter((c) => c.type === CATEGORY).sort(byOrder);
+    const text2 = all.filter((c) => TEXT2.has(c.type)).sort(byOrder);
+    const catIds = new Set(cats.map((c) => String(c.id)));
+    const out = text2.filter((c) => !c.parentId || !catIds.has(String(c.parentId))).map((c) => ({ ...c, category: null }));
+    for (const cat of cats) {
+      const name = String(cat.name || "");
+      for (const c of text2) if (c.parentId && String(c.parentId) === String(cat.id)) out.push({ ...c, category: name });
+    }
+    return out;
+  }
+  function discordChannelOptionsHtml(list, selected = "") {
+    const opt = (c) => `<option value="${escHtml(c.id)}"${String(c.id) === String(selected) ? " selected" : ""}>#${escHtml(c.name)}</option>`;
+    let html = "";
+    let open = null;
+    for (const c of Array.isArray(list) ? list : []) {
+      const cat = c?.category || null;
+      if (cat !== open) {
+        if (open !== null) html += "</optgroup>";
+        if (cat !== null) html += `<optgroup label="${escHtml(cat)}">`;
+        open = cat;
+      }
+      html += opt(c);
+    }
+    if (open !== null) html += "</optgroup>";
+    return html;
+  }
+
   // client-ui/src/elements/gbti-news-share.mjs
   var PILLS = [...NEWS_SHARE_CHANNELS, "discord", "devto"];
   var NOTES = {
@@ -27449,7 +27489,7 @@ ${BLOCKED_PILL_CSS}
       }
       try {
         const r = await this.client.discordChannels();
-        this._channels = (r?.channels || []).filter((c) => c.type === 0 || c.type === 5);
+        this._channels = orderDiscordChannels(r?.channels || []);
       } catch {
         this._channels = [];
       }
@@ -27500,7 +27540,7 @@ ${BLOCKED_PILL_CSS}
       if (ch === "discord") {
         const d = this._status?.discord || {};
         const chosen = this._discordChoice || d.channelId || d.mappedChannelId || "";
-        const opts = (this._channels || []).map((c) => `<option value="${esc2(c.id)}"${c.id === chosen ? " selected" : ""}>#${esc2(c.name)}</option>`).join("");
+        const opts = discordChannelOptionsHtml(this._channels || [], chosen);
         const picker = this._channels == null ? '<p class="note">Loading the Discord channels...</p>' : opts ? `<select id="ns-dc" data-dc ${d.posted ? "disabled" : ""}>${chosen ? "" : '<option value="" selected>Pick a channel</option>'}${opts}</select>` : '<p class="note">Could not load the Discord channels, so the story goes to the channel for its category.</p>';
         return `<div class="field"><label for="ns-dc">Channel</label>${picker}</div><div class="field"><span class="lab">Message</span><div class="preview">${discordPreviewHtml(formatNewsPost(this._story || {}))}</div></div>`;
       }
@@ -31324,7 +31364,7 @@ ${BLOCKED_PILL_CSS}
     return upgradePromptKind(m) || "restricted";
   }
   var copyFor = (membership) => lockedAccountCopy(membership === "trialing" ? "none" : membership);
-  var escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var escHtml2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
     pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
     box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
@@ -31341,7 +31381,7 @@ ${BLOCKED_PILL_CSS}
   function choiceHtml(ch) {
     const tag = ch.href ? `Opens the website editor ${svg5("out")}` : "Opens the share box here";
     const inner = `<span class="sc-tile">${svg5(ch.icon)}</span>
-      <span class="sc-txt"><b class="sc-title">${escHtml(ch.title)}</b><span class="sc-desc">${escHtml(ch.desc)}</span><span class="sc-tag">${tag}</span></span>
+      <span class="sc-txt"><b class="sc-title">${escHtml2(ch.title)}</b><span class="sc-desc">${escHtml2(ch.desc)}</span><span class="sc-tag">${tag}</span></span>
       <span class="sc-chev">${svg5("chev")}</span>`;
     return ch.href ? `<li><a class="sc-choice" href="${ch.href}" target="_blank" rel="noopener" data-sc-choice="${ch.key}">${inner}</a></li>` : `<li><button class="sc-choice" type="button" data-sc-choice="${ch.key}">${inner}</button></li>`;
   }
@@ -31365,12 +31405,12 @@ ${BLOCKED_PILL_CSS}
   </div>`;
     }
     const copy = copyFor(membership);
-    const cta = copy.cta ? `<a class="sc-cta" href="${escHtml(copy.cta.href)}" target="_blank" rel="noopener">${escHtml(copy.cta.label)} ${svg5("arrow")}</a>` : "";
+    const cta = copy.cta ? `<a class="sc-cta" href="${escHtml2(copy.cta.href)}" target="_blank" rel="noopener">${escHtml2(copy.cta.label)} ${svg5("arrow")}</a>` : "";
     const how = kind2 === "join" ? howLink("sc-how") : "";
     const close = copy.cta ? "" : '<button class="sc-close" type="button" data-sc-close>Close</button>';
-    return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="${escHtml(kind2)}">${head}
-    <h2 id="sc-title">${escHtml(copy.heading)}</h2>
-    <p class="sc-body">${escHtml(copy.body)}</p>
+    return `<div class="sc-dialog" role="dialog" aria-modal="true" aria-labelledby="sc-title" data-sc-kind="${escHtml2(kind2)}">${head}
+    <h2 id="sc-title">${escHtml2(copy.heading)}</h2>
+    <p class="sc-body">${escHtml2(copy.body)}</p>
     <div class="sc-acts">${cta}${how}${close}</div>
   </div>`;
   }
