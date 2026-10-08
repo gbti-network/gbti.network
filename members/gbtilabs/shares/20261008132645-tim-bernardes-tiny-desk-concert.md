@@ -12,7 +12,8 @@ tags:
   - tiny-desk
   - brazilian-music
   - mpb
-image: https://i.ytimg.com/vi/ey7ZHhcv1dE/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261008132645-tim-bernardes-tiny-desk-concert-866bf482.webp
+imageSource: https://i.ytimg.com/vi/ey7ZHhcv1dE/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@nprmusic
 creatorName: NPR Music
 id: 20261008132645-tim-bernardes-tiny-desk-concert
