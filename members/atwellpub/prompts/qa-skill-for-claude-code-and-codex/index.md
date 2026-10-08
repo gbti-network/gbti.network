@@ -19,6 +19,7 @@ tags:
   - agent-skills
   - planning
   - workflow
+image: ./images/checklist-marker.jpg
 publishedAt: '2026-07-30T19:37:31.690Z'
 updatedAt: '2026-10-08T22:20:40.359Z'
 type: prompt
@@ -40,3 +41,5 @@ This skill ships with several parameters, however you will probably never need t
 - **`/qa continue`** or **`/qa proceed`** is the same, minus the approval round. You answer, it builds. Still plan mode, so nothing gets written while the questions are open.
 - **`/qa deep`** widens the scope to the full six-category sweep in the skill file: the request, the governing doc, the audit findings, silent defaults, the decisions that are inherently yours, and conflicts with existing conventions. Use it when you are starting real work, not when you are closing out a reply.
 - **`/qa <anything else>`** scopes to a subject. `"/qa the rate limiter"` asks everything unresolved about the rate limiter specifically.
+
+Cover photo by [Towfiqu barbhuiya](https://www.pexels.com/@towfiqu-barbhuiya-3440682/) on [Pexels](https://www.pexels.com/photo/a-marker-near-checked-circles-on-white-paper-11412596/), free to use under the [Pexels License](https://www.pexels.com/license/).
