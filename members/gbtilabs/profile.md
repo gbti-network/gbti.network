@@ -5,7 +5,10 @@ directory: false
 skills: []
 roles: []
 visibility: public
-headline: Creative. Curative. Community. Cooperative.
+status: published
+type: profile
+username: gbtilabs
+headline: Connecting creators, linking lives together.
 avatar: https://secure.gravatar.com/avatar/061a44e977c1338f8b6d2e0e36b36f1a?s=512&d=mm
 links:
   github: https://github.com/gbti-network
@@ -18,9 +21,6 @@ links:
   dailydev: https://daily.dev/squads/gbti_network
   substack: https://gbti.substack.com/
   hashnode: https://gbti.hashnode.dev/
-status: published
-type: profile
-username: gbtilabs
 ---
 
 A professional co-op network where members publish products, contribute articles, and share profits.
