@@ -2,7 +2,7 @@
 id: intro-qa-skill-for-claude-code-and-codex
 targetType: prompt
 targetSlug: qa-skill-for-claude-code-and-codex
-createdAt: '2026-10-08T22:15:54.857Z'
+createdAt: '2026-10-08T22:20:40.801Z'
 status: published
 visibility: public
 authorNote: true
@@ -10,18 +10,4 @@ type: comment
 author: atwellpub
 ---
 
-I wrote this because my work sprints kept ending the same way: with raised questions. The work would
-wrap up, and only then would the open decisions surface, at the point where acting on them meant
-redoing something.
-
-So I gave myself a way to invoke the pass I wanted, on demand. Typing `/qa` gets the questions asked, in
-plan mode, before anything is written. `/qa continue` does the same and then just builds once I have
-answered.
-
-I keep the default narrow on purpose. It reads only what the agent just told me and asks about that,
-because that is the case I actually hit, and a full sweep of the repository on every invocation is
-more tokens than the job is worth. `/qa deep` is there for when I do want the wide pass.
-
-The rest of the file exists to keep the questions worth answering: audit the repository first so it
-never asks what the code already says, and say plainly when there is nothing left to decide rather than
-inventing something to ask.
+I wrote this because my work sprints kept ending the same way: with raised questions buried in a verbose summary. I really enjoy Claud Code's plan mode for answering questions. I like how it offers options and an intake input in case I do not like the provided options. Typing `/qa` tells Claude Code to consider all questions recently asked and switch from auto to plan mode to get a round of answers from me. It may be my most-used custom skill.
