@@ -11,7 +11,7 @@ import { shareSchema } from '../client/src/schemas.mjs';
 import { buildShareFile, shareSummary } from '../client/src/content-ops.mjs';
 import { editInputFor } from '../client-ui/src/share-post-core.mjs';
 import { platformLabel } from '../client/src/share-source.mjs';
-import { cardSourceFor, newsHostNames, newsCardSource, hostOfUrl } from '../src/lib/link-card.mjs';
+import { cardSourceFor, cardTitleFor, newsHostNames, newsCardSource, hostOfUrl } from '../src/lib/link-card.mjs';
 import { readNewsSourceList } from '../src/lib/news-source-list.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -97,6 +97,18 @@ test('the card names, in order: the saved name, the news source pool, the platfo
   assert.equal(cardSourceFor({}, hosts), '', 'no link: the card keeps the site name');
   assert.equal(cardSourceFor({ url: 'javascript:alert(1)' }, hosts), '');
   assert.equal(hostOfUrl('https://m.youtube.com/x'), 'youtube.com');
+});
+
+test('the card names the source once: a title that already ends with it is left as it is', () => {
+  assert.equal(cardTitleFor('Why Physicists Think Space May Have a Holographic Description', 'Quanta Magazine'), 'Why Physicists Think Space May Have a Holographic Description | Quanta Magazine');
+  for (const [title, source] of [['Reddit Citations Are Dropping in ChatGPT | Promptwatch', 'Promptwatch'], ['Ninety minutes: watching attackers - Patchstack', 'Patchstack'],
+    ['The future of the website · Joost.blog', 'Joost.blog'], ['SOS Does Not Stand for Anything \u2013 Word Smarts', 'word smarts'], ['A post \u2014 www.example.com', 'example.com']]) {
+    assert.equal(cardTitleFor(title, source), title, title);
+  }
+  assert.equal(cardTitleFor('Lane 8 - Summer 2026 Mixtape', 'YouTube'), 'Lane 8 - Summer 2026 Mixtape | YouTube', 'a separator alone is not the source');
+  assert.equal(cardTitleFor('Protecting our commons \u2014 Codeberg News', 'blog.codeberg.org'), 'Protecting our commons \u2014 Codeberg News | blog.codeberg.org');
+  assert.equal(cardTitleFor('Kotaku-adjacent', 'Kotaku'), 'Kotaku-adjacent | Kotaku', 'a hyphen inside a word is not a separator');
+  assert.equal(cardTitleFor('Title', ''), 'Title');
 });
 
 test('the platform label comes from the fixed hosts only', () => {

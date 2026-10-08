@@ -44,6 +44,20 @@ export function cardSourceFor({ url, sourceName } = {}, hostNames = new Map()) {
   return str(sourceName).slice(0, 80) || hostNames.get(host) || platformLabel(url) || host;
 }
 
+/**
+ * The card's title: the page title, then " | <source>", unless the title already ends with that name after a separator.
+ * A share's title is often the source page's own, and that one often ends with the publication ("Reddit Citations Are
+ * Dropping in ChatGPT | Promptwatch"), which made the card repeat it. Compared case-insensitively, ignoring "www.".
+ */
+export function cardTitleFor(title, source) {
+  const t = str(title);
+  const s = str(source);
+  if (!t || !s) return t;
+  const norm = (v) => v.toLowerCase().replace(/^www\./, '');
+  const tail = t.split(/\s[|·•\u2013\u2014-]\s/).pop();
+  return norm(tail) === norm(s) ? t : `${t} | ${s}`;
+}
+
 /** The name a news story's card ends with: the publication from the pool by the story's source id, else the
  *  story link's domain. Never the raw id: an id like `object-object` reads as a fault on a card. '' when neither. */
 export function newsCardSource(story = {}, sources) {

@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cardTitleFor } from '../src/lib/link-card.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SITE_NAME = 'GBTI Network';
@@ -55,7 +56,7 @@ test('DRIFT: BaseLayout still composes fullTitle by appending the site name', ()
   assert.match(src, /<title>\{fullTitle\}<\/title>/);
   // sow-445: og:title is cardTitle, which IS fullTitle unless a page names a card source (a share's publication).
   assert.match(src, /property="og:title" content=\{cardTitle\}/);
-  assert.match(src, /const cardTitle = cardBrand && pageTitle !== siteName \? `\$\{pageTitle\} \| \$\{cardBrand\}` : fullTitle;/);
+  assert.match(src, /const cardTitle = cardBrand && pageTitle !== siteName \? cardTitleFor\(pageTitle, cardBrand\) : fullTitle;/);
 });
 
 // sow-445 (owner, 2026-10-08): a link card names the source ("| Quanta Magazine"); the tab keeps the site name.
@@ -67,12 +68,13 @@ test('a card source changes og:title only, and only for a titled page', () => {
     const siteName = SITE_NAME; const pageTitle = String(title ?? '').trim() || siteName;
     const fullTitle = pageTitle === siteName ? pageTitle : `${pageTitle} | ${siteName}`;
     const cardBrand = String(cardSource ?? '').trim();
-    return { tab: fullTitle, card: cardBrand && pageTitle !== siteName ? `${pageTitle} | ${cardBrand}` : fullTitle };
+    return { tab: fullTitle, card: cardBrand && pageTitle !== siteName ? cardTitleFor(pageTitle, cardBrand) : fullTitle };
   };
   assert.deepEqual(compose('Holography', 'Quanta Magazine'), { tab: `Holography | ${SITE_NAME}`, card: 'Holography | Quanta Magazine' });
   assert.deepEqual(compose('Holography', undefined), { tab: `Holography | ${SITE_NAME}`, card: `Holography | ${SITE_NAME}` });
   assert.deepEqual(compose('Holography', '  '), { tab: `Holography | ${SITE_NAME}`, card: `Holography | ${SITE_NAME}` });
   assert.deepEqual(compose('', 'Quanta Magazine'), { tab: SITE_NAME, card: SITE_NAME }, 'never " | Quanta Magazine" alone');
+  assert.deepEqual(compose('Reddit Citations Are Dropping | Promptwatch', 'Promptwatch'), { tab: `Reddit Citations Are Dropping | Promptwatch | ${SITE_NAME}`, card: 'Reddit Citations Are Dropping | Promptwatch' }, 'the source named once');
 });
 
 // ---------------------------------------------------------------------------
