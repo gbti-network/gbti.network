@@ -674,3 +674,8 @@ sources:
     url: https://noted.lol/rss/
     description: noted.lol
     enabled: true
+  - id: renwick
+    name: Renwick
+    url: https://rennwick.com/insights/feed/
+    description: rennwick.com
+    enabled: true
