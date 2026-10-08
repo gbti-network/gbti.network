@@ -24,7 +24,7 @@ import { handleDrafts } from './membership-drafts.mjs'; // SOW-157: the hosted d
 import { handleDraftImage } from './membership-draft-images.mjs'; // the staged image bytes beside those drafts
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
 import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
-import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
+import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews, publicNewsItem } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { handleShoptalk } from './membership-shoptalk.mjs'; // sow-314: the Shop Talk call guest list
 import { handleDigestSwitch } from './membership-digest.mjs'; // sow-202: the member's weekly digest switch
@@ -271,6 +271,14 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
     if (method === 'GET') {
       const r = await publicNews(request, env);
       return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'public, max-age=300' });
+    }
+  }
+  // sow-445: one story of that same public list, by guid (the story page and its link card).
+  if (pathname === '/news/item') {
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+    if (method === 'GET') {
+      const r = await publicNewsItem(request, env);
+      return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': r.status === 200 ? 'public, max-age=300' : 'public, max-age=60' });
     }
   }
 

@@ -2,8 +2,8 @@
 // sow-139 (owner-directed, 2026-07-21): the news item's deep-linked expanded view, mirroring the
 // extension's news reader. News items live only in the worker (no static build data), so this is a
 // CLIENT-RENDERED shell (the embed.astro pattern): noindex, keyed by ?g=<guid> (+ an optional
-// &s=<source> hint that narrows the lookup window per publication). It fetches the anonymous
-// /news/feed, the site's own /news-sources.json (the source meta card), and /comments-index.json
+// &s=<source> hint that narrows the lookup window per publication). It fetches the story from the anonymous
+// /news/item?g= (sow-445; /news/feed is the fallback), the site's own /news-sources.json (the source meta card), and /comments-index.json
 // (the GATED discussion: public comment bodies render, members comments render as locked rows; the
 // index strips members bodies at build, src/lib/comments-index.mjs). The source FOLLOW button routes
 // per the owner directive: extension present + signed in -> the gbti:open relay into the extension's
@@ -164,13 +164,19 @@ import { SIGNUP_BASE } from '../../lib/membership';
       };
 
       const feedUrl = base + '/news/feed?limit=60' + (sourceHint && /^[a-z0-9][a-z0-9 _.-]{0,60}$/i.test(sourceHint) ? '&source=' + encodeURIComponent(sourceHint) : '');
+      // sow-445: the story by its id first (two reads whatever the source, and the whole month, as "left the stream"
+      // promises), which is also how its link card finds it. The list lookup stays as the fallback, for a Worker without
+      // the route and for any failure of it; for a publication that posts rarely it reads back through the month.
+      const fromList = () => fetch(feedUrl).then((r) => (r.ok ? r.json() : Promise.reject(new Error('feed'))))
+        .then((feed) => (Array.isArray(feed?.items) ? feed.items : []).find((x: any) => String(x?.guid) === guid) || null);
+      const story = guid
+        ? fetch(base + '/news/item?g=' + encodeURIComponent(guid)).then((r) => (r.ok ? r.json() : null)).then((b) => b?.item || fromList(), () => fromList())
+        : Promise.resolve(null);
       Promise.all([
-        fetch(feedUrl).then((r) => (r.ok ? r.json() : Promise.reject(new Error('feed')))),
+        story,
         fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         fetch('/comments-index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      ]).then(([feed, sources, commentsIdx]) => {
-        const items = Array.isArray(feed?.items) ? feed.items : [];
-        const it = items.find((x: any) => String(x?.guid) === guid);
+      ]).then(([it, sources, commentsIdx]) => {
         if (!guid || !it) { missing(); return; }
 
         document.title = String(it.title || 'News') + ` | ${SITE_NAME}`;

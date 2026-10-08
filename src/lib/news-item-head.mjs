@@ -1,7 +1,7 @@
 // sow-445 (owner, 2026-10-08): a news story posted with a gbti.network link gets ITS OWN card. The story page draws
 // itself in the browser, and preview bots (LinkedIn, X, Facebook, Slack, Discord) never run that, so every story
 // unfurled as the empty shell: "News | GBTI Network", a generic line, our default picture, and one shared address.
-// functions/news/item/index.js finds the story the same way the page does and hands it here.
+// functions/news/item/index.js looks the story up by its id, as the page does, and hands it here.
 //
 // Pure (string in, string out) so node --test exercises it. ALL OR NOTHING, like personalizeHead: if any tag this
 // rewrites is missing, the page goes out untouched rather than half describing a story.
@@ -38,9 +38,9 @@ export function storyRequest(url) {
   return { guid, source: SAFE_SOURCE.test(s) ? s : '' };
 }
 
-/** The public feed address the page itself reads for this story (src/pages/news/item.astro). */
-export function feedUrlFor(base, { source } = {}) {
-  return `${base}/news/feed?limit=60${source ? `&source=${encodeURIComponent(source)}` : ''}`;
+/** The signup Worker's one-story lookup (GET /news/item?g=), which the page reads too (src/pages/news/item.astro). */
+export function itemUrlFor(base, { guid } = {}) {
+  return `${base}/news/item?g=${encodeURIComponent(String(guid || ''))}`;
 }
 
 const text = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
@@ -54,14 +54,12 @@ const cut = (s, max) => {
 const fixUrl = (u) => String(u).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&');
 
 /**
- * What the card says for one story, or null when the feed does not hold it (the page then shows "left the
+ * What the card says for one story (the lookup's `item`), or null when there is none (the page then shows "left the
  * stream", and the card stays generic to match). `sources` is /news-sources.json.
  */
-export function storyCard(feed, req, sources) {
-  const items = Array.isArray(feed?.items) ? feed.items : [];
-  const it = req && items.find((x) => String(x?.guid) === req.guid);
+export function storyCard(it, req, sources) {
   const headline = text(it?.title);
-  if (!it || !headline) return null;
+  if (!req || !it || String(it.guid) !== req.guid || !headline) return null;
   const brand = newsCardSource(it, sources);
   const image = text(it.image) ? fixUrl(text(it.image)) : '';
   return {

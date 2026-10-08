@@ -10,7 +10,7 @@
 // authorizeMember (denies banned); member-only content (decrypt/encrypt/Shares/publishing) stays on authorizePaid.
 import { authorizeSignedIn } from './membership-content.mjs';
 import { recordAuthedUsage } from './analytics.mjs'; // SOW-061 P3: news_view usage by tier
-import { queryItems as kvQueryItems, loadIndex as kvLoadIndex } from './news/src/store.mjs';
+import { queryItems as kvQueryItems, loadIndex as kvLoadIndex, findPublicItem as kvFindPublicItem } from './news/src/store.mjs';
 import { publicItem, categoriesWithCounts, sourcesWithCounts } from './news/src/api.mjs';
 
 // A category label is config-defined (news/config/categories.mjs); a source id is config-defined
@@ -79,6 +79,16 @@ export async function membershipNews(request, env, { authorize = authorizeSigned
 export async function publicNews(request, env, { queryItems = kvQueryItems } = {}) {
   if (!newsReady(env)) return unavailable();
   return readFeed(request, env, queryItems, 40, 60);
+}
+
+/** GET /news/item?g=<guid> -> { item } with NO auth (sow-445): one story of the public list, for the story page and
+ *  its link card. 404 when the window does not hold it (or it is pulled, blocked or has no picture). */
+export async function publicNewsItem(request, env, { findItem = kvFindPublicItem } = {}) {
+  if (!newsReady(env)) return unavailable();
+  const guid = new URL(request.url).searchParams.get('g') || '';
+  if (!guid || guid.length > 2000) return { status: 400, body: { error: 'bad_request', message: 'a story id (g) is required' } };
+  const it = await findItem(env, guid);
+  return it ? { status: 200, body: { ok: true, item: publicItem(it) } } : { status: 404, body: { error: 'not_found' } };
 }
 
 /** GET /membership/news-categories -> { categories } (the classifier label set + live counts). */

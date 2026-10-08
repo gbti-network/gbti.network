@@ -1,12 +1,16 @@
 // sow-445 (owner, 2026-10-08): a news story posted with a gbti.network link unfurls as itself, "<headline> |
 // <publication>" with its summary and picture, instead of the shell every story shared. The story page draws itself in
 // the browser, which no preview bot runs, so functions/news/item/index.js fills the card before the page leaves. It
-// FAILS CLOSED to the plain page on every miss.
+// FAILS CLOSED to the plain page on every miss. The story comes from the signup Worker's GET /news/item?g=, two reads
+// whatever the source; the first build used the page's list lookup, which measured over 3 s at the edge for a
+// publication that posts rarely (Databricks), so its card stayed generic live.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { storyRequest, feedUrlFor, storyCard, newsItemHead, isPreviewBot, SITE_NAME } from '../src/lib/news-item-head.mjs';
+import { storyRequest, itemUrlFor, storyCard, newsItemHead, isPreviewBot, SITE_NAME } from '../src/lib/news-item-head.mjs';
 import { onRequest } from '../functions/news/item/index.js';
+import { findPublicItem } from '../workers/signup/news/src/store.mjs';
+import { publicNewsItem } from '../workers/signup/membership-news.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -26,30 +30,32 @@ test('the request: the guid and a safe source hint, as the page reads them', () 
   assert.deepEqual(storyRequest('https://gbti.network/news/item/?g=abc&s=%3Cscript%3E'), { guid: 'abc', source: '' }, 'an unsafe hint is dropped');
   assert.equal(storyRequest('https://gbti.network/news/item/'), null);
   assert.equal(storyRequest('https://gbti.network/news/item/?g=' + 'a'.repeat(2001)), null);
-  assert.equal(feedUrlFor('https://signup.gbti.network', REQ), 'https://signup.gbti.network/news/feed?limit=60&source=ars-technica');
-  assert.equal(feedUrlFor('https://signup.gbti.network', { source: '' }), 'https://signup.gbti.network/news/feed?limit=60');
-  // the page's own lookup, so the card describes a story exactly when the page can show it
-  assert.match(read('src/pages/news/item.astro'), /base \+ '\/news\/feed\?limit=60' \+ \(sourceHint && \/\^\[a-z0-9\]\[a-z0-9 _\.-\]\{0,60\}\$\/i\.test\(sourceHint\)/);
+  assert.equal(itemUrlFor('https://signup.gbti.network', REQ), `https://signup.gbti.network/news/item?g=${encodeURIComponent(STORY.guid)}`);
+  // the page's own lookup, so the card describes a story exactly when the page can show it; the list stays its fallback
+  const page = read('src/pages/news/item.astro');
+  assert.match(page, /fetch\(base \+ '\/news\/item\?g=' \+ encodeURIComponent\(guid\)\)\.then\(\(r\) => \(r\.ok \? r\.json\(\) : null\)\)\.then\(\(b\) => b\?\.item \|\| fromList\(\), \(\) => fromList\(\)\)/);
+  assert.match(page, /const fromList = \(\) => fetch\(feedUrl\)/);
 });
 
 test('the card: headline | publication for the card, headline | GBTI Network for the tab, its own address', () => {
-  const card = storyCard({ items: [{ guid: 'other' }, STORY] }, REQ, SOURCES);
+  const card = storyCard(STORY, REQ, SOURCES);
   assert.equal(card.cardTitle, 'Chips & "dips" | Ars Technica');
   assert.equal(card.tabTitle, `Chips & "dips" | ${SITE_NAME}`);
   assert.equal(card.description, 'A whole sentence about chips.');
   assert.equal(card.image, 'https://cdn.arstechnica.net/a.jpg?w=1&h=2', 'an escaped ampersand is decoded, as the page does');
   assert.equal(card.url, `https://gbti.network/news/item/?g=${encodeURIComponent(STORY.guid)}&s=ars-technica`);
-  assert.equal(storyCard({ items: [STORY] }, { guid: 'gone', source: '' }, SOURCES), null, 'a story the feed no longer holds');
-  assert.equal(storyCard(null, REQ, SOURCES), null);
-  assert.equal(storyCard({ items: [STORY] }, REQ, null).cardTitle, 'Chips & "dips" | arstechnica.com', 'no source list: the domain');
-  assert.equal(storyCard({ items: [{ ...STORY, image: 'http://insecure/a.jpg' }] }, REQ, SOURCES).image, '', 'a card picture must be https');
-  const long = storyCard({ items: [{ ...STORY, summary: `${'word '.repeat(120)}end.` }] }, REQ, SOURCES).description;
+  assert.equal(storyCard(STORY, { guid: 'another', source: '' }, SOURCES), null, 'a story that is not the one asked for');
+  assert.equal(storyCard(null, REQ, SOURCES), null, 'no story');
+  assert.equal(storyCard({ ...STORY, title: '  ' }, REQ, SOURCES), null, 'no headline');
+  assert.equal(storyCard(STORY, REQ, null).cardTitle, 'Chips & "dips" | arstechnica.com', 'no source list: the domain');
+  assert.equal(storyCard({ ...STORY, image: 'http://insecure/a.jpg' }, REQ, SOURCES).image, '', 'a card picture must be https');
+  const long = storyCard({ ...STORY, summary: `${'word '.repeat(120)}end.` }, REQ, SOURCES).description;
   assert.ok(long.length <= 303 && long.endsWith('...'), `trimmed on a word (${long.length})`);
   assert.equal(SITE_NAME, /SITE_NAME = '([^']+)'/.exec(read('src/lib/brand.ts'))[1]);
 });
 
 test('the head: every card tag replaced and escaped, the default picture size gone, nothing else touched', () => {
-  const card = storyCard({ items: [STORY] }, REQ, SOURCES);
+  const card = storyCard(STORY, REQ, SOURCES);
   const { html, changed } = newsItemHead(HEAD, card);
   assert.equal(changed, true);
   assert.match(html, /<title>Chips &amp; &quot;dips&quot; \| GBTI Network<\/title>/);
@@ -65,7 +71,7 @@ test('the head: every card tag replaced and escaped, the default picture size go
 });
 
 test('the head is all or nothing, and a card with no picture keeps the default one and its size', () => {
-  const card = storyCard({ items: [STORY] }, REQ, SOURCES);
+  const card = storyCard(STORY, REQ, SOURCES);
   for (const tag of ['<link rel="canonical" href="https://gbti.network/news/item/">', '<meta name="twitter:image" content="https://gbti.network/og-image.png">', '<meta property="og:url" content="https://gbti.network/news/item/">']) {
     const r = newsItemHead(HEAD.replace(tag, ''), card);
     assert.deepEqual(r, { html: HEAD.replace(tag, ''), changed: false }, `without ${tag.slice(0, 30)}`);
@@ -104,8 +110,8 @@ async function withFetch(fake, fn) {
 }
 
 test('the function fills the card from the feed, keeps the static headers, and drops the stale length and etag', async () => {
-  const { result: res, calls } = await withFetch(async () => Response.json({ items: [STORY] }), () => onRequest(ctx(URL1)));
-  assert.deepEqual(calls, ['https://signup.gbti.network/news/feed?limit=60&source=ars-technica']);
+  const { result: res, calls } = await withFetch(async () => Response.json({ ok: true, item: STORY }), () => onRequest(ctx(URL1)));
+  assert.deepEqual(calls, [`https://signup.gbti.network/news/item?g=${encodeURIComponent(STORY.guid)}`]);
   const body = await res.text();
   assert.match(body, /og:title" content="Chips &amp; &quot;dips&quot; \| Ars Technica"/);
   assert.equal(res.headers.get('x-frame-options'), 'DENY', 'the site\'s security headers ride along');
@@ -114,9 +120,10 @@ test('the function fills the card from the feed, keeps the static headers, and d
 
 test('every miss serves the plain page: no guid, a gone story, a failed or slow lookup, a POST, a non-HTML answer', async () => {
   const plain = async (c, fake) => (await withFetch(fake, () => onRequest(c))).result.text();
-  const story = async () => Response.json({ items: [STORY] });
+  const story = async () => Response.json({ ok: true, item: STORY });
   assert.equal(await plain(ctx('https://gbti.network/news/item/'), story), HEAD);
-  assert.equal(await plain(ctx(URL1), async () => Response.json({ items: [{ guid: 'other', title: 'x' }] })), HEAD);
+  assert.equal(await plain(ctx(URL1), async () => Response.json({ error: 'not_found' }, { status: 404 })), HEAD);
+  assert.equal(await plain(ctx(URL1), async () => Response.json({ ok: true, item: { ...STORY, guid: 'other' } })), HEAD);
   assert.equal(await plain(ctx(URL1), async () => new Response('', { status: 502 })), HEAD);
   assert.equal(await plain(ctx(URL1), async () => { throw new Error('network'); }), HEAD);
   assert.equal(await plain(ctx(URL1), async () => new Response('not json', { status: 200 })), HEAD);
@@ -142,7 +149,7 @@ test('only a preview fetcher waits for the card; a person gets the page at once,
   for (const ua of [CHROME, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', '']) {
     assert.equal(isPreviewBot(ua), false, ua);
   }
-  const { result, calls } = await withFetch(async () => Response.json({ items: [STORY] }), () => onRequest(ctx(URL1, { ua: CHROME })));
+  const { result, calls } = await withFetch(async () => Response.json({ ok: true, item: STORY }), () => onRequest(ctx(URL1, { ua: CHROME })));
   assert.equal(await result.text(), HEAD);
   assert.deepEqual(calls, [], 'no lookup for a person');
 });
@@ -150,4 +157,42 @@ test('only a preview fetcher waits for the card; a person gets the page at once,
 test('the function never logs', () => {
   const src = read('functions/news/item/index.js');
   assert.doesNotMatch(src.replace(/^\s*\/\/.*$/gm, ''), /console\./);
+});
+
+// The Worker side: one story by guid, two reads, the same guards as a listed story.
+function newsEnv({ removed = {}, banwords = [] } = {}) {
+  const m = new Map(Object.entries({
+    'feed:v2:guids': JSON.stringify({ [STORY.guid]: '2026-10-08', 'no-pic': '2026-10-08', 'old-day': '2026-09-01' }),
+    'feed:v2:day:2026-10-08': JSON.stringify([{ ...STORY, imgTried: 2 }, { ...STORY, guid: 'no-pic', image: null }]), // imgTried: stored, never public
+    'feed:v2:day:2026-09-01': JSON.stringify([]),
+    'feed:v2:removed': JSON.stringify(removed),
+    'feed:v2:banwords': JSON.stringify(banwords),
+  }));
+  const reads = [];
+  return { reads, NEWS_KV: { get: async (k) => { reads.push(k); return m.get(k) ?? null; }, put: async (k, v) => { m.set(k, v); } } };
+}
+
+test('the store finds one story by guid in its day file, and serves none it would not list', async () => {
+  const env = newsEnv();
+  assert.equal((await findPublicItem(env, STORY.guid))?.title, STORY.title);
+  assert.ok(env.reads.length <= 4 && !env.reads.includes('feed:v2:index'), `a fixed handful of reads, never the month (${env.reads.join(', ')})`);
+  assert.equal(await findPublicItem(newsEnv(), 'unknown'), null);
+  assert.equal(await findPublicItem(newsEnv(), 'no-pic'), null, 'a story without its own picture is not listed, so not served');
+  assert.equal(await findPublicItem(newsEnv(), 'old-day'), null, 'the guid map names a day that no longer holds it');
+  assert.equal(await findPublicItem(newsEnv({ removed: { [STORY.guid]: { at: 1 } } }), STORY.guid), null, 'a pulled story');
+  assert.equal(await findPublicItem(newsEnv({ banwords: ['chips'] }), STORY.guid), null, 'a blocked word');
+  assert.equal(await findPublicItem(newsEnv(), ''), null);
+});
+
+test('GET /news/item: the story in its public shape, 404 when it is not served, 400 without an id', async () => {
+  const get = (q) => publicNewsItem(new Request(`https://signup.gbti.network/news/item${q}`), newsEnv());
+  const ok = await get(`?g=${encodeURIComponent(STORY.guid)}`);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.item.title, STORY.title);
+  assert.equal('imgTried' in ok.body.item, false, 'the same public shape as the feed');
+  assert.equal((await get('?g=unknown')).status, 404);
+  assert.equal((await get('')).status, 400);
+  assert.equal((await publicNewsItem(new Request('https://x/news/item?g=a'), {})).status, 502, 'no news store bound');
+  const routes = read('workers/signup/member-routes.mjs');
+  assert.match(routes, /if \(pathname === '\/news\/item'\) \{\n\s*if \(method === 'OPTIONS'\)[^\n]*\n\s*if \(method === 'GET'\) \{\n\s*const r = await publicNewsItem\(request, env\);/);
 });

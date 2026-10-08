@@ -160,6 +160,23 @@ export async function commitIngest(env, { freshItems = [], updatedItems = [], ch
 }
 
 /**
+ * sow-445: ONE public story by guid, in two reads whatever its source: the guid map names its day, and the day file
+ * holds it. A source-filtered list query reads back through the month for a publication that posts rarely (measured
+ * at over a second for Databricks), which is too slow for a link-preview fetcher. The same guards as a listed story:
+ * a pulled one, one a blocked word catches, and one without its own picture are not served. Null when it is not here.
+ */
+export async function findPublicItem(env, guid) {
+  if (!guid) return null;
+  const day = (await loadGuids(env))[guid];
+  if (!day) return null;
+  const removed = await loadRemoved(env);
+  if (removed[guid]) return null;
+  const it = (await loadDay(env, day)).find((x) => x && x.guid === guid);
+  if (!it || !it.image || blockedBy(it, banwordMatcher(await loadBanwords(env)))) return null;
+  return it;
+}
+
+/**
  * sow-338: a superadmin pulls one story out of the index.
  *
  * The guid STAYS in the guid map and a tombstone is written, so the story is skipped on every later fetch and
