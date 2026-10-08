@@ -52,7 +52,7 @@ export const SOCIAL_LINKS = [
   // MEMBER linking their own Hashnode profile. That is a different thing from GBTI syndicating to its own
   // publication, and the owner kept it (sow-217 question 1), matching how sow-159 left member Mastodon values.
 
-  { label: 'Daily.dev', href: 'https://daily.dev/squads/gbti_network/', path: siDailydotdev.path },
+  { label: 'Daily.dev', href: 'https://daily.dev/squads/gbti/', path: siDailydotdev.path },
   { label: 'Discord', href: '/membership/', path: siDiscord.path },
   { label: 'Reddit', href: 'https://www.reddit.com/r/GBTI_network', path: siReddit.path },
   // sow-159: Mastodon retired (2026-07-28, fediverse turn-away). The GBTI footer link is removed.

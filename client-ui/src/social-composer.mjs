@@ -16,7 +16,7 @@ export const composeUrl = (task) => {
   // sow-405: Bluesky is assisted now. Its intent link opens the web composer with the text filled in, and Bluesky
   // turns the link, the hashtags and any @handle in that text into a link card, tags and a mention itself.
   if (channel === 'bluesky') return `https://bsky.app/intent/compose?text=${t}`;
-  if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti_network'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
+  if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
   if (channel === 'hashnode') return 'https://hashnode.com/draft'; // RETAINED for already-queued tasks, see below
   // sow-260: unlike X and LinkedIn, Reddit's submit form takes a REAL prefill, so Assist lands on a form with
   // the title and link already filled and only the body left to paste. `text` is the title here (the drain

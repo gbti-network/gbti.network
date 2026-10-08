@@ -59,7 +59,7 @@ const GBTI_CHANNELS = [
   ['devto', 'Dev.to', 'https://dev.to/gbti', 'Member articles crossposted to the GBTI organization on DEV.', '@gbti'],
   // sow-217: the Hashnode follow tile is REMOVED with the footer link. Retiring the channel while still
   // inviting new members to follow the publication would point them at something nobody maintains.
-  ['dailydev', 'daily.dev', 'https://daily.dev/squads/gbti_network/', 'Follow the GBTI squad inside your daily.dev feed.', 'GBTI squad'],
+  ['dailydev', 'daily.dev', 'https://daily.dev/squads/gbti/', 'Follow the GBTI squad inside your daily.dev feed.', 'GBTI squad'],
   ['linkedin', 'LinkedIn', 'https://www.linkedin.com/company/gbti-network/posts', 'Network updates and member work on LinkedIn.', 'GBTI Network'],
 ];
 

@@ -18,7 +18,7 @@ links:
   linkedin: https://www.linkedin.com/company/gbti-network
   reddit: https://www.reddit.com/r/GBTI_network/
   devto: https://dev.to/gbti
-  dailydev: https://daily.dev/squads/gbti_network
+  dailydev: https://daily.dev/squads/gbti
   substack: https://gbti.substack.com/
   hashnode: https://gbti.hashnode.dev/
 ---

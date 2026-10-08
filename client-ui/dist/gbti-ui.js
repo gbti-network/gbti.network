@@ -27315,7 +27315,7 @@ ${BLOCKED_PILL_CSS}
     if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
     if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
     if (channel === "bluesky") return `https://bsky.app/intent/compose?text=${t}`;
-    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
+    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti";
     if (channel === "hashnode") return "https://hashnode.com/draft";
     if (channel === "reddit") {
       const u = String(task?.url || "");

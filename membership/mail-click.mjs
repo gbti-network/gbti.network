@@ -27,7 +27,7 @@
 // asking, and refuses to be able to answer "did this person click", which is the one that turns a counter
 // into surveillance and drags the whole store into a data-protection question it does not need to be in.
 
-import { DIGEST_SOCIAL } from './mail-social.mjs'; // sow-383: the social row's accounts
+import { DIGEST_SOCIAL, RETIRED_SOCIAL_HREFS } from './mail-social.mjs'; // sow-383: the social row's accounts
 import { CLOSING_TARGETS } from './mail-closing.mjs'; // the closing message's links (owner, 2026-09-29)
 
 /**
@@ -132,6 +132,7 @@ export function candidateTargets(issue, siteUrl, sectionFeeds = SECTION_FEED) {
   for (const p of Object.values(FIXED_TARGETS)) add(p);
   // sow-383: the social row. Fixed like the footer, so a click on an icon resolves in any issue.
   for (const s of DIGEST_SOCIAL) add(s.href);
+  for (const h of RETIRED_SOCIAL_HREFS) add(h); // an account that moved: issues sent before the move still resolve
   for (const p of Object.values(sectionFeeds)) add(p);
   // LAYOUT FIRST, because layout is what the renderer actually renders from. sections/topNews are the
   // composition core's inputs and `layout` is derived from them, so today the three agree; walking the derived
