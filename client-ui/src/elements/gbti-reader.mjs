@@ -642,7 +642,7 @@ class GbtiReader extends GbtiElement {
     const side = resolved ? `<aside class="side">${facts}${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : `<aside class="side">${facts}</aside>`;
 
 
-    // sow-109: a public skill's install box sits above the author's text, as on the website's skill page.
+    // sow-109: a public skill's install box, placed as on the website's skill page: after the author's text (sow-448).
     const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc(this._skill.text)}</pre>` : '';
     // sow-441: a project's hero and action bar span both columns above them, and its install box and screenshots
     // follow the body; every other type keeps the title at the top of the article.
@@ -653,7 +653,7 @@ class GbtiReader extends GbtiElement {
     // the scraped picture (usually a screenshot of the same tweet) hides once the tweet shows. A tweet X cannot show
     // leaves the page as it was, picture included.
     const tweet = it.type === 'share' && tweetId(it.url) ? `<div class="md-tweet md-tweet-share" data-tweet-url="${esc(it.url)}"></div>` : '';
-    this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : '') + (tweet ? TWEET_CSS : '')) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
+    this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : '') + (tweet ? TWEET_CSS : '')) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${body}${skillBox}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
     if (proj) wireProjectView(this.root, proj);
     // An inline style, not [hidden]: the cover's own display rule outranks [hidden] inside a shadow root.
     if (tweet) wireTweets(this.root, { onReady: () => { const c = this.$('img.cover'); if (c) c.style.display = 'none'; } });

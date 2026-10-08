@@ -76,8 +76,13 @@ test('sow-109: the skill page renders the box, the author text and the file, and
   assert.match(page, /const skillView = !!skillFile \|\| !!membersSkill;/);
   assert.match(page, /\{membersSkill \? <LockedBody encPath=\{membersSkill\} kind="skillfile" targets=\{d\.targets \?\? \[\]\} \/> : <Fragment set:html=\{installHtml\} \/>\}/);
   assert.match(page, /buildSkillInstallHtml\(\{ \.\.\.install, fileHref: `\/prompts\/\$\{d\.slug\}\/SKILL\.md` \}\)/);
-  assert.match(page, /\{skillView \? \(\s*<>\s*\{membersSkill \? [^\n]+\}\s*<div class="skill-notes" data-gbti-region="body">\s*\{stub \? \(/);
-  assert.match(page, /\{!membersSkill && <Fragment set:html=\{skillFileHtml\} \/>\}\s*<\/>\s*\) : \(/, 'no plain file block for a members-only skill');
+  // sow-448 (owner, 2026-10-08): the author's text, then the skill file, then the install box (locked for a members-only
+  // skill), in that order.
+  assert.match(page, /\{skillView \? \(\s*<>\s*<div class="skill-notes" data-gbti-region="body">\s*\{stub \? \(/, 'the text first');
+  assert.match(page, /\{!membersSkill && <Fragment set:html=\{skillFileHtml\} \/>\}\s*\{membersSkill \? <LockedBody encPath=\{membersSkill\} kind="skillfile" [^\n]+ : <Fragment set:html=\{installHtml\} \/>\}\s*<\/>\s*\) : \(/, 'then the file (none for a members-only skill), then the box');
+  assert.equal((page.match(/kind="skillfile"/g) || []).length, 1, 'one install box, not one above and one below');
+  assert.match(src('src/styles/prompt-kind.css'), /\.skill-file \{ margin-bottom: 30px; \}/, 'the box does not sit tight against the file');
+  assert.match(src('client-ui/src/elements/gbti-reader.mjs'), /<article>\$\{title\}\$\{meta\}\$\{cover\}\$\{body\}\$\{skillBox\}/, 'the extension reader keeps the site\'s order');
   assert.match(page, /\{isSkill \? 'Made for' : 'Works with'\}/);
   assert.match(page, /<span class=\{`kind-badge kind-\$\{d\.kind\}`\}>/, 'every prompt page says which it is');
   assert.match(page, /^\s*wireSkillPage\(document\);/m);

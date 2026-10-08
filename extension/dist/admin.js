@@ -28850,7 +28850,7 @@ ${BLOCKED_PILL_CSS}
       const title = proj ? "" : `<h1>${esc2(it2.title || "")}</h1>`;
       const tail = proj ? projectInstallHtml(proj) + projectGalleryHtml(proj) : "";
       const tweet = it2.type === "share" && tweetId(it2.url) ? `<div class="md-tweet md-tweet-share" data-tweet-url="${esc2(it2.url)}"></div>` : "";
-      this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : "") + (tweet ? TWEET_CSS : "")) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${skillBox}${body}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(READER_CSS() + (proj ? PROJECT_CSS : "") + (tweet ? TWEET_CSS : "")) + `<div class="wrap">${top}<div class="cols"><article>${title}${meta}${cover}${body}${skillBox}${tweet}${tail}${view}${copyAll}</article>${side}</div></div>`);
       if (proj) wireProjectView(this.root, proj);
       if (tweet) wireTweets(this.root, { onReady: () => {
         const c = this.$("img.cover");

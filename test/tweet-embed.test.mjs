@@ -162,7 +162,9 @@ test('every comment surface wires its tweet blocks, and the share views mount th
   assert.match(comments, /\.cmt-rich \.md-tweet\.is-ready > a \{ display: none; \}/);
   const reader = read('client-ui/src/elements/gbti-reader.mjs');
   assert.match(reader, /const tweet = it\.type === 'share' && tweetId\(it\.url\) \? `<div class="md-tweet md-tweet-share" data-tweet-url="\$\{esc\(it\.url\)\}"><\/div>` : '';/);
-  assert.match(reader, /\$\{body\}\$\{tweet\}\$\{tail\}/, 'under the member\'s comment block');
+  // sow-448: the skill box follows the body too, but only a skill has one, so on a share the tweet is still right under it
+  assert.match(reader, /\$\{body\}\$\{skillBox\}\$\{tweet\}\$\{tail\}/, 'under the member\'s comment block');
+  assert.match(reader, /const skillBox = this\._skill \?/, 'the box exists only for a skill');
   assert.match(reader, /if \(tweet\) wireTweets\(this\.root, \{ onReady: \(\) => \{ const c = this\.\$\('img\.cover'\); if \(c\) c\.style\.display = 'none'; \} \}\);/);
   const page = read('src/pages/shares/[author]/[id].astro');
   assert.match(page, /const tweetUrl = !videoSrc && d\.url && tweetId\(d\.url\) \? d\.url : null;/);

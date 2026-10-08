@@ -112,7 +112,7 @@
 
 /* ---------- a skill page: the author's text, then the file ---------- */
 .skill-notes { margin-bottom: 30px; }
-.skill-file { margin-bottom: 8px; }
+.skill-file { margin-bottom: 30px; } /* sow-448: the install box follows the file */
 .skill-file-h { margin: 0 0 12px; font-family: var(--f-display); font-weight: 700; font-size: 22px; }
 .skill-file-body { padding: 18px 20px; position: relative; }
 .skill-file[data-open="false"] .skill-file-body { max-height: 240px; overflow: hidden; }

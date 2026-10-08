@@ -60,8 +60,9 @@ const authorStubs = byAuthor.filter(isStub).length;
 const crumbs = breadcrumb(d.categories);
 const stub = isStub(prompt); // sow-323 Phase 3: a members-only prompt page asks search engines to skip it
 
-// sow-109: a public skill shows how to install it, then the author's own text, then the skill file. A members-only
-// skill whose file is encrypted (Phase 7) gets the same layout with the install box LOCKED: a paid member's browser
+// sow-109: a public skill shows the author's own text, then the skill file, then how to install it (sow-448, owner
+// 2026-10-08: the install box moved below the file). A members-only skill whose file is encrypted (Phase 7) gets the
+// same layout with the install box LOCKED: a paid member's browser
 // decrypts the file through the Worker and builds the box there, and every other reader sees the members notice.
 // One with no encrypted file keeps the prompt layout, because its file is still inside its body.
 const isSkill = d.kind === 'skill';
@@ -128,7 +129,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
 
       <div class="detail-grid mt32">
         <!-- MAIN: an optional result image, then the prompt enclosed in its own code-style block. A skill shows its
-             install box, the author's text and its skill file instead (sow-109). -->
+             author's text, its skill file and its install box instead (sow-109, sow-448). -->
         <div class="detail-main">
           {d.image && (
             <figure class="prompt-result">
@@ -138,7 +139,6 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           )}
           {skillView ? (
             <>
-              {membersSkill ? <LockedBody encPath={membersSkill} kind="skillfile" targets={d.targets ?? []} /> : <Fragment set:html={installHtml} />}
               <div class="skill-notes" data-gbti-region="body">
                 {stub ? (
                   <>
@@ -153,6 +153,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
                 ) : <Prose><Content /></Prose>}
               </div>
               {!membersSkill && <Fragment set:html={skillFileHtml} />}
+              {membersSkill ? <LockedBody encPath={membersSkill} kind="skillfile" targets={d.targets ?? []} /> : <Fragment set:html={installHtml} />}
             </>
           ) : (
             <>

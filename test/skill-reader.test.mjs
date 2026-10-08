@@ -81,7 +81,7 @@ test('the reader: a kind badge on every prompt item, the box only for a public s
   assert.match(r, /if \(String\(it\.visibility \|\| fm\.visibility \|\| 'public'\) !== 'public'\) \{[\s\S]{0,400}if \(typeof fm\.encryptedSkill !== 'string' \|\| !fm\.encryptedSkill \|\| typeof this\.client\?\.decrypt !== 'function'\) return null;[\s\S]{0,300}loadMembersSkillBox\(/, 'members-only: decrypted file or no box');
   assert.match(r, /<span class="badge kind-badge kind-\$\{kind\}">/);
   assert.match(r, /const copyAll = \(it\.type === 'prompt' && this\._rawBody && this\._kind\(it\) !== 'skill'\)/);
-  assert.match(r, /\$\{meta\}\$\{cover\}\$\{skillBox\}\$\{body\}/, 'the box sits above the author text');
+  assert.match(r, /\$\{meta\}\$\{cover\}\$\{body\}\$\{skillBox\}/, 'the box follows the author text, as on the site (sow-448)');
   assert.match(r, /if \(this\._skill\) wireSkillPage\(this\.root\);/);
   assert.match(r, /URL\.revokeObjectURL\(this\._skillUrl\)/, 'the previous local copy is released on the next open');
 });

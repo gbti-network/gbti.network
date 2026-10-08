@@ -134,7 +134,7 @@ test('the reader: a project gets the project layout and no cover; every other ty
   const r = read('client-ui/src/elements/gbti-reader.mjs');
   assert.match(r, /const proj = it\.type === 'project' \? projectViewModel\(\{ item: it, frontmatter: this\._fm, itemPath: it\.path, paid: this\._paid === true \}\) : null;/);
   assert.match(r, /const cover = proj \? '' : shareEmbed/, 'no cover on a project');
-  assert.match(r, /<div class="wrap">\$\{top\}<div class="cols"><article>\$\{title\}\$\{meta\}\$\{cover\}\$\{skillBox\}\$\{body\}\$\{tweet\}\$\{tail\}/); // sow-261: an X share's tweet sits between
+  assert.match(r, /<div class="wrap">\$\{top\}<div class="cols"><article>\$\{title\}\$\{meta\}\$\{cover\}\$\{body\}\$\{skillBox\}\$\{tweet\}\$\{tail\}/); // sow-261: an X share's tweet sits between
   assert.match(r, /const title = proj \? '' : `<h1>\$\{esc\(it\.title \|\| ''\)\}<\/h1>`;/, 'other types keep the title in the article');
   assert.match(r, /this\._metaHtml\(proj \? \{ \.\.\.it, categoryLabels: \[\] \} : it, when\)/, 'the category moves to the hero');
   assert.match(r, /<aside class="side">\$\{facts\}\$\{this\._authorCardHtml\(it\)\}/);
