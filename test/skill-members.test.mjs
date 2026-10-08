@@ -171,6 +171,11 @@ function fixture() {
   for (const d of ['client', 'client-ui', 'membership', 'house', 'src', 'node_modules', 'workers']) fs.symlinkSync(path.join(ROOT, d), path.join(dir, d));
   fs.mkdirSync(path.join(dir, 'members'));
   for (const m of ['atwellpub', 'nareshdevineni']) fs.cpSync(path.join(ROOT, 'members', m), path.join(dir, 'members', m), { recursive: true });
+  // The owner made /QA public on 2026-10-08 (its SKILL.md is now plain beside index.md). These checks need a
+  // members-only skill, so the throwaway copy turns it back into one: members audience, no plain SKILL.md.
+  const qa = path.join(dir, 'members/atwellpub/prompts/qa-skill-for-claude-code-and-codex/index.md');
+  fs.writeFileSync(qa, fs.readFileSync(qa, 'utf8').replace(/^visibility: .*$/m, 'visibility: members'));
+  fs.rmSync(path.join(path.dirname(qa), 'SKILL.md'), { force: true });
   return dir;
 }
 const QA = 'members/atwellpub/prompts/qa-skill-for-claude-code-and-codex/index.md';

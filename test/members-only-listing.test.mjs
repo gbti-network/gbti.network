@@ -72,8 +72,18 @@ test('the sitemap scan reads the frontmatter block only, and finds every members
   const paths = membersOnlyPagePaths(ROOT);
   const live = [...paths];
   assert.ok(live.every((p) => /^\/(articles|projects|prompts)\/[a-z0-9][a-z0-9-]*\/$/.test(p)), live.join(' '));
-  // the repository's own members-only items, as a control that the scan is reading something
-  assert.ok(live.includes('/prompts/qa-skill-for-claude-code-and-codex/'), live.join(' '));
+  // Control that the scan reads a real item's frontmatter. It used to name the repository's own members-only /QA
+  // skill, but the owner made /QA public on 2026-10-08 and no article, project or prompt is members-only now, so the
+  // check above could pass on an empty list. A real item file, copied and set to members, has to be found.
+  const real = 'members/atwellpub/prompts/qa-skill-for-claude-code-and-codex/index.md';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'members-only-real-'));
+  try {
+    fs.mkdirSync(path.join(root, path.dirname(real)), { recursive: true });
+    const text = read(real).replace(/^visibility: .*$/m, 'visibility: members');
+    assert.match(text, /^visibility: members$/m, 'control: the copied item says members');
+    fs.writeFileSync(path.join(root, real), text);
+    assert.deepEqual([...membersOnlyPagePaths(root)], ['/prompts/qa-skill-for-claude-code-and-codex/']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('the page scan reads the frontmatter block only, so a body line cannot hide an item', () => {
