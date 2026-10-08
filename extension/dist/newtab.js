@@ -4373,6 +4373,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (Array.isArray(share.redirectFrom) && share.redirectFrom.length) input.redirectFrom = share.redirectFrom.filter((x) => typeof x === "string" && x.trim());
     if (typeof share.creatorUrl === "string" && share.creatorUrl) input.creatorUrl = share.creatorUrl;
     if (typeof share.creatorName === "string" && share.creatorName) input.creatorName = share.creatorName;
+    if (input.url && typeof share.sourceName === "string" && share.sourceName) input.sourceName = share.sourceName;
     if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
     const vis = fields.visibility ?? share.visibility;
     input.visibility = vis === "public" ? "public" : "members";
@@ -6007,6 +6008,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._image = null;
       this._imageRemoved = false;
       this._creator = null;
+      this._sourceName = null;
       this._suggested = null;
       this._suggestedTags = [];
       this.$(".card")?.addEventListener("click", (e) => this._onCardClick(e));
@@ -6191,6 +6193,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._suggested = item.category || null;
       this._image = item.image || null;
       this._creator = item.creatorUrl ? { url: item.creatorUrl, name: item.creatorName || "" } : null;
+      this._sourceName = item.sourceName || null;
       this._imageRemoved = item.imageRemoved === true;
       this._lastOgUrl = item.url || null;
       const box = this.$("[data-og]");
@@ -6289,6 +6292,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       this._image = null;
       this._creator = null;
+      this._sourceName = null;
       this._lastOgUrl = null;
       const note = this.$("[data-edit-note]");
       if (note) note.textContent = "The link is removed when you save; the share keeps its note and its discussion.";
@@ -6420,6 +6424,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._lastOgUrl = null;
         this._image = null;
         this._creator = null;
+        this._sourceName = null;
         box.hidden = true;
         box.innerHTML = "";
         return;
@@ -6449,6 +6454,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._image = og?.image || null;
         if (this._image) this._imageRemoved = false;
         this._creator = og?.creatorUrl && /^https:\/\//i.test(String(og.creatorUrl)) ? { url: String(og.creatorUrl), name: String(og.creatorName || "") } : null;
+        this._sourceName = og?.sourceName ? String(og.sourceName).slice(0, 80) : null;
         let domain = "";
         try {
           domain = new URL(url).hostname.replace(/^www\./, "");
@@ -6468,6 +6474,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       this._image = null;
       this._creator = null;
+      this._sourceName = null;
       if (state.kind === "error") {
         this._lastOgUrl = null;
         this._suggested = null;
@@ -6539,6 +6546,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           input.creatorUrl = this._creator.url;
           if (this._creator.name) input.creatorName = this._creator.name;
         }
+        if (url && this._sourceName) input.sourceName = this._sourceName;
         const authorTarget = this._authorTarget();
         const res = await this.client.postShare({ input, body, ...authorTarget ? { authorTarget } : {} });
         this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ""}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, "ok");
@@ -6554,6 +6562,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const postedImage = this._image;
         this._image = null;
         this._creator = null;
+        this._sourceName = null;
         this._imageRemoved = false;
         this._removedUrl = null;
         this._suggested = null;

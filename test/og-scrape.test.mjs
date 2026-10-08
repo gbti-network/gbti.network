@@ -27,6 +27,7 @@ test('scrapeOgPreview returns image + title + description with fallbacks', () =>
     </head>`;
   assert.deepEqual(scrapeOgPreview(html, 'https://ex.com/a'), {
     image: 'https://cdn.ex.com/og.jpg', title: 'The headline', description: 'why it matters', tags: [],
+    siteName: '', // sow-445: the page states no name, and the <title> is never taken for one
   });
 });
 
@@ -40,7 +41,7 @@ test('scrapeOgPreview falls back to <title> and meta description, and decodes en
 
 test('scrapeOgPreview never throws on garbage', () => {
   assert.doesNotThrow(() => scrapeOgPreview(null));
-  assert.deepEqual(scrapeOgPreview(''), { image: '', title: '', description: '', tags: [] });
+  assert.deepEqual(scrapeOgPreview(''), { image: '', title: '', description: '', tags: [], siteName: '' });
 });
 
 // SOW-087: the declared keyword/tag hints feed the share category suggestion.

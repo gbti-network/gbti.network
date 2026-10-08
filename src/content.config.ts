@@ -397,6 +397,9 @@ const share = defineCollection({
     // other eight platforms are derived from `url` at render time and store nothing. Mirrors client/src/schemas.mjs.
     creatorUrl: z.string().optional(),
     creatorName: z.string().max(120).optional(),
+    // sow-445: the publication's name as its page states it (og:site_name), saved when the share is made. The share
+    // page's link card ends with it ("| Quanta Magazine") instead of "| GBTI Network". Mirrors client/src/schemas.mjs.
+    sourceName: z.string().max(80).optional(),
     category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
     tags: z.array(z.string()).default([]),
     createdAt: z.coerce.date(),

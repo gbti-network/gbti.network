@@ -322,6 +322,7 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     // alone, and so an edit can carry it (editInputFor drops any field it does not name).
     creatorUrl: typeof fm.creatorUrl === 'string' && fm.creatorUrl.trim() ? fm.creatorUrl.trim() : null,
     creatorName: typeof fm.creatorName === 'string' && fm.creatorName.trim() ? fm.creatorName.trim() : null,
+    sourceName: typeof fm.sourceName === 'string' && fm.sourceName.trim() ? fm.sourceName.trim() : null, // sow-445: kept by an edit
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? 'members',
     status: fm.status ?? null,

@@ -17221,6 +17221,8 @@ var shareSchema = external_exports.object({
   // sow-222: the channel behind the link (oEmbed author_url; YouTube + Vimeo only)
   creatorName: external_exports.string().max(120).optional(),
   // sow-222: what that channel is called, for the Subscribe card
+  sourceName: external_exports.string().max(80).optional(),
+  // sow-445: the publication's name ("Quanta Magazine"), for the link card
   category: external_exports.string().optional(),
   // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
   tags: tagsSchema,
@@ -17546,6 +17548,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     // alone, and so an edit can carry it (editInputFor drops any field it does not name).
     creatorUrl: typeof fm.creatorUrl === "string" && fm.creatorUrl.trim() ? fm.creatorUrl.trim() : null,
     creatorName: typeof fm.creatorName === "string" && fm.creatorName.trim() ? fm.creatorName.trim() : null,
+    sourceName: typeof fm.sourceName === "string" && fm.sourceName.trim() ? fm.sourceName.trim() : null,
+    // sow-445: kept by an edit
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,
@@ -20267,6 +20271,8 @@ async function addShare(ctx2, args = {}) {
     // other. https only, and only when the provider named the channel as well, so no card is left unnamed.
     creatorUrl: /^https:\/\//i.test(String(og?.creatorUrl || "")) ? og.creatorUrl : void 0,
     creatorName: /^https:\/\//i.test(String(og?.creatorUrl || "")) ? og?.creatorName : void 0,
+    // sow-445: the publication's name, so the share page's link card ends "| Quanta Magazine" as the composer's do.
+    sourceName: typeof og?.sourceName === "string" ? og.sourceName.slice(0, 80) : void 0,
     // A published share needs a category (owner, 2026-09-21). The composer pre-fills the Worker's suggestion for the
     // link; an agent that names none gets the same suggestion rather than a refusal it cannot act on.
     category: args.category || og?.suggestedCategory || void 0,

@@ -76,7 +76,7 @@ export function safeFetchTarget(raw) {
 // could not reach it, it is not a web page at all, or it timed out. The route still NEVER throws and still
 // never 500s, so this is additive: `reason: null` is the genuine no-data case and keeps today's behaviour.
 // The composer turns each into its own sentence (ogPreviewState in gbti-share-composer.mjs).
-const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, suggestedTags: [], creatorUrl: null, creatorName: null, reason: null };
+const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, suggestedTags: [], creatorUrl: null, creatorName: null, sourceName: null, reason: null };
 
 export async function handleOgPreview(request, env, {
   fetchImpl = globalThis.fetch,
@@ -226,6 +226,9 @@ export async function handleOgPreview(request, env, {
         // The composer carries it into the share, where the source card turns it into Subscribe or Follow.
         creatorUrl: preview.creatorUrl || null,
         creatorName: preview.creatorName || null,
+        // sow-445: the publication's name as the page or provider states it. The composer saves it on the share, and
+        // the share page's link card ends with it ("| Quanta Magazine") instead of "| GBTI Network".
+        sourceName: preview.siteName || null,
         // We reached the page and read it. If it yielded nothing, that IS the genuine no-data case.
         reason: null,
       },

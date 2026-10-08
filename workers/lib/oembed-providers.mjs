@@ -55,7 +55,7 @@ export function largeMixcloudImage(imageUrl) {
 }
 
 /** Map an oEmbed JSON response onto the preview shape membership-og returns ({ image, title, description,
- *  tags, creatorUrl, creatorName }). The description is a factual by-line (oEmbed carries no description
+ *  tags, creatorUrl, creatorName, siteName }). The description is a factual by-line (oEmbed carries no description
  *  field); tags stay empty so the topic suggester works from the title alone. Returns null when the JSON has
  *  no usable title/thumb.
  *
@@ -79,7 +79,8 @@ export function previewFromOembed(json) {
     ? (kind ? `A ${kind} by ${author}${provider ? ` on ${provider}` : ''}` : `By ${author}${provider ? ` on ${provider}` : ''}`)
     : null;
   const creatorUrl = typeof j.author_url === 'string' && /^https:\/\//.test(j.author_url.trim()) ? j.author_url.trim() : null;
-  return { image, title, description, tags: [], creatorUrl, creatorName: author };
+  // sow-445: the provider is the publication a share's link card names ("| YouTube"); null when it is not stated.
+  return { image, title, description, tags: [], creatorUrl, creatorName: author, siteName: provider };
 }
 
 /** YouTube's oEmbed only ever hands back the 480x360 `hqdefault` thumbnail. That is under the minimum-width

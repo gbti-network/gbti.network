@@ -185,6 +185,8 @@ export function editInputFor({ share, fields = {}, now = null, status = null } =
   // and an edit that dropped it would silently turn Subscribe back into Visit with nothing to relearn it from.
   if (typeof share.creatorUrl === 'string' && share.creatorUrl) input.creatorUrl = share.creatorUrl;
   if (typeof share.creatorName === 'string' && share.creatorName) input.creatorName = share.creatorName;
+  // sow-445: the publication's name belongs to the link, so it goes when the link does.
+  if (input.url && typeof share.sourceName === 'string' && share.sourceName) input.sourceName = share.sourceName;
   if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
   const vis = fields.visibility ?? share.visibility;
   input.visibility = vis === 'public' ? 'public' : 'members';

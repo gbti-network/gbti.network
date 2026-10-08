@@ -16,8 +16,11 @@ const doc = (fm, body = 'The body.\n') => `---\n${fm}\n---\n\n${body}`;
 const BEFORE = doc('type: prompt\ntitle: "T"\nstatus: published\ntags: ["PDF", "pikepdf"]');
 
 test('a change to a system field alone is system-only', () => {
-  assert.deepEqual(SYSTEM_FIELDS, ['kind']);
+  assert.deepEqual(SYSTEM_FIELDS, ['kind', 'sourceName']);
   assert.equal(isSystemOnlyChange(BEFORE, doc('type: prompt\nkind: prompt\ntitle: "T"\nstatus: published\ntags: ["PDF", "pikepdf"]')), true);
+  // sow-445: the publication's name backfilled onto a share is the system's write, not the member's edit.
+  const SHARE = doc('type: share\nstatus: published\nurl: https://www.quantamagazine.org/a/?utm_source=x');
+  assert.equal(isSystemOnlyChange(SHARE, doc('type: share\nstatus: published\nurl: https://www.quantamagazine.org/a/?utm_source=x\nsourceName: Quanta Magazine')), true);
   assert.equal(isSystemOnlyChange(BEFORE, doc('type: prompt\ntitle: T\nstatus: published\ntags:\n  - PDF\n  - pikepdf')), true, 'the same values written another way are the same');
 });
 

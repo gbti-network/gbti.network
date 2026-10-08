@@ -143,6 +143,26 @@ export function creatorFrom(rawUrl, stored = {}) {
   return null;
 }
 
+/** sow-445: the platform a link is on, by its host alone, for a link card that ends "| YouTube". '' for any other
+ *  host, Mastodon included: it has no fixed host, and naming it needs the status-url shape creatorFrom reads. */
+export function platformLabel(rawUrl) {
+  const u = parse(rawUrl);
+  if (!u) return '';
+  const h = hostOf(u);
+  const is = (...hosts) => hosts.includes(h);
+  const key = is('youtube.com', 'music.youtube.com', 'youtu.be') ? 'youtube'
+    : is('vimeo.com', 'player.vimeo.com') ? 'vimeo'
+    : is('x.com', 'twitter.com') ? 'x'
+    : is('bsky.app') ? 'bluesky'
+    : h.endsWith('.substack.com') ? 'substack'
+    : is('mixcloud.com') ? 'mixcloud'
+    : is('github.com') ? 'github'
+    : is('dev.to') ? 'devto'
+    : is('medium.com') || h.endsWith('.medium.com') ? 'medium'
+    : '';
+  return key ? PLATFORMS[key].label : '';
+}
+
 /**
  * Everything the sidebar source card renders, for both copies of it. The renderer keeps its own favicon
  * service, its own outbound decoration and its own escaping; this owns WHO the card names and WHAT the action

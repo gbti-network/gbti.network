@@ -273,6 +273,7 @@ export const shareSchema = z.object({
   redirectFrom: z.array(z.string()).optional(), // sow-365: urls this share used to live at (an author move); the build 301s them
   creatorUrl: z.string().optional(), // sow-222: the channel behind the link (oEmbed author_url; YouTube + Vimeo only)
   creatorName: z.string().max(120).optional(), // sow-222: what that channel is called, for the Subscribe card
+  sourceName: z.string().max(80).optional(), // sow-445: the publication's name ("Quanta Magazine"), for the link card
   category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
   tags: tagsSchema,
   createdAt: z.coerce.date(),

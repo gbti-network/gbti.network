@@ -4,6 +4,7 @@
 // endpoint (workers/signup/membership-og.mjs) uses scrapeOgPreview.
 
 import { decodeHtmlEntities } from '../../membership/html-entities.mjs';
+import { sourceDisplayName } from '../../membership/mail-compile-core.mjs';
 
 const HEAD_SCAN = 200000; // these tags live in <head>; bound the scan for CPU
 
@@ -41,6 +42,7 @@ function metaMap(html) {
     'og:image', 'og:image:secure_url', 'twitter:image', 'twitter:image:src',
     'og:title', 'twitter:title', 'og:description', 'twitter:description', 'description',
     'keywords', 'news_keywords', // SOW-087: declared keyword hints feed the share category suggestion
+    'og:site_name', 'application-name', // sow-445: the name the site gives itself, for a share's link card
   ];
   const out = {};
   for (const k of keys) out[k] = '';
@@ -102,8 +104,26 @@ function collectTags(m) {
   return out;
 }
 
+/** sow-445: the publication's name as the page states it (og:site_name, then application-name), cut to the brand
+ *  by sourceDisplayName ("Name | tagline" keeps "Name") and capped there at 40 characters. NEVER the <title>: on an
+ *  article that is the headline, and a card reading "Headline | Headline" is worse than the domain it replaces.
+ *  '' when the page names nothing. Pure. */
+export function siteNameOf(html) {
+  return siteNameFromMeta(metaMap(html));
+}
+// Words a site uses for a SECTION of itself ("Docs" on docs.astro.build). Alone they name nobody, so the domain is better.
+const GENERIC_NAMES = new Set(['docs', 'documentation', 'blog', 'home', 'homepage', 'news', 'website', 'site', 'web']);
+function siteNameFromMeta(m) {
+  const raw = decodeEntities(m['og:site_name'] || m['application-name']).replace(/\s*\([^()]*\)$/, ''); // "X (formerly Twitter)"
+  const name = sourceDisplayName(raw) || '';
+  if (GENERIC_NAMES.has(name.toLowerCase())) return '';
+  // A site that states only its own domain in capitals ("TECHCOMMUNITY.MICROSOFT.COM") reads better as the domain.
+  // Only all-capitals: "Unite.AI" and "Rivale.io" are how those brands write themselves.
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(name) && name === name.toUpperCase() ? name.toLowerCase() : name;
+}
+
 /**
- * Pull a full link preview from a page's HTML: { image, title, description, tags }. image is an absolute URL or ''.
+ * Pull a full link preview from a page's HTML: { image, title, description, tags, siteName }. image is an absolute URL or ''.
  * title falls back og:title -> twitter:title -> <title>; description falls back og:description -> twitter:description
  * -> meta description; tags (SOW-087) are the page's declared article:tag/keywords hints. Pure; never throws.
  */
@@ -112,5 +132,5 @@ export function scrapeOgPreview(html, baseUrl = '') {
   const image = absolutize(decodeHtmlEntities(m['og:image'] || m['og:image:secure_url'] || m['twitter:image'] || m['twitter:image:src'] || m._linkImg || ''), baseUrl); // decoded, as in scrapeOgImage
   const title = decodeEntities(m['og:title'] || m['twitter:title'] || m._docTitle);
   const description = decodeEntities(m['og:description'] || m['twitter:description'] || m['description']);
-  return { image, title, description, tags: collectTags(m) };
+  return { image, title, description, tags: collectTags(m), siteName: siteNameFromMeta(m) };
 }

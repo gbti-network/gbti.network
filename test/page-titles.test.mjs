@@ -53,7 +53,26 @@ test('DRIFT: BaseLayout still composes fullTitle by appending the site name', ()
   const src = fs.readFileSync(path.join(ROOT, 'src', 'layouts', 'BaseLayout.astro'), 'utf8');
   assert.match(src, /const fullTitle = pageTitle === siteName \? pageTitle : `\$\{pageTitle\} \| \$\{siteName\}`/);
   assert.match(src, /<title>\{fullTitle\}<\/title>/);
-  assert.match(src, /property="og:title" content=\{fullTitle\}/);
+  // sow-445: og:title is cardTitle, which IS fullTitle unless a page names a card source (a share's publication).
+  assert.match(src, /property="og:title" content=\{cardTitle\}/);
+  assert.match(src, /const cardTitle = cardBrand && pageTitle !== siteName \? `\$\{pageTitle\} \| \$\{cardBrand\}` : fullTitle;/);
+});
+
+// sow-445 (owner, 2026-10-08): a link card names the source ("| Quanta Magazine"); the tab keeps the site name.
+test('a card source changes og:title only, and only for a titled page', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'layouts', 'BaseLayout.astro'), 'utf8');
+  assert.match(src, /const cardBrand = String\(cardSource \?\? ''\)\.trim\(\);/, 'a blank card source is no card source');
+  assert.equal((src.match(/\{cardTitle\}/g) || []).length, 1, 'cardTitle reaches og:title and nothing else');
+  const compose = (title, cardSource) => {
+    const siteName = SITE_NAME; const pageTitle = String(title ?? '').trim() || siteName;
+    const fullTitle = pageTitle === siteName ? pageTitle : `${pageTitle} | ${siteName}`;
+    const cardBrand = String(cardSource ?? '').trim();
+    return { tab: fullTitle, card: cardBrand && pageTitle !== siteName ? `${pageTitle} | ${cardBrand}` : fullTitle };
+  };
+  assert.deepEqual(compose('Holography', 'Quanta Magazine'), { tab: `Holography | ${SITE_NAME}`, card: 'Holography | Quanta Magazine' });
+  assert.deepEqual(compose('Holography', undefined), { tab: `Holography | ${SITE_NAME}`, card: `Holography | ${SITE_NAME}` });
+  assert.deepEqual(compose('Holography', '  '), { tab: `Holography | ${SITE_NAME}`, card: `Holography | ${SITE_NAME}` });
+  assert.deepEqual(compose('', 'Quanta Magazine'), { tab: SITE_NAME, card: SITE_NAME }, 'never " | Quanta Magazine" alone');
 });
 
 // ---------------------------------------------------------------------------

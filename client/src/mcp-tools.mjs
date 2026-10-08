@@ -327,6 +327,8 @@ export async function addShare(ctx, args = {}) {
     // other. https only, and only when the provider named the channel as well, so no card is left unnamed.
     creatorUrl: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og.creatorUrl : undefined,
     creatorName: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og?.creatorName : undefined,
+    // sow-445: the publication's name, so the share page's link card ends "| Quanta Magazine" as the composer's do.
+    sourceName: typeof og?.sourceName === 'string' ? og.sourceName.slice(0, 80) : undefined,
     // A published share needs a category (owner, 2026-09-21). The composer pre-fills the Worker's suggestion for the
     // link; an agent that names none gets the same suggestion rather than a refusal it cannot act on.
     category: args.category || og?.suggestedCategory || undefined,

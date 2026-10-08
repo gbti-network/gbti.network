@@ -19,6 +19,8 @@ import { embedUrl } from '../../../../client/src/video-embed.mjs';
 import { tweetId } from '../../../../client/src/tweet-embed.mjs'; // sow-261: an X share shows the live tweet
 import { linkKind } from '../../../../client/src/link-kind.mjs'; // sow-417: an audio link says Listen, not Read
 import { sourceCardModel } from '../../../../client/src/share-source.mjs'; // sow-222: who the source card points at
+import { cardSourceFor, newsHostNames } from '../../../lib/link-card.mjs'; // sow-445: the link card names the source
+import { readNewsSourceList } from '../../../lib/news-source-list.mjs';
 import { getCollection } from 'astro:content';
 import { authorDisplay, formatDate, authorAvatar, isNetworkAuthor } from '../../../lib/authors';
 import { profileHref } from '../../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
@@ -45,6 +47,8 @@ const descComplete = desc ? /[.!?]["')\]]?$/.test(desc.trim()) : true;
 const quotedDesc = desc ? `"${desc.trim()}${descComplete ? '' : '...'}"` : undefined;
 let srcDomain: string | undefined;
 try { srcDomain = d.url ? new URL(d.url).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
+// sow-445: a posted link card reads "<title> | Quanta Magazine". A share with no link keeps "| GBTI Network".
+const cardSource = cardSourceFor({ url: d.url, sourceName: d.sourceName }, newsHostNames(readNewsSourceList())) || undefined;
 const profiles = await getCollection('profile');
 const profile = profiles.find((p) => p.data.username === d.author);
 const avatar = authorAvatar(d.author, profile?.data.avatar);
@@ -82,7 +86,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   } catch { ogImageSize = undefined; }
 }
 ---
-<BaseLayout ogImageSize={ogImageSize} title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
+<BaseLayout ogImageSize={ogImageSize} cardSource={cardSource} title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">

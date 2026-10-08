@@ -371,7 +371,7 @@ class GbtiShareComposer extends GbtiElement {
     this._imageRemoved = false; // sow-272: the author pressed "Remove preview"; saved so no image is looked up later
     // sow-222: the creator the link preview reported (YouTube and Vimeo only). Stored on the share so its
     // source card can offer Subscribe; the other platforms are derived from the url and store nothing.
-    this._creator = null;
+    this._creator = null; this._sourceName = null; // sow-445: the publication's name the preview reported
     this._suggested = null; // SOW-087: the Worker's category suggestion, applied once topics are loaded
     this._suggestedTags = []; // sow-303: the Worker's free-form tag suggestion, applied to the tags input
     // One delegated handler for the wizard controls (rail dots, Back/Next, note tabs, audience cards); base
@@ -544,6 +544,7 @@ class GbtiShareComposer extends GbtiElement {
     this._image = item.image || null;
     // sow-222: an edit keeps the creator it was published with (editInputFor carries it; this is the display side).
     this._creator = item.creatorUrl ? { url: item.creatorUrl, name: item.creatorName || '' } : null;
+    this._sourceName = item.sourceName || null; // sow-445: kept with the frozen link
     this._imageRemoved = item.imageRemoved === true;
     this._lastOgUrl = item.url || null; // never re-fetch the preview for a frozen link
     const box = this.$('[data-og]');
@@ -613,7 +614,7 @@ class GbtiShareComposer extends GbtiElement {
     const rm = this.$('[data-remove-link]'); if (rm) rm.hidden = true;
     const box = this.$('[data-og]'); if (box) { box.hidden = true; box.innerHTML = ''; }
     this._image = null;
-    this._creator = null; // sow-222: no link, no creator
+    this._creator = null; this._sourceName = null; // sow-222: no link, no creator (sow-445: and no publication)
     this._lastOgUrl = null;
     const note = this.$('[data-edit-note]'); if (note) note.textContent = 'The link is removed when you save; the share keeps its note and its discussion.';
   }
@@ -729,7 +730,7 @@ class GbtiShareComposer extends GbtiElement {
     const url = (this.$('input[type=url]')?.value || '').trim();
     const box = this.$('[data-og]');
     if (!box) return;
-    if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._lastOgUrl = null; this._image = null; this._creator = null; box.hidden = true; box.innerHTML = ''; return; }
+    if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._lastOgUrl = null; this._image = null; this._creator = null; this._sourceName = null; box.hidden = true; box.innerHTML = ''; return; }
     if (url === this._lastOgUrl) return; // already fetched (or in flight) for this exact URL
     this._lastOgUrl = url;
     if (url !== this._removedUrl) this._imageRemoved = false; // a different link: a removal belonged to the previous one
@@ -760,6 +761,7 @@ class GbtiShareComposer extends GbtiElement {
       this._creator = (og?.creatorUrl && /^https:\/\//i.test(String(og.creatorUrl)))
         ? { url: String(og.creatorUrl), name: String(og.creatorName || '') }
         : null;
+      this._sourceName = og?.sourceName ? String(og.sourceName).slice(0, 80) : null; // sow-445: the share's link card
       let domain = '';
       try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch { /* leave empty */ }
       box.innerHTML = `<div class="ogcard">`
@@ -777,7 +779,7 @@ class GbtiShareComposer extends GbtiElement {
     // Empty or failed. The box STAYS VISIBLE and says which. A preview is optional metadata, so neither state
     // blocks posting; the author can continue to the note and publish without one.
     this._image = null;
-    this._creator = null;
+    this._creator = null; this._sourceName = null;
     // A THROW clears the same-URL guard (as it always did) so the next input event can retry on its own; a
     // reached-but-empty page keeps it, since re-asking on every keystroke is what the guard exists to stop.
     if (state.kind === 'error') { this._lastOgUrl = null; this._suggested = null; this._suggestedTags = []; }
@@ -847,6 +849,7 @@ class GbtiShareComposer extends GbtiElement {
         input.creatorUrl = this._creator.url;
         if (this._creator.name) input.creatorName = this._creator.name;
       }
+      if (url && this._sourceName) input.sourceName = this._sourceName; // sow-445: "Title | Quanta Magazine" on the card
       const authorTarget = this._authorTarget(); // sow-183 for shares: post AS another member (superadmin only)
       const res = await this.client.postShare({ input, body, ...(authorTarget ? { authorTarget } : {}) });
       this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ''}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, 'ok'); // SOW-072 P2: consistent ack
@@ -856,7 +859,7 @@ class GbtiShareComposer extends GbtiElement {
       this._paintAuthorRow(); // back to "You"
       const postedImage = this._image;
       this._image = null;
-      this._creator = null;
+      this._creator = null; this._sourceName = null;
       this._imageRemoved = false;
       this._removedUrl = null;
       this._suggested = null;

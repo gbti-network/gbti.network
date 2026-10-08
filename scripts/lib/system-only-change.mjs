@@ -18,9 +18,10 @@ import yaml from 'js-yaml';
 /**
  * Fields the system writes into EXISTING content, whose change alone is not an author's edit. Add a field here only
  * when a retrofit writes it across content the authors did not touch.
- *   kind   sow-109: every prompt item states prompt or skill (retrofitted onto all 27 on 2026-09-29)
+ *   kind        sow-109: every prompt item states prompt or skill (retrofitted onto all 27 on 2026-09-29)
+ *   sourceName  sow-445: the publication a share links to, backfilled onto existing public shares (2026-10-08)
  */
-export const SYSTEM_FIELDS = Object.freeze(['kind']);
+export const SYSTEM_FIELDS = Object.freeze(['kind', 'sourceName']);
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 

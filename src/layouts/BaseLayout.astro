@@ -35,6 +35,9 @@ interface Props {
   /** The measured pixel size of `ogImage`, when the caller read it from the file itself (sow-283: a share's
       hosted cover). Wins over knownImageSize, which only recognizes URLs whose size is fixed by their name. */
   ogImageSize?: { width: number; height: number };
+  /** sow-445: the source a link card names after the title ("| Quanta Magazine"). Only og:title takes it: the
+      browser tab and the search result keep the site name, because the page is ours. */
+  cardSource?: string;
 }
 
 const {
@@ -45,6 +48,7 @@ const {
   noindex = false,
   bare = false,
   ogImageSize: measuredOgImageSize,
+  cardSource,
 } = Astro.props;
 
 const siteName = SITE_NAME;
@@ -54,6 +58,8 @@ const siteName = SITE_NAME;
 // content schema can reach.
 const pageTitle = String(title ?? '').trim() || siteName;
 const fullTitle = pageTitle === siteName ? pageTitle : `${pageTitle} | ${siteName}`;
+const cardBrand = String(cardSource ?? '').trim();
+const cardTitle = cardBrand && pageTitle !== siteName ? `${pageTitle} | ${cardBrand}` : fullTitle;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 // Every page gets an OG image so a shared link never previews blank. A page-specific image (a post cover, a
 // product banner) wins and renders as a large card; otherwise the branded 1200x630 GBTI Network card is
@@ -110,7 +116,7 @@ const ogImageSize = measuredOgImageSize ?? knownImageSize(ogImage || DEFAULT_OG_
     <link rel="canonical" href={canonical} />
 
     <meta property="og:site_name" content={siteName} />
-    <meta property="og:title" content={fullTitle} />
+    <meta property="og:title" content={cardTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonical} />
