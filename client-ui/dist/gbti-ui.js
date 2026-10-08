@@ -19586,6 +19586,25 @@ ${BLOCKED_PILL_CSS}
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }
 
+  // membership/news-source-name.mjs
+  var str5 = (v2) => typeof v2 === "string" ? v2.trim() : "";
+  function sourceNameMap(sources) {
+    const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
+    const map = /* @__PURE__ */ new Map();
+    for (const s of list) {
+      const id = str5(s?.id);
+      const name = str5(s?.name);
+      if (id && name) map.set(id, name);
+    }
+    return map;
+  }
+  function newsSourceName(id, names) {
+    const key = str5(id);
+    if (!key) return "";
+    const map = names instanceof Map ? names : sourceNameMap(names);
+    return map.get(key) || key;
+  }
+
   // membership/syndication-channels.mjs
   var CHANNEL_LIMITS = Object.freeze({
     discord: 2e3,
@@ -19789,15 +19808,18 @@ ${link}` : ""}`;
       return link;
     }
   }
-  function newsToItem(n = {}) {
+  function newsToItem(n = {}, { names } = {}) {
+    const resolved = n.source ? newsSourceName(n.source, names instanceof Map ? names : []) : "";
+    const sourceName = resolved && resolved !== n.source ? resolved : null;
     return {
       type: "news",
       kind: "news",
       supplementary: true,
       guid: n.guid ?? null,
-      title: n.title || n.source || "News",
-      author: n.source || "News",
+      title: n.title || sourceName || n.source || "News",
+      author: sourceName || n.source || "News",
       source: n.source || null,
+      sourceName,
       visibility: "members",
       // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
       // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image
@@ -19978,7 +20000,7 @@ ${link}` : ""}`;
   }
   function avatarFor(item = {}) {
     if (lc2(item.type) === "news") {
-      const title = item.source || item.author || "News";
+      const title = item.sourceName || item.source || item.author || "News";
       return { src: faviconFor(item.link || item.openHref), title, seed: title };
     }
     const folder2 = lc2(item.author);
@@ -26840,25 +26862,6 @@ ${BLOCKED_PILL_CSS}
     return [...followed, ...rest];
   }
 
-  // membership/news-source-name.mjs
-  var str5 = (v2) => typeof v2 === "string" ? v2.trim() : "";
-  function sourceNameMap(sources) {
-    const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
-    const map = /* @__PURE__ */ new Map();
-    for (const s of list) {
-      const id = str5(s?.id);
-      const name = str5(s?.name);
-      if (id && name) map.set(id, name);
-    }
-    return map;
-  }
-  function newsSourceName(id, names) {
-    const key = str5(id);
-    if (!key) return "";
-    const map = names instanceof Map ? names : sourceNameMap(names);
-    return map.get(key) || key;
-  }
-
   // client-ui/src/elements/gbti-news.mjs
   var SITE20 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE20}/membership/">Become a member</a> to unlock the news feed.</div>`;
@@ -26963,6 +26966,7 @@ ${BLOCKED_PILL_CSS}
       try {
         const { items } = await this.client.getNews({ limit: 60 });
         let raw = Array.isArray(items) ? items : [];
+        const names = fetch(`${SITE20}/news-sources.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).then(sourceNameMap, () => /* @__PURE__ */ new Map());
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
@@ -26972,7 +26976,8 @@ ${BLOCKED_PILL_CSS}
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
         } catch {
         }
-        this._items = raw.map(newsToItem);
+        const sourceNames = await names;
+        this._items = raw.map((n) => newsToItem(n, { names: sourceNames }));
         this._state = "ready";
       } catch (err) {
         this._state = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
@@ -27091,7 +27096,7 @@ ${BLOCKED_PILL_CSS}
       const host = this.$("[data-body]");
       if (!host) return;
       const it2 = this._open;
-      const by = [newsSourceName(it2.source, this._sources || []), it2.category].filter(Boolean).map((s) => esc2(String(s))).join(" · ");
+      const by = [it2.sourceName || newsSourceName(it2.source, this._sources || []), it2.category].filter(Boolean).map((s) => esc2(String(s))).join(" · ");
       const src = it2.openHref ? `<a class="src" href="${esc2(it2.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
@@ -27796,7 +27801,7 @@ ${BLOCKED_PILL_CSS}
         }
         const sid = lc5(item.source);
         this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
-        if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.source || "";
+        if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.sourceName || item.source || "";
         this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
@@ -27908,7 +27913,7 @@ ${BLOCKED_PILL_CSS}
       const chanDesc = pub?.description ? `<p class="cc-desc">${esc2(pub.description)}</p>` : "";
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc2(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
-      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
+      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.sourceName || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
       this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);

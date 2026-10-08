@@ -2554,6 +2554,25 @@
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }
 
+  // membership/news-source-name.mjs
+  var str = (v2) => typeof v2 === "string" ? v2.trim() : "";
+  function sourceNameMap(sources) {
+    const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
+    const map = /* @__PURE__ */ new Map();
+    for (const s of list) {
+      const id = str(s?.id);
+      const name = str(s?.name);
+      if (id && name) map.set(id, name);
+    }
+    return map;
+  }
+  function newsSourceName(id, names) {
+    const key = str(id);
+    if (!key) return "";
+    const map = names instanceof Map ? names : sourceNameMap(names);
+    return map.get(key) || key;
+  }
+
   // membership/syndication-channels.mjs
   var CHANNEL_LIMITS = Object.freeze({
     discord: 2e3,
@@ -2760,15 +2779,18 @@ ${link}` : ""}`;
       return link;
     }
   }
-  function newsToItem(n = {}) {
+  function newsToItem(n = {}, { names } = {}) {
+    const resolved = n.source ? newsSourceName(n.source, names instanceof Map ? names : []) : "";
+    const sourceName = resolved && resolved !== n.source ? resolved : null;
     return {
       type: "news",
       kind: "news",
       supplementary: true,
       guid: n.guid ?? null,
-      title: n.title || n.source || "News",
-      author: n.source || "News",
+      title: n.title || sourceName || n.source || "News",
+      author: sourceName || n.source || "News",
       source: n.source || null,
+      sourceName,
       visibility: "members",
       // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
       // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image
@@ -2782,6 +2804,18 @@ ${link}` : ""}`;
       openHref: n.link ? utmLink(n.link) : null,
       link: n.link ?? null
     };
+  }
+
+  // extension/src/version-build.mjs
+  function buildForVersion(entries, version) {
+    const v2 = String(version || "");
+    if (!v2 || !Array.isArray(entries)) return 0;
+    let best = 0;
+    for (const e of entries) {
+      const b = Number(e?.build);
+      if (e?.version === v2 && Number.isFinite(b) && b > best) best = b;
+    }
+    return best;
   }
 
   // client-ui/src/content-types.mjs
@@ -20325,15 +20359,15 @@ ${listStyleProseCss(".doc-blocks")}
     maxLinks: 1,
     forbiddenClaims: Object.freeze(["collections", "favorites", "favourites"])
   });
-  var str = (v2) => typeof v2 === "string" ? v2 : "";
+  var str2 = (v2) => typeof v2 === "string" ? v2 : "";
   function ctaVisibleLength(body, planLabel = "Network Supporter") {
-    return str(body).replace(/\{plan\}/g, planLabel).trim().length;
+    return str2(body).replace(/\{plan\}/g, planLabel).trim().length;
   }
   function ctaWarnings(cta = {}, { planLabel = "Network Supporter" } = {}) {
     const out = [];
-    const body = str(cta.body);
-    const label = str(cta.linkLabel);
-    const url = str(cta.linkUrl);
+    const body = str2(cta.body);
+    const label = str2(cta.linkLabel);
+    const url = str2(cta.linkUrl);
     if (!body.trim()) out.push("The pitch has no text, so nothing will render.");
     const visible = ctaVisibleLength(body, planLabel) + label.trim().length;
     if (visible > CTA_RULES.maxVisibleChars) {
@@ -20762,7 +20796,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-digest-manager", GbtiDigestManager);
 
   // membership/skill-install.mjs
-  var str2 = (v2) => typeof v2 === "string" ? v2.trim() : "";
+  var str3 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
   function skillNameFrom(skillMd) {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
@@ -20781,7 +20815,7 @@ ${listStyleProseCss(".doc-blocks")}
     return out;
   }
   function installTabsFromTools({ tools, targets, name }) {
-    const byLabel = new Map((Array.isArray(tools) ? tools : []).filter((t) => t && str2(t.key) && str2(t.label) && str2(t.folder) && str2(t.run)).map((t) => [str2(t.label), t]));
+    const byLabel = new Map((Array.isArray(tools) ? tools : []).filter((t) => t && str3(t.key) && str3(t.label) && str3(t.folder) && str3(t.run)).map((t) => [str3(t.label), t]));
     const tabs = [];
     const without = [];
     const okName = SKILL_NAME_RE.test(String(name ?? "")) ? name : "";
@@ -20791,14 +20825,14 @@ ${listStyleProseCss(".doc-blocks")}
         without.push(label);
         continue;
       }
-      const folder2 = fillName(str2(e.folder), okName);
+      const folder2 = fillName(str3(e.folder), okName);
       tabs.push({
-        key: str2(e.key),
+        key: str3(e.key),
         label,
         folder: folder2,
         mkdir: `mkdir -p ${folder2}`,
-        run: codeRuns(fillName(str2(e.run), okName)),
-        local: codeRuns(fillName(str2(e.local), okName))
+        run: codeRuns(fillName(str3(e.run), okName)),
+        local: codeRuns(fillName(str3(e.local), okName))
       });
     }
     return { tabs, without };
@@ -21826,9 +21860,9 @@ ${SKILL_BOX_CSS}`;
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
   var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
-  var str3 = (v2) => typeof v2 === "string" ? v2.trim() : "";
+  var str4 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   function validRef(type, ref) {
-    const r = str3(ref);
+    const r = str4(ref);
     if (!r || r.length > CTA_LIMITS.ref) return false;
     return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE2.test(r);
   }
@@ -21844,7 +21878,7 @@ ${SKILL_BOX_CSS}`;
     return null;
   }
   function trackedPathProblem(trackedPath) {
-    const v2 = str3(trackedPath);
+    const v2 = str4(trackedPath);
     if (!v2) return null;
     if (v2.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
     if (!v2.startsWith("/")) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
@@ -21879,7 +21913,7 @@ ${SKILL_BOX_CSS}`;
   function validateCta(e, where = "cta") {
     const problems = [];
     if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
-    const id = str3(e.id);
+    const id = str4(e.id);
     if (!id || !ID_RE2.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
     if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
     const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
@@ -21889,12 +21923,12 @@ ${SKILL_BOX_CSS}`;
         problems.push(`${where}: ${k} must be text`);
         continue;
       }
-      const v2 = str3(e[k]);
+      const v2 = str4(e[k]);
       if (!v2) {
         if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
       } else if (v2.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
     }
-    const dest = str3(e.destination);
+    const dest = str4(e.destination);
     let u = null;
     if (dest || uses.link) {
       try {
@@ -21915,7 +21949,7 @@ ${SKILL_BOX_CSS}`;
       if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
       else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
     }
-    if (uses.html && !str3(e.html)) problems.push(`${where}: html is required for the html layout`);
+    if (uses.html && !str4(e.html)) problems.push(`${where}: html is required for the html layout`);
     if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
     if (e.hosts !== void 0) {
       if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
@@ -21929,7 +21963,7 @@ ${SKILL_BOX_CSS}`;
         });
       }
     }
-    const partner = str3(e.partner);
+    const partner = str4(e.partner);
     if (!partner || !ID_RE2.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
     if (partner === "amazon" && u) {
       const why = amazonDestinationProblem(dest);
@@ -21961,7 +21995,7 @@ ${SKILL_BOX_CSS}`;
         problems.push(`${at3}: ref must be a ${it2.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it2.ref ?? null)}`);
         continue;
       }
-      const key = `${it2.type}:${str3(it2.ref)}`;
+      const key = `${it2.type}:${str4(it2.ref)}`;
       if (seen.has(key)) problems.push(`${at3}: ${key} is assigned to this CTA twice`);
       seen.add(key);
     }
@@ -21993,24 +22027,24 @@ ${SKILL_BOX_CSS}`;
   });
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
   var ID_RE3 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  var str4 = (v2) => typeof v2 === "string" ? v2 : "";
+  var str5 = (v2) => typeof v2 === "string" ? v2 : "";
   var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
-      id: str4(c?.id),
-      label: str4(c?.label),
-      line: str4(c?.line),
-      button: str4(c?.button),
-      destination: str4(c?.destination),
-      partner: str4(c?.partner),
-      note: str4(c?.note),
+      id: str5(c?.id),
+      label: str5(c?.label),
+      line: str5(c?.line),
+      button: str5(c?.button),
+      destination: str5(c?.destination),
+      partner: str5(c?.partner),
+      note: str5(c?.note),
       enabled: c?.enabled === true,
       layout: CTA_LAYOUTS.includes(c?.layout) ? c.layout : "text",
       icon: c?.icon && typeof c.icon === "object" ? structuredClone(c.icon) : null,
-      html: str4(c?.html),
+      html: str5(c?.html),
       showTitle: c?.showTitle !== false,
       hosts: Array.isArray(c?.hosts) ? c.hosts.filter((h) => typeof h === "string") : [],
-      items: (Array.isArray(c?.items) ? c.items : []).filter((it2) => it2 && typeof it2 === "object").map((it2) => ({ type: it2.type, ref: str4(it2.ref) })),
+      items: (Array.isArray(c?.items) ? c.items : []).filter((it2) => it2 && typeof it2 === "object").map((it2) => ({ type: it2.type, ref: str5(it2.ref) })),
       image: typeof c?.image === "string" ? { kind: "stored", file: c.image, url: imageUrl } : { kind: "none" }
     };
   }
@@ -22086,7 +22120,7 @@ ${SKILL_BOX_CSS}`;
       changed.push(k);
     };
     for (const k of ["label", "line", "button", "destination", "partner", "note", "html"]) {
-      if (str4(card[k]) !== str4(o[k]).trim()) set(k, str4(card[k]));
+      if (str5(card[k]) !== str5(o[k]).trim()) set(k, str5(card[k]));
     }
     const oLayout = CTA_LAYOUTS.includes(o.layout) ? o.layout : "text";
     if (card.layout !== oLayout) set("layout", card.layout);
@@ -22094,7 +22128,7 @@ ${SKILL_BOX_CSS}`;
     if (o.showTitle !== false !== (d.showTitle !== false)) set("showTitle", d.showTitle === false ? false : null);
     const oHosts = Array.isArray(o.hosts) ? o.hosts : [];
     if (!sameJson(d.hosts, oHosts)) set("hosts", d.hosts.length ? d.hosts : null);
-    const oItems = (Array.isArray(o.items) ? o.items : []).map((it2) => ({ type: it2.type, ref: str4(it2.ref) }));
+    const oItems = (Array.isArray(o.items) ? o.items : []).map((it2) => ({ type: it2.type, ref: str5(it2.ref) }));
     if (!sameJson(d.items, oItems)) set("items", d.items);
     if (o.enabled === true !== (d.enabled === true)) set("enabled", d.enabled === true);
     if (d.image.kind === "upload") set("imageBase64", d.image.base64);
@@ -22117,7 +22151,7 @@ ${SKILL_BOX_CSS}`;
     return found;
   }
   function pagesFromBuilt(built) {
-    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str4(p.ref)).map((p) => ({ type: p.type, ref: str4(p.ref), title: str4(p.title) || str4(p.ref) }));
+    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str5(p.ref)).map((p) => ({ type: p.type, ref: str5(p.ref), title: str5(p.title) || str5(p.ref) }));
   }
   function pageCandidates(pages, query, items = [], limit = 6) {
     const q2 = String(query || "").trim().toLowerCase();
@@ -22130,7 +22164,7 @@ ${SKILL_BOX_CSS}`;
       const hosts = Array.isArray(c.hosts) ? c.hosts : [];
       return `Partner code${hosts.length ? `, loads from ${hosts.map((h) => h.replace(/^https:\/\//, "")).join(", ")}` : ""}`;
     }
-    return str4(c?.line);
+    return str5(c?.line);
   }
   function previewNote(d) {
     if (!d.enabled) return "Disabled: this card shows on no page.";
@@ -25464,7 +25498,7 @@ ${BLOCKED_PILL_CSS}
   }
   function avatarFor(item = {}) {
     if (lc2(item.type) === "news") {
-      const title = item.source || item.author || "News";
+      const title = item.sourceName || item.source || item.author || "News";
       return { src: faviconFor(item.link || item.openHref), title, seed: title };
     }
     const folder2 = lc2(item.author);
@@ -29183,25 +29217,6 @@ ${BLOCKED_PILL_CSS}
     return [...followed, ...rest];
   }
 
-  // membership/news-source-name.mjs
-  var str5 = (v2) => typeof v2 === "string" ? v2.trim() : "";
-  function sourceNameMap(sources) {
-    const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
-    const map = /* @__PURE__ */ new Map();
-    for (const s of list) {
-      const id = str5(s?.id);
-      const name = str5(s?.name);
-      if (id && name) map.set(id, name);
-    }
-    return map;
-  }
-  function newsSourceName(id, names) {
-    const key = str5(id);
-    if (!key) return "";
-    const map = names instanceof Map ? names : sourceNameMap(names);
-    return map.get(key) || key;
-  }
-
   // client-ui/src/elements/gbti-news.mjs
   var SITE23 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE23}/membership/">Become a member</a> to unlock the news feed.</div>`;
@@ -29306,6 +29321,7 @@ ${BLOCKED_PILL_CSS}
       try {
         const { items } = await this.client.getNews({ limit: 60 });
         let raw = Array.isArray(items) ? items : [];
+        const names = fetch(`${SITE23}/news-sources.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).then(sourceNameMap, () => /* @__PURE__ */ new Map());
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
@@ -29315,7 +29331,8 @@ ${BLOCKED_PILL_CSS}
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
         } catch {
         }
-        this._items = raw.map(newsToItem);
+        const sourceNames = await names;
+        this._items = raw.map((n) => newsToItem(n, { names: sourceNames }));
         this._state = "ready";
       } catch (err) {
         this._state = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
@@ -29434,7 +29451,7 @@ ${BLOCKED_PILL_CSS}
       const host = this.$("[data-body]");
       if (!host) return;
       const it2 = this._open;
-      const by = [newsSourceName(it2.source, this._sources || []), it2.category].filter(Boolean).map((s) => esc2(String(s))).join(" · ");
+      const by = [it2.sourceName || newsSourceName(it2.source, this._sources || []), it2.category].filter(Boolean).map((s) => esc2(String(s))).join(" · ");
       const src = it2.openHref ? `<a class="src" href="${esc2(it2.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
@@ -30121,7 +30138,7 @@ ${BLOCKED_PILL_CSS}
         }
         const sid = lc5(item.source);
         this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
-        if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.source || "";
+        if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.sourceName || item.source || "";
         this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
@@ -30233,7 +30250,7 @@ ${BLOCKED_PILL_CSS}
       const chanDesc = pub?.description ? `<p class="cc-desc">${esc2(pub.description)}</p>` : "";
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc2(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
-      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
+      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.sourceName || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
       this.set(this.css(CSS48) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
@@ -32028,8 +32045,8 @@ ${BLOCKED_PILL_CSS}
       const res = await fetch(`${SITE28}/changelog.json`, { cache: "no-cache" });
       if (res.ok) {
         const data = await res.json();
-        const build = Number(data?.build);
-        if (Number.isFinite(build) && build > 0) paint(build);
+        const build = buildForVersion(data?.entries, version);
+        if (build > 0) paint(build);
       }
     } catch {
     }
@@ -32090,6 +32107,14 @@ ${BLOCKED_PILL_CSS}
   var SHARES_LOADED_AT = null;
   var NEWS = null;
   var NEWS_LOADED = false;
+  var NEWS_NAMES_KEY = "gbti-news-names";
+  var NEWS_NAMES = (() => {
+    try {
+      return sourceNameMap(JSON.parse(localStorage.getItem(NEWS_NAMES_KEY) || "null"));
+    } catch (e) {
+      return /* @__PURE__ */ new Map();
+    }
+  })();
   var PAGE_SIZE2 = 40;
   var VISIBLE = PAGE_SIZE2;
   var PAGE_KEY = "";
@@ -32127,7 +32152,7 @@ ${BLOCKED_PILL_CSS}
     const { wantNews, wantShares, narrow, kinds } = feedSources(TYPE);
     const directory = narrow ? DIRECTORY[TYPE] : null;
     let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
-    if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n));
+    if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map((n) => newsToItem(n, { names: NEWS_NAMES })).map(({ openHref, ...n }) => n));
     if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
     if (VIEW === "following") {
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
@@ -32364,6 +32389,22 @@ ${BLOCKED_PILL_CSS}
       if (!Array.isArray(NEWS)) NEWS = [];
     }
   }
+  async function loadNewsNames() {
+    try {
+      const res = await fetch(`${SITE28}/news-sources.json`, { cache: "no-cache" });
+      if (!res.ok) return;
+      const map = sourceNameMap(await res.json());
+      if (!map.size) return;
+      const same2 = map.size === NEWS_NAMES.size && [...map].every(([id, name]) => NEWS_NAMES.get(id) === name);
+      NEWS_NAMES = map;
+      try {
+        localStorage.setItem(NEWS_NAMES_KEY, JSON.stringify([...map].map(([id, name]) => ({ id, name }))));
+      } catch (e) {
+      }
+      if (!same2 && Array.isArray(NEWS) && NEWS.length) renderFeed($("[data-filter]")?.value || "");
+    } catch {
+    }
+  }
   async function ensureNewsForFilter() {
     if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
       await loadNews();
@@ -32484,6 +32525,7 @@ ${BLOCKED_PILL_CSS}
     renderTabs();
     initFooterTip();
     initVersionIndicator();
+    loadNewsNames();
     applyMembershipState().then(() => {
       ensureSharesForFilter();
       ensureNewsForFilter();

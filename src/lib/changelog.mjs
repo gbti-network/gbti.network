@@ -46,7 +46,7 @@ export function normalizeChangelog(parsed) {
   return out;
 }
 
-/** The highest build across a normalized list (what the extension indicator shows), or 0 if empty. */
+/** The highest build across a normalized list (the newest; the extension indicator shows its installed version's own), or 0 if empty. */
 export function currentBuildOf(entries) {
   return entries.reduce((max, e) => Math.max(max, e.build), 0);
 }
@@ -76,7 +76,7 @@ export function releases() {
   return load().filter((e) => e.type === 'release');
 }
 
-/** The highest build number across all entries (what the extension indicator shows), or 0 if empty. */
+/** The highest build number across all entries (the newest; the extension indicator shows its installed version's own), or 0 if empty. */
 export function currentBuild() {
   return currentBuildOf(load());
 }

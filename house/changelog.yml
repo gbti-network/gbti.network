@@ -1,11 +1,12 @@
 # SOW-118: the git-native changelog journal (portable, admin-CODEOWNED house data). This file IS the
 # curation: a fork that clones this repo carries its own changelog, and its build publishes its own
 # /changelog.json. The Astro build emits src/pages/changelog.json.ts from this, the public /changelog page
-# renders it, and the extension new-tab version indicator reads it to show the current build number.
+# renders it, and the extension new-tab version indicator reads it to show the installed version's build number.
 #
 # Each entry: { version, build, date, type, title, notes }.
 #   version : the semver the extension manifest carries at that point (a release bumps it, a build reuses it).
-#   build   : a monotonic integer that increases by one on every entry. The extension shows the highest build.
+#   build   : a monotonic integer that increases by one on every entry. The extension shows the highest build of
+#             the version it has installed (an install that has not updated yet shows its own, not the newest).
 #   date    : an absolute date (YYYY-MM-DD).
 #   type    : release (a public version members see) or build (a dev iteration, shown only when the
 #             changelog page's "Show build notes" view is turned on).

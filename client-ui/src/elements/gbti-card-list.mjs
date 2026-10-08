@@ -38,7 +38,7 @@ export function faviconFor(urlOrHost) {
 // is the name/source shown as a hover tooltip on the avatar. Pure.
 export function avatarFor(item = {}) {
   if (lc(item.type) === 'news') {
-    const title = item.source || item.author || 'News';
+    const title = item.sourceName || item.source || item.author || 'News'; // the publication's name, never its id
     return { src: faviconFor(item.link || item.openHref), title, seed: title };
   }
   const folder = lc(item.author);

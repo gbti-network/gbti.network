@@ -13,6 +13,8 @@ import { canSeeNews, canSeeShares, upgradePromptKind, lockedAccountCopy } from '
 import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (superadmin + Debug-flag gated; inert otherwise)
 import { mergeAll, newestFirst } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
+import { sourceNameMap } from '../../membership/news-source-name.mjs'; // a news card names the publication, never its id
+import { buildForVersion } from './version-build.mjs';
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
 import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType } from '../../client-ui/src/feed-route.mjs';
@@ -26,8 +28,8 @@ const $ = (sel) => document.querySelector(sel);
 const authorName = (a) => (a === 'gbti' || a === 'house' ? 'GBTI Network' : a);
 
 // SOW-118: fill the bottom-right version indicator. The installed version comes from the manifest (always
-// available); the build number comes from the public changelog artifact (fail-soft, so an offline tab still
-// shows the version). The whole control links to /changelog.
+// available); the build number is that version's own build in the public changelog artifact (fail-soft, so an offline
+// tab still shows the version). The whole control links to /changelog.
 async function initVersionIndicator() {
   const el = $('[data-version]');
   const txt = el?.querySelector('[data-version-text]');
@@ -44,8 +46,8 @@ async function initVersionIndicator() {
     const res = await fetch(`${SITE}/changelog.json`, { cache: 'no-cache' });
     if (res.ok) {
       const data = await res.json();
-      const build = Number(data?.build);
-      if (Number.isFinite(build) && build > 0) paint(build);
+      const build = buildForVersion(data?.entries, version); // not data.build: that is the newest release, maybe not this one
+      if (build > 0) paint(build);
     }
   } catch { /* offline or the artifact is unreachable: the version-only label is fine */ }
 }
@@ -105,6 +107,11 @@ let SHARES_LOADED = false;
 let SHARES_LOADED_AT = null; // the MEMBERSHIP the loaded SHARES were fetched under, so an upgrade re-fetches
 let NEWS = null;
 let NEWS_LOADED = false;
+// A story carries only its source id, and the card printed it as the byline: The Verge's id is `object-object`. The
+// names come from the site's public sources list, remembered in this page's localStorage (the list is the same for
+// everyone and holds nothing personal) so a new tab names the publication on its first paint instead of flashing the id.
+const NEWS_NAMES_KEY = 'gbti-news-names';
+let NEWS_NAMES = (() => { try { return sourceNameMap(JSON.parse(localStorage.getItem(NEWS_NAMES_KEY) || 'null')); } catch (e) { return new Map(); } })();
 // SOW-111 QA follow-up (owner-refined): every view renders in 40-item chunks and AUTO-LOADS the next chunk as
 // the reader nears the bottom (an IntersectionObserver sentinel with a 600px pre-load margin, so scrolling
 // feels continuous; the rows are already in memory, only the DOM grows). The window resets when the
@@ -168,7 +175,7 @@ function renderFeed(filter = '') {
   let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
   // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
-  if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
+  if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map((n) => newsToItem(n, { names: NEWS_NAMES })).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
   // sow-204 item 4a: filter by `kinds` rather than by TYPE, because NETWORK admits THREE item types
   // (posts, projects, prompts) and the old single-type equality could not express it. A single-type view
   // reports kinds:[itsOwnType], so this is the same behaviour for every pre-existing view; `all` reports
@@ -447,6 +454,21 @@ async function loadNews() {
   }
 }
 
+/** Refresh the publication names from the site's sources list. Re-renders only when a name changed, so a tab that
+ *  already painted from the remembered list does not redraw for nothing. A failure keeps what is remembered. */
+async function loadNewsNames() {
+  try {
+    const res = await fetch(`${SITE}/news-sources.json`, { cache: 'no-cache' });
+    if (!res.ok) return;
+    const map = sourceNameMap(await res.json());
+    if (!map.size) return;
+    const same = map.size === NEWS_NAMES.size && [...map].every(([id, name]) => NEWS_NAMES.get(id) === name);
+    NEWS_NAMES = map;
+    try { localStorage.setItem(NEWS_NAMES_KEY, JSON.stringify([...map].map(([id, name]) => ({ id, name })))); } catch (e) { /* storage blocked */ }
+    if (!same && Array.isArray(NEWS) && NEWS.length) renderFeed($('[data-filter]')?.value || '');
+  } catch { /* offline: the remembered names, or the id, stay the label */ }
+}
+
 /** If the active filter needs News and it is not loaded yet, fetch it, then re-render the feed. */
 async function ensureNewsForFilter() {
   if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
@@ -577,6 +599,7 @@ function init() {
   renderTabs();
   initFooterTip();
   initVersionIndicator();
+  loadNewsNames();
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
   // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
   applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });

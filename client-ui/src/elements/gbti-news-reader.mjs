@@ -119,7 +119,7 @@ class GbtiNewsReader extends GbtiElement {
       if (status?.role === 'superadmin' && item.guid && this._item === item) { this._mountAdmin(item); this._mountShare(item); }
       const sid = lc(item.source);
       this._publisher = (srcs?.sources || []).find((s) => lc(s.id) === sid || lc(s.name) === sid) || null;
-      if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.source || '';
+      if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.sourceName || item.source || '';
       this._followed = new Set((prefs?.followedChannels || []).map(lc));
     } catch { /* keep the basics */ }
     this.render();
@@ -232,7 +232,7 @@ class GbtiNewsReader extends GbtiElement {
     const followBtn = followable ? `<button class="fbtn ${followed ? 'on' : ''}" data-follow type="button">${followed ? 'Following' : 'Follow'}</button>` : '';
     const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div>`
       + `<div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ''}</span>`
-      + `<div class="cc-name">${esc(pub?.name || it.source || 'Publisher')}</div></div>`
+      + `<div class="cc-name">${esc(pub?.name || it.sourceName || it.source || 'Publisher')}</div></div>`
       + `${chanDesc}${chanCount}${followBtn}</div>`;
     // sow-420: a removed story is replaced in place by the website's notice and an Undo. The reader of this view is
     // the superadmin who just removed it, so closing it would hide whether the removal worked.

@@ -6,6 +6,7 @@
 // primary). No DOM, no client, no deploy dependency -> node-testable. The element/proxy/Discord/onboarding phases
 // remain owner/deploy-gated; this is the reusable, decision-free core P4/P5 will consume.
 import { toMs } from './all-merge.mjs';
+import { newsSourceName } from '../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
 
 // SOW-043 P5: every outbound news link carries these so referred traffic is attributable to the extension.
 export const UTM = Object.freeze({ utm_source: 'gbti-network', utm_medium: 'extension', utm_campaign: 'news' });
@@ -30,16 +31,25 @@ export function utmLink(link, params = UTM) {
 
 /** Project a news item onto the shared card-list item shape. News is always members + flagged `supplementary`
  *  (and type/kind 'news') so the blended feed renders it as a lighter, secondary card. openHref is the UTM-tagged
- *  source link (a news item has no in-network page; the readability preview is a separate, lib-gated phase). */
-export function newsToItem(n = {}) {
+ *  source link (a news item has no in-network page; the readability preview is a separate, lib-gated phase).
+ *
+ *  `names` is the id -> name map from the published sources list (sourceNameMap). A story carries only its source
+ *  id, and an id is not always readable: The Verge's is `object-object`, which the card printed as the byline until
+ *  this was passed through. `sourceName` is the name or null, never the id, so a reader can tell "unknown" apart and
+ *  look further; the byline falls back to the id, as before. `source` stays the id, because the follow state and the
+ *  channel filter key on it. A bare `.map(newsToItem)` passes an index here and gets the id. */
+export function newsToItem(n = {}, { names } = {}) {
+  const resolved = n.source ? newsSourceName(n.source, names instanceof Map ? names : []) : '';
+  const sourceName = resolved && resolved !== n.source ? resolved : null; // newsSourceName answers the id when unknown
   return {
     type: 'news',
     kind: 'news',
     supplementary: true,
     guid: n.guid ?? null,
-    title: n.title || n.source || 'News',
-    author: n.source || 'News',
+    title: n.title || sourceName || n.source || 'News',
+    author: sourceName || n.source || 'News',
     source: n.source || null,
+    sourceName,
     visibility: 'members',
     // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
     // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image

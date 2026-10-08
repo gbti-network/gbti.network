@@ -11,7 +11,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { newsToItem, newsTargetSlug } from '../news.mjs';
 import './gbti-card-list.mjs';
 import { newsCategoriesForTopics, prioritizeNewsByTopics } from '../../../membership/topic-map.mjs'; // SOW-054 P4: news defaults to followed topics
-import { newsSourceName } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
+import { newsSourceName, sourceNameMap } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
 import './gbti-discussion.mjs';
 
 const SITE = 'https://gbti.network';
@@ -122,6 +122,10 @@ class GbtiNews extends GbtiElement {
       // SOW-054 Phase 4: default the news feed to the member's FOLLOWED TOPICS by prioritizing (never hiding) the
       // matching news to the top. Map prefs.categories (topic keys) -> news categories via /topics.json's per-topic
       // map. Best-effort: any failure (no prefs, no topics.json) just keeps the upstream newest-first order.
+      // A story carries only its source id, so the card byline needs the published sources list for the name (The
+      // Verge's id is `object-object`). Fetched alongside the topics; a failure leaves the id, as before.
+      const names = fetch(`${SITE}/news-sources.json`, { cache: 'no-cache' })
+        .then((r) => (r.ok ? r.json() : null)).then(sourceNameMap, () => new Map());
       try {
         const [prefs, tj] = await Promise.all([
           this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
@@ -130,7 +134,8 @@ class GbtiNews extends GbtiElement {
         const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
         raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
       } catch { /* no personalization; keep the upstream order */ }
-      this._items = raw.map(newsToItem);
+      const sourceNames = await names;
+      this._items = raw.map((n) => newsToItem(n, { names: sourceNames }));
       this._state = 'ready';
     } catch (err) {
       this._state = err?.code === 'membership-required' ? 'locked' : (err?.code === 'not-authenticated' ? 'signin' : 'error');
@@ -225,9 +230,9 @@ class GbtiNews extends GbtiElement {
   _renderReader() {
     const host = this.$('[data-body]'); if (!host) return;
     const it = this._open;
-    // sow-371: the channel list this element already loaded carries each source's real name, so print that rather
-    // than the id. Falls back to the id when the list has not arrived, which is the line this replaces.
-    const by = [newsSourceName(it.source, this._sources || []), it.category].filter(Boolean).map((s) => esc(String(s))).join(' · ');
+    // sow-371: print the publication's name, never the id. The card item carries it (newsToItem, from the published
+    // sources list); the channel list, loaded only once the Channels view opens, is the second place to look.
+    const by = [it.sourceName || newsSourceName(it.source, this._sources || []), it.category].filter(Boolean).map((s) => esc(String(s))).join(' · ');
     const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : '';
     const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : '';
     const note = this._postNote ? `<p class="note ${this._postNote.ok ? 'ok' : 'err'}">${esc(this._postNote.msg)}</p>` : '';
