@@ -12,7 +12,7 @@ import { applyDraftPut } from '../membership/member-drafts.mjs';
 import { pathsNeedingApproval } from '../membership/hosted-author.mjs';
 import { audienceRefusal } from '../workers/signup/membership-audience.mjs';
 import { draftRecordForEditor } from '../src/lib/workbench-client-core.mjs';
-import { madeForRows, toggleTarget, mainHeading, mainHeadingHtml, kindSectionHtml, skillSectionsHtml, skillFileFrom, siteFor, normalizeKind } from '../client-ui/src/editor-skill.mjs';
+import { madeForRows, toggleTarget, mainHeading, mainHeadingHtml, kindSectionHtml, skillSectionsHtml, skillFileFrom, siteFor, normalizeKind, SKILL_EDITOR_CSS } from '../client-ui/src/editor-skill.mjs';
 import { FIELDS } from '../client/src/form-fields.mjs';
 import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
 import { contentEditorSource } from './lib/content-editor-source.mjs'; // the element plus the modules it was split into
@@ -228,7 +228,7 @@ test('the choice, the headings and the skill file field', () => {
   assert.match(kindSectionHtml('skill'), /<input data-key="kind" data-kind="enum" type="hidden" value="skill" \/>/);
   assert.match(kindSectionHtml(undefined), /value="prompt"/, 'a new item starts as a prompt');
   assert.equal((kindSectionHtml('skill').match(/aria-checked="true"/g) || []).length, 1);
-  assert.equal((skillSectionsHtml({ kind: 'prompt' }).match(/data-skill-only hidden/g) || []).length, 3, 'all three skill blocks hidden for a prompt');
+  assert.equal((skillSectionsHtml({ kind: 'prompt' }).match(/data-skill-only hidden/g) || []).length, 2, 'both skill blocks (Made for, the file) hidden for a prompt');
   assert.match(skillSectionsHtml({ kind: 'skill', skillFile: '<b>' }), /<textarea id="skillfile"[^>]*>&lt;b&gt;<\/textarea>/, 'the file is escaped');
   const root = (kind, value) => ({ querySelector: (s) => (s === 'input[data-key="kind"]' ? { value: kind } : s === '#skillfile' ? { value } : null) });
   assert.equal(skillFileFrom(root('skill', FILE)), FILE);
@@ -253,4 +253,20 @@ test('the editor and workspace carry kind and the skill file end to end', () => 
   assert.equal((ws.match(/skillFile: typeof full\.skillFile === 'string' \? full\.skillFile : null/g) || []).length, 2, 'an item and a draft both open with it');
   const page = src('src/pages/skill-install.json.ts');
   assert.match(page, /allTools: aiToolsAll\(\)/, 'the tick list reads every tool');
+});
+
+// sow-447 (owner, 2026-10-08): the option boxes have 2px corners and smaller text, and the "No install steps needed" note
+// is gone from the editor (the reader's skill page still shows the install steps).
+test('the option boxes: 2px corners, the smaller text, and no install note', () => {
+  const rule = (sel) => { const m = SKILL_EDITOR_CSS.match(new RegExp(`(?:^|\\n)\\s*${sel.replace(/\./g, '\\.')} \\{([^}]*)\\}`)); assert.ok(m, sel); return m[1]; };
+  assert.match(rule('button.kind-card'), /border-radius:2px;/);
+  assert.match(rule('button.kind-card'), /padding:12px 14px;/);
+  assert.match(rule('button.mf-tool'), /border-radius:2px;/);
+  assert.match(rule('.kc-name'), /font-size:15px;/);
+  assert.match(rule('.kc-desc'), /font-size:12.5px;/);
+  assert.match(rule('.mf-name'), /font-size:13px;/);
+  assert.match(rule('.mf-note'), /font-size:11.5px;/);
+  const html = skillSectionsHtml({ kind: 'skill' }) + kindSectionHtml('skill');
+  assert.doesNotMatch(html, /No install steps needed|skill-note/, 'the note is gone');
+  assert.doesNotMatch(SKILL_EDITOR_CSS, /\.skill-note|\.sn-text|\.sn-ico/, 'and its styles with it');
 });

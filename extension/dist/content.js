@@ -6452,8 +6452,7 @@ ${listStyleProseCss(".doc-blocks")}
   var ICON = {
     prompt: '<path d="M4 6h16M4 12h11M4 18h7"/>',
     skill: '<path d="M4 17l6-5-6-5"/><path d="M12 19h8"/>',
-    check: '<path d="M5 12l5 5 9-10"/>',
-    install: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'
+    check: '<path d="M5 12l5 5 9-10"/>'
   };
   var CARDS = [
     { kind: "prompt", name: "Prompt", desc: "Text a reader copies into ChatGPT, Claude, Gemini or another AI tool." },
@@ -6492,9 +6491,7 @@ ${listStyleProseCss(".doc-blocks")}
     <span class="mf-box">${svg4(ICON.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc2(r.label)}</span><span class="mf-note">${esc2(r.note)}</span></span></button>`).join("");
   function skillSectionsHtml({ kind: kind2, skillFile = "" } = {}) {
     const hide = normalizeKind(kind2) === "skill" ? "" : " hidden";
-    return `<div class="skill-note" data-skill-only${hide}><span class="sn-ico">${svg4(ICON.install, 17)}</span><div><b>No install steps needed</b>
-      <span class="sn-text">Your skill page shows the standard install steps for every tool you tick below, and readers pick theirs. Write about what your skill does, not how to install it.</span></div></div>
-    <section class="mf-sec" aria-labelledby="mfh" data-skill-only${hide}><h2 id="mfh" class="kind-h">Made for</h2>
+    return `<section class="mf-sec" aria-labelledby="mfh" data-skill-only${hide}><h2 id="mfh" class="kind-h">Made for</h2>
       <p class="mf-sub">Tick every tool your skill works in. Readers get the install steps for the one they use.</p>
       <div class="mf-tools" role="group" aria-labelledby="mfh" data-mf-tools><span class="mf-wait">Loading the tool list…</span></div>
       <p class="mf-foot">Not listed? Explain installation for it in Commands and usage, and ask an admin to add its standard steps.</p></section>
@@ -6611,32 +6608,28 @@ ${listStyleProseCss(".doc-blocks")}
   .kind-h { margin:0; font-size:15px; font-weight:700; color:var(--s-fg); letter-spacing:normal; text-transform:none; font-family:inherit; }
   .kind-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   @media (max-width:560px) { .kind-cards { grid-template-columns:1fr; } }
-  button.kind-card { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:14px 16px; border:2px solid var(--s-line-2); border-radius:12px; background:var(--s-surface); color:var(--s-fg); font:inherit; text-align:left; cursor:pointer; width:auto; }
+  button.kind-card { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:12px 14px; border:2px solid var(--s-line-2); border-radius:2px; background:var(--s-surface); color:var(--s-fg); font:inherit; text-align:left; cursor:pointer; width:auto; }
   button.kind-card:hover { border-color:var(--skill-box-line); background:var(--s-surface); }
   button.kind-card.on { border-color:var(--skill-box-accent); background:var(--skill-box-bg); }
   .kc-top { display:flex; align-items:center; gap:10px; }
   .kc-ico { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .kc-prompt { background:var(--kind-prompt-bg); color:var(--kind-prompt-fg); }
   .kc-skill { background:var(--kind-skill-bg); color:var(--kind-skill-fg); }
-  .kc-name { flex:1; font-weight:700; font-size:17px; }
+  .kc-name { flex:1; font-weight:700; font-size:15px; }
   .kc-check { width:22px; height:22px; border-radius:50%; background:var(--skill-box-accent); color:var(--skill-box-on-accent); display:flex; align-items:center; justify-content:center; visibility:hidden; }
   .kind-card.on .kc-check { visibility:visible; }
-  .kc-desc { font-size:13.5px; line-height:1.5; color:var(--s-fg-soft); }
-  .skill-note { margin-top:16px; display:flex; gap:12px; align-items:flex-start; padding:14px 16px; border:1px solid var(--skill-box-line); border-radius:12px; background:var(--skill-box-bg); }
-  .skill-note b { display:block; font-size:14.5px; margin-bottom:2px; color:var(--s-fg); }
-  .sn-text { font-size:13.5px; line-height:1.55; color:var(--skill-box-mute); }
-  .sn-ico { width:30px; height:30px; flex-shrink:0; border-radius:8px; background:var(--skill-box-accent); color:var(--skill-box-on-accent); display:flex; align-items:center; justify-content:center; }
+  .kc-desc { font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
   .mf-sub, .mf-foot { margin:0; font-size:13.5px; line-height:1.5; color:var(--s-fg-mute); }
   .mf-tools { display:flex; gap:8px; flex-wrap:wrap; }
   .mf-wait { font-size:13.5px; color:var(--s-fg-mute); }
-  button.mf-tool { display:flex; align-items:center; gap:10px; padding:8px 12px; border:1.5px solid var(--s-line-2); border-radius:10px; background:var(--s-surface); color:var(--s-fg); font:inherit; cursor:pointer; width:auto; }
+  button.mf-tool { display:flex; align-items:center; gap:10px; padding:8px 12px; border:1.5px solid var(--s-line-2); border-radius:2px; background:var(--s-surface); color:var(--s-fg); font:inherit; cursor:pointer; width:auto; }
   button.mf-tool:hover { border-color:var(--skill-box-line); background:var(--s-surface); }
   button.mf-tool.on { border-color:var(--skill-box-accent); background:var(--skill-box-bg); }
   .mf-box { width:18px; height:18px; flex-shrink:0; box-sizing:border-box; border-radius:5px; border:1.5px solid var(--s-fg-mute); color:transparent; display:flex; align-items:center; justify-content:center; }
   .mf-tool.on .mf-box { background:var(--skill-box-accent); border-color:var(--skill-box-accent); color:var(--skill-box-on-accent); }
   .mf-txt { display:flex; flex-direction:column; text-align:left; }
-  .mf-name { font-size:14px; font-weight:700; }
-  .mf-note { font-size:12px; color:var(--s-fg-mute); }
+  .mf-name { font-size:13px; font-weight:700; }
+  .mf-note { font-size:11.5px; color:var(--s-fg-mute); }
   .sf-text { box-sizing:border-box; width:100%; min-height:220px; padding:12px 14px; border:1px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); color:var(--s-fg); font-family:var(--font-mono,ui-monospace,monospace); font-size:13px; line-height:1.6; resize:vertical; }
   .sf-text:focus { outline:none; border-color:var(--skill-box-accent); }
   .dsub-opt { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:none; color:var(--s-fg-mute); border:1px solid var(--s-line-2); border-radius:999px; padding:1px 8px; }
