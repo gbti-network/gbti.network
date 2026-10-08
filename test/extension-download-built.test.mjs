@@ -34,7 +34,9 @@ test('both generated files are ignored and untracked, and every surface that use
   assert.doesNotMatch(drift, /git diff[^\n]*public\/extension/, 'an untracked path in a diff passes on nothing');
   assert.match(drift, /- run: npm run build:extension[\s\S]*- run: npm run check:extension/, 'the fresh build is still checked');
   const release = read('scripts/release.mjs');
-  assert.match(release, /git add extension\/manifest\.json src\/lib\/extension\.ts\\n/);
+  // The staging line names the tracked version sources and the changelog (the extension footer shows its newest
+  // build), and never the generated download, which stays untracked (sow-348).
+  assert.match(release, /git add extension\/manifest\.json src\/lib\/extension\.ts house\/changelog\.yml\\n/);
   assert.doesNotMatch(release, /git add[^\n]*public\/extension/);
   assert.match(read('package.json'), /"build:pages": "npm run build:extension && astro build/, 'the deploy still packages the download before the site build');
   assert.match(read('.github/workflows/publish-extension.yml'), /run: npm run build:extension && node scripts\/check-extension\.mjs/, 'the store workflow builds its own');

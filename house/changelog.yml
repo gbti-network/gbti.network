@@ -15,6 +15,66 @@
 # The deployment SOP (.data/ops/deployment-ops/README.md) tells the agent to APPEND one entry here on every
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
+  - version: 0.6.0
+    build: 40
+    date: 2026-10-08
+    type: release
+    title: Version 0.6.0, start new work from the extension
+    notes:
+      - A Submit content button sits at the right of the top bar. Members choose an article, project or prompt, which opens the editor on gbti.network, or a share, which opens the share box.
+      - A comment you post now shows straight away under your name, and a tweet or video link on a line of its own in a comment now shows inside the card. Before, the extension left them as plain links.
+      - A share of a post on X shows the post itself in the reader.
+      - A public share you post now saves the name of the site it links to, such as Quanta Magazine, so the preview card other sites show for your share ends with that name instead of GBTI Network.
+      - The project page in the extension now matches the one on the website.
+      - The top bar hides the logo before its controls would wrap onto a second line.
+      - When a member's photo cannot be shown, a generated avatar now takes its place instead of a letter, and Saved labels prompts and skills apart.
+      - Superadmins can share a news story to the network's channels from the news reader.
+      - The invite link in Settings now opens the membership page with your referral code. It used to point at a page that did not exist.
+      - Settings and the complimentary year notice now say that your published work stays live when a membership ends.
+  - version: 0.5.3
+    build: 39
+    date: 2026-09-30
+    type: release
+    title: Version 0.5.3, skills told apart and the Social Queue returns
+    notes:
+      - Prompts and skills are told apart, and a skill opens with install steps for your tool and buttons to copy or download it.
+      - News cards show their category beside News, and every story keeps its own picture.
+      - Notifications remember what you have read, the same on every tab.
+      - Reading your own share, an Edit on gbti.network link opens it in the share editor on the website.
+      - Save and favorite controls are easier to read in the light, dark and glass themes.
+      - WorkBench is first in the avatar menu, and opens the website.
+      - Signing in no longer opens the website welcome page.
+      - A share from a known music or podcast site, such as Mixcloud, SoundCloud, Spotify or Apple Podcasts, now says Listen to it on that site instead of Read article.
+      - For superadmins, the Social Queue is back, a news story offers source weight and removal controls, and Admin tools gains Skill install.
+  - version: 0.5.2
+    build: 38
+    date: 2026-09-26
+    type: release
+    title: Version 0.5.2, fewer permissions and a clearer top bar
+    notes:
+      - The extension no longer asks for access to github.com and api.github.com. It now asks only for gbti.network and signup.gbti.network, GBTI's own service.
+      - The Use a code instead option is gone from the sign-in screen, so Sign in with GitHub is the only way to sign in.
+      - The top bar says GBTI, and its logo, not a quick launch icon, opens the website. Every other page leads back to the feed.
+      - The share category picker reads as a tree.
+      - For superadmins, moderation actions sit in their own menu, in the reader and the Shares feed.
+      - This release also carries 0.5.1, which was withdrawn from review and never reached anyone.
+  - version: 0.5.0
+    build: 37
+    date: 2026-09-25
+    type: release
+    title: Version 0.5.0, a new sign-in and a simpler extension
+    notes:
+      - Signing in uses the normal GitHub sign-in in a Chrome window, so there is no device code to copy. A code is still offered as a fallback.
+      - Setup moves to the website. After your first sign-in, the welcome steps open on gbti.network, and the toolbar icon opens the new tab.
+      - The WorkBench leaves the extension. Favorites and collections move to the avatar menu, and Profile opens your page.
+      - The new tab is built around the share box, with a quick launch row you can fill with your own sites, and the feeds become a row of tabs.
+      - You can favorite and save a share from its page. Feed cards for articles, projects, prompts and shares now carry the heart and Save. News cards do not.
+      - Choosing a share's category is one searchable list grouped by heading.
+      - Notifications are in the app only for now. The bell, which members see, follows your notification settings. It now shows public shares from people you follow and new stories from the news sources you follow.
+      - A free account is no longer told on the lock screen that its membership lapsed.
+      - News appears in the All tab, newest first.
+      - Superadmins can post a share for another member.
+      - For superadmins, syndication settings, the Social Queue and Manually syndicate move to the website.
   - version: 0.4.0
     build: 36
     date: 2026-09-12

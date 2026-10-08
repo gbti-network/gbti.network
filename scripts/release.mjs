@@ -115,7 +115,8 @@ export async function main({ argv = process.argv.slice(2) } = {}) {
   // stage sweeps whatever anyone else has in flight; two published articles were once found staged as
   // drafts that way. Print the explicit paths a release actually touches.
   stdout.write('  1. Review the diff, then stage EXPLICIT paths (never `git add -A` in this shared clone):\n');
-  stdout.write('       git add extension/manifest.json src/lib/extension.ts\n');
+  stdout.write('       add a release entry at the top of house/changelog.yml (the next build number; the extension footer shows it)\n');
+  stdout.write('       git add extension/manifest.json src/lib/extension.ts house/changelog.yml\n');
   stdout.write(`       git commit -m "Release extension v${next}"\n`);
   stdout.write('  2. Push (the deploy builds and serves the new download):  git push\n');
   if (!flags.has('--publish')) {
