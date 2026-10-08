@@ -7,6 +7,7 @@ shortDescription: >-
   meant it, but we also knew what tends to happen next. A criti
 url: >-
   https://patchstack.com/articles/ninety-minutes-watching-attackers-weaponize-the-wordpress-core-rce/
+sourceName: Patchstack
 category: wordpress
 image: https://gbti.network/media/shares/atwellpub/20260722174805-ninety-minutes-watching-attackers-weaponize-the--ae069736.webp
 imageSource: https://wp.patchstack.com/wp-content/uploads/2026/06/supply-chain.png

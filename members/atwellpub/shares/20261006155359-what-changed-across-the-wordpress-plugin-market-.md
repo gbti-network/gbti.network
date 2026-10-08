@@ -6,6 +6,7 @@ shortDescription: >-
   Rivale’s first monthly plugin-market report tracks August 2026 downloads, updates, ratings, new
   arrivals, departures, and early WordPress 7.1 support across the WordPress.org directory.
 url: https://rivale.io/reports/diff/issue-2026-09/
+sourceName: Rivale.io
 category: wordpress
 tags:
   - wordpress

@@ -7,6 +7,7 @@ shortDescription: >-
   businesses, evaluate options, and complete transactions on behalf of users, the website is
   becoming a veri
 url: https://joost.blog/future-of-the-website/
+sourceName: Joost.blog
 category: ai
 image: https://gbti.network/media/shares/atwellpub/20260727145151-the-future-of-the-website-joost-blog-51b501a6.webp
 imageSource: https://joost.blog/og/future-of-the-website.webp

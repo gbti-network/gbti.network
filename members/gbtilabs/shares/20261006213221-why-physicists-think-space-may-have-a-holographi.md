@@ -6,6 +6,7 @@ shortDescription: >-
   The holographic principle raises a strange possibility: the space we experience may not be
   fundamental, but instead emerge from a deeper layer of quantum information.
 url: https://www.quantamagazine.org/gravity-seems-holographic-what-does-that-mean-for-reality-20260925/
+sourceName: Quanta Magazine
 category: space
 tags:
   - holography

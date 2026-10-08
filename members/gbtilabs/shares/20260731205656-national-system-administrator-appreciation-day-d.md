@@ -6,6 +6,7 @@ shortDescription: >-
   System administrators sit behind the scenes and keep our technology running, so thank them for the
   work they do to make our modern lives as easy as possible.
 url: https://www.daysoftheyear.com/days/system-administrator-appreciation-day/
+sourceName: Days Of The Year
 category: devops
 image: https://gbti.network/media/shares/gbtilabs/20260731205656-national-system-administrator-appreciation-day-d-64e48376.webp
 imageSource: https://www.daysoftheyear.com/cdn-cgi/image/dpr=1%2Cf=jpeg%2Cfit=cover%2Cheight=675%2Cq=85%2Cwidth=1200/wp-content/uploads/system-administrator-appreciation-day1-scaled.jpg

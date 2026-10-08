@@ -6,6 +6,7 @@ shortDescription: >-
   To some they’re known as the fuzz, po-po, or five-0. But the most common term for police officers
   is “cops,” and here’s why.
 url: https://wordsmarts.com/police-cops-origin/
+sourceName: Word Smarts
 category: entertainment
 tags:
   - etymology

@@ -7,6 +7,7 @@ shortDescription: >-
   worldwide and eligible ChatGPT and Codex output in the EU scheduled to receive watermarks over the
   coming we
 url: https://www.unite.ai/openai-begins-phased-text-watermarking-under-eu-ai-act-rules/
+sourceName: Unite.AI
 category: llm
 tags:
   - openai

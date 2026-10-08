@@ -6,6 +6,7 @@ shortDescription: >-
   A platform-agnostic, full specification of the technical features a good website should have.
   Built in the open under an MIT licence.
 url: https://specification.website/
+sourceName: The Website Specification
 category: open-source
 image: https://gbti.network/media/shares/atwellpub/20260727150212-the-website-specification-github-technical-websi-82919011.webp
 imageSource: https://specification.website/og-default.png

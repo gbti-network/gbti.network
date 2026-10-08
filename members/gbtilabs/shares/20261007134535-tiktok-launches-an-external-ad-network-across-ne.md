@@ -6,6 +6,7 @@ shortDescription: >-
   TikTok is expanding beyond its own app with an ad network reaching nearly 400,000 apps while
   adding AI agents for shopping, lead generation, and advertising workflows.
 url: https://musically.com/2026/10/06/tiktok-launches-an-external-ad-network-across-nearly-400k-apps/
+sourceName: Music Ally
 category: marketing
 tags:
   - tiktok-ad-network

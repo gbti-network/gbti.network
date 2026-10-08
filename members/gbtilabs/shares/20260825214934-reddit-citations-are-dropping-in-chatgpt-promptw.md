@@ -7,6 +7,7 @@ shortDescription: >-
   about 4% to about 0.5% on August 14, 2026. Daily data for ChatGPT, Google AI Overviews, and Google
   AI M
 url: https://promptwatch.com/data/reddit-citations-are-dropping-in-chatgpt
+sourceName: Promptwatch
 category: llm
 image: https://gbti.network/media/shares/gbtilabs/20260825214934-reddit-citations-are-dropping-in-chatgpt-promptw-b81ab3c6.webp
 imageSource: https://promptwatch.com/meta.png

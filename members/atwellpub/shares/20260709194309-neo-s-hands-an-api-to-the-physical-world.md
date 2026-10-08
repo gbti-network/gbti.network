@@ -6,6 +6,7 @@ shortDescription: >-
   We're an AI and robotics company based in Palo Alto, California. We create safe humanoid robots
   that do your chores and offer personalized assistance.
 url: https://www.1x.tech/discover/neos-hands
+sourceName: 1X Tech
 category: hardware
 image: https://gbti.network/media/shares/atwellpub/20260709194309-neo-s-hands-an-api-to-the-physical-world-6c74f1ba.webp
 imageSource: https://cdn.sanity.io/images/qka6yvsc/production/dda3401c63234b7b18047dbbb610c6b2ace0b2c1-1800x945.jpg?fit=max&amp;auto=format

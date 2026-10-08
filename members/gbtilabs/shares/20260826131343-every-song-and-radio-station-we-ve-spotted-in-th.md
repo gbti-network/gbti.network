@@ -6,6 +6,7 @@ shortDescription: >-
   From classic rock to recent pop hits and some oddball choices like a foreign cover of "Heart of
   Glass," here's all the music (so far)
 url: https://kotaku.com/every-song-and-radio-station-weve-spotted-in-the-gta-6-leaks-2000727661
+sourceName: Kotaku
 category: music
 image: https://gbti.network/media/shares/gbtilabs/20260826131343-every-song-and-radio-station-we-ve-spotted-in-th-7126247b.webp
 imageSource: https://kotaku.com/app/uploads/2025/05/0f109d881f799bde51423dbbea7fa909-1200x675.jpg

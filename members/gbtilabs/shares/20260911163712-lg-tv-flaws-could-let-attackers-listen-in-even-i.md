@@ -7,6 +7,7 @@ shortDescription: >-
   could let attackers record conversations.
 url: >-
   https://www.malwarebytes.com/blog/privacy/2026/09/lg-tv-flaws-could-let-attackers-listen-in-even-in-standby-mode
+sourceName: Malwarebytes
 category: security
 tags:
   - security

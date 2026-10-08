@@ -6,6 +6,7 @@ shortDescription: >-
   Beam is Reflection AI’s first open-weight model, combining 23.8 trillion tokens of pretraining
   with more than 100 million reinforcement-learning rollouts generated on 10,500 NVIDIA GB300 GPUs.
 url: https://reflection.ai/blog/introducing-beam
+sourceName: Reflection
 category: llm
 tags:
   - open-source-ai

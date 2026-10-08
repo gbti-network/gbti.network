@@ -7,6 +7,7 @@ shortDescription: >-
   dive in and get YOU set up to tinker with the WooCommerce Claude Commerce Agent store and merchant
   exp
 url: https://developer.woocommerce.com/2026/09/16/wc-claude-commerce-agent/
+sourceName: The WooCommerce Developer Blog
 category: open-source
 tags:
   - wordpress
