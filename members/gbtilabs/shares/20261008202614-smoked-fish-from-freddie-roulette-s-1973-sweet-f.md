@@ -13,7 +13,8 @@ tags:
   - blues
   - funk
   - music
-image: https://i.ytimg.com/vi/1CGYDU_W5bo/hqdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261008202614-smoked-fish-from-freddie-roulette-s-1973-sweet-f-add68b8f.webp
+imageSource: https://i.ytimg.com/vi/1CGYDU_W5bo/hqdefault.jpg
 creatorUrl: https://www.youtube.com/@sweetdontrelleus
 creatorName: sweetdontrelleus
 sourceName: YouTube
