@@ -26,7 +26,7 @@ export const SKILL_SHELL = Object.freeze({
   steps: 'skill-steps',
   cmd: 'skill-cmd',
   note: 'skill-note',
-  local: 'skill-local',
+  scope: 'skill-scope', // sow-449: the All projects / This project switch (replaced the skill-local line)
   notes: 'skill-notes',
   file: 'skill-file',
   fileBody: 'skill-file-body',
@@ -34,6 +34,8 @@ export const SKILL_SHELL = Object.freeze({
 
 /** Where the reader's chosen tool is remembered, so every skill page opens on the tool they use. */
 export const SKILL_TOOL_KEY = 'gbti-skill-tool';
+/** sow-449: where All projects or This project is remembered, the same way as the tool. */
+export const SKILL_SCOPE_KEY = 'gbti-skill-scope';
 
 // Drawn inline rather than from the site's icon sprite, because the extension reader renders this box inside a shadow
 // root that cannot see the page's sprite. The skill mark is the same shape as IconSprite's ico-kind-skill.
@@ -46,9 +48,11 @@ const icon = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${s
 const runsHtml = (runs) => (runs || []).map((r) => (r.code ? `<code>${esc(r.text)}</code>` : esc(r.text))).join('');
 const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
-/** "Codex reads this folder too", when another tab installs to the same folder, so a reader does not copy twice. */
-export function sharedFolderNote(tab, tabs) {
-  const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
+/** "Codex reads this folder too", when another tab installs to the same folder, so a reader does not copy twice.
+ *  sow-449: `field` is 'localFolder' for the This project steps, where the folders differ from the home ones. */
+export function sharedFolderNote(tab, tabs, field = 'folder') {
+  const mine = tab?.[field];
+  const others = mine ? (tabs || []).filter((t) => t !== tab && t[field] === mine).map((t) => t.label) : [];
   if (!others.length) return '';
   if (others.length === 1) return `${others[0]} reads this folder too, so one copy serves both.`;
   return `${andList(others)} read this folder too, so one copy serves them all.`;
@@ -66,7 +70,7 @@ export function withoutNote(without) {
  * the author's own text instead, which is where their instructions are.
  *
  * @param {object} args
- * @param {Array<{key:string,label:string,folder:string,mkdir:string,run:Array,local:Array}>} args.tabs from installTabsFor
+ * @param {Array<{key:string,label:string,folder:string,mkdir:string,run:Array,localFolder?:string,localMkdir?:string}>} args.tabs from installTabsFor
  * @param {string[]} [args.without] targets with no steps, from installTabsFor
  * @param {string} [args.fileHref] where the skill file can be downloaded; no Download link without one
  */
@@ -88,19 +92,31 @@ export function buildSkillInstallHtml({ tabs = [], without = [], fileHref = '' }
     ? `<a class="skill-btn" href="${esc(fileHref)}" download="SKILL.md">${icon('ico-download', 16)}<span>Download SKILL.md</span></a>`
     : '';
 
+  // sow-449 (owner, 2026-10-08): step 1 for All projects (the home folder) and, when the tool has a one-project folder,
+  // for This project, each marked with the scope it belongs to; the box's data-scope shows one of them.
+  const makeFolder = (text, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ''}>`
+    + `<p class="skill-step-t">${text}</p>`
+    + `<div class="${s.cmd}"><code>${esc(cmd)}</code>`
+    + `<button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc(cmd)}">${icon('ico-copy', 14)}<span data-label>Copy</span></button></div>`
+    + (shared ? `<p class="${s.note}">${esc(shared)}</p>` : '')
+    + `</div>`;
+  const scopeSwitch = (t) => `<div class="${s.toolsRow} ${s.scope}"><span id="skill-scope-l-${esc(t.key)}" class="skill-tools-label">Install for</span>`
+    + `<div class="${s.tools}" role="radiogroup" aria-labelledby="skill-scope-l-${esc(t.key)}">`
+    + `<button type="button" role="radio" aria-checked="true" tabindex="0" data-skill-scope="all">All projects</button>`
+    + `<button type="button" role="radio" aria-checked="false" tabindex="-1" data-skill-scope="project">This project</button>`
+    + `</div></div>`;
+
   const panels = tabs.map((t, i) => {
-    const shared = sharedFolderNote(t, tabs);
-    const local = runsHtml(t.local);
+    const project = typeof t.localFolder === 'string' && t.localFolder && t.localMkdir;
     return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc(t.key)}"`
       + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : '')
       + (i === 0 ? '' : ' hidden') + `>`
+      + (project ? scopeSwitch(t) : '')
       + `<ol class="${s.steps}">`
-      + `<li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step">`
-      + `<p class="skill-step-t">Make the skill's folder.</p>`
-      + `<div class="${s.cmd}"><code>${esc(t.mkdir)}</code>`
-      + `<button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc(t.mkdir)}">${icon('ico-copy', 14)}<span data-label>Copy</span></button></div>`
-      + (shared ? `<p class="${s.note}">${esc(shared)}</p>` : '')
-      + `</div></li>`
+      + `<li><span class="skill-step-n" aria-hidden="true">1</span>`
+      + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? 'all' : '')
+      + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, 'localFolder'), 'project') : '')
+      + `</li>`
       + `<li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step">`
       + `<p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p>`
       + `<div class="skill-file-btns">`
@@ -111,12 +127,11 @@ export function buildSkillInstallHtml({ tabs = [], without = [], fileHref = '' }
       + `<p class="skill-step-t">${runsHtml(t.run)}</p>`
       + `</div></li>`
       + `</ol>`
-      + (local ? `<p class="${s.local}">${local}</p>` : '')
       + `</div>`;
   }).join('');
 
   const also = withoutNote(without);
-  return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h">`
+  return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h">`
     + `<div class="${s.installHead}"><span class="skill-install-ico">${icon('ico-kind-skill', 22)}</span>`
     + `<h2 id="skill-install-h">Install this skill</h2></div>`
     + chooser
@@ -179,6 +194,28 @@ export function wireSkillPage(root = document, storage = globalThis.localStorage
     let saved = null;
     try { saved = storage?.getItem(SKILL_TOOL_KEY) ?? null; } catch { saved = null; }
     if (saved) pick(saved, false);
+
+    // sow-449: All projects or This project. One choice for the whole box (every tool's switch shows it), remembered.
+    const scopes = Array.from(box.querySelectorAll('[data-skill-scope]'));
+    const setScope = (v, remember) => {
+      if (v !== 'all' && v !== 'project') return;
+      box.dataset.scope = v;
+      scopes.forEach((b) => { const on = b.dataset.skillScope === v; b.setAttribute('aria-checked', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
+      if (remember) { try { storage?.setItem(SKILL_SCOPE_KEY, v); } catch { /* storage blocked: the choice lasts this visit */ } }
+    };
+    scopes.forEach((b) => {
+      b.addEventListener('click', () => setScope(b.dataset.skillScope, true));
+      b.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        const next = b.dataset.skillScope === 'all' ? 'project' : 'all';
+        setScope(next, true);
+        b.parentElement?.querySelector(`[data-skill-scope="${next}"]`)?.focus();
+      });
+    });
+    let savedScope = null;
+    try { savedScope = storage?.getItem(SKILL_SCOPE_KEY) ?? null; } catch { savedScope = null; }
+    if (savedScope && scopes.length) setScope(savedScope, false);
   }
 
   const copy = async (btn, text) => {

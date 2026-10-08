@@ -149,9 +149,9 @@ class GbtiSkillInstallManager extends GbtiElement {
               <div class="f"><label for="si-run">How to run it</label>
                 <input id="si-run" data-k="run" type="text" maxlength="${SKILL_STEP_LIMITS.run}" value="${esc(this._draft.run)}" placeholder="Start a new session and type \`/{name}\`." />
                 <span class="note">Step 3. Put a command in \`backticks\` to show it as code.</span></div>
-              <div class="f"><label for="si-local">Only in one project <span class="muted">(optional)</span></label>
-                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc(this._draft.local)}" placeholder="Only want it in one project? Use \`.agents/skills/{name}/\` inside it instead." />
-                <span class="note">Shown under the steps.</span></div>
+              <div class="f"><label for="si-local">Folder for one project only <span class="muted">(optional)</span></label>
+                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc(this._draft.local)}" placeholder=".claude/skills/{name}" />
+                <span class="note">Inside the project, with {name}. Readers switch between All projects and This project.</span></div>
             </div>
             <div>
               <p class="pv-h">Preview, as /${PREVIEW_NAME}</p>

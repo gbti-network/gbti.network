@@ -8,7 +8,8 @@
 // Every box has the same three steps, so an entry holds only what differs by tool:
 //   folder   where the skill file goes, with {name} for the skill's own name (from its SKILL.md `name:` line)
 //   run      how to start using it; `backticks` mark a command the page shows as code
-//   local    optional: how to install it for one project only
+//   local    optional: the folder for one project only, inside the project, with {name} (sow-449: the install box
+//            switches between All projects, which uses `folder`, and This project, which uses this)
 // Step 1 is always "make the folder", step 2 is always "save SKILL.md into it".
 //
 // Node-free and pure over already-parsed documents, so the site build, the extension reader, the admin screen and
@@ -21,6 +22,10 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
 /** A skill's name as it may appear in a folder or a command: the same shape Claude Code and Codex accept. */
 export const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** sow-449: a one-project folder as it may be used: relative to the project (no `~` or `/` at the start), one path with
+ *  no spaces, holding {name}. Anything else (the sentence this field used to hold) means the tool offers no switch. */
+export const isProjectFolder = (v) => /^[^~/\s][^\s]*$/.test(str(v)) && str(v).includes('{name}');
 
 /** Every tool that has steps, as { key, folder, run, local }, in file order. An entry without a folder or run is dropped. */
 export function skillInstallEntries(doc) {
@@ -49,6 +54,7 @@ export function skillInstallProblems(doc, aiToolsDoc) {
     if (!str(v.folder)) problems.push(`"${key}" has no folder`);
     else if (!str(v.folder).includes('{name}')) problems.push(`"${key}" folder must contain {name}, the skill's own name`);
     if (!str(v.run)) problems.push(`"${key}" has no run step`);
+    if (str(v.local) && !isProjectFolder(v.local)) problems.push(`"${key}" local must be the one-project folder, inside the project, with {name}, like .claude/skills/{name}`);
     for (const f of ['folder', 'run', 'local']) {
       if (/[—–]/.test(str(v[f]))) problems.push(`"${key}" ${f} carries a dash our writing conventions do not use`);
     }
@@ -106,7 +112,8 @@ export function installTabsFromTools({ tools, targets, name }) {
       folder,
       mkdir: `mkdir -p ${folder}`,
       run: codeRuns(fillName(str(e.run), okName)),
-      local: codeRuns(fillName(str(e.local), okName)),
+      // sow-449: the This project folder, when the tool has one on file
+      ...(isProjectFolder(e.local) ? { localFolder: fillName(str(e.local), okName), localMkdir: `mkdir -p ${fillName(str(e.local), okName)}` } : {}),
     });
   }
   return { tabs, without };

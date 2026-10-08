@@ -75,7 +75,10 @@ export const SKILL_BOX_CSS = `/* ---------- the label ---------- */
   font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; width: auto;
 }
 .skill-tools button:hover { background: var(--skill-box-bg); color: var(--fg); }
-.skill-tools button[aria-selected="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+.skill-tools button[aria-selected="true"], .skill-tools button[aria-checked="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+/* sow-449: All projects / This project. The box's data-scope shows the step 1 that belongs to it. */
+.skill-scope { margin-bottom: 18px; }
+[data-skill-install][data-scope="project"] [data-scope-only="all"], [data-skill-install]:not([data-scope="project"]) [data-scope-only="project"] { display: none; }
 .skill-panel[hidden] { display: none; }
 .skill-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
 .skill-steps > li { display: flex; gap: 14px; }
@@ -93,9 +96,7 @@ export const SKILL_BOX_CSS = `/* ---------- the label ---------- */
   border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: var(--skill-box-well);
 }
 .skill-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--fg); }
-.skill-note, .skill-local { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
-.skill-local { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--skill-box-well-line); }
-.skill-local code { color: var(--fg); }
+.skill-note { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
 .skill-file-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* The buttons carry their own hover background: the site's bare-button rules would otherwise paint them green. */

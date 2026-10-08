@@ -1,4 +1,5 @@
 ---
+import InlineCode from '../InlineCode.astro'; // sow-449: `backticks` in a short description show as code
 import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
@@ -50,7 +51,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
       </div>
     </div>
   </a>
-  <p class="body-sm muted" style="flex:1;margin-bottom:16px">{d.shortDescription}</p>
+  <p class="body-sm muted" style="flex:1;margin-bottom:16px"><InlineCode text={d.shortDescription} /></p>
   {home ? (
     <div class="flex items-center g12" style="justify-content:space-between">
       <span class="flex items-center g12" style="min-width:0">

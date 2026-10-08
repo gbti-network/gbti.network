@@ -1,4 +1,6 @@
 ---
+import InlineCode from '../../components/InlineCode.astro'; // sow-449: `backticks` in a short description show as code
+import { plainInline } from '../../lib/inline-code.mjs';
 // sow-172: the project detail page, rebuilt on the "Doc Shell" layout (design direction 1b).
 //
 // The page exists to earn an install click, so the install call to action is never more than a glance away:
@@ -173,7 +175,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
     ? 'Encrypted member content. Open in the GBTI client to unlock.'
     : 'Members only. Open in the GBTI client to unlock.';
 ---
-<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')} ogImageSize={imageFieldSize(d.featuredImage ?? d.banner ?? d.icon)} noindex={stub ? 'noindex' : false}>
+<BaseLayout title={d.title} description={plainInline(d.shortDescription)} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')} ogImageSize={imageFieldSize(d.featuredImage ?? d.banner ?? d.icon)} noindex={stub ? 'noindex' : false}>
   <DeployStatusNotice type="project" slug={d.slug} updatedAt={d.updatedAt} />
   <div class="pd-shell">
     <!-- Hero: the banner, scrimmed, with the project mark and the one-line pitch sitting on it. -->
@@ -192,7 +194,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
         <div class="pd-hero-txt">
           <CategoryCrumbs categories={d.categories} class="pd-eyebrow" />
           <h1 data-gbti-region="title" class="pd-title">{d.title}</h1>
-          <p class="pd-pitch">{d.shortDescription}</p>
+          <p class="pd-pitch"><InlineCode text={d.shortDescription} /></p>
         </div>
       </div>
     </section>
@@ -254,7 +256,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
               <div class="pd-teaser">
                 <span class="pd-gate-lab">Members only</span>
                 <h2 class="pd-gate-title">This write-up lives inside the network</h2>
-                <p class="pd-gate-sub">{d.shortDescription}</p>
+                <p class="pd-gate-sub"><InlineCode text={d.shortDescription} /></p>
                 <div class="pd-skel" aria-hidden="true"><i></i><i></i><i></i></div>
                 <LockedBody encPath={d.encryptedBody} kind="body" readerPath={project.id} readerType="project" />
               </div>

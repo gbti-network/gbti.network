@@ -1,0 +1,8 @@
+---
+// sow-449: a short description with its `backticked` spans shown as inline code (src/lib/inline-code.mjs). Astro escapes
+// every run, so nothing in the text becomes markup except the <code> this adds.
+import { inlineCodeRuns } from '../lib/inline-code.mjs';
+interface Props { text?: string | null }
+const runs = inlineCodeRuns(Astro.props.text ?? '');
+---
+{runs.map((r) => (r.code ? <code class="inline-code">{r.text}</code> : r.text))}

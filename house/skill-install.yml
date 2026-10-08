@@ -8,7 +8,8 @@
 # Every box has the same three steps, so an entry holds only what differs by tool:
 #   folder  where the skill file goes. {name} is the skill's own name, from the name: line of its SKILL.md.
 #   run     how to start using it. `Backticks` mark a command, shown as code.
-#   local   optional: how to install it for one project only.
+#   local   optional: the folder for one project only, inside the project, with {name}. The install box switches
+#           between All projects (folder) and This project (local).
 # Step 1 is always "make the skill's folder" and step 2 is always "save the skill file into it as SKILL.md".
 #
 # A key must be a tool key in house/ai-tools.yml. A tool with no entry here (Paperclip, for now) still counts as a
@@ -28,12 +29,12 @@ tools:
   claude-code:
     folder: "~/.claude/skills/{name}"
     run: "Open a new Claude Code session and type `/{name}`."
-    local: "Only want it in one project? Use `.claude/skills/{name}/` inside that project instead."
+    local: ".claude/skills/{name}"
   codex:
     folder: "~/.agents/skills/{name}"
     run: "Start Codex and type `${name}`. Codex notices new skills on its own; if it does not, restart it."
-    local: "Only want it in one repository? Use `.agents/skills/{name}/` inside that repository instead."
+    local: ".agents/skills/{name}"
   openclaw:
     folder: "~/.agents/skills/{name}"
     run: "Start a new OpenClaw session. It loads new skills when a session starts."
-    local: "Only want it in one workspace? Use the workspace's `skills/{name}/` folder instead."
+    local: "skills/{name}"

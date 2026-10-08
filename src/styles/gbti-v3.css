@@ -646,6 +646,12 @@ section { position: relative; }
 }
 
 
+/* sow-449: a `backticked` span in a short description (src/components/InlineCode.astro), shown as inline code. */
+.inline-code {
+  font-family: var(--f-mono); font-size: .88em; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--fg); white-space: nowrap;
+}
+
 /* The design system continues in gbti-v3-theme.css, gbti-v3-feed.css, gbti-v3-detail.css and gbti-v3-article.css,
    loaded in that order by global.css (split at the 900-line limit, 2026-09-30). A rule named "in gbti-v3.css"
    elsewhere may live in one of them. */

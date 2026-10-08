@@ -28,7 +28,7 @@ test('a skill tile names its command from the skill file; a members-only skill s
 
 test('the card text is the short description, not the author note', () => {
   const s = src(CARD);
-  assert.match(s, /\{d\.shortDescription && <p class="hpc-desc">\{d\.shortDescription\}<\/p>\}/);
+  assert.match(s, /\{d\.shortDescription && <p class="hpc-desc"><InlineCode text=\{d\.shortDescription\} \/><\/p>\}/, 'sow-449: backticks show as code');
   assert.doesNotMatch(s, /authorNote|comments/, 'no author-note lookup, and no comments prop');
   assert.doesNotMatch(s, /leafLabel|hp-kind/, 'no category tag repeating the section name');
 });

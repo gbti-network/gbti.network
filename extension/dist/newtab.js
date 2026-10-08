@@ -13499,7 +13499,10 @@ ${listStyleProseCss(".doc-blocks")}
   font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; width: auto;
 }
 .skill-tools button:hover { background: var(--skill-box-bg); color: var(--fg); }
-.skill-tools button[aria-selected="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+.skill-tools button[aria-selected="true"], .skill-tools button[aria-checked="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+/* sow-449: All projects / This project. The box's data-scope shows the step 1 that belongs to it. */
+.skill-scope { margin-bottom: 18px; }
+[data-skill-install][data-scope="project"] [data-scope-only="all"], [data-skill-install]:not([data-scope="project"]) [data-scope-only="project"] { display: none; }
 .skill-panel[hidden] { display: none; }
 .skill-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
 .skill-steps > li { display: flex; gap: 14px; }
@@ -13517,9 +13520,7 @@ ${listStyleProseCss(".doc-blocks")}
   border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: var(--skill-box-well);
 }
 .skill-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--fg); }
-.skill-note, .skill-local { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
-.skill-local { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--skill-box-well-line); }
-.skill-local code { color: var(--fg); }
+.skill-note { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
 .skill-file-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* The buttons carry their own hover background: the site's bare-button rules would otherwise paint them green. */
@@ -20841,6 +20842,7 @@ ${listStyleProseCss(".doc-blocks")}
   // membership/skill-install.mjs
   var str3 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  var isProjectFolder = (v2) => /^[^~/\s][^\s]*$/.test(str3(v2)) && str3(v2).includes("{name}");
   function skillNameFrom(skillMd) {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
     if (!m) return "";
@@ -20875,7 +20877,8 @@ ${listStyleProseCss(".doc-blocks")}
         folder: folder2,
         mkdir: `mkdir -p ${folder2}`,
         run: codeRuns(fillName(str3(e.run), okName)),
-        local: codeRuns(fillName(str3(e.local), okName))
+        // sow-449: the This project folder, when the tool has one on file
+        ...isProjectFolder(e.local) ? { localFolder: fillName(str3(e.local), okName), localMkdir: `mkdir -p ${fillName(str3(e.local), okName)}` } : {}
       });
     }
     return { tabs, without };
@@ -20948,12 +20951,14 @@ ${listStyleProseCss(".doc-blocks")}
     steps: "skill-steps",
     cmd: "skill-cmd",
     note: "skill-note",
-    local: "skill-local",
+    scope: "skill-scope",
+    // sow-449: the All projects / This project switch (replaced the skill-local line)
     notes: "skill-notes",
     file: "skill-file",
     fileBody: "skill-file-body"
   });
   var SKILL_TOOL_KEY = "gbti-skill-tool";
+  var SKILL_SCOPE_KEY = "gbti-skill-scope";
   var ICON_PATHS = {
     "ico-kind-skill": '<path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
     "ico-copy": '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
@@ -20962,8 +20967,9 @@ ${listStyleProseCss(".doc-blocks")}
   var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
   var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc7(r.text)}</code>` : esc7(r.text)).join("");
   var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
-  function sharedFolderNote(tab, tabs) {
-    const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
+  function sharedFolderNote(tab, tabs, field2 = "folder") {
+    const mine = tab?.[field2];
+    const others = mine ? (tabs || []).filter((t) => t !== tab && t[field2] === mine).map((t) => t.label) : [];
     if (!others.length) return "";
     if (others.length === 1) return `${others[0]} reads this folder too, so one copy serves both.`;
     return `${andList(others)} read this folder too, so one copy serves them all.`;
@@ -20981,13 +20987,14 @@ ${listStyleProseCss(".doc-blocks")}
     const panelId = (t) => `skill-panel-${t.key}`;
     const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc7(t.key)}">${esc7(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc7(tabs[0].label)}</p>`;
     const download = fileHref ? `<a class="skill-btn" href="${esc7(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const makeFolder = (text2, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ""}><p class="skill-step-t">${text2}</p><div class="${s.cmd}"><code>${esc7(cmd)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc7(cmd)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc7(shared)}</p>` : "") + `</div>`;
+    const scopeSwitch = (t) => `<div class="${s.toolsRow} ${s.scope}"><span id="skill-scope-l-${esc7(t.key)}" class="skill-tools-label">Install for</span><div class="${s.tools}" role="radiogroup" aria-labelledby="skill-scope-l-${esc7(t.key)}"><button type="button" role="radio" aria-checked="true" tabindex="0" data-skill-scope="all">All projects</button><button type="button" role="radio" aria-checked="false" tabindex="-1" data-skill-scope="project">This project</button></div></div>`;
     const panels = tabs.map((t, i) => {
-      const shared = sharedFolderNote(t, tabs);
-      const local = runsHtml(t.local);
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc7(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc7(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc7(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc7(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
+      const project = typeof t.localFolder === "string" && t.localFolder && t.localMkdir;
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc7(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `>` + (project ? scopeSwitch(t) : "") + `<ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span>` + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? "all" : "") + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, "localFolder"), "project") : "") + `</li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol></div>`;
     }).join("");
     const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc7(also)}</p>` : "") + `</section>`;
+    return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc7(also)}</p>` : "") + `</section>`;
   }
   function wireSkillPage(root = document, storage = globalThis.localStorage) {
     const box = root.querySelector("[data-skill-install]");
@@ -21030,6 +21037,39 @@ ${listStyleProseCss(".doc-blocks")}
         saved = null;
       }
       if (saved) pick(saved, false);
+      const scopes = Array.from(box.querySelectorAll("[data-skill-scope]"));
+      const setScope = (v2, remember) => {
+        if (v2 !== "all" && v2 !== "project") return;
+        box.dataset.scope = v2;
+        scopes.forEach((b) => {
+          const on = b.dataset.skillScope === v2;
+          b.setAttribute("aria-checked", on ? "true" : "false");
+          b.tabIndex = on ? 0 : -1;
+        });
+        if (remember) {
+          try {
+            storage?.setItem(SKILL_SCOPE_KEY, v2);
+          } catch {
+          }
+        }
+      };
+      scopes.forEach((b) => {
+        b.addEventListener("click", () => setScope(b.dataset.skillScope, true));
+        b.addEventListener("keydown", (e) => {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+          e.preventDefault();
+          const next = b.dataset.skillScope === "all" ? "project" : "all";
+          setScope(next, true);
+          b.parentElement?.querySelector(`[data-skill-scope="${next}"]`)?.focus();
+        });
+      });
+      let savedScope = null;
+      try {
+        savedScope = storage?.getItem(SKILL_SCOPE_KEY) ?? null;
+      } catch {
+        savedScope = null;
+      }
+      if (savedScope && scopes.length) setScope(savedScope, false);
     }
     const copy = async (btn, text2) => {
       const label = btn.querySelector("[data-label]") || btn;
@@ -21252,9 +21292,9 @@ ${SKILL_BOX_CSS}`;
               <div class="f"><label for="si-run">How to run it</label>
                 <input id="si-run" data-k="run" type="text" maxlength="${SKILL_STEP_LIMITS.run}" value="${esc2(this._draft.run)}" placeholder="Start a new session and type \`/{name}\`." />
                 <span class="note">Step 3. Put a command in \`backticks\` to show it as code.</span></div>
-              <div class="f"><label for="si-local">Only in one project <span class="muted">(optional)</span></label>
-                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc2(this._draft.local)}" placeholder="Only want it in one project? Use \`.agents/skills/{name}/\` inside it instead." />
-                <span class="note">Shown under the steps.</span></div>
+              <div class="f"><label for="si-local">Folder for one project only <span class="muted">(optional)</span></label>
+                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc2(this._draft.local)}" placeholder=".claude/skills/{name}" />
+                <span class="note">Inside the project, with {name}. Readers switch between All projects and This project.</span></div>
             </div>
             <div>
               <p class="pv-h">Preview, as /${PREVIEW_NAME}</p>

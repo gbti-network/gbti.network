@@ -1,4 +1,5 @@
 ---
+import InlineCode from '../InlineCode.astro'; // sow-449: `backticks` in a short description show as code
 // Shared "Editor's pick" spotlight (ported from the /projects/ page). Accepts one or more projects:
 // a single project renders one spotlight; multiple render a slider you can page through. Relies on the
 // glyph defs (#g-arrow, #g-wp ...) emitted by <ProjectDirectory>, so render this AFTER a
@@ -59,7 +60,7 @@ const isSlider = items.length > 1;
                 <div class="pfeat-body">
                   <span class="pchip">{c.label}</span>
                   <h2 class="h2">{p.data.title}</h2>
-                  <p class="lead">{p.data.shortDescription ?? ''}</p>
+                  <p class="lead"><InlineCode text={p.data.shortDescription ?? ''} /></p>
                   <div class="pfeat-cta">
                     <a class="btn btn-primary" href={`/projects/${p.data.slug}/`}>View details <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#g-arrow"/></svg></a>
                     <span class="prow-author"><Avatar item={{ name: authorDisplay(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar), seed: author }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={profileHref(author)}>{authorDisplay(author)}</a> : <span>{authorDisplay(author)}</span>}</span>

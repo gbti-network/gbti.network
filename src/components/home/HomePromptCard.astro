@@ -1,4 +1,5 @@
 ---
+import InlineCode from '../InlineCode.astro'; // sow-449: `backticks` in a short description show as code
 // sow-431 (owner, 2026-09-30, design B on the canvas "Homepage Prompts & Skills"): the homepage Prompts & Skills card,
 // shaped like the Articles card above it. The image on top is the item's own cover; an item without one gets a tile in
 // its kind's colours (a skill: the terminal glyph and its command, a prompt: the prompt glyph), never the robot the
@@ -52,7 +53,7 @@ const avatar = authorAvatar(d.author, profile?.avatar);
       </span>
     )}
     <h3 class="hpc-title"><a href={href}>{d.title}</a></h3>
-    {d.shortDescription && <p class="hpc-desc">{d.shortDescription}</p>}
+    {d.shortDescription && <p class="hpc-desc"><InlineCode text={d.shortDescription} /></p>}
     <div class="hpc-foot">
       <a class="hp-author" href={`/prompts/?author=${encodeURIComponent(d.author)}`}>
         <Avatar item={{ name: authorName, avatar, seed: d.author }} class="hp-av" size={24} />

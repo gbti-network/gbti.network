@@ -1,4 +1,5 @@
 ---
+import InlineCode from '../InlineCode.astro'; // sow-449: `backticks` in a short description show as code
 // sow-323 Phase 3: one feed card, moved out of FeedList.astro unchanged so the list renders the SAME card for its public
 // items and for the members-only items it reveals to a paying member (MembersOnlyCards). The markup, the classes and
 // the data-* hooks the feed view's filters, the share merge (src/lib/feed-share-cards.mjs) and the favorites bootstrap
@@ -63,7 +64,7 @@ const catsOf = (x: FeedItem) => catsAttr([...(x.categories ?? []), ...(x.categor
           ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener nofollow' : undefined}>{it.title}</a>
           : it.title}
       </h2>
-      {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
+      {it.excerpt && <p class="feed-ex"><InlineCode text={it.excerpt} /></p>}
       <div class="feed-foot">
         {/* Save and collect are free member perks (sow-060): they act for any signed-in member and
             drive sign-up for a signed-out visitor (the light-DOM [data-signin] pills open the SigninModal

@@ -1,4 +1,5 @@
 ---
+import InlineCode from '../../components/InlineCode.astro'; // sow-449: `backticks` in a short description show as code
 import { imageFieldSize } from '../../lib/og-image-size.mjs'; // sow-294: declare the preview image's size
 import { getCollection, render } from 'astro:content';
 import { Image } from 'astro:assets';
@@ -121,7 +122,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
           {paid && <span class="chip chip-green">Paid</span>}
         </div>
-        {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
+        {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch"><InlineCode text={d.shortDescription || d.exampleOutput} /></p>}
         <div class="mt20">
           <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} author={d.author} categories={d.categories} count={favoriteCount('prompt', d.slug, aliasSlugsOf(d))} />
         </div>

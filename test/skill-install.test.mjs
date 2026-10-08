@@ -35,7 +35,10 @@ test('sow-109: a skill gets one tab per tool it is made for, in its own order, w
   assert.equal(tabs[0].mkdir, 'mkdir -p ~/.agents/skills/farley');
   assert.deepEqual(tabs[0].run.find((r) => r.code), { code: true, text: '$farley' });
   assert.equal(tabs[1].mkdir, 'mkdir -p ~/.claude/skills/farley');
-  assert.ok(tabs[1].local.some((r) => r.code && r.text === '.claude/skills/farley/'));
+  // sow-449: the This project folder, for the All projects / This project switch
+  assert.equal(tabs[1].localFolder, '.claude/skills/farley');
+  assert.equal(tabs[1].localMkdir, 'mkdir -p .claude/skills/farley');
+  assert.equal(tabs[0].localMkdir, 'mkdir -p .agents/skills/farley');
 });
 
 test('sow-109: without a usable name there are no steps to fill in, so every tool is reported', () => {
