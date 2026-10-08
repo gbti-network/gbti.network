@@ -2,7 +2,7 @@
 id: intro-qa-skill-for-claude-code-and-codex
 targetType: prompt
 targetSlug: qa-skill-for-claude-code-and-codex
-createdAt: '2026-07-31T02:55:24.940Z'
+createdAt: '2026-10-08T22:15:54.857Z'
 status: published
 visibility: public
 authorNote: true
