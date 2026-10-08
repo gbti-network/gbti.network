@@ -64,7 +64,11 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
     // The page is a gated authoring app: resolve the signed-in member AUTHORITATIVELY from the httpOnly-cookie
     // session (the Worker's /membership/status oracle, credentialed) before loading the ~large client-ui bundle.
     // A signed-out visitor (no session, or an invalid one) is redirected to /login and the bundle never loads.
-    const RETURN_TO = '/login/?return_to=%2Fworkbench%2F';
+    // The hash rides along (2026-10-08): an Edit link from the extension opens this page in a new tab, and a member
+    // with no website session would otherwise sign in and land on the Overview instead of the item. The Worker refuses
+    // a return path over 512 characters, so an outsized hash is dropped rather than losing the whole return.
+    const RETURN_HASH = location.hash && location.hash.length <= 400 ? location.hash : '';
+    const RETURN_TO = '/login/?return_to=' + encodeURIComponent('/workbench/' + RETURN_HASH);
     function readCookie(name: string): string | null {
       for (const part of document.cookie.split(';')) {
         const eq = part.indexOf('=');

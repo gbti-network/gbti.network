@@ -35,7 +35,7 @@ export function flagKeyFor(type, slug) {
 /**
  * sow-409 (owner, 2026-09-25): the actions in the superadmin "..." menu, in order. Replaces the SOW-071 tiers, where
  * a moderator saw Hide and Unhide and an admin added Remove: the owner made the menu superadmin-only.
- *   - not superadmin: [] (nothing renders);
+ *   - not superadmin: [] (the item's owner still gets the menu, holding Edit alone: canEditItem below);
  *   - Hide, never Unhide: the reader and the Shares feed only ever show live items;
  *   - an article, project or prompt: the half of each mark pair that applies, from `flags` ({ stale, unindexed });
  *     both halves when `flags` is null, because the marks could not be read;
@@ -54,4 +54,51 @@ export function menuActions({ role, type, flags = null } = {}) {
   }
   out.push('remove');
   return out;
+}
+
+// Owner, 2026-10-08: "content owners and superadmins should be able to edit from this dropdown by opening up the
+// content inside the workbench." The menu's Edit row opens the item itself in the WorkBench editor, through the
+// WorkBench's own deep links: `#edit=<path>` for an article, project or prompt (parseWorkspaceEdit) and
+// `#edit-share=<id>` for a share (parseWorkspaceEditShare; a superadmin's link to another member's share moves the
+// WorkBench to Network shares to find it). The WorkBench accepts lowercase member paths only, so anything else gets no
+// row rather than a link that opens nothing. House items (the GBTI Network author) live outside members/ and are not
+// editable there. As with the rest of the menu this is the UX gate; the Worker decides who may publish what.
+const EDIT_TAB = { post: 'post', project: 'project', product: 'project', prompt: 'prompt', share: 'share' };
+const LOWER = /^[a-z0-9][a-z0-9-]*$/;
+const HOUSE = new Set(['gbti', 'house']);
+const lc = (v) => String(v ?? '').trim().toLowerCase();
+
+/**
+ * Whether the viewer may open this item in the editor: a superadmin, or its owner (their GBTI folder is the author)
+ * while their membership is not locked. A lapsed owner's work stays live, but the WorkBench shows them its locked
+ * screen instead of the editor, so the row would lead nowhere. `locked` is isLockedMembership(status.membership).
+ */
+export function canEditItem({ role, viewer, author, locked = false } = {}) {
+  if (role === 'superadmin') return true;
+  const me = lc(viewer);
+  return !locked && Boolean(me) && me === lc(author);
+}
+
+/**
+ * Where the WorkBench is from the page the menu sits on. On gbti.network (or a subdomain such as the preview) it is
+ * the site's own /workbench/, in the same tab. Anywhere else (the extension, which has none since sow-406, or the agent
+ * server's local page, which serves no /workbench/) it is the website's, in a new tab.
+ */
+export function workbenchTarget(loc) {
+  const host = String(loc?.hostname || '');
+  const onSite = /^https?:$/.test(String(loc?.protocol || '')) && (host === 'gbti.network' || host.endsWith('.gbti.network'));
+  return onSite ? { base: '/workbench/', newTab: false } : { base: 'https://gbti.network/workbench/', newTab: true };
+}
+
+/**
+ * The WorkBench link that opens this item in its editor, or null when it cannot be opened there. `base` is the
+ * WorkBench page: '/workbench/' on the website, 'https://gbti.network/workbench/' from the extension.
+ */
+export function editHrefFor({ type, author, slug, id } = {}, base = '/workbench/') {
+  const tab = EDIT_TAB[type];
+  if (!tab || HOUSE.has(lc(author)) || !LOWER.test(String(author || ''))) return null;
+  if (type === 'share') return LOWER.test(String(id || '')) ? `${base}#tab=share&edit-share=${id}` : null;
+  if (!LOWER.test(String(slug || ''))) return null;
+  const path = modPathFor({ type, author, slug });
+  return path ? `${base}#tab=${tab}&edit=${encodeURIComponent(path)}` : null;
 }

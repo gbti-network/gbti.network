@@ -817,8 +817,8 @@
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc10 = c | 32;
-      if (lc10 >= 97 && lc10 <= 102) return lc10 - 97 + 10;
+      const lc11 = c | 32;
+      if (lc11 >= 97 && lc11 <= 102) return lc11 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -7184,14 +7184,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc10 = String(login).toLowerCase();
+      const lc11 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc10).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc11).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc10).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc11).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -13027,6 +13027,28 @@ ${listStyleProseCss(".doc-blocks")}
     out.push("remove");
     return out;
   }
+  var EDIT_TAB = { post: "post", project: "project", product: "project", prompt: "prompt", share: "share" };
+  var LOWER = /^[a-z0-9][a-z0-9-]*$/;
+  var HOUSE = /* @__PURE__ */ new Set(["gbti", "house"]);
+  var lc = (v2) => String(v2 ?? "").trim().toLowerCase();
+  function canEditItem({ role, viewer: viewer2, author, locked = false } = {}) {
+    if (role === "superadmin") return true;
+    const me = lc(viewer2);
+    return !locked && Boolean(me) && me === lc(author);
+  }
+  function workbenchTarget(loc) {
+    const host = String(loc?.hostname || "");
+    const onSite = /^https?:$/.test(String(loc?.protocol || "")) && (host === "gbti.network" || host.endsWith(".gbti.network"));
+    return onSite ? { base: "/workbench/", newTab: false } : { base: "https://gbti.network/workbench/", newTab: true };
+  }
+  function editHrefFor({ type, author, slug, id } = {}, base = "/workbench/") {
+    const tab = EDIT_TAB[type];
+    if (!tab || HOUSE.has(lc(author)) || !LOWER.test(String(author || ""))) return null;
+    if (type === "share") return LOWER.test(String(id || "")) ? `${base}#tab=share&edit-share=${id}` : null;
+    if (!LOWER.test(String(slug || ""))) return null;
+    const path = modPathFor({ type, author, slug });
+    return path ? `${base}#tab=${tab}&edit=${encodeURIComponent(path)}` : null;
+  }
 
   // client-ui/src/comment-echo-core.mjs
   function pendingRows(items) {
@@ -13103,10 +13125,10 @@ ${listStyleProseCss(".doc-blocks")}
   .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 `;
-  var lc = (s) => String(s || "").toLowerCase();
+  var lc2 = (s) => String(s || "").toLowerCase();
   var authorName = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
   function avatarHtml(author) {
-    return `<span class="cav">${avatarLayers(lc(author) || authorName(author), author ? void 0 : "")}</span>`;
+    return `<span class="cav">${avatarLayers(lc2(author) || authorName(author), author ? void 0 : "")}</span>`;
   }
   var GbtiDiscussion = class extends GbtiElement {
     static get observedAttributes() {
@@ -17381,6 +17403,7 @@ ${listStyleProseCss(".doc-blocks")}
   .mi { display:block; width:100%; text-align:left; padding:8px 12px; border:0; border-radius:var(--r, 10px); background:transparent;
     color:var(--fg); font:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; }
   .mi:hover, .mi:focus-visible { background:var(--green-tint); color:var(--green-700, var(--accent)); outline:none; }
+  a.mi { box-sizing:border-box; text-decoration:none; }
   .mi-remove, .mi-remove:hover, .mi-remove:focus-visible { color:var(--danger, #c0392b); }
   .mi-remove:hover, .mi-remove:focus-visible { background:color-mix(in srgb, var(--danger, #c0392b) 10%, transparent); }
   .sep { height:1px; background:var(--line); margin:5px 4px; }
@@ -17389,6 +17412,8 @@ ${listStyleProseCss(".doc-blocks")}
   var GbtiModActions = class extends GbtiElement {
     connectedCallback() {
       this._role = "member";
+      this._viewer = "";
+      this._locked = true;
       this._flags = void 0;
       this._open = false;
       this._said = "";
@@ -17405,9 +17430,14 @@ ${listStyleProseCss(".doc-blocks")}
     }
     async _load() {
       try {
-        this._role = (await this.client?.status?.())?.role || "member";
+        const s = await this.client?.status?.();
+        this._role = s?.role || "member";
+        this._viewer = String(s?.identity?.username || s?.username || "");
+        this._locked = isLockedMembership(s?.membership);
       } catch {
         this._role = "member";
+        this._viewer = "";
+        this._locked = true;
       }
       if (this._role === "superadmin" && flagKeyFor(this.dataset.gbtiType, this.dataset.gbtiSlug)) {
         const all = await loadFlags();
@@ -17422,18 +17452,33 @@ ${listStyleProseCss(".doc-blocks")}
     _actions() {
       return this._path() ? menuActions({ role: this._role, type: this.dataset.gbtiType, flags: this._flags ?? null }) : [];
     }
+    // The Edit row's link, or null. The website opens its own WorkBench; anywhere else opens the website's in a new tab.
+    _editLink() {
+      const d = this.dataset;
+      if (!canEditItem({ role: this._role, viewer: this._viewer, author: d.gbtiAuthor, locked: this._locked })) return null;
+      const { base, newTab } = workbenchTarget(typeof location !== "undefined" ? location : null);
+      const href = editHrefFor({ type: d.gbtiType, author: d.gbtiAuthor, slug: d.gbtiSlug, id: d.gbtiId }, base);
+      return href ? { href, newTab } : null;
+    }
     render() {
       const actions = this._actions();
-      if (!actions.length) {
+      const edit = this._editLink();
+      if (!actions.length && !edit) {
         this._unlisten();
         this.set("");
         return;
       }
-      const rows = actions.map((a) => `${a === "remove" && actions.length > 1 ? '<div class="sep" role="separator"></div>' : ""}<button class="mi mi-${a}" type="button" role="menuitem" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS13) + `<button class="dots" type="button" data-dots aria-label="Moderation actions" title="Moderation actions" aria-haspopup="menu" aria-expanded="${this._open}">${DOTS}</button><div class="menu" role="menu" aria-label="Moderation actions"${this._open ? "" : " hidden"}>${rows}</div>` + (this._said ? `<span class="said" role="status">${this._said}</span>` : ""));
+      const editRow = edit ? `<a class="mi mi-edit" role="menuitem" data-edit href="${esc2(edit.href)}"${edit.newTab ? ' target="_blank" rel="noopener"' : ""}>Edit</a>` + (actions.length ? '<div class="sep" role="separator"></div>' : "") : "";
+      const rows = editRow + actions.map((a) => `${a === "remove" && actions.length > 1 ? '<div class="sep" role="separator"></div>' : ""}<button class="mi mi-${a}" type="button" role="menuitem" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
+      this.set(this.css(CSS13) + `<button class="dots" type="button" data-dots aria-label="More actions" title="More actions" aria-haspopup="menu" aria-expanded="${this._open}">${DOTS}</button><div class="menu" role="menu" aria-label="More actions"${this._open ? "" : " hidden"}>${rows}</div>` + (this._said ? `<span class="said" role="status">${this._said}</span>` : ""));
       this.$("[data-dots]")?.addEventListener("click", (e) => {
         e.stopPropagation();
         this._setOpen(!this._open);
+      });
+      this.$("[data-edit]")?.addEventListener("click", (e) => {
+        const newTab = e.currentTarget?.target === "_blank";
+        this._setOpen(false);
+        if (newTab) this.$("[data-dots]")?.focus?.();
       });
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
@@ -17457,13 +17502,18 @@ ${listStyleProseCss(".doc-blocks")}
       document.removeEventListener("keydown", this._onKey, true);
     }
     // Esc closes and returns focus to the button; the arrow keys move between rows (Enter and Space press a row, as
-    // any button does).
+    // any button does). The Edit row is a link, and Space on a link scrolls the page, so Space presses it here.
     _key(e) {
       if (!this._open) return;
       if (e.key === "Escape") {
         e.preventDefault();
         this._setOpen(false);
         this.$("[data-dots]")?.focus?.();
+        return;
+      }
+      if (e.key === " " && this.root?.activeElement?.matches?.("a.mi")) {
+        e.preventDefault();
+        this.root.activeElement.click();
         return;
       }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -25483,8 +25533,8 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
   var TYPE_LABEL5 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
-  var lc2 = (s) => String(s || "").toLowerCase();
-  var authorName2 = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
+  var lc3 = (s) => String(s || "").toLowerCase();
+  var authorName2 = (a) => lc3(a) === "gbti" || lc3(a) === "house" ? "GBTI Network" : a;
   function faviconFor(urlOrHost) {
     let host = String(urlOrHost || "").trim();
     if (!host) return "";
@@ -25497,11 +25547,11 @@ ${BLOCKED_PILL_CSS}
     return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
   }
   function avatarFor(item = {}) {
-    if (lc2(item.type) === "news") {
+    if (lc3(item.type) === "news") {
       const title = item.sourceName || item.source || item.author || "News";
       return { src: faviconFor(item.link || item.openHref), title, seed: title };
     }
-    const folder2 = lc2(item.author);
+    const folder2 = lc3(item.author);
     return { src: memberAvatarUrl(folder2), title: authorName2(item.author), seed: folder2 || authorName2(item.author) };
   }
   function thumbRaw(item = {}, isCard2 = false) {
@@ -25683,7 +25733,7 @@ ${BLOCKED_PILL_CSS}
     }
     _media(item) {
       const isCard2 = this.mode === "card";
-      if (lc2(item.type) === "news" && !isCard2) return "";
+      if (lc3(item.type) === "news" && !isCard2) return "";
       const thumb = this._thumbUrl(item);
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
@@ -25692,7 +25742,7 @@ ${BLOCKED_PILL_CSS}
       return `<span class="media" style="--ka:${esc2(g.accent)}">${glyph2}${img}</span>`;
     }
     _chip(item) {
-      const t = lc2(item.type);
+      const t = lc3(item.type);
       if (t === "prompt" && item.kind === "skill") return '<span class="chip k-skill">Skill</span>';
       const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
       return `<span class="chip${k}">${esc2(TYPE_LABEL5[item.type] || item.type)}</span>`;
@@ -25701,12 +25751,12 @@ ${BLOCKED_PILL_CSS}
     // sow-423 (owner, 2026-09-29): news gets the pill too. A news item carries its category as a readable name already
     // ("AI/ML", "Hardware", "Other"), not a taxonomy path, so it is shown as it is, "Other" included (owner's call).
     _categoryChip(item) {
-      const leaf = lc2(item.type) === "news" ? String(item.category ?? "").trim() : categoryLeaf(item.categoryLabels);
+      const leaf = lc3(item.type) === "news" ? String(item.category ?? "").trim() : categoryLeaf(item.categoryLabels);
       return leaf ? `<span class="catchip">${esc2(leaf)}</span>` : "";
     }
     // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
     _lock(item) {
-      return item.visibility === "members" && lc2(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
+      return item.visibility === "members" && lc3(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
     }
     // SOW-049: the meta leads with a small avatar (member -> their photo; news -> publisher favicon); the name/source
     // is the avatar's hover tooltip (title), not a persistent label. A missing or broken image leaves the blobatar.
@@ -25718,7 +25768,7 @@ ${BLOCKED_PILL_CSS}
       return `<span class="meta"><span class="av" title="${esc2(av.title)}">${avatarLayers(av.seed, av.src)}</span>${who}${sep}${ago ? `<span class="ago">${esc2(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
-      const t = lc2(item.type);
+      const t = lc3(item.type);
       const accent = t && t !== "news" ? ` style="--cbar:${esc2(typeAccent(t))}"` : "";
       const nomedia = t === "news" && cls !== "card-i" || cls === "row-d" && !this._thumbUrl(item) ? " no-media" : "";
       const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc2(t)}"${accent}`;
@@ -25730,7 +25780,7 @@ ${BLOCKED_PILL_CSS}
     // sow-398: the heart + Save for an item the member can favorite and collect (posts, projects, prompts, shares; not
     // news), keyed exactly as the reader keys them. '' for anything else, so the card renders as before.
     _acts(item) {
-      const t = lc2(item.type);
+      const t = lc3(item.type);
       const slug = SAVABLE_TYPES.has(t) ? targetSlugFor({ ...item, type: t }) : "";
       if (!slug) return "";
       const a = `data-gbti-target-type="${esc2(t)}" data-gbti-target-slug="${esc2(slug)}"`;
@@ -26830,7 +26880,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-subscriptions.mjs
   var SITE19 = "https://gbti.network";
-  var lc3 = (s) => String(s || "").toLowerCase();
+  var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -26891,8 +26941,8 @@ ${BLOCKED_PILL_CSS}
         }
         const [src, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         const sources = src?.sources || [];
-        const followed = new Set((prefs?.followedChannels || []).map(lc3));
-        this._channels = sources.filter((s) => followed.has(lc3(s.id))).map((s) => ({
+        const followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._channels = sources.filter((s) => followed.has(lc4(s.id))).map((s) => ({
           id: s.id,
           name: s.name || s.id,
           meta: s.category || s.description || ""
@@ -26996,8 +27046,8 @@ ${BLOCKED_PILL_CSS}
       this.render();
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on: false } });
-        const followed = new Set((prefs?.followedChannels || []).map(lc3));
-        this._channels = (this._channels || []).filter((c) => followed.has(lc3(c.id)));
+        const followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._channels = (this._channels || []).filter((c) => followed.has(lc4(c.id)));
       } catch {
         await this._reloadChannels(false);
       }
@@ -29220,7 +29270,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-news.mjs
   var SITE23 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE23}/membership/">Become a member</a> to unlock the news feed.</div>`;
-  var lc4 = (s) => String(s ?? "").toLowerCase();
+  var lc5 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
     if (!s) return "";
@@ -29345,7 +29395,7 @@ ${BLOCKED_PILL_CSS}
       try {
         const [{ sources }, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         this._sources = Array.isArray(sources) ? sources : [];
-        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
         this._chanState = "ready";
       } catch (err) {
         this._chanState = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
@@ -29363,14 +29413,14 @@ ${BLOCKED_PILL_CSS}
       this.render();
     }
     async _toggleFollow(id, btn) {
-      const on = !this._followed.has(lc4(id));
+      const on = !this._followed.has(lc5(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
       this.render();
@@ -29492,12 +29542,12 @@ ${BLOCKED_PILL_CSS}
       }
       const followed = this._followed || /* @__PURE__ */ new Set();
       const rows = sources.map((s) => {
-        const on = followed.has(lc4(s.id));
+        const on = followed.has(lc5(s.id));
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count2 = s.count != null ? `${s.count} items` : "";
         const inline4 = [domain, count2].filter(Boolean).join(" · ");
-        const showDesc = s.description && lc4(s.description) !== lc4(domain);
+        const showDesc = s.description && lc5(s.description) !== lc5(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc2(name)}</b>` + (domain ? `<span class="hc-dom">${esc2(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc2(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc2(count2)}</span>` : "") + `</div>`;
         return `<li class="chan"><div class="ci" tabindex="0"><b>${esc2(name)}</b>${inline4 ? `<span class="d">${esc2(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc2(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
@@ -30079,7 +30129,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-news-share", GbtiNewsShare);
 
   // client-ui/src/elements/gbti-news-reader.mjs
-  var lc5 = (s) => String(s ?? "").toLowerCase();
+  var lc6 = (s) => String(s ?? "").toLowerCase();
   var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
@@ -30176,10 +30226,10 @@ ${BLOCKED_PILL_CSS}
           this._mountAdmin(item);
           this._mountShare(item);
         }
-        const sid = lc5(item.source);
-        this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
+        const sid = lc6(item.source);
+        this._publisher = (srcs?.sources || []).find((s) => lc6(s.id) === sid || lc6(s.name) === sid) || null;
         if (this._share && this._item === item) this._share.publisher = this._publisher?.name || item.sourceName || item.source || "";
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
       } catch {
       }
       this.render();
@@ -30187,14 +30237,14 @@ ${BLOCKED_PILL_CSS}
     async _toggleFollow(btn) {
       const id = this._item?.source;
       if (!id || !this._followed) return;
-      const on = !this._followed.has(lc5(id));
+      const on = !this._followed.has(lc6(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
       } catch {
       }
       this.render();
@@ -30279,7 +30329,7 @@ ${BLOCKED_PILL_CSS}
       const fav = faviconFor(it2.link || it2.openHref);
       const pub = this._publisher;
       const followable = Boolean(this.client?.setPrefs && it2.source && this._followed);
-      const followed = followable && this._followed.has(lc5(it2.source));
+      const followed = followable && this._followed.has(lc6(it2.source));
       const open = it2.openHref || (it2.link ? utmLink(it2.link) : "");
       const disc = this._share ? `<button class="share-toggle" data-share-toggle type="button" aria-expanded="${this._shareOpen}" aria-controls="news-share"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>Share to our channels<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
@@ -30441,10 +30491,10 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/members-index.mjs
   var SITE24 = "https://gbti.network";
-  var lc6 = (s) => String(s || "").toLowerCase();
+  var lc7 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
-    return new Map(members.filter((m) => m && m.username).map((m) => [lc6(m.username), m]));
+    return new Map(members.filter((m) => m && m.username).map((m) => [lc7(m.username), m]));
   }
   var _directory = null;
   function loadMembersDirectory() {
@@ -30679,9 +30729,9 @@ ${BLOCKED_PILL_CSS}
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
   var READER_CSS = () => CSS49 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
-  var lc7 = (s) => String(s || "").toLowerCase();
+  var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc7(a);
+    const x = lc8(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
@@ -31044,21 +31094,21 @@ ${BLOCKED_PILL_CSS}
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it2) {
-      const username = lc7(it2.author);
+      const username = lc8(it2.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc7(status?.identity?.username || status?.identity?.login);
+      const me = lc8(status?.identity?.username || status?.identity?.login);
       const canFollow = !!status?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc7(x.username) === username);
+          following = list.some((x) => lc8(x.username) === username);
         } catch {
         }
       }
@@ -31083,7 +31133,7 @@ ${BLOCKED_PILL_CSS}
     _metaHtml(it2, when) {
       const t = TYPE_LABEL6[it2.type] || it2.type || "";
       const name = authorName4(it2.author);
-      const folder2 = lc7(it2.author) || "gbti";
+      const folder2 = lc8(it2.author) || "gbti";
       const avUrl = this._author?.entry?.avatar || memberAvatarUrl(folder2);
       const srcFav = it2.type === "share" && it2.url ? faviconFor(it2.url) : "";
       const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc2(srcFav)}" alt=""><span class="src-mini">${avatarLayers(folder2, avUrl)}</span></span>` : `<span class="av">${avatarLayers(folder2, avUrl)}</span>`;
@@ -31106,10 +31156,10 @@ ${BLOCKED_PILL_CSS}
       const avUrl = e.avatar || memberAvatarUrl(it2.author);
       const note = e.headline ? `<p class="a-note">${esc2(e.headline)}</p>` : "";
       let follow = "";
-      const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const wsBase = inExt ? `${SITE25}/workbench/` : "/workbench/";
-      const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it2.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc2(it2.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it2.type === "share" && it2.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it2.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
+      const ws = workbenchTarget(typeof location !== "undefined" ? location : null);
+      const wsOut = ws.newTab ? ' target="_blank" rel="noopener"' : "";
+      const editHref = !a.isSelf ? null : editHrefFor({ type: it2.type, author: it2.author, slug: targetSlugFor(it2), id: it2.id }, ws.base) || (["post", "project", "prompt"].includes(it2.type) ? `${ws.base}#tab=${it2.type}` : null);
+      if (a.isSelf) follow = editHref ? `<a class="follow edit" href="${esc2(editHref)}"${wsOut}>${ws.newTab ? "Edit on gbti.network" : it2.type === "share" ? "Edit share" : "Edit in workspace"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE25}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
@@ -31128,7 +31178,7 @@ ${BLOCKED_PILL_CSS}
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc2(prettyRole2(r))}</span>`);
       for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc2(String(s))}</span>`);
       const tags = tagPills.length && it2.type !== "share" ? `<div class="tags">${tagPills.join("")}</div>` : "";
-      return `<div class="author"><div class="a-top"><span class="a-av">${avatarLayers(lc7(it2.author), avUrl)}</span><div>${it2.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc2(name)}</div><div class="a-user">@${esc2(it2.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
+      return `<div class="author"><div class="a-top"><span class="a-av">${avatarLayers(lc8(it2.author), avUrl)}</span><div>${it2.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc2(name)}</div><div class="a-user">@${esc2(it2.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
     }
     render() {
       const it2 = this._item;
@@ -31273,16 +31323,16 @@ ${BLOCKED_PILL_CSS}
   define("gbti-reader", GbtiReader);
 
   // client-ui/src/member-view-core.mjs
-  var lc8 = (s) => String(s || "").toLowerCase();
+  var lc9 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
     { type: "post", json: "blog-index.json", label: "Articles" },
     { type: "project", json: "projects-index.json", label: "Projects" },
     { type: "prompt", json: "prompts-index.json", label: "Prompts" }
   ]);
   function memberContent(items, username, cap = 24) {
-    const u = lc8(username);
+    const u = lc9(username);
     if (!u || u === "gbti" || u === "house" || !Array.isArray(items)) return [];
-    const mine = items.filter((it2) => it2 && lc8(it2.author) === u);
+    const mine = items.filter((it2) => it2 && lc9(it2.author) === u);
     mine.sort((a, b) => {
       const av = Number.isFinite(a?.publishedAt) ? a.publishedAt : -Infinity;
       const bv = Number.isFinite(b?.publishedAt) ? b.publishedAt : -Infinity;
@@ -31294,7 +31344,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-member-view.mjs
   var SITE26 = "https://gbti.network";
-  var lc9 = (s) => String(s || "").toLowerCase();
+  var lc10 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
   var CSS50 = `
@@ -31350,7 +31400,7 @@ ${BLOCKED_PILL_CSS}
       this.setAttribute("data-gbti-username", String(username || ""));
     }
     get _username() {
-      const u = lc9(this.getAttribute("data-gbti-username") || "").trim();
+      const u = lc10(this.getAttribute("data-gbti-username") || "").trim();
       return USERNAME_RE2.test(u) ? u : "";
     }
     async _load() {
@@ -31368,7 +31418,7 @@ ${BLOCKED_PILL_CSS}
           ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE26}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
-        const me = lc9(status?.identity?.username || status?.identity?.login || "");
+        const me = lc10(status?.identity?.username || status?.identity?.login || "");
         this._isSelf = !!me && me === username;
         MEMBER_SECTIONS.forEach((s, i) => {
           this._sections[s.type] = memberContent(idx[i]?.items || [], username, 24);

@@ -259,7 +259,8 @@ class GbtiSharesFeed extends GbtiElement {
     </div>` : '';
     const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
     // SOW-071: the shared <gbti-mod-actions> replaces the bespoke Hide button (one moderation surface on every content
-    // type). It self-gates by role + builds the canonical members/<author>/shares/<id>.md path; on a hide/remove it
+    // type). It self-gates (Edit for the share's owner and a superadmin, moderation for a superadmin) + builds the canonical
+    // members/<author>/shares/<id>.md path; on a hide/remove it
     // emits 'mod-action', which returns us to the updated stream. CODEOWNERS + the SOW-005 gate stay the boundary.
     const mod = (share.author && share.id) ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : '';
     this.set(this.css(CSS) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>

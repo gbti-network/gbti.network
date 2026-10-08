@@ -59,7 +59,7 @@ function element({ type = 'post', author = 'alice', slug = 'hello', id = '', rol
 
 const labels = (html) => [...html.matchAll(/role="menuitem" data-act="([a-z]+)"/g)].map((m) => m[1]);
 
-test('a non-superadmin sees nothing at all', () => {
+test('a non-superadmin who does not own the item sees nothing at all', () => {
   for (const role of ['member', 'moderator', 'admin']) {
     const { el, html } = element({ role });
     el._flags = { stale: false, unindexed: false };
@@ -75,8 +75,8 @@ test('a superadmin gets one "..." button and a closed menu of what applies', () 
   el.render();
   const out = html();
   assert.equal((out.match(/data-dots/g) || []).length, 1, 'one button');
-  assert.match(out, /aria-label="Moderation actions"[^>]*aria-haspopup="menu" aria-expanded="false"/);
-  assert.match(out, /<div class="menu" role="menu" aria-label="Moderation actions" hidden>/, 'closed until clicked');
+  assert.match(out, /aria-label="More actions"[^>]*aria-haspopup="menu" aria-expanded="false"/); // "More actions" since the menu carries Edit too (2026-10-08)
+  assert.match(out, /<div class="menu" role="menu" aria-label="More actions" hidden>/, 'closed until clicked');
   assert.deepEqual(labels(out), ['hide', 'stale', 'unindex', 'remove']);
   assert.equal((out.match(/class="ma /g) || []).length, 0, 'the old row of buttons is gone');
   setClient(null);

@@ -140,10 +140,20 @@ test('a member\'s confirmation names no pull request and no WorkBench; staff kee
   assert.equal(/WorkBench/.test(houseEditAck({ prNumber: 42 })), false);
 });
 
-test('the reader\'s Edit link leaves the extension for the website WorkBench', () => {
-  const src = read('client-ui/src/elements/gbti-reader.mjs');
-  assert.match(src, /const wsBase = inExt \? `\$\{SITE\}\/workbench\/` : '\/workbench\/';/);
-  assert.match(src, /inExt \? 'Edit on gbti\.network' : 'Edit in workspace'/);
+test('the reader\'s Edit link leaves the extension for the website WorkBench', async () => {
+  // 2026-10-08: the base comes from workbenchTarget (the site's own only on gbti.network), so drive the real card from
+  // an extension page rather than pinning the source line it used to be.
+  const { GbtiReader } = await import('../client-ui/src/elements/gbti-reader.mjs');
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { value: { protocol: 'chrome-extension:', hostname: 'iffjdmifgnjgkdjoodapjciddibmifka' }, configurable: true });
+  try {
+    const r = Object.create(GbtiReader.prototype);
+    r._author = { house: false, username: 'ali', entry: null, canFollow: true, following: false, isSelf: true };
+    const html = r._authorCardHtml({ type: 'post', author: 'ali', slug: 'hello' });
+    assert.match(html, /href="https:\/\/gbti\.network\/workbench\/#tab=post&amp;edit=members%2Fali%2Fposts%2Fhello%2Findex\.md" target="_blank" rel="noopener">Edit on gbti\.network<\/a>/);
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'location', had); else delete globalThis.location;
+  }
 });
 
 test('a role-gated avatar menu item stays hidden for a member', () => {

@@ -46,12 +46,23 @@ test('an edit shows "Loading your share..." until its fields are filled, never a
 const card = (isSelf, it) => { const r = Object.create(GbtiReader.prototype); r._author = { house: false, username: 'ali', entry: null, canFollow: true, following: false, isSelf }; return r._authorCardHtml(it); };
 
 test('the reader gives a share\'s author an Edit link straight into the share editor, and nobody else', () => {
-  const share = { type: 'share', id: '20260928191738-chatgpt', author: 'ali', title: 'T' };
-  assert.match(card(true, share), /<a class="follow edit" href="\/workbench\/#tab=share&edit-share=20260928191738-chatgpt">Edit share<\/a>/);
-  assert.doesNotMatch(card(false, share), /edit-share=/, 'another member sees Follow, not Edit');
-  assert.doesNotMatch(card(true, { type: 'share', author: 'ali' }), /edit-share=/, 'no id, no link');
-  assert.match(card(true, { type: 'post', author: 'ali' }), /href="\/workbench\/#tab=post"/, 'articles unchanged');
-  assert.match(src('client-ui/src/elements/gbti-reader.mjs'), /\$\{inExt \? 'Edit on gbti\.network' : 'Edit share'\}/, 'in the extension it opens the website in a new tab');
+  // On the website (the WorkBench is the site's own); 2026-10-08 the link is built by editHrefFor and escaped.
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { value: { protocol: 'https:', hostname: 'gbti.network' }, configurable: true });
+  try {
+    const share = { type: 'share', id: '20260928191738-chatgpt', author: 'ali', title: 'T' };
+    assert.match(card(true, share), /<a class="follow edit" href="\/workbench\/#tab=share&amp;edit-share=20260928191738-chatgpt">Edit share<\/a>/);
+    assert.doesNotMatch(card(false, share), /edit-share=/, 'another member sees Follow, not Edit');
+    assert.doesNotMatch(card(true, { type: 'share', author: 'ali' }), /edit-share=/, 'no id, no link');
+    // 2026-10-08 (owner): an article opens itself in the editor, as the "..." menu's Edit does, not only its tab.
+    assert.match(card(true, { type: 'post', author: 'ali', slug: 'hello' }), /href="\/workbench\/#tab=post&amp;edit=members%2Fali%2Fposts%2Fhello%2Findex\.md">Edit in workspace</);
+    assert.match(card(true, { type: 'post', author: 'ali' }), /href="\/workbench\/#tab=post">Edit in workspace</, 'no slug: the tab, as before');
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'location', had); else delete globalThis.location;
+  }
+  assert.match(card(true, { type: 'share', id: '20260928191738-chatgpt', author: 'ali' }),
+    /href="https:\/\/gbti\.network\/workbench\/#tab=share&amp;edit-share=20260928191738-chatgpt" target="_blank" rel="noopener">Edit on gbti\.network</,
+    'off the site (the extension) it opens the website in a new tab');
 });
 
 // sow-422 (owner, 2026-09-29): the author's role and skill chips "do not need to be included on a member share in

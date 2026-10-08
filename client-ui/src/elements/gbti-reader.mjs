@@ -24,7 +24,8 @@ import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
 import './gbti-collection.mjs';
-import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
+import './gbti-mod-actions.mjs'; // SOW-071: the "..." menu: Edit for the owner and a superadmin, moderation for a superadmin
+import { editHrefFor, workbenchTarget } from '../mod-actions-core.mjs'; // the author card's Edit opens the item, as the menu's does
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
 import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbound share links
 import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the share source favicon (meta stack + side card)
@@ -482,7 +483,8 @@ class GbtiReader extends GbtiElement {
     const acts = slug ? `<span class="m-actions">`
       + `<gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite>`
       + `<gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection>`
-      // SOW-071: moderator+ only (self-gates; renders nothing otherwise). sow-398: a share's canonical path is built
+      // SOW-071: self-gates (Edit for the owner and a superadmin, moderation for a superadmin; nothing for anyone
+      // else). sow-398: a share's canonical path is built
       // from its id (modPathFor, as gbti-shares-feed passes it), so a share carries data-gbti-id as well.
       + `<gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || '')}" data-gbti-slug="${esc(slug)}"${it.type === 'share' ? ` data-gbti-id="${esc(it.id || '')}"` : ''}></gbti-mod-actions>`
       + `</span>` : '';
@@ -515,14 +517,18 @@ class GbtiReader extends GbtiElement {
     // `/workbench/` on the website (gbti.network), so pick the base by host or a website /browse reader links to
     // /browse/workspace.html -> 404. npm-CMS hosts have no WorkBench page; the link is inert there as before.
     // sow-406: the extension has no WorkBench any more, so there the link opens the website's, in a new tab.
-    const inExt = typeof location !== 'undefined' && location.protocol === 'chrome-extension:';
-    const wsBase = inExt ? `${SITE}/workbench/` : '/workbench/';
-    const wsOut = inExt ? ' target="_blank" rel="noopener"' : '';
+    // 2026-10-08: it opens the item itself in the editor (editHrefFor, as the "..." menu's Edit does), not only the
+    // WorkBench tab, and a host with no WorkBench of its own (the agent server's local page) also gets the website's.
+    const ws = workbenchTarget(typeof location !== 'undefined' ? location : null);
+    const wsOut = ws.newTab ? ' target="_blank" rel="noopener"' : '';
     // sow-421: a share's author can edit it too, landing straight in the share editor (the public share page's link).
-    if (a.isSelf) follow = ['post', 'project', 'prompt'].includes(it.type)
-      ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? 'Edit on gbti.network' : 'Edit in workspace'}</a>`
-      : it.type === 'share' && it.id
-        ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it.id)}"${wsOut}>${inExt ? 'Edit on gbti.network' : 'Edit share'}</a>` : '';
+    // An article, project or prompt whose path cannot be worked out keeps the old link to its WorkBench tab.
+    const editHref = !a.isSelf ? null
+      : editHrefFor({ type: it.type, author: it.author, slug: targetSlugFor(it), id: it.id }, ws.base)
+        || (['post', 'project', 'prompt'].includes(it.type) ? `${ws.base}#tab=${it.type}` : null);
+    if (a.isSelf) follow = editHref
+      ? `<a class="follow edit" href="${esc(editHref)}"${wsOut}>${ws.newTab ? 'Edit on gbti.network' : (it.type === 'share' ? 'Edit share' : 'Edit in workspace')}</a>`
+      : '';
     else if (a.canFollow) follow = `<button class="follow${a.following ? ' on' : ''}" data-follow type="button">${a.following ? 'Following' : 'Follow'}</button>`;
     else follow = `<a class="follow muted" href="${SITE}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
     // Social links (Discord shown as an inspectable handle chip).

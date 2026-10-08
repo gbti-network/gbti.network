@@ -9,8 +9,13 @@
 // button that opens a menu, for a superadmin only, listing only the actions that apply (menuActions): Hide, the half
 // of each sow-189 mark pair that applies (read from the public /content-flags.json), and Remove last. The menu takes
 // the avatar menu's look (extension/shell.css .me-menu / .mi), so no new design was invented.
-import { GbtiElement, define } from '../base.mjs';
-import { modPathFor, menuActions, flagKeyFor } from '../mod-actions-core.mjs';
+//
+// Owner, 2026-10-08: the menu also carries Edit, first, for the item's OWNER as well as a superadmin. It opens the item
+// in the WorkBench editor (a new tab from the extension, which has no WorkBench of its own). So an owner who is not a
+// superadmin now sees the "..." button too, holding Edit alone, and the button is named "More actions" for everyone.
+import { GbtiElement, define, esc } from '../base.mjs';
+import { modPathFor, menuActions, flagKeyFor, canEditItem, editHrefFor, workbenchTarget } from '../mod-actions-core.mjs';
+import { isLockedMembership } from '../../../client/src/membership.mjs';
 
 const SITE = 'https://gbti.network';
 const ACTION_LABEL = { hide: 'Hide', unhide: 'Unhide', remove: 'Remove', stale: 'Mark stale', unstale: 'Unmark stale', unindex: 'Unindex', reindex: 'Reindex' };
@@ -63,6 +68,7 @@ const CSS = `
   .mi { display:block; width:100%; text-align:left; padding:8px 12px; border:0; border-radius:var(--r, 10px); background:transparent;
     color:var(--fg); font:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; }
   .mi:hover, .mi:focus-visible { background:var(--green-tint); color:var(--green-700, var(--accent)); outline:none; }
+  a.mi { box-sizing:border-box; text-decoration:none; }
   .mi-remove, .mi-remove:hover, .mi-remove:focus-visible { color:var(--danger, #c0392b); }
   .mi-remove:hover, .mi-remove:focus-visible { background:color-mix(in srgb, var(--danger, #c0392b) 10%, transparent); }
   .sep { height:1px; background:var(--line); margin:5px 4px; }
@@ -72,6 +78,8 @@ const CSS = `
 class GbtiModActions extends GbtiElement {
   connectedCallback() {
     this._role = 'member';
+    this._viewer = ''; // the signed-in member's GBTI folder, to recognise the item's owner
+    this._locked = true; // until status() says otherwise: a lapsed or unknown account gets no owner Edit
     this._flags = undefined; // undefined = not asked yet; null = could not read; { stale, unindexed } = known
     this._open = false;
     this._said = '';
@@ -87,8 +95,14 @@ class GbtiModActions extends GbtiElement {
   }
 
   async _load() {
-    // The host re-checks the role server-side; this read is only to decide what to SHOW. Fail closed to 'member'.
-    try { this._role = (await this.client?.status?.())?.role || 'member'; } catch { this._role = 'member'; }
+    // The host re-checks the role server-side; this read is only to decide what to SHOW. Fail closed to 'member' and
+    // to no viewer (identity.username is the folder on both hosts, sow-428).
+    try {
+      const s = await this.client?.status?.();
+      this._role = s?.role || 'member';
+      this._viewer = String(s?.identity?.username || s?.username || '');
+      this._locked = isLockedMembership(s?.membership);
+    } catch { this._role = 'member'; this._viewer = ''; this._locked = true; }
     if (this._role === 'superadmin' && flagKeyFor(this.dataset.gbtiType, this.dataset.gbtiSlug)) {
       const all = await loadFlags();
       const key = flagKeyFor(this.dataset.gbtiType, this.dataset.gbtiSlug);
@@ -105,16 +119,36 @@ class GbtiModActions extends GbtiElement {
     return this._path() ? menuActions({ role: this._role, type: this.dataset.gbtiType, flags: this._flags ?? null }) : [];
   }
 
+  // The Edit row's link, or null. The website opens its own WorkBench; anywhere else opens the website's in a new tab.
+  _editLink() {
+    const d = this.dataset;
+    if (!canEditItem({ role: this._role, viewer: this._viewer, author: d.gbtiAuthor, locked: this._locked })) return null;
+    const { base, newTab } = workbenchTarget(typeof location !== 'undefined' ? location : null);
+    const href = editHrefFor({ type: d.gbtiType, author: d.gbtiAuthor, slug: d.gbtiSlug, id: d.gbtiId }, base);
+    return href ? { href, newTab } : null;
+  }
+
   render() {
     const actions = this._actions();
-    if (!actions.length) { this._unlisten(); this.set(''); return; } // not a superadmin, or an unresolvable path
-    const rows = actions.map((a) => `${a === 'remove' && actions.length > 1 ? '<div class="sep" role="separator"></div>' : ''}`
+    const edit = this._editLink();
+    if (!actions.length && !edit) { this._unlisten(); this.set(''); return; } // neither owner nor superadmin, or no path
+    const editRow = edit
+      ? `<a class="mi mi-edit" role="menuitem" data-edit href="${esc(edit.href)}"${edit.newTab ? ' target="_blank" rel="noopener"' : ''}>Edit</a>`
+        + (actions.length ? '<div class="sep" role="separator"></div>' : '')
+      : '';
+    const rows = editRow + actions.map((a) => `${a === 'remove' && actions.length > 1 ? '<div class="sep" role="separator"></div>' : ''}`
       + `<button class="mi mi-${a}" type="button" role="menuitem" data-act="${a}">${ACTION_LABEL[a]}</button>`).join('');
     this.set(this.css(CSS)
-      + `<button class="dots" type="button" data-dots aria-label="Moderation actions" title="Moderation actions" aria-haspopup="menu" aria-expanded="${this._open}">${DOTS}</button>`
-      + `<div class="menu" role="menu" aria-label="Moderation actions"${this._open ? '' : ' hidden'}>${rows}</div>`
+      + `<button class="dots" type="button" data-dots aria-label="More actions" title="More actions" aria-haspopup="menu" aria-expanded="${this._open}">${DOTS}</button>`
+      + `<div class="menu" role="menu" aria-label="More actions"${this._open ? '' : ' hidden'}>${rows}</div>`
       + (this._said ? `<span class="said" role="status">${this._said}</span>` : ''));
     this.$('[data-dots]')?.addEventListener('click', (e) => { e.stopPropagation(); this._setOpen(!this._open); });
+    // The link itself navigates. A new tab leaves this page behind, so focus goes back to the button, as Escape does.
+    this.$('[data-edit]')?.addEventListener('click', (e) => {
+      const newTab = e.currentTarget?.target === '_blank';
+      this._setOpen(false);
+      if (newTab) this.$('[data-dots]')?.focus?.();
+    });
     this.$$('[data-act]').forEach((b) => b.addEventListener('click', () => this._do(b.dataset.act)));
   }
 
@@ -140,10 +174,11 @@ class GbtiModActions extends GbtiElement {
   }
 
   // Esc closes and returns focus to the button; the arrow keys move between rows (Enter and Space press a row, as
-  // any button does).
+  // any button does). The Edit row is a link, and Space on a link scrolls the page, so Space presses it here.
   _key(e) {
     if (!this._open) return;
     if (e.key === 'Escape') { e.preventDefault(); this._setOpen(false); this.$('[data-dots]')?.focus?.(); return; }
+    if (e.key === ' ' && this.root?.activeElement?.matches?.('a.mi')) { e.preventDefault(); this.root.activeElement.click(); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = this.$$('.mi');
     if (!items.length) return;
