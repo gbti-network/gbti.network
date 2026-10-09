@@ -11,6 +11,10 @@
 # Regenerate with `node scripts/build-campaign-manifest.mjs`. CI runs `--check` and fails on drift.
 
 campaigns:
+  - id: ADMIREDWORK
+    tier: member
+    active: true
+    lander: /member-invite/
   - id: CODEABLEYEAR
     tier: member
     active: true
