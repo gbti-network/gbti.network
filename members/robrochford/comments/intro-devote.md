@@ -2,7 +2,7 @@
 id: intro-devote
 targetType: project
 targetSlug: devote
-createdAt: '2026-10-03T14:23:40.428Z'
+createdAt: '2026-10-09T15:49:25.082Z'
 status: published
 visibility: public
 authorNote: true
