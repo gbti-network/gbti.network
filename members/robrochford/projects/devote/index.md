@@ -6,6 +6,11 @@ shortDescription: >-
   reading with Matthew Henry's commentary, and guided reflection questions.
 categories:
   - education
+status: published
+visibility: public
+publicStub: false
+pricing: paid
+pricingUrl: https://devote.electrodedigital.co.uk/
 tags:
   - devotional
   - bible
@@ -17,10 +22,10 @@ platforms:
   - Windows
   - macOS
   - Android
-pricing: free
 icon: ./images/devote-icon-128.webp
 iconLarge: ./images/devote-icon-256.webp
 featuredImage: ./images/devote-featured.webp
+bannerPreset: ink
 gallery:
   - src: ./images/devote-choose-a-plan.webp
     caption: >-
@@ -32,6 +37,7 @@ gallery:
     caption: 'Study: Matthew Henry''s Concise Commentary on the day''s chapter.'
   - src: ./images/devote-go-in-peace.webp
     caption: 'Go In Peace: a closing blessing and the running streak.'
+sidebarPosition: right
 links:
   - label: Source on GitHub
     url: https://github.com/robrochford/Devote
@@ -39,10 +45,8 @@ links:
   - label: Download for Windows and macOS
     url: https://github.com/robrochford/Devote/releases/latest
     type: download
-bannerPreset: ink
-status: published
-visibility: public
 publishedAt: '2026-10-03T14:23:40.428Z'
+updatedAt: '2026-10-09T15:49:24.752Z'
 type: project
 author: robrochford
 ---
