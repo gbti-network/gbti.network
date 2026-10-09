@@ -15,11 +15,11 @@ import { IMG } from './editor-icons.mjs';
 export const withEditorMedia = (Base) => class extends Base {
   // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
   // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
-  // via jsDelivr over GitHub (the built site only serves the /_astro/-optimized variant, whose path the editor does
+  // from GitHub's raw host, sow-450 (the built site only serves the /_astro/-optimized variant, whose path the editor does
   // not have). This is why resolveAsset alone produced a broken `gbti.network/./images/...` url. Falls back safely.
   resolveCover(value) {
-    // sow-165: a freshly-staged cover previews from its local data URL (jsDelivr 404s until the PR merges);
-    // an already-committed value resolves against the item folder over jsDelivr.
+    // sow-165: a freshly-staged cover previews from its local data URL (the raw host 404s until the PR merges);
+    // an already-committed value resolves against the item folder on the raw host.
     return (this._stagedSrc && this._stagedSrc[value]) || resolveContentAsset(value, this.itemPath);
   }
 
@@ -38,7 +38,7 @@ export const withEditorMedia = (Base) => class extends Base {
   }
 
   // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
-  // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
+  // resolveCover falls through to a raw-host URL for a file that is not on main: the broken thumbnail the
   // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
   // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
   // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
@@ -66,7 +66,7 @@ export const withEditorMedia = (Base) => class extends Base {
   // host's /membership/draft-image PUTs do not race and one failure does not abort the rest. Each file gets a
   // SESSION-UNIQUE name (uniqueImageName) because stageImage uses the filename verbatim, so two files both named
   // image.png would otherwise collide onto one ./images/image.png. The just-staged bytes preview from the local
-  // data URL keyed by the stored path (resolveCover reads _stagedSrc first; a jsDelivr URL 404s until merge).
+  // data URL keyed by the stored path (resolveCover reads _stagedSrc first; a raw-host URL 404s until merge).
   async doGalleryImages(fileList) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
@@ -291,7 +291,7 @@ export const withEditorMedia = (Base) => class extends Base {
       // per-user path could not be resolved by Astro's image() and broke the site build).
       const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(',')[1] || '', itemPath: this.itemPath, item: this.itemToken });
       // Preview the just-staged cover from the local data URL keyed by the stored path; a full re-render
-      // otherwise resolves it to a jsDelivr URL that 404s until the PR merges.
+      // otherwise resolves it to a raw-host URL that 404s until the PR merges.
       (this._stagedSrc ||= {})[res.path] = dataUrl;
       // sow-174: scoped to data-kind="image" -- the banner control also holds a second [data-key] (the
       // bannerPreset swatch input), and a bare [data-key] would grab whichever comes first in DOM order.

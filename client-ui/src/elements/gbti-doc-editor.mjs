@@ -89,7 +89,7 @@ class GbtiDocEditor extends GbtiElement {
   get value() { return serializeBlocks(this._blocks || []); } // serializeBlock ignores the non-serialized _id
 
   // A body image that is staged but not yet published exists ONLY in the Worker's staged store, so after a
-  // reload its path resolves to a jsDelivr URL for a file that is not on main and the block renders broken.
+  // reload its path resolves to a raw-host URL for a file that is not on main and the block renders broken.
   // Refill _stagedSrc from the store and swap the <img> src in place. Hung off the value SETTER (once per
   // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
   // instead of re-rendering so an author who is already typing keeps their caret.
@@ -276,8 +276,8 @@ class GbtiDocEditor extends GbtiElement {
         // sow-165: a body image is usually a REPO-relative path (`./images/x.webp`). Prefixing the site
         // origin produced `https://gbti.network/./images/x.webp`, a guaranteed 404, which is why every body
         // image rendered broken in the editor. Resolve against the item's folder like the reader does.
-        // sow-165: a freshly-staged image previews from its local object URL (jsDelivr 404s pre-merge); an
-        // already-committed image resolves against the item folder over jsDelivr like the reader does.
+        // sow-165: a freshly-staged image previews from its local object URL (the raw host 404s pre-merge); an
+        // already-committed image resolves against the item folder on the raw host like the reader does.
         const src = hasUrl ? esc((this._stagedSrc && this._stagedSrc[b.url]) || resolveContentAsset(b.url, this.itemPath)) : '';
         return `<div class="card"><div class="card-h">${svg('img')} Image</div>`
           + `<div class="imgframe">`
@@ -580,8 +580,8 @@ class GbtiDocEditor extends GbtiElement {
       // the canonical `./images/<file>` reference (native Astro resolution; the old per-user path broke the build).
       const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.item });
       b.url = out.path;
-      // A just-staged image is not on main yet, so its jsDelivr URL 404s until the PR merges. Preview it from the
-      // local file via an object URL keyed by the stored path, which the renderer consults before jsDelivr.
+      // A just-staged image is not on main yet, so its raw-host URL 404s until the PR merges. Preview it from the
+      // local file via an object URL keyed by the stored path, which the renderer consults before the raw host.
       try { (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(file); } catch { /* no URL in this host */ }
       if (!b.alt) b.alt = file.name.replace(/\.[^.]+$/, '');
       this._render(); this._change();
@@ -636,7 +636,7 @@ class GbtiDocEditor extends GbtiElement {
         : `<div class="media-load">${esc(rows.length ? 'Nothing matches that.' : (this._mediaErr || 'No images.'))}</div>`;
       pop.querySelectorAll('[data-mi]').forEach((cell) => {
         cell.addEventListener('click', () => { this._closeMediaPicker(); this._reuseImage(shown[Number(cell.dataset.mi)], id); });
-        // A thumbnail can legitimately fail: the file was deleted, or jsDelivr has not caught up with a recent
+        // A thumbnail can legitimately fail: the file was deleted, or the raw host's five-minute cache has not caught up with a recent
         // merge. Hide the broken <img> so the cell falls back to its filename, which is still selectable and
         // still copies correctly. A browser broken-image glyph reads as "this app is broken" instead.
         cell.querySelector('img')?.addEventListener('error', (e) => { e.target.style.display = 'none'; });

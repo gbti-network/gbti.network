@@ -19,7 +19,7 @@
 // both ends, needs no content-type or caching work, and the payload is capped at 1 MB anyway.
 //
 // The lifetime is short by design: publish() commits the image into the PR and deletes the key, so the
-// editor and preview fall back to jsDelivr the moment the real file exists on main. Nothing here is
+// editor and preview fall back to GitHub's raw host the moment the real file exists on main. Nothing here is
 // permanent storage, and eraseMemberDraftImages hard-deletes the lot for the SOW-024 right-to-erasure
 // runbook.
 

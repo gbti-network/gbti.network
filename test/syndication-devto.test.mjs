@@ -60,6 +60,15 @@ test('prepareDevtoBody: marker cut, CDN rewrite, byline prepend, tag normalizati
   assert.deepEqual(r.tags, ['claudecode', 'agentskills', 'ai', 'workflow'], 'lowercase alphanumeric, capped at 4');
 });
 
+// sow-450: jsDelivr refuses this repo (over its 50 MB package limit), so a new image linked through it is
+// broken on dev.to. The literal, not the constant: a test reading DEVTO_CDN_BASE passes whatever it says.
+test('dev.to images point at GitHub\'s raw host, not jsDelivr', () => {
+  assert.equal(DEVTO_CDN_BASE, 'https://raw.githubusercontent.com/gbti-network/gbti.network/main');
+  const r = prepareDevtoBody(FILE, ITEM, { intro: '' });
+  assert.ok(r.body.includes('](https://raw.githubusercontent.com/gbti-network/gbti.network/main/members/atwellpub/posts/my-article/images/pic.webp)'));
+  assert.doesNotMatch(r.body, /jsdelivr/);
+});
+
 test('prepareDevtoBody: a members item STUBS (the rendered stub template, never any body)', () => {
   const membersFile = FILE.replace('visibility: public', 'visibility: members');
   const r = prepareDevtoBody(membersFile, ITEM, { intro: '**By H.**', footer: 'Join us.', stubBody: 'A great teaser.\n\n[Read it](https://gbti.network/x)' });

@@ -94,8 +94,8 @@ export async function saveDraft(ctx, { type, input, body, path, skillFile } = {}
 export async function foldRepoDrafts(ctx, drafts, type) {
   let items = [];
   // sow-315: the same envelope carries the CONTENT COMMIT the index was built from. It rides back to the UI
-  // so the editors can pin their jsDelivr image URLs to a commit instead of to `main`, whose URLs the
-  // viewer's browser caches for seven days (a replaced image would keep showing the old picture). Null when
+  // so the editors can pin their image URLs to a commit instead of to `main`, whose URLs are cached (a replaced
+  // image would keep showing the old picture for a while). Null when
   // unavailable, which leaves the old `main` behaviour rather than half-pinning.
   let contentRef = null;
   try {

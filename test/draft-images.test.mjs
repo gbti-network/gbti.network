@@ -2,7 +2,7 @@
 //
 // The defect it exists to close: a staged upload lived only in an in-memory Map in workbench-client.ts, so
 // saving a draft persisted the image PATH and never the BYTES. After a reload the editor and the preview
-// both resolved that path to a jsDelivr URL for a file that had never been committed, and publish silently
+// both resolved that path to a CDN URL for a file that had never been committed, and publish silently
 // dropped the missing binary and would have opened a PR whose frontmatter pointed at nothing.
 //
 // The key then carried no ITEM, only the file name, so two unpublished drafts that both staged a `cover.png`

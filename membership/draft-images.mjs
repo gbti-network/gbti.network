@@ -3,7 +3,7 @@
 //
 // WHY THIS EXISTS. src/lib/workbench-client.ts staged an uploaded image into a plain in-memory Map and only
 // publish() ever read it. Saving a draft therefore wrote the image PATH into KV and the image BYTES nowhere,
-// so a reload left the editor and the preview pointing at a jsDelivr URL for a file that was never
+// so a reload left the editor and the preview pointing at a raw-host URL for a file that was never
 // committed: a broken thumbnail that no amount of re-saving could fix.
 //
 // The bytes cannot ride along inside the draft record. membership/member-drafts.mjs caps a single draft at

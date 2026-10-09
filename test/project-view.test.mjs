@@ -16,8 +16,11 @@ import {
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const DEVOTE = 'members/robrochford/projects/devote/index.md';
-const CDN = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main/members/robrochford/projects/devote/images/';
-const devoteFm = () => yaml.load(read(DEVOTE).split('---')[1]);
+const CDN = 'https://raw.githubusercontent.com/gbti-network/gbti.network/main/members/robrochford/projects/devote/images/';
+// The file is Rob's to edit, and he does: on 2026-10-09 he made Devote paid and the publish stamped `updatedAt`
+// (which adds an "Updated" fact), turning these pins red with nothing wrong in the code. The two fields a member
+// changes in the normal course are held at their 2026-10-03 values; everything else stays read from the file.
+const devoteFm = () => ({ ...yaml.load(read(DEVOTE).split('---')[1]), pricing: 'free', pricingUrl: undefined, updatedAt: undefined });
 const devote = (extra = {}) => projectViewModel({ item: { type: 'project', path: DEVOTE, categoryLabels: ['Education'] }, frontmatter: devoteFm(), ...extra });
 
 test('Devote, from its real frontmatter: the icon, the category, the price, the platforms, both buttons', () => {

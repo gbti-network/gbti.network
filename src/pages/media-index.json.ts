@@ -16,7 +16,7 @@
 // appeared in a Mode A item. The file is still in the repo and can be referenced by hand.
 //
 // Metadata only, same privacy posture as the other index endpoints: names and repo paths of images that are
-// ALREADY public (committed to a public repo and served over jsDelivr), never a body. CORS `*` because the
+// ALREADY public (committed to a public repo and served from GitHub's raw host), never a body. CORS `*` because the
 // extension fetches it cross-origin.
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';

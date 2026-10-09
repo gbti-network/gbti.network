@@ -167,7 +167,7 @@ the published read-view, and each member's client is their authoring node.**
 [Astro](https://astro.build) and [Tailwind CSS](https://tailwindcss.com) build a static site that
 deploys on **Cloudflare Pages**. Content is a set of Astro Zod collections (`post`, `product`, `prompt`,
 `profile`, `page`, `applet`, `comment`, `share`), so the same schemas validate content in CI and in the
-authoring client. Images are committed to the repo and served over the jsDelivr CDN; video is embed-only
+authoring client. Images are committed to the repo; the site build serves optimized copies and the signed-in editors preview them from GitHub's raw host; video is embed-only
 and never committed. The public build renders only entries that are both `published` and `public`, so
 drafts and members-only content are excluded from the bundle.
 

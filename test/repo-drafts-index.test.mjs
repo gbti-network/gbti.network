@@ -85,15 +85,15 @@ test('mirrorRepoDraftsToKv: creds-gated no-op (no throw) without CF_*; a real PU
   }
 });
 
-// sow-315: the envelope carries the CONTENT COMMIT so the review surfaces can pin their jsDelivr image URLs
-// to it. A `@main` URL is cached for seven days in the viewer's browser, so a replaced image keeps showing
-// the old picture and no purge reaches it. Envelope, not per item: the item-shape deepEqual above pins
+// sow-315: the envelope carries the CONTENT COMMIT so the review surfaces can pin their image URLs
+// to it. A `main` URL is cached, so a replaced image keeps showing the old picture
+// for a while. Envelope, not per item: the item-shape deepEqual above pins
 // exactly seven keys, and the sha describes the whole index rather than any one draft.
 test('contentSha: only a full 40-hex GITHUB_SHA is recorded', () => {
   const SHA = 'a3190e581c09127494dafe5baf41cf14b2ab1a1e';
   assert.equal(contentSha({ GITHUB_SHA: SHA }), SHA);
   assert.equal(contentSha({ GITHUB_SHA: SHA.toUpperCase() }), SHA, 'normalized, not rejected');
-  // A SHORT sha resolves as a BRANCH at jsDelivr and keeps the mutable seven-day cache, so recording one
+  // A SHORT sha is not a pin (jsDelivr read it as a branch), so recording one
   // would look like a pin and fix nothing. Null instead, which keeps the honest `main` behaviour.
   assert.equal(contentSha({ GITHUB_SHA: 'a3190e5' }), null);
   assert.equal(contentSha({ GITHUB_SHA: '' }), null);

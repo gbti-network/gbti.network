@@ -99,7 +99,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
   // .md land atomically and the path resolves on merge.
   //
   // This Map used to be the ONLY copy, and it is per-tab, so saving a draft persisted the image PATH and the
-  // BYTES nowhere. A reload left the editor and the preview resolving that path to a jsDelivr URL for a file
+  // BYTES nowhere. A reload left the editor and the preview resolving that path to a raw-host URL for a file
   // that had never been committed: the broken thumbnail no amount of re-saving could fix. The bytes now also go
   // to the Worker's staged-image store (`draftimg:<github_id>:<type>:<slug>:<name>`), which survives the reload
   // and the device. The Map stays as the same-session fast path so picking an image and publishing immediately
@@ -402,9 +402,8 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
       // KV draft (that KV copy is the newer editable staging state). Fail-soft: a repo-drafts error must not
       // blank the Drafts list, so a KV-only member still sees their KV drafts if the route is unavailable.
       let repoItems: any[] = [];
-      // sow-315: the same envelope carries the content commit. Pin the image URLs to it, because a `@main`
-      // jsDelivr URL is cached seven days in the viewer's browser and a replaced image would keep showing
-      // the old picture. A missing or partial sha resets to `main` inside setContentRef, never half-pins.
+      // sow-315: the same envelope carries the content commit. Pin the image URLs to it, because a `main`
+      // URL is cached and a replaced image would keep showing the old picture for a while. A missing or partial sha resets to `main` inside setContentRef, never half-pins.
       try {
         const rr: any = await workerGet('/membership/repo-drafts');
         repoItems = Array.isArray(rr?.items) ? rr.items : [];

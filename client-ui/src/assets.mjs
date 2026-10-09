@@ -6,26 +6,27 @@
 
 const SITE = 'https://gbti.network';
 
-/** The public content repo (jsDelivr serves committed images from it; the media convention). */
+/** The public content repo (GitHub's raw host serves committed images from it; the media convention). */
 export const CONTENT_REPO = 'gbti-network/gbti.network';
 
-// sow-315: WHICH GIT REF the jsDelivr URLs point at, and why it is not always `main`.
+// sow-450: previews load committed images from GitHub's raw host, not jsDelivr. jsDelivr refuses any GitHub
+// repo over 50 MB (`403 Package size exceeded the configured limit of 50 MB`); this one crossed it, so only
+// files jsDelivr had cached before then still served and every new image broke (Devote's cover, 2026-10-09).
+// The raw host has no size limit, sends `access-control-allow-origin: *` and the real image content type,
+// and takes a branch or a commit in the same path segment.
+export const RAW_HOST = 'https://raw.githubusercontent.com';
+
+// sow-315: WHICH GIT REF the URLs point at, and why it is not always `main`. A branch URL is cached (five
+// minutes on the raw host; it was seven days in the browser on jsDelivr), so replacing an image at the same
+// path can show the old picture for a while. A FULL 40-hex commit is a URL whose bytes never change, so a
+// new commit is simply a new URL and staleness stops being possible.
 //
-// jsDelivr's cache policy is decided by the REF FORM, not by us. A branch ref answers
-// `max-age=604800, s-maxage=43200`: twelve hours at the edge and SEVEN DAYS in the viewer's own browser.
-// So replacing an image at the same path leaves every reviewer who already opened the page looking at the
-// old picture for a week, and no purge API reaches a browser cache. Measured on 2026-09-07: `@main` was
-// still serving a cover that had been replaced once and then deleted from main entirely.
-//
-// A FULL 40-hex commit ref answers `max-age=31536000, immutable` instead, so a new commit is simply a new
-// URL and staleness stops being possible.
-//
-// THE TRAP: an ABBREVIATED sha (`@a3190e5`) resolves as a BRANCH and keeps the mutable seven-day policy.
-// It looks pinned, tests that only check URL shape pass, and nothing is fixed. Hence the exact-40 test.
+// THE TRAP: an ABBREVIATED sha looks pinned and is not treated as one (jsDelivr read it as a branch). Tests
+// that only check URL shape pass, and nothing is fixed. Hence the exact-40 test.
 const FULL_SHA = /^[0-9a-f]{40}$/;
 export const DEFAULT_REF = 'main';
 
-/** The ref to put after `@`: a full 40-hex commit, else `main`. Never a short sha. Pure. */
+/** The ref to put in the URL: a full 40-hex commit, else `main`. Never a short sha. Pure. */
 export function pinnedRef(sha) {
   const s = String(sha ?? '').trim().toLowerCase();
   return FULL_SHA.test(s) ? s : DEFAULT_REF;
@@ -42,40 +43,59 @@ export function setContentRef(sha) { currentRef = pinnedRef(sha); }
 /** The ref in force. Exported so a test can assert it and restore it (the state is module-wide). */
 export function contentRef() { return currentRef; }
 
-/** The jsDelivr base for a repo at the ref in force. */
+/** The raw-host base for a repo at the ref in force. */
 export function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
-  return `https://cdn.jsdelivr.net/gh/${repo}@${pinnedRef(ref)}`;
+  return `${RAW_HOST}/${repo}/${pinnedRef(ref)}`;
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The URL a failed image should retry, or '' for none. Two cases, both landing on the raw host at `main`:
+ *  - a PINNED raw URL (`.../<repo>/<40-hex>/<path>`): the commit may not hold the file yet (below);
+ *  - ANY jsDelivr URL for the repo (`cdn.jsdelivr.net/gh/<repo>@<ref>/<path>`): one saved or cached before
+ *    sow-450, which jsDelivr now refuses unless it happened to be cached.
+ * Pure, so the rewrite is testable without a DOM.
+ */
+export function cdnRetryUrl(src, repo = CONTENT_REPO) {
+  const s = String(src || '');
+  const r = escapeRe(repo);
+  const pinned = s.match(new RegExp(`^${escapeRe(RAW_HOST)}/${r}/[0-9a-f]{40}/(.+)$`));
+  if (pinned) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${pinned[1]}`;
+  const legacy = s.match(new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${r}@[^/]+/(.+)$`));
+  if (legacy) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${legacy[1]}`;
+  return '';
 }
 
 /**
- * Install ONE capture-phase error listener that repoints a failed PINNED asset back at `main`.
+ * Install ONE capture-phase error listener that repoints a failed image at the raw host's `main`
+ * (cdnRetryUrl decides which images qualify).
  *
- * This exists for one window and it is the common one: the authoring loop is commit, then open the review
- * surface. Until the index job finishes (about a minute) the ref in force is the PREVIOUS content commit,
- * where a just-added image does not exist, so a bare pin would turn a stale image into a BROKEN one. The
- * retry costs nothing in the normal case because it only runs on an error, and it degrades to exactly the
- * old `@main` behaviour.
+ * The pinned case exists for one window and it is the common one: the authoring loop is commit, then open
+ * the review surface. Until the index job finishes (about a minute) the ref in force is the PREVIOUS content
+ * commit, where a just-added image does not exist, so a bare pin would turn a stale image into a BROKEN one.
+ * The retry costs nothing in the normal case because it only runs on an error, and it degrades to exactly
+ * the old `main` behaviour.
  *
  * Capture phase because `error` does not bubble. `dataset.cdnRetried` makes the retry once-only, so a
  * genuinely missing file still fails instead of looping.
  */
 export function attachCdnFallback(root, repo = CONTENT_REPO) {
   if (!root || typeof root.addEventListener !== 'function') return () => {};
-  const pinned = new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@[0-9a-f]{40}/`);
   const onError = (ev) => {
     const el = ev.target;
     if (!el || el.tagName !== 'IMG' || el.dataset?.cdnRetried) return;
-    const src = String(el.getAttribute('src') || '');
-    if (!pinned.test(src)) return;
+    const next = cdnRetryUrl(el.getAttribute('src'), repo);
+    if (!next) return;
     el.dataset.cdnRetried = '1';
-    el.setAttribute('src', src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
+    el.setAttribute('src', next);
   };
   root.addEventListener('error', onError, true);
   return () => root.removeEventListener('error', onError, true);
 }
 
 /**
- * Rewrite repo-relative image srcs in RAW MARKDOWN to absolute jsDelivr URLs, using the item's repo path
+ * Rewrite repo-relative image srcs in RAW MARKDOWN to absolute raw-host URLs, using the item's repo path
  * as the base (members/<u>/posts/<slug>/index.md -> .../posts/<slug>/images/x.webp). The site build
  * resolves these relatives itself; the in-extension reader renders raw markdown, so without this pass a
  * `![](./images/x.webp)` has no meaningful src outside the repo. Absolute (http, //) and site-absolute
@@ -95,7 +115,7 @@ export function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, r
 /**
  * Resolve ONE image value (a frontmatter cover, or a body image block's url) to something an <img src>
  * can actually load. Absolute, protocol-relative and build-optimized `/_astro/` values pass through;
- * anything else is treated as a REPO-relative path and resolved against the item's folder via jsDelivr,
+ * anything else is treated as a REPO-relative path and resolved against the item's folder on the raw host,
  * exactly as resolveMarkdownAssets does for raw markdown. Without the item path there is no folder to
  * resolve against, so it falls back to the site origin.
  *
@@ -118,7 +138,7 @@ export function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site =
 
 export function resolveAsset(thumb, site = SITE) {
   if (!thumb || typeof thumb !== 'string') return null;
-  if (/^https?:\/\//.test(thumb)) return thumb; // already absolute (a raw/jsDelivr/CDN URL)
+  if (/^https?:\/\//.test(thumb)) return thumb; // already absolute (a raw/CDN URL)
   if (/^\/\//.test(thumb)) return `https:${thumb}`; // protocol-relative
   return `${site}${thumb.startsWith('/') ? '' : '/'}${thumb}`; // SITE-relative `/_astro/...`
 }

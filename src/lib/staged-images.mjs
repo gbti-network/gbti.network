@@ -2,7 +2,7 @@
 //
 // WHY THIS EXISTS. An uploaded image is committed with its content, in ONE publish PR, so between the upload
 // and the merge the bytes live only in the Worker's staged store (`draftimg:<github_id>:<type>:<slug>:<file>`,
-// see membership/draft-images.mjs). Every surface resolves an image PATH against jsDelivr over main, so inside
+// see membership/draft-images.mjs). Every surface resolves an image PATH against GitHub's raw host over main, so inside
 // that window the path 404s: the editor's Media panel said "1 image" over a broken thumbnail, the preview
 // showed a broken image, and neither survived a reload. These helpers put the staged bytes in front of the
 // resolver until the real file exists on main, after which the key is gone and the CDN answers.

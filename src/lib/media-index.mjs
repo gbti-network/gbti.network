@@ -30,7 +30,7 @@
 //
 // This module is node-free and carries no URL convention of its own. It emits `{ name, itemPath }` and the UI
 // resolves that pair through the EXISTING `resolveContentAsset` in client-ui/src/assets.mjs, which already
-// knows how to turn a content-relative image into a jsDelivr URL.
+// knows how to turn a content-relative image into a raw-host URL.
 
 import { contentItemPath } from './content-index.mjs';
 

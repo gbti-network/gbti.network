@@ -93,8 +93,8 @@ test('the block model round-trips a caption; the planners set, change and remove
 
 test('the asset resolver and the content validator see through a title', () => {
   const out = resolveMarkdownAssets('![a](./images/x.png "cap"){full} and ![b](./images/y.png)', 'members/u/posts/s/index.md');
-  assert.match(out, /!\[a\]\(https:\/\/cdn\.jsdelivr\.net\/gh\/[^ ]+\/members\/u\/posts\/s\/images\/x\.png "cap"\)\{full\}/);
-  assert.match(out, /!\[b\]\(https:\/\/cdn\.jsdelivr\.net\/gh\/[^ )]+\/members\/u\/posts\/s\/images\/y\.png\)/);
+  assert.match(out, /!\[a\]\(https:\/\/raw\.githubusercontent\.com\/[^ ]+\/members\/u\/posts\/s\/images\/x\.png "cap"\)\{full\}/);
+  assert.match(out, /!\[b\]\(https:\/\/raw\.githubusercontent\.com\/[^ )]+\/members\/u\/posts\/s\/images\/y\.png\)/);
   const v = read('scripts/validate-content.mjs');
   const m = /const BODY_IMAGE_REF_RE = (\/.*\/g);/.exec(v);
   const re = new Function(`return ${m[1]}`)();

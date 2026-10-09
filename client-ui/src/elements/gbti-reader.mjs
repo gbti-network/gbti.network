@@ -407,7 +407,7 @@ class GbtiReader extends GbtiElement {
       // site's prompt Copy, which always yields the raw markdown regardless of the active view).
       this._rawBody = typeof body === 'string' ? body : null;
       // Repo-relative image srcs (./images/x.webp) only mean something inside the repo; the site build
-      // resolves them itself, but THIS reader renders raw markdown, so resolve them to jsDelivr here.
+      // resolves them itself, but THIS reader renders raw markdown, so resolve them to GitHub's raw host here.
       this._itemPath = it.path;
       // SOW-088: the RAW taxonomy path (categoryLabels alone cannot drive channel routing) + the whole
       // frontmatter for the deep-link metadata backfill.

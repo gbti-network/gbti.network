@@ -63,9 +63,10 @@ export class GbtiElement extends Base {
 
   connectedCallback() {
     SUBSCRIBERS.add(this._onClient);
-    // sow-315: retry a PINNED jsDelivr image against `main` if it 404s. Installed on the BASE, so every
-    // component that renders content images is covered by one listener rather than three opt-ins that a
-    // future component would silently miss. It only fires on an error, so it costs nothing normally.
+    // sow-315: retry a PINNED image (and any pre-sow-450 jsDelivr one) against the raw host's `main` if it
+    // 404s. Installed on the BASE, so every component that renders content images is covered by one
+    // listener rather than three opt-ins that a future component would silently miss. It only fires on an
+    // error, so it costs nothing normally.
     //
     // The window it covers is the common one: the authoring loop is commit, then open the review surface,
     // and until the index job finishes the pinned ref is the PREVIOUS content commit, where a just-added

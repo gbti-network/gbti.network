@@ -3,6 +3,7 @@
   // client-ui/src/assets.mjs
   var SITE = "https://gbti.network";
   var CONTENT_REPO = "gbti-network/gbti.network";
+  var RAW_HOST = "https://raw.githubusercontent.com";
   var FULL_SHA = /^[0-9a-f]{40}$/;
   var DEFAULT_REF = "main";
   function pinnedRef(sha) {
@@ -14,19 +15,28 @@
     currentRef = pinnedRef(sha);
   }
   function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
-    return `https://cdn.jsdelivr.net/gh/${repo}@${pinnedRef(ref)}`;
+    return `${RAW_HOST}/${repo}/${pinnedRef(ref)}`;
+  }
+  var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function cdnRetryUrl(src, repo = CONTENT_REPO) {
+    const s = String(src || "");
+    const r = escapeRe(repo);
+    const pinned = s.match(new RegExp(`^${escapeRe(RAW_HOST)}/${r}/[0-9a-f]{40}/(.+)$`));
+    if (pinned) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${pinned[1]}`;
+    const legacy = s.match(new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${r}@[^/]+/(.+)$`));
+    if (legacy) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${legacy[1]}`;
+    return "";
   }
   function attachCdnFallback(root, repo = CONTENT_REPO) {
     if (!root || typeof root.addEventListener !== "function") return () => {
     };
-    const pinned = new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@[0-9a-f]{40}/`);
     const onError = (ev) => {
       const el = ev.target;
       if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
-      const src = String(el.getAttribute("src") || "");
-      if (!pinned.test(src)) return;
+      const next = cdnRetryUrl(el.getAttribute("src"), repo);
+      if (!next) return;
       el.dataset.cdnRetried = "1";
-      el.setAttribute("src", src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
+      el.setAttribute("src", next);
     };
     root.addEventListener("error", onError, true);
     return () => root.removeEventListener("error", onError, true);
@@ -2561,7 +2571,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     // serializeBlock ignores the non-serialized _id
     // A body image that is staged but not yet published exists ONLY in the Worker's staged store, so after a
-    // reload its path resolves to a jsDelivr URL for a file that is not on main and the block renders broken.
+    // reload its path resolves to a raw-host URL for a file that is not on main and the block renders broken.
     // Refill _stagedSrc from the store and swap the <img> src in place. Hung off the value SETTER (once per
     // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
     // instead of re-rendering so an author who is already typing keeps their caret.
@@ -8333,7 +8343,7 @@ ${listStyleProseCss(".doc-blocks")}
   var withEditorMedia = (Base2) => class extends Base2 {
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
     // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
-    // via jsDelivr over GitHub (the built site only serves the /_astro/-optimized variant, whose path the editor does
+    // from GitHub's raw host, sow-450 (the built site only serves the /_astro/-optimized variant, whose path the editor does
     // not have). This is why resolveAsset alone produced a broken `gbti.network/./images/...` url. Falls back safely.
     resolveCover(value) {
       return this._stagedSrc && this._stagedSrc[value] || resolveContentAsset(value, this.itemPath);
@@ -8352,7 +8362,7 @@ ${listStyleProseCss(".doc-blocks")}
       return this.type && slug ? `${this.type}:${slug}` : null;
     }
     // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
-    // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
+    // resolveCover falls through to a raw-host URL for a file that is not on main: the broken thumbnail the
     // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
     // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
     // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
@@ -8377,7 +8387,7 @@ ${listStyleProseCss(".doc-blocks")}
     // host's /membership/draft-image PUTs do not race and one failure does not abort the rest. Each file gets a
     // SESSION-UNIQUE name (uniqueImageName) because stageImage uses the filename verbatim, so two files both named
     // image.png would otherwise collide onto one ./images/image.png. The just-staged bytes preview from the local
-    // data URL keyed by the stored path (resolveCover reads _stagedSrc first; a jsDelivr URL 404s until merge).
+    // data URL keyed by the stored path (resolveCover reads _stagedSrc first; a raw-host URL 404s until merge).
     async doGalleryImages(fileList) {
       const files = Array.from(fileList || []);
       if (!files.length) return;

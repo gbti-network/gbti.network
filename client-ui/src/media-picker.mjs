@@ -3,7 +3,7 @@
 // The picker offers every image the signed-in member's own published items already reference, read from the
 // build-time /media-index.json. Selecting one has to COPY the file into the item being edited, because a body
 // image reference is `./images/<name>` resolved against the item's own folder: a reference to a file sitting
-// in a different item's folder would render in the editor (which resolves over jsDelivr) and 404 on the built
+// in a different item's folder would render in the editor (which resolves over GitHub's raw host) and 404 on the built
 // site. That copy is not a new code path. It stages the bytes through the SAME client.stageImage the upload
 // flow uses, so co-location, naming and the publish flush stay in one place.
 //

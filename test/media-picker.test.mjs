@@ -43,7 +43,7 @@ test('sow-165: selecting an image from ANOTHER item plans a copy', () => {
   const plan = reusePlan(ROW('cover.webp', 'members/alice/posts/one/index.md'), 'members/alice/posts/two/index.md');
   assert.equal(plan.alreadyHere, false, 'a different item means the bytes must be copied in');
   assert.equal(plan.ref, './images/cover.webp', 'the stored reference is identical to what an upload produces');
-  assert.match(plan.sourceUrl, /cdn\.jsdelivr\.net\/gh\/gbti-network\/gbti\.network@main\/members\/alice\/posts\/one\/images\/cover\.webp$/,
+  assert.match(plan.sourceUrl, /raw\.githubusercontent\.com\/gbti-network\/gbti\.network\/main\/members\/alice\/posts\/one\/images\/cover\.webp$/,
     'the source URL resolves against the SOURCE item, which is where the bytes actually are');
 });
 

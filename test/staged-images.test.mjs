@@ -2,7 +2,7 @@
 //
 // The defect these close: an uploaded image is committed with its content in ONE publish PR, so until that PR
 // merges the bytes are only in the Worker's staged store. Every surface resolved the image PATH against
-// jsDelivr over main, which 404s in that window, so the editor showed a broken thumbnail and the preview a
+// the CDN over main, which 404s in that window, so the editor showed a broken thumbnail and the preview a
 // broken image, and a reload made it permanent.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -95,7 +95,7 @@ test('a path the caller already holds is not re-fetched', async () => {
 });
 
 test('a miss and a throwing read both fall back to the CDN instead of failing', async () => {
-  // "not staged" is the NORMAL steady state once the publish PR merges: the key is deleted and jsDelivr serves
+  // "not staged" is the NORMAL steady state once the publish PR merges: the key is deleted and the raw host serves
   // the real file. It must never surface as an error, or every published item would report one.
   assert.deepEqual(await loadStagedImages(['./images/x.png'], async () => null), {});
   assert.deepEqual(await loadStagedImages(['./images/x.png'], async () => { throw new Error('offline'); }), {});

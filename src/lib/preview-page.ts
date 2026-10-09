@@ -57,18 +57,17 @@ export async function initWorkbenchPreview() {
   // sow-315: the CDN base is resolved LATE, because it depends on a content commit this page has not
   // fetched yet. `main` is the honest default and is exactly the pre-sow-315 behaviour.
   //
-  // Why it matters: jsDelivr caches a BRANCH url for twelve hours at the edge and SEVEN DAYS in the
-  // viewer's browser, so replacing an image at the same path leaves a reviewer looking at the old
-  // picture for a week and no purge API can reach a browser cache. A full 40-hex COMMIT url is
-  // immutable, so a new commit is simply a new url. pinnedRef refuses a short sha, which jsDelivr would
-  // resolve as a branch and silently keep the mutable policy.
+  // Why it matters: a BRANCH url is cached, so replacing an image at the same path can leave a reviewer
+  // looking at the old picture (five minutes on GitHub's raw host, sow-450; it was a week on jsDelivr). A
+  // full 40-hex COMMIT url never changes, so a new commit is simply a new url. pinnedRef refuses a short
+  // sha, which looks pinned and is not.
   let CDN = cdnBase();
-  // An image the author has uploaded but not yet published is not on main, so jsDelivr 404s it and the
+  // An image the author has uploaded but not yet published is not on main, so the raw host 404s it and the
   // preview shows a broken image. Its bytes are in the Worker's staged store; this map is filled from
   // there once the draft is loaded (see loadStagedImages below) and consulted FIRST.
   const stagedSrc: Record<string, string> = {};
   // Mirrors resolveContentAsset (client-ui/src/assets.mjs): a repo-relative path resolves against the
-  // item's folder over jsDelivr, because a draft's images may not be on the site yet.
+  // item's folder on GitHub's raw host, because a draft's images may not be on the site yet.
   const asset = (v: string, itemPath: string) => {
     if (!v) return '';
     if (stagedSrc[v]) return stagedSrc[v];

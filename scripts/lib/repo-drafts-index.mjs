@@ -111,12 +111,12 @@ export function buildRepoDraftsIndex(root) {
   return out;
 }
 
-// sow-315: the CONTENT COMMIT this index was built from, so the review surfaces can pin their jsDelivr
-// image URLs to it instead of to the `main` branch. A branch URL is cached twelve hours at the CDN edge and
-// SEVEN DAYS in the viewer's browser, so replacing an image at the same path shows the old picture for a
-// week and no purge API can reach it. A full 40-hex commit URL is immutable instead.
+// sow-315: the CONTENT COMMIT this index was built from, so the review surfaces can pin their
+// image URLs to it instead of to the `main` branch. A branch URL is cached, so replacing an image at the same
+// path shows the old picture for a while (a week on jsDelivr; five minutes on GitHub's raw host since sow-450).
+// A full 40-hex commit URL never changes instead.
 //
-// Stored as null unless it is a full 40-hex sha. A SHORT sha resolves as a BRANCH at jsDelivr and keeps the
+// Stored as null unless it is a full 40-hex sha. A SHORT sha was read as a BRANCH by jsDelivr and kept the
 // mutable policy, so writing one would look like a pin and fix nothing.
 //
 // GITHUB_SHA needs no workflow wiring: it is a default Actions variable, as scripts/deploy-status.mjs

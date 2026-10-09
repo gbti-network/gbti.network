@@ -4,15 +4,15 @@
 //   1. split the frontmatter (status/visibility/tags come from it, never trusted from the queue item);
 //   2. FAIL CLOSED unless `status: published` and `visibility: public` — and CUT everything at/after the
 //      SOW-016 `<!-- members-only -->` marker, so a members-only section can never crosspost;
-//   3. rewrite RELATIVE image/link targets `](./x)` to the jsDelivr CDN over the canonical repo (the
-//      house media style), because dev.to cannot resolve repo-relative paths;
+//   3. rewrite RELATIVE image/link targets `](./x)` to GitHub's raw host over the canonical repo (sow-450:
+//      jsDelivr refuses this repo, over its 50 MB limit), because dev.to cannot resolve repo-relative paths;
 //   4. prepend the rendered byline intro (the {fullName}/{member-url} template) + a blank line;
 //   5. normalize tags for dev.to (lowercase alphanumeric, max 4; fallback: the taxonomy path leaves).
 
 import yaml from 'js-yaml';
 import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
-export const DEVTO_CDN_BASE = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
+export const DEVTO_CDN_BASE = 'https://raw.githubusercontent.com/gbti-network/gbti.network/main';
 export const MEMBERS_MARKER = '<!-- members-only -->';
 const SUB = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
 
@@ -57,7 +57,7 @@ export function parsePublishedFile(rawFileText) {
   return { ok: true, fm, body: text.slice(m[0].length) };
 }
 
-/** Rewrite repo-relative image/link targets ("](./x)" and "](images/x)") to the jsDelivr CDN over the item's
+/** Rewrite repo-relative image/link targets ("](./x)" and "](images/x)") to GitHub's raw host over the item's
  *  folder. Shared by the dev.to + Hashnode pipelines (neither can resolve repo-relative paths). */
 export function rewriteRelativeImages(body, item, cdnBase = DEVTO_CDN_BASE) {
   const path = contentPathFor(item);
