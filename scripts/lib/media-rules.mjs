@@ -54,12 +54,12 @@ export function undersizeProblem({ role, rel, width, height }) {
   const w = Number(width);
   const h = Number(height);
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-    return `${role} could not be measured: ${rel} — re-export it as a valid webp/jpg/png`;
+    return `${role} could not be measured, so nothing about it was checked: ${rel}. Re-export it as a valid webp, jpg or png.`;
   }
   const long = Math.max(w, h);
   if (long < MIN_LONG_EDGE) {
-    return `${role} is too small (${w}x${h}, needs ${MIN_LONG_EDGE}px on its longest side): ${rel} — `
-      + 'the lightbox opens this file at its natural size, so export it bigger rather than scaling it down to the card';
+    return `${role} is too small (${w}x${h}, needs ${MIN_LONG_EDGE}px on its longest side): ${rel}. `
+      + 'The lightbox opens this file at its natural size, so export it bigger rather than scaling it down to the card.';
   }
   return null;
 }
