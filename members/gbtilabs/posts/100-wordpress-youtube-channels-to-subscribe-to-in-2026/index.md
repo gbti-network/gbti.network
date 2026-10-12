@@ -48,25 +48,15 @@ Of the 6,097 titles posted by the 100 channels in 2026, 1,190 use an AI term. Th
 
 ![Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6097 titles; 72 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.](./images/ai-in-2026-titles.svg)
 
-### The year of the "Is WordPress dead?" video
+### 16:9 (Long form) still dominates WordPress
 
-Channels published videos with the following titles in 2026:
+Short-form video has not taken over WordPress YouTube.
 
-- "Is WordPress Dead? My Honest Take on AI vs WordPress" (WPTuts)
-- "WordPress vs. AI: Is WordPress Dead?" (the WP Minute podcasts)
-- "WordPress is dead! We tested EmDash CMS, the new WP Killer" (WordPress Help)
-- "Its been fun, WordPress." (Jonathan Jernigan)
-- "Why I Don't Use WordPress Anymore" (Mark Szymanski)
-- "STOP SELLING WORDPRESS WEBSITES" (PixemWeb)
-- The other side: "You Don't Have to Leave WordPress to Work With AI" (The Admin Bar)
+The median channel among the 100 puts 5% of its uploads into Shorts.
 
-### Still long-form
+Twenty-one channels have posted no Shorts at all, and 5 post mostly Shorts.
 
-Short-form video has not taken over WordPress YouTube. The median channel among the 100 puts 5% of its uploads into Shorts. Twenty-one channels have posted no Shorts at all, and 5 post mostly Shorts. WordPress YouTube is still long-form.
-
-### About these numbers
-
-Topic share and AI share are measured on titles, not on what is said in the videos. Subscriber counts are YouTube's rounded public figures. Upload dates older than a few weeks are month-grained on YouTube; channels whose only qualifying video sat near 1 January were checked against the video's exact date.
+WordPress YouTube is still long-form.
 
 ## Official and community
 
