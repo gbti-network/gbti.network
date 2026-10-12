@@ -1,28 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="370" viewBox="0 0 760 370" role="img" aria-label="The 100 channels by type: Independent creators 39; Plugin and theme companies 28; Developer educators 13; News, podcasts and shows 8; Official and community 7; Agencies and freelancers 4; Hosting companies 1." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-<title>The 100 channels by type: Independent creators 39; Plugin and theme companies 28; Developer educators 13; News, podcasts and shows 8; Official and community 7; Agencies and freelancers 4; Hosting companies 1.</title>
-<rect x="0.5" y="0.5" width="759" height="369" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="336" viewBox="0 0 760 336" role="img" aria-label="The 100 channels by type: Independent creators 38; Plugin and theme companies 29; Developer educators 13; News, podcasts and shows 9; Official and community 7; Agencies and freelancers 4." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>The 100 channels by type: Independent creators 38; Plugin and theme companies 29; Developer educators 13; News, podcasts and shows 9; Official and community 7; Agencies and freelancers 4.</title>
+<rect x="0.5" y="0.5" width="759" height="335" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">The 100 channels, by type</text>
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Every channel posted at least one video about WordPress in 2026</text>
 <text x="28.0" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators</text>
 <path d="M238.0,98.0 H688.0 Q692.0,98.0 692.0,102.0 V114.0 Q692.0,118.0 688.0,118.0 H238.0 Z" fill="#2a78d6"/>
-<text x="700.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">39</text>
+<text x="700.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">38</text>
 <text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies</text>
-<path d="M238.0,132.0 H559.9 Q563.9,132.0 563.9,136.0 V148.0 Q563.9,152.0 559.9,152.0 H238.0 Z" fill="#2a78d6"/>
-<text x="571.9" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">28</text>
+<path d="M238.0,132.0 H580.5 Q584.5,132.0 584.5,136.0 V148.0 Q584.5,152.0 580.5,152.0 H238.0 Z" fill="#2a78d6"/>
+<text x="592.5" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">29</text>
 <text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators</text>
-<path d="M238.0,166.0 H385.3 Q389.3,166.0 389.3,170.0 V182.0 Q389.3,186.0 385.3,186.0 H238.0 Z" fill="#2a78d6"/>
-<text x="397.3" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">13</text>
+<path d="M238.0,166.0 H389.3 Q393.3,166.0 393.3,170.0 V182.0 Q393.3,186.0 389.3,186.0 H238.0 Z" fill="#2a78d6"/>
+<text x="401.3" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">13</text>
 <text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows</text>
-<path d="M238.0,200.0 H327.1 Q331.1,200.0 331.1,204.0 V216.0 Q331.1,220.0 327.1,220.0 H238.0 Z" fill="#2a78d6"/>
-<text x="339.1" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">8</text>
+<path d="M238.0,200.0 H341.5 Q345.5,200.0 345.5,204.0 V216.0 Q345.5,220.0 341.5,220.0 H238.0 Z" fill="#2a78d6"/>
+<text x="353.5" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">9</text>
 <text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Official and community</text>
-<path d="M238.0,234.0 H315.5 Q319.5,234.0 319.5,238.0 V250.0 Q319.5,254.0 315.5,254.0 H238.0 Z" fill="#2a78d6"/>
-<text x="327.5" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">7</text>
+<path d="M238.0,234.0 H317.6 Q321.6,234.0 321.6,238.0 V250.0 Q321.6,254.0 317.6,254.0 H238.0 Z" fill="#2a78d6"/>
+<text x="329.6" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">7</text>
 <text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers</text>
-<path d="M238.0,268.0 H280.6 Q284.6,268.0 284.6,272.0 V284.0 Q284.6,288.0 280.6,288.0 H238.0 Z" fill="#2a78d6"/>
-<text x="292.6" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">4</text>
-<text x="28.0" y="316.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Hosting companies</text>
-<path d="M238.0,302.0 H245.6 Q249.6,302.0 249.6,306.0 V318.0 Q249.6,322.0 245.6,322.0 H238.0 Z" fill="#2a78d6"/>
-<text x="257.6" y="316.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1</text>
-<text x="28.0" y="352.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
+<path d="M238.0,268.0 H281.8 Q285.8,268.0 285.8,272.0 V284.0 Q285.8,288.0 281.8,288.0 H238.0 Z" fill="#2a78d6"/>
+<text x="293.8" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">4</text>
+<text x="28.0" y="318.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
 </svg>

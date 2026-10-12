@@ -1,28 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="370" viewBox="0 0 760 370" role="img" aria-label="Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6230 titles; 72 of the 100 channels used an AI term at least once. Independent creators 21%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%; Hosting companies 33%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-<title>Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6230 titles; 72 of the 100 channels used an AI term at least once. Independent creators 21%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%; Hosting companies 33%.</title>
-<rect x="0.5" y="0.5" width="759" height="369" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="336" viewBox="0 0 760 336" role="img" aria-label="Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6097 titles; 72 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6097 titles; 72 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.</title>
+<rect x="0.5" y="0.5" width="759" height="335" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">How often 2026 video titles mention AI</text>
-<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">20% of 6,230 titles overall; 72 of the 100 channels used an AI term at least once</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">20% of 6,097 titles overall; 72 of the 100 channels used an AI term at least once</text>
 <text x="28.0" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators (13 channels)</text>
 <path d="M318.0,98.0 H668.0 Q672.0,98.0 672.0,102.0 V114.0 Q672.0,118.0 668.0,118.0 H318.0 Z" fill="#2a78d6"/>
 <text x="680.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">42%</text>
-<text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Hosting companies (1 channel)</text>
-<path d="M318.0,132.0 H594.7 Q598.7,132.0 598.7,136.0 V148.0 Q598.7,152.0 594.7,152.0 H318.0 Z" fill="#2a78d6"/>
-<text x="606.7" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">33%</text>
-<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows (8 channels)</text>
-<path d="M318.0,166.0 H543.3 Q547.3,166.0 547.3,170.0 V182.0 Q547.3,186.0 543.3,186.0 H318.0 Z" fill="#2a78d6"/>
-<text x="555.3" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">27%</text>
-<text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (39 channels)</text>
-<path d="M318.0,200.0 H492.7 Q496.7,200.0 496.7,204.0 V216.0 Q496.7,220.0 492.7,220.0 H318.0 Z" fill="#2a78d6"/>
-<text x="504.7" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">21%</text>
-<text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Official and community (7 channels)</text>
-<path d="M318.0,234.0 H435.4 Q439.4,234.0 439.4,238.0 V250.0 Q439.4,254.0 435.4,254.0 H318.0 Z" fill="#2a78d6"/>
-<text x="447.4" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">14%</text>
-<text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies (28 channels)</text>
-<path d="M318.0,268.0 H423.6 Q427.6,268.0 427.6,272.0 V284.0 Q427.6,288.0 423.6,288.0 H318.0 Z" fill="#2a78d6"/>
-<text x="435.6" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">13%</text>
-<text x="28.0" y="316.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers (4 channels)</text>
-<path d="M318.0,302.0 H418.5 Q422.5,302.0 422.5,306.0 V318.0 Q422.5,322.0 418.5,322.0 H318.0 Z" fill="#2a78d6"/>
-<text x="430.5" y="316.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
-<text x="28.0" y="352.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
+<text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows (9 channels)</text>
+<path d="M318.0,132.0 H543.3 Q547.3,132.0 547.3,136.0 V148.0 Q547.3,152.0 543.3,152.0 H318.0 Z" fill="#2a78d6"/>
+<text x="555.3" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">27%</text>
+<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (38 channels)</text>
+<path d="M318.0,166.0 H480.9 Q484.9,166.0 484.9,170.0 V182.0 Q484.9,186.0 480.9,186.0 H318.0 Z" fill="#2a78d6"/>
+<text x="492.9" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">20%</text>
+<text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Official and community (7 channels)</text>
+<path d="M318.0,200.0 H435.4 Q439.4,200.0 439.4,204.0 V216.0 Q439.4,220.0 435.4,220.0 H318.0 Z" fill="#2a78d6"/>
+<text x="447.4" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">14%</text>
+<text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies (29 channels)</text>
+<path d="M318.0,234.0 H424.4 Q428.4,234.0 428.4,238.0 V250.0 Q428.4,254.0 424.4,254.0 H318.0 Z" fill="#2a78d6"/>
+<text x="436.4" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">13%</text>
+<text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers (4 channels)</text>
+<path d="M318.0,268.0 H418.5 Q422.5,268.0 422.5,272.0 V284.0 Q422.5,288.0 418.5,288.0 H318.0 Z" fill="#2a78d6"/>
+<text x="430.5" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
+<text x="28.0" y="318.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
 </svg>
