@@ -12,21 +12,25 @@ layout: journal
 redirectFrom: []
 ---
 
-The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in 2026. The list is built for WordPress users, builders and developers who want a specific, measured guide to where the community is publishing video this year.
+We've assembled a list of the top 100 WordPress YouTube channels to follow in 2026.
 
-## Assembling the 2026 List: Our Selection Process
+## Who's YouTubing about Wordpress in 2026? Our Selection Process
 
-To be included, a channel had to meet one rule: it posted at least one video about WordPress in 2026. The GBTI Network found 199 channels that met this rule. To further narrow the selection, we created an inclusion algorithm that considered the density of WordPress-based publishing and the age of the YouTube account creating videos, including WordPress.
+To be included in our Top 100 list, a channel first had to meet one major rule: it posted at least one video about WordPress within the 2026 calendar year.
+
+In our research, we found 199 channels that met this rule. However, we needed to narrow our list down to meet our 100-channel goal.
+
+To do this, we created an inclusion algorithm that considered the density of WordPress-based videos within the channel and combined it with the channel's overall age to determine who would be included in our top 100 lists.
 
 We also made sure that official channels were included regardless of posting activity: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. These five are present regardless of score.
 
-Channels that sell their own product, meaning plugin and theme companies and hosting companies, have their inclusion weight reduced, so this list leans toward channels that teach and report on WordPress-related topics with less product-driven commercial incentive to do so, other than to expand their influence.
+Our selection algorithm also discounts channels that sell their own products, meaning plugin, theme, and hosting companies had their inclusion weight reduced. This means that our list favors channels that teach and report on WordPress-related topics with fewer product-driven commercial incentives, other than to expand their influence.
 
 ## The Breakdown: Types of Channels Surveyed
 
 ### Who makes WordPress videos in 2026?
 
-The 100 channels featured in this article are organized into **seven types.** Independent creators make up the largest group at **39**. Plugin and theme companies are the next largest at **28**. Developer educators account for **13**, news, podcasts and shows for **8**, official and community for **7**, agencies and freelancers for **4**, and hosting companies for **1.**
+The 100 channels featured in this article are organized into *seven types*. **Independent creators** make up the largest group at 39. **Plugin and theme companies** are the next largest at 28. **Developer educators** account for 13, **news, podcasts and shows** for 8, official and community for **7**, **agencies and freelancers** for 4, and **hosting companies** for 1.
 
 The channels vary widely in size. The median channel has **9,475 subscribers**. Fifteen channels have **100,000 subscribers** or more, while 21 have fewer than 1,000. Together, the 100 posted **4,122 videos about WordPress in 2026**.
 
