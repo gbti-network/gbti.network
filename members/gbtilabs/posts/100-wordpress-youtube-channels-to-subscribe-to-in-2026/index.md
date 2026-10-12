@@ -14,8 +14,6 @@ redirectFrom: []
 
 The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in 2026. The list is built for WordPress users, builders and developers who want a specific, measured guide to where the community is publishing video this year.
 
-The one rule for inclusion is a video about WordPress posted in 2026. YouTube data was measured on 10 October 2026. This list replaces [last year's list](/articles/50-wordpress-youtube-channels-to-subscribe-to-in-2025/).
-
 ## How the list was made
 
 To be included, a channel had to meet one rule: it posted at least one video about WordPress in 2026. The GBTI Network found 199 channels that met this rule. Once Darrel Wilson's seven language editions are counted together with the main Darrel Wilson channel, the count is 192. The list is strictly 100 channels.
