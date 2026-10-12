@@ -22,27 +22,23 @@ We also made sure that official channels were included regardless of posting act
 
 Channels that sell their own product, meaning plugin and theme companies and hosting companies, have their inclusion weight reduced, so this list leans toward channels that teach and report on WordPress-related topics with less product-driven commercial incentive to do so, other than to expand their influence.
 
-## What the 100 channels look like in 2026
+## The Breakdown: Types of Channels Surveyed
 
-### Who makes WordPress videos
+### Who makes WordPress videos in 2026?
 
-The 100 channels are organized into seven types. Independent creators make up the largest group at 39. Plugin and theme companies are the next largest at 28. Developer educators account for 13, news, podcasts and shows for 8, official and community for 7, agencies and freelancers for 4, and hosting companies for 1.
+The 100 channels featured in this article are organized into **seven types.** Independent creators make up the largest group at **39**. Plugin and theme companies are the next largest at **28**. Developer educators account for **13**, news, podcasts and shows for **8**, official and community for **7**, agencies and freelancers for **4**, and hosting companies for **1.**
 
-Language is not limited to English. Seventeen of the 100 publish in a language other than English. Spanish is the most common non-English language with 9 channels, followed by Portuguese with 3, French with 2, and one each in Persian, Gujarati and Arabic.
-
-The channels vary widely in size. The median channel has 9,475 subscribers. Fifteen channels have 100,000 subscribers or more, while 21 have fewer than 1,000. Together the 100 posted 4,122 videos about WordPress in 2026.
+The channels vary widely in size. The median channel has **9,475 subscribers**. Fifteen channels have **100,000 subscribers** or more, while 21 have fewer than 1,000. Together, the 100 posted **4,122 videos about WordPress in 2026**.
 
 ![The 100 channels by type: Independent creators 39; Plugin and theme companies 28; Developer educators 13; News, podcasts and shows 8; Official and community 7; Agencies and freelancers 4; Hosting companies 1.](./images/the-100-by-type.svg)
 
 _The 100 channels by type. YouTube data measured 10 October 2026._
 
-### How much of the output is about WordPress
+### What is the topic density related to WordPress for these channels?
 
-Across all 100 channels, 4,122 of the 6,230 videos posted in 2026 are about WordPress. That is 66% of total output. The measurement looks at video titles. A title counts if it names WordPress or a WordPress-only product. Because a video about WordPress whose title says "your website" counts as other, the 66% figure is conservative.
+Across all 100 channels, 4,122 of the 6,230 videos posted in 2026 are about WordPress. That is 66% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
 
-The share of WordPress content differs by channel type. Plugin and theme companies have the highest share at 83%. Developer educators are at 80%, agencies and freelancers at 67%, independent creators at 62%, official and community channels at 58%, and news, podcasts and shows at 49%. The single hosting company sits at 87%, though that reflects one channel rather than a trend.
-
-The typical channel, measured by median, has 82% of its 2026 titles about WordPress. The pooled figure of 66% is lower because some large, frequent uploaders cover other subjects in addition to WordPress.
+The share of WordPress content differs by channel type. Plugin and theme companies have the highest share at 83%. Developer educators are at 80%, agencies and freelancers at 67%, independent creators at 62%, official and community channels at 58%, and news, podcasts and shows at 49%.
 
 ![Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,122 of 6,230 videos (66%). Plugin and theme companies 83% of 1,229; Developer educators 80% of 421; Agencies and freelancers 67% of 631; Independent creators 62% of 2,515; Official and community 58% of 653; News, podcasts and shows 49% of 721; Hosting companies 87% of 60.](./images/wordpress-vs-other-topics-by-type.svg)
 
