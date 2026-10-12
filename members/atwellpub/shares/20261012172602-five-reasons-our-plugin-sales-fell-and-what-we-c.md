@@ -12,7 +12,8 @@ tags:
   - wp-product-talk
   - wordpress
   - plugin-development
-image: https://wpproducttalk.com/wp-content/uploads/2026/10/Katie-DLP-Hosted-2.png
+image: https://gbti.network/media/shares/atwellpub/20261012172602-five-reasons-our-plugin-sales-fell-and-what-we-c-91c44535.webp
+imageSource: https://wpproducttalk.com/wp-content/uploads/2026/10/Katie-DLP-Hosted-2.png
 sourceName: WP Product Talk
 id: 20261012172602-five-reasons-our-plugin-sales-fell-and-what-we-c
 createdAt: '2026-10-12T17:26:02.108Z'
