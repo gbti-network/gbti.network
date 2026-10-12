@@ -14,22 +14,13 @@ redirectFrom: []
 
 The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in 2026. The list is built for WordPress users, builders and developers who want a specific, measured guide to where the community is publishing video this year.
 
-## How the list was made
+## Assembling the 2026 List: Our Selection Process
 
-To be included, a channel had to meet one rule: it posted at least one video about WordPress in 2026. The GBTI Network found 199 channels that met this rule. Once Darrel Wilson's seven language editions are counted together with the main Darrel Wilson channel, the count is 192. The list is strictly 100 channels.
+To be included, a channel had to meet one rule: it posted at least one video about WordPress in 2026. The GBTI Network found 199 channels that met this rule. To further narrow the selection, we created an inclusion algorithm that considered the density of WordPress-based publishing and the age of the YouTube account creating videos, including WordPress.
 
-Five channels are always included as the core of the community: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. These five are present regardless of score. The remaining channels are chosen and ordered by a relevance score built from four measures:
+We also made sure that official channels were included regardless of posting activity: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. These five are present regardless of score.
 
-- how much of the channel's 2026 output is about WordPress (40%), reflecting focus on the platform;
-- how many WordPress videos it posted in 2026 (20%), reflecting volume;
-- its median views (20%), reflecting typical reach; and
-- its views relative to its subscriber count (20%), reflecting audience response.
-
-Channels that sell their own product, meaning plugin and theme companies and hosting companies, have their score counted at 75%. This reduces their weight so the list leans toward channels that teach and report rather than channels that sell.
-
-The 100 are grouped into seven sections: Official and community; News, podcasts and shows; Independent creators; Developer educators; Agencies and freelancers; Plugin and theme companies; and Hosting companies. Within each section, channels are listed in order of relevance. The number beside each channel name is its overall rank out of 100.
-
-Channels were found from multiple sources: the 2025 list, published roundups, WordPress news sites and newsletters, WordCamp programmes, company channels and YouTube search, in any language. The GBTI Network's own channel is not included.
+Channels that sell their own product, meaning plugin and theme companies and hosting companies, have their inclusion weight reduced, so this list leans toward channels that teach and report on WordPress-related topics with less product-driven commercial incentive to do so, other than to expand their influence.
 
 ## What the 100 channels look like in 2026
 
