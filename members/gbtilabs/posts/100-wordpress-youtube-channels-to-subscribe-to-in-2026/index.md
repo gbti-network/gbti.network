@@ -65,9 +65,9 @@ Of the 7,050 titles posted by the 100 channels in 2026, 1,285 use an AI term. Th
 
 ### 16:9 (Long form) still dominates WordPress
 
-Long-form video still carries WordPress on YouTube. Most of these channels treat Shorts as a side dish: only about 6% of the typical channel's uploads are Shorts, and 18 channels have posted none at all.
-
 ![How the 100 channels use YouTube Shorts: 18 have posted no Shorts, 76 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts.](./images/shorts-habit-of-the-100.svg)
+
+Long-form video still carries WordPress on YouTube. Most of these channels treat Shorts as a side dish: only about 6% of the typical channel's uploads are Shorts, and 18 channels have posted none at all.
 
 ## The 100 Channels: Counting Down to #1
 
