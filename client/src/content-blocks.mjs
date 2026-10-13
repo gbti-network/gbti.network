@@ -113,7 +113,7 @@ export function renderDataBlock(name, body, meta = '') {
     const s = parseStats(body);
     if (!s.stats.length) return null;
     return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc(s.caption)}</div>` : '')
-      + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc(x.value)}</span> <span class="gbti-stat-label">${esc(x.label)}</span></div>`).join('')}</div></div>`;
+      + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc(x.value)}</span> <span class="gbti-stat-label">${esc(x.label)}</span></div>`).join(' ')}</div></div>`; // ' ' keeps each cell's text apart for readers and the sort
   }
   return null;
 }
@@ -231,7 +231,7 @@ ${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:soli
 ${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
 ${s} .gbti-stats{margin:1em 0}
 ${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
-${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
+${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
 ${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
 ${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
 ${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}

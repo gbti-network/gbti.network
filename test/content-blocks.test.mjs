@@ -149,6 +149,7 @@ test('stats and the primary button: HTML on the site, the renderer and cross-pos
   assert.match(html, /<div class="gbti-stats"><div class="gbti-stats-caption">Official and community · Always included<\/div><div class="gbti-stats-row"><div class="gbti-stat"><span class="gbti-stat-value">118K<\/span> <span class="gbti-stat-label">subscribers<\/span>/);
   assert.match(html, /<a class="gbti-button gbti-button-primary" href=/);
   assert.equal((html.match(/class="gbti-stat"/g) || []).length, 3);
+  assert.match(html, /<\/div> <div class="gbti-stat">/); // separated cells: "of 100" never runs into "118K"
   const r = renderMarkdown([STATS, PRIMARY].join('\n\n'));
   assert.ok(r.includes(renderDataBlock('stats', STATS.split('\n').slice(1, -1).join('\n'))));
   assert.match(r, /gbti-button gbti-button-primary/);

@@ -18353,7 +18353,7 @@ function renderDataBlock(name, body, meta3 = "") {
   if (name === "stats") {
     const s = parseStats(body);
     if (!s.stats.length) return null;
-    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc2(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc2(x.value)}</span> <span class="gbti-stat-label">${esc2(x.label)}</span></div>`).join("")}</div></div>`;
+    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc2(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc2(x.value)}</span> <span class="gbti-stat-label">${esc2(x.label)}</span></div>`).join(" ")}</div></div>`;
   }
   return null;
 }
