@@ -240,7 +240,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   // leaves it empty, so the entries after it read in their source order.
   if (info[0] === 'directory') return '<div class="sortlist"></div>';
   // sow-453: tags, bar, facts, button, through the one module the site uses too.
-  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body); if (html != null) return html; }
+  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' ')); if (html != null) return html; }
   if (info[0] === 'embed') {
     const url = body.trim();
     // Frame the SOW-092 relay, never the provider directly. This renderer only ever runs off-https (the

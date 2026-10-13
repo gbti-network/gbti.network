@@ -18256,7 +18256,7 @@ async function requireAdmin(ctx) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
 var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
@@ -18303,6 +18303,24 @@ function parseFacts(body) {
   }
   return { rows, bad };
 }
+function parseStats(body) {
+  let caption = "";
+  const stats = [];
+  const bad = [];
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    if (k && k.toLowerCase() === "caption") {
+      caption = v;
+      continue;
+    }
+    if (!k || !v) {
+      bad.push(l);
+      continue;
+    }
+    stats.push({ value: k, label: v });
+  }
+  return { caption, stats, bad };
+}
 function parseButton(body) {
   const ls = lines(body);
   let label = ls[0] ?? "";
@@ -18310,7 +18328,7 @@ function parseButton(body) {
   if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
   return { label, url: safeUrl(url2), rawUrl: url2 };
 }
-function renderDataBlock(name, body) {
+function renderDataBlock(name, body, meta3 = "") {
   if (name === "tags") {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -18329,7 +18347,13 @@ function renderDataBlock(name, body) {
   if (name === "button") {
     const b = parseButton(body);
     if (!b.label) return null;
-    return b.url ? `<div class="gbti-button-row"><a class="gbti-button" href="${esc2(b.url)}">${esc2(b.label)}</a></div>` : `<p>${esc2(b.label)}</p>`;
+    const cls = String(meta3).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
+    return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc2(b.url)}">${esc2(b.label)}</a></div>` : `<p>${esc2(b.label)}</p>`;
+  }
+  if (name === "stats") {
+    const s = parseStats(body);
+    if (!s.stats.length) return null;
+    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc2(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc2(x.value)}</span> <span class="gbti-stat-label">${esc2(x.label)}</span></div>`).join("")}</div></div>`;
   }
   return null;
 }
@@ -20663,7 +20687,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   }
   if (info[0] === "directory") return '<div class="sortlist"></div>';
   if (DATA_BLOCKS.includes(info[0])) {
-    const html = renderDataBlock(info[0], body);
+    const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
     if (html != null) return html;
   }
   if (info[0] === "embed") {

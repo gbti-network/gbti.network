@@ -37,6 +37,8 @@ test('parseSubscribers reads K, M and plain counts', () => {
   assert.equal(parseSubscribers('1,240 subscribers'), 1240);
   assert.equal(parseSubscribers('1 subscriber'), 1);
   assert.equal(parseSubscribers('no count here'), null);
+  assert.equal(parseSubscribers('In Arabic63K subscribers46% of 2026'), 63000); // a stat strip's run-on text
+  assert.equal(parseSubscribers('5 subscribersx'), null);
 });
 
 test('parseStats takes the type from the first segment, and only from a stats line', () => {

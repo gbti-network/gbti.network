@@ -173,7 +173,7 @@ const CSS = `
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
-  ${dataBlocksCss('.body', { fg: 'var(--fg)', soft: 'var(--muted)', mute: 'var(--muted)', line: 'var(--line)', line2: 'var(--line)', rest: 'var(--line)', green: 'var(--accent)', green700: 'var(--accent)', greenTint: 'rgba(31,158,95,.12)', greenBorder: 'rgba(31,158,95,.4)', surface: 'var(--bg, transparent)', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace' })}
+  ${dataBlocksCss('.body', { fg: 'var(--fg)', soft: 'var(--muted)', mute: 'var(--muted)', line: 'var(--line)', line2: 'var(--line)', rest: 'var(--line)', green: 'var(--accent)', green700: 'var(--accent)', green700Solid: '#0f6f40', greenTint: 'rgba(31,158,95,.12)', greenBorder: 'rgba(31,158,95,.4)', surface: 'var(--bg, transparent)', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace' })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */

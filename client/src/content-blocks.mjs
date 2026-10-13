@@ -7,7 +7,7 @@
 // thing. Output HTML uses only the classes the site sanitizer admits (src/lib/markdown-sanitize.mjs); a bar's length
 // is a class (gbti-bar-w-<0..100>) because the sanitizer does not admit an inline width.
 
-export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button'];
+export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats']; // stats: option A, picked 2026-10-13
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lines = (body) => String(body ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -59,6 +59,20 @@ export function parseFacts(body) {
   return { rows, bad };
 }
 
+/** Option A's stat strip: an optional "caption:" line, then "value: label" lines (118K: subscribers). */
+export function parseStats(body) {
+  let caption = '';
+  const stats = [];
+  const bad = [];
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    if (k && k.toLowerCase() === 'caption') { caption = v; continue; }
+    if (!k || !v) { bad.push(l); continue; }
+    stats.push({ value: k, label: v });
+  }
+  return { caption, stats, bad };
+}
+
 /** Line 1 the label, line 2 the URL; also accepts "label | url" on one line. */
 export function parseButton(body) {
   const ls = lines(body);
@@ -69,7 +83,7 @@ export function parseButton(body) {
 }
 
 /** The HTML for a data block, or null when the fence is not one of them (or the block is empty). */
-export function renderDataBlock(name, body) {
+export function renderDataBlock(name, body, meta = '') {
   if (name === 'tags') {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -92,7 +106,14 @@ export function renderDataBlock(name, body) {
   if (name === 'button') {
     const b = parseButton(body);
     if (!b.label) return null;
-    return b.url ? `<div class="gbti-button-row"><a class="gbti-button" href="${esc(b.url)}">${esc(b.label)}</a></div>` : `<p>${esc(b.label)}</p>`;
+    const cls = String(meta).trim() === 'primary' ? 'gbti-button gbti-button-primary' : 'gbti-button';
+    return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc(b.url)}">${esc(b.label)}</a></div>` : `<p>${esc(b.label)}</p>`;
+  }
+  if (name === 'stats') {
+    const s = parseStats(body);
+    if (!s.stats.length) return null;
+    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc(s.caption)}</div>` : '')
+      + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc(x.value)}</span> <span class="gbti-stat-label">${esc(x.label)}</span></div>`).join('')}</div></div>`;
   }
   return null;
 }
@@ -108,6 +129,10 @@ export function dataBlockToMarkdown(name, body) {
   if (name === 'button') {
     const b = parseButton(body);
     return b.url ? `[${b.label}](${b.url})` : b.label;
+  }
+  if (name === 'stats') {
+    const s = parseStats(body);
+    return [s.caption ? `_${s.caption}_` : '', s.stats.map((x) => `**${x.value}** ${x.label}`).join(' · ')].filter(Boolean).join('\n\n');
   }
   return null;
 }
@@ -160,6 +185,12 @@ export function checkComponentBlocks(md) {
       for (const l of f.bad) warn(`facts line "${l}" has no "Label:" before its value`);
       for (const r of f.rows) if (r.barAsked && r.bar == null) warn(`facts row "${r.k}" asks for {bar} but "${r.v}" is not a percentage`);
     }
+    if (name === 'stats') {
+      const st = parseStats(text);
+      if (!st.stats.length) warn('stats needs at least one "value: label" line, such as "118K: subscribers"');
+      for (const l of st.bad) warn(`stats line "${l}" is not "value: label"`);
+    }
+    if (name === 'button' && meta && meta !== 'primary') warn(`button option "${meta}" is not known; only "primary" is`);
     if (name === 'button') {
       const b = parseButton(text);
       if (!b.label) warn('button needs its label on the first line');
@@ -195,6 +226,15 @@ ${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
 ${s} .gbti-button-row{margin:1em 0}
 ${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
 ${s} a.gbti-button:hover{background:${t.greenTint}}
+${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
+${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
+${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
+${s} .gbti-stats{margin:1em 0}
+${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
+${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
+${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
+${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
+${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
 ${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
 ${barWidthCss(s)}`;
 }

@@ -101,8 +101,8 @@ test('styles: 101 width classes and every class the HTML uses', () => {
   assert.match(w, /\.x \.gbti-bar-w-0\{width:0%\}/);
   assert.match(w, /\.x \.gbti-bar-w-100\{width:100%\}/);
   assert.equal((w.match(/gbti-bar-w-/g) || []).length, 101);
-  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', greenTint: 'i', greenBorder: 'j', surface: 'k', mono: 'm' });
-  for (const c of ['gbti-tags', 'gbti-tag', 'gbti-tag-primary', 'gbti-bar', 'gbti-bar-head', 'gbti-bar-label', 'gbti-bar-value', 'gbti-bar-track', 'gbti-bar-fill', 'gbti-bar-note', 'gbti-facts', 'gbti-fact', 'gbti-bar-mini', 'gbti-button-row', 'gbti-button']) {
+  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', green700Solid: 'h2', greenTint: 'i', greenBorder: 'j', surface: 'k', mono: 'm' });
+  for (const c of ['gbti-tags', 'gbti-tag', 'gbti-tag-primary', 'gbti-bar', 'gbti-bar-head', 'gbti-bar-label', 'gbti-bar-value', 'gbti-bar-track', 'gbti-bar-fill', 'gbti-bar-note', 'gbti-facts', 'gbti-fact', 'gbti-bar-mini', 'gbti-button-row', 'gbti-button', 'gbti-button-primary', 'gbti-stats', 'gbti-stats-caption', 'gbti-stats-row', 'gbti-stat', 'gbti-stat-value', 'gbti-stat-label']) {
     assert.ok(css.includes(`.${c}`), `no rule for ${c}`);
   }
   assert.doesNotMatch(css, /undefined/);
@@ -138,4 +138,33 @@ test('MCP: tools/list carries list_components and tools/call returns the catalog
   const parsed = JSON.parse(text);
   assert.deepEqual(parsed.components.map((c) => c.name), listComponents().components.map((c) => c.name));
   assert.ok(parsed.components.find((c) => c.name === 'bar').syntax.includes('value:'));
+});
+
+// Option A, the pick corrected on 2026-10-13: "I am very sorry I meant to select A stat strip".
+const STATS = `${F}stats\ncaption: Official and community · Always included\n118K: subscribers\n60%: of 2026 videos about WordPress\n240: WordPress videos in 2026\n${F}`;
+const PRIMARY = `${F}button primary\nSubscribe to @WordPress\nhttps://www.youtube.com/@WordPress?sub_confirmation=1\n${F}`;
+
+test('stats and the primary button: HTML on the site, the renderer and cross-posts', async () => {
+  const html = await site([STATS, PRIMARY].join('\n\n'));
+  assert.match(html, /<div class="gbti-stats"><div class="gbti-stats-caption">Official and community · Always included<\/div><div class="gbti-stats-row"><div class="gbti-stat"><span class="gbti-stat-value">118K<\/span> <span class="gbti-stat-label">subscribers<\/span>/);
+  assert.match(html, /<a class="gbti-button gbti-button-primary" href=/);
+  assert.equal((html.match(/class="gbti-stat"/g) || []).length, 3);
+  const r = renderMarkdown([STATS, PRIMARY].join('\n\n'));
+  assert.ok(r.includes(renderDataBlock('stats', STATS.split('\n').slice(1, -1).join('\n'))));
+  assert.match(r, /gbti-button gbti-button-primary/);
+  const md = stripSiteOnlyFences([STATS, PRIMARY].join('\n\n'));
+  assert.match(md, /_Official and community · Always included_\n\n\*\*118K\*\* subscribers · \*\*60%\*\* of 2026 videos about WordPress · \*\*240\*\* WordPress videos in 2026/);
+  assert.match(md, /\[Subscribe to @WordPress\]\(https:/);
+  assert.doesNotMatch(md, /```/);
+  assert.equal(serializeBlocks(parseBlocks(['A', STATS, PRIMARY].join('\n\n'))), ['A', STATS, PRIMARY].join('\n\n'));
+  const evil = await site('<a class="gbti-button-secondary" href="https://a.example">x</a>\n');
+  assert.doesNotMatch(evil, /gbti-button-secondary/);
+});
+
+test('stats and button options: validator warnings', () => {
+  assert.deepEqual(checkComponentBlocks([STATS, PRIMARY].join('\n\n')), []);
+  const msgs = checkComponentBlocks([`${F}stats\ncaption: only\n${F}`, `${F}stats\njust words\n${F}`, `${F}button huge\nGo\nhttps://a.example\n${F}`].join('\n\n')).map((x) => x.message).join('\n');
+  assert.match(msgs, /stats needs at least one "value: label" line/);
+  assert.match(msgs, /stats line "just words" is not "value: label"/);
+  assert.match(msgs, /button option "huge" is not known/);
 });

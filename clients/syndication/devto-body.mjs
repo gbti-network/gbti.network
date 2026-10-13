@@ -66,7 +66,7 @@ export function stripSiteOnlyFences(body) {
 
 /** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link). */
 export function dataBlocksToMarkdown(body) {
-  return String(body).replace(/^```(tags|bar|facts|button)[ \t]*\n([\s\S]*?)^```[ \t]*$/gm, (m, name, inner) => dataBlockToMarkdown(name, inner) ?? m);
+  return String(body).replace(/^```(tags|bar|facts|button|stats)(?:[ \t][^\n]*)?\n([\s\S]*?)^```[ \t]*$/gm, (m, name, inner) => dataBlockToMarkdown(name, inner) ?? m);
 }
 
 /** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts

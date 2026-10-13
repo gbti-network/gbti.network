@@ -18515,7 +18515,7 @@ async function requireAdmin(ctx2) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18557,6 +18557,24 @@ function parseFacts(body) {
     rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
   }
   return { rows, bad };
+}
+function parseStats(body) {
+  let caption = "";
+  const stats = [];
+  const bad = [];
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    if (k && k.toLowerCase() === "caption") {
+      caption = v;
+      continue;
+    }
+    if (!k || !v) {
+      bad.push(l);
+      continue;
+    }
+    stats.push({ value: k, label: v });
+  }
+  return { caption, stats, bad };
 }
 function parseButton(body) {
   const ls = lines(body);
@@ -18602,6 +18620,12 @@ function checkComponentBlocks(md) {
       for (const l of f.bad) warn(`facts line "${l}" has no "Label:" before its value`);
       for (const r of f.rows) if (r.barAsked && r.bar == null) warn(`facts row "${r.k}" asks for {bar} but "${r.v}" is not a percentage`);
     }
+    if (name === "stats") {
+      const st = parseStats(text);
+      if (!st.stats.length) warn('stats needs at least one "value: label" line, such as "118K: subscribers"');
+      for (const l of st.bad) warn(`stats line "${l}" is not "value: label"`);
+    }
+    if (name === "button" && meta3 && meta3 !== "primary") warn(`button option "${meta3}" is not known; only "primary" is`);
     if (name === "button") {
       const b = parseButton(text);
       if (!b.label) warn("button needs its label on the first line");
@@ -20216,10 +20240,27 @@ ${F}`,
     renders: "Site, preview and reader: a two-column table. Cross-posts: a bulleted list with bold labels."
   },
   {
+    name: "stats",
+    kind: "fence",
+    purpose: "A strip of big numbers with labels, with an optional small caption above. In a directory, the first part of the caption (before a ·) is the entry's category.",
+    syntax: `${F}stats
+caption: <optional small line above>
+<value>: <label>
+<value>: <label>
+${F}`,
+    example: `${F}stats
+caption: Official and community · Always included
+118K: subscribers
+60%: of 2026 videos about WordPress
+240: WordPress videos in 2026
+${F}`,
+    renders: "Site, preview and reader: the number strip. Cross-posts: an italic caption and a line of bold figures."
+  },
+  {
     name: "button",
     kind: "fence",
-    purpose: "A link shown as a button. The label on the first line, an http or https URL on the second.",
-    syntax: `${F}button
+    purpose: "A link shown as a button. The label on the first line, an http or https URL on the second. Add the word primary for a filled green button.",
+    syntax: `${F}button [primary]
 <label>
 <https URL>
 ${F}`,
@@ -20227,7 +20268,7 @@ ${F}`,
 Subscribe to @WordPress
 https://www.youtube.com/@WordPress?sub_confirmation=1
 ${F}`,
-    renders: "Site, preview and reader: an outlined button. Cross-posts: a plain link."
+    renders: "Site, preview and reader: an outlined button, or filled with primary. Cross-posts: a plain link."
   },
   {
     name: "image layout",

@@ -213,8 +213,8 @@ export function remarkContentBlocks() {
         }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };
-        } else if (n && n.type === 'code' && DATA_BLOCKS.includes(n.lang) && renderDataBlock(n.lang, n.value) != null) {
-          node.children[i] = { type: 'html', value: renderDataBlock(n.lang, n.value) };
+        } else if (n && n.type === 'code' && DATA_BLOCKS.includes(n.lang) && renderDataBlock(n.lang, n.value, n.meta) != null) {
+          node.children[i] = { type: 'html', value: renderDataBlock(n.lang, n.value, n.meta) };
         } else if (n && n.type === 'code' && n.lang === 'directory') {
           // sow-452: a sortable list. The placeholder only; src/lib/sort-list.mjs reads the h3 entries after it.
           node.children[i] = { type: 'html', value: '<div class="sortlist"></div>' };

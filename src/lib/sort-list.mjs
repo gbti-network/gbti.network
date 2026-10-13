@@ -17,7 +17,8 @@ export function parseRank(heading) {
 
 /** "4.5K subscribers" -> 4500, "1.24M subscribers" -> 1240000, "625 subscribers" -> 625; none -> null. */
 export function parseSubscribers(text) {
-  const m = String(text ?? '').match(/([\d][\d,]*(?:\.\d+)?)\s*([KkMm])?\s+subscribers?\b/);
+  // No \b after the word: a stat strip's text runs straight on ("63K subscribers46% of ...").
+  const m = String(text ?? '').match(/([\d][\d,]*(?:\.\d+)?)\s*([KkMm])?\s+subscribers?(?![A-Za-z])/);
   if (!m) return null;
   const n = Number(m[1].replace(/,/g, ''));
   const mult = /k/i.test(m[2] || '') ? 1e3 : /m/i.test(m[2] || '') ? 1e6 : 1;
@@ -85,6 +86,9 @@ function collectItems(box) {
       // sow-453: a ```tags block names the category (its first tag); the stats line is the fallback.
       const tag = n.matches?.('.gbti-tags') ? n.querySelector('.gbti-tag') : null;
       if (tag) cur.tagType = tag.textContent.trim();
+      // sow-453 option A: a ```stats caption names the category in its first segment.
+      const cap = n.matches?.('.gbti-stats') ? n.querySelector('.gbti-stats-caption') : null;
+      if (cap && !cur.tagType) cur.tagType = cap.textContent.split(/\s+·\s+/)[0].trim();
       if (cur.subscribers == null) {
         const s = parseStats(n.textContent);
         if (s) { cur.type = s.type; cur.subscribers = s.subscribers; }

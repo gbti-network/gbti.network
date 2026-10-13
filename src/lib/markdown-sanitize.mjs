@@ -49,11 +49,11 @@ export const sanitizeSchema = {
   tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption'])], // figure: a captioned image
   attributes: {
     ...defaultSchema.attributes,
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
+    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row|stats|stats-caption|stats-row|stat)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
     iframe: [['src'], 'loading', 'allowFullScreen', 'title', 'allow', 'sandbox'],
     // sow-453: ```button adds one class. The default schema already lists a className rule for footnote links, and a
     // second className entry is ignored, so the two are merged into one rule.
-    a: [...(defaultSchema.attributes?.a ?? []).filter((x) => !(Array.isArray(x) && x[0] === 'className')), 'target', ['rel', 'noopener', 'nofollow', 'noreferrer'], ['className', 'data-footnote-backref', /^gbti-button$/]],
+    a: [...(defaultSchema.attributes?.a ?? []).filter((x) => !(Array.isArray(x) && x[0] === 'className')), 'target', ['rel', 'noopener', 'nofollow', 'noreferrer'], ['className', 'data-footnote-backref', /^gbti-button(-primary)?$/]],
     dl: [['className', /^gbti-facts$/]], // sow-453: ```facts
     pre: [...(defaultSchema.attributes?.pre ?? []), 'style', 'tabIndex', 'dataLanguage'],
     code: [...(defaultSchema.attributes?.code ?? []), 'style'],

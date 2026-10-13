@@ -5317,7 +5317,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button"];
+  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
   var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
   function parsePercent(v2) {
@@ -5364,6 +5364,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return { rows, bad };
   }
+  function parseStats(body) {
+    let caption = "";
+    const stats = [];
+    const bad = [];
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      if (k && k.toLowerCase() === "caption") {
+        caption = v2;
+        continue;
+      }
+      if (!k || !v2) {
+        bad.push(l);
+        continue;
+      }
+      stats.push({ value: k, label: v2 });
+    }
+    return { caption, stats, bad };
+  }
   function parseButton(body) {
     const ls = lines(body);
     let label = ls[0] ?? "";
@@ -5371,7 +5389,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
     return { label, url: safeUrl(url), rawUrl: url };
   }
-  function renderDataBlock(name, body) {
+  function renderDataBlock(name, body, meta = "") {
     if (name === "tags") {
       const { tags } = parseTags(body);
       if (!tags.length) return null;
@@ -5390,7 +5408,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (name === "button") {
       const b = parseButton(body);
       if (!b.label) return null;
-      return b.url ? `<div class="gbti-button-row"><a class="gbti-button" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
+      const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
+      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
+    }
+    if (name === "stats") {
+      const s = parseStats(body);
+      if (!s.stats.length) return null;
+      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join("")}</div></div>`;
     }
     return null;
   }
@@ -5420,6 +5444,15 @@ ${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
 ${s} .gbti-button-row{margin:1em 0}
 ${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
 ${s} a.gbti-button:hover{background:${t.greenTint}}
+${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
+${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
+${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
+${s} .gbti-stats{margin:1em 0}
+${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
+${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
+${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
+${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
+${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
 ${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
 ${barWidthCss(s)}`;
   }
@@ -5639,7 +5672,7 @@ ${barWidthCss(s)}`;
     }
     if (info[0] === "directory") return '<div class="sortlist"></div>';
     if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body);
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
       if (html != null) return html;
     }
     if (info[0] === "embed") {
@@ -30999,7 +31032,7 @@ ${BLOCKED_PILL_CSS}
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
-  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
+  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */

@@ -57,12 +57,20 @@ export const COMPONENTS = Object.freeze([
     renders: 'Site, preview and reader: a two-column table. Cross-posts: a bulleted list with bold labels.',
   },
   {
+    name: 'stats',
+    kind: 'fence',
+    purpose: 'A strip of big numbers with labels, with an optional small caption above. In a directory, the first part of the caption (before a ·) is the entry\'s category.',
+    syntax: `${F}stats\ncaption: <optional small line above>\n<value>: <label>\n<value>: <label>\n${F}`,
+    example: `${F}stats\ncaption: Official and community · Always included\n118K: subscribers\n60%: of 2026 videos about WordPress\n240: WordPress videos in 2026\n${F}`,
+    renders: 'Site, preview and reader: the number strip. Cross-posts: an italic caption and a line of bold figures.',
+  },
+  {
     name: 'button',
     kind: 'fence',
-    purpose: 'A link shown as a button. The label on the first line, an http or https URL on the second.',
-    syntax: `${F}button\n<label>\n<https URL>\n${F}`,
+    purpose: 'A link shown as a button. The label on the first line, an http or https URL on the second. Add the word primary for a filled green button.',
+    syntax: `${F}button [primary]\n<label>\n<https URL>\n${F}`,
     example: `${F}button\nSubscribe to @WordPress\nhttps://www.youtube.com/@WordPress?sub_confirmation=1\n${F}`,
-    renders: 'Site, preview and reader: an outlined button. Cross-posts: a plain link.',
+    renders: 'Site, preview and reader: an outlined button, or filled with primary. Cross-posts: a plain link.',
   },
   {
     name: 'image layout',
