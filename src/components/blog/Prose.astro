@@ -167,13 +167,18 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
   .prose-gbti .sortlist-btn.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
   .prose-gbti .sortlist-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
   .prose-gbti .sortlist-count { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); }
-  /* Owner, 2026-10-13: in the category view the categories are sub-filters, a second row inside the sticky bar. The
-     row stays one line and scrolls sideways, so the pinned bar stays short; the right edge fades to show there is more. */
-  .prose-gbti .sortlist-sub { flex-basis: 100%; display: flex; flex-wrap: nowrap; gap: 6px; padding-top: 4px; overflow-x: auto; scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); padding-right: 28px; }
-  .prose-gbti .sortlist-sub::-webkit-scrollbar { display: none; }
+  /* Owner, 2026-10-13: in the category view the categories are sub-filters, a second row inside the sticky bar. On a
+     wide screen the row wraps with compact pills, so every category stays visible and clickable with a mouse (a
+     sideways-scrolling row clipped the chosen pill there). On a phone or tablet it is one line you swipe, so the pinned bar
+     stays short, and sort-list.mjs scrolls the chosen pill into view. Below 900px the column is too narrow for two lines. */
+  .prose-gbti .sortlist-sub { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
   .prose-gbti .sortlist-sub[hidden] { display: none; }
-  .prose-gbti .sortlist-subbtn { flex: none; padding: 6px 10px; font-size: 11.5px; }
+  .prose-gbti .sortlist-subbtn { flex: none; padding: 4px 10px; font-family: var(--f-sans); font-size: 12.5px; font-weight: 600; letter-spacing: 0; line-height: 1.5; }
+  @media (max-width: 900px) {
+    .prose-gbti .sortlist-sub { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-right: 28px;
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+    .prose-gbti .sortlist-sub::-webkit-scrollbar { display: none; }
+  }
   .prose-gbti .sortlist-group { margin: 2em 0 0.2em; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
   @media (prefers-reduced-motion: reduce) { .prose-gbti .sortlist-btn { transition: none; } }
 </style>

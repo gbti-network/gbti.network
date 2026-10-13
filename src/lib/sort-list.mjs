@@ -196,7 +196,8 @@ export function enhanceSortList(root = document) {
           const b = doc.createElement('button');
           b.type = 'button';
           b.className = 'sortlist-btn sortlist-subbtn';
-          b.textContent = label ? `${label} (${n})` : `All (${n})`;
+          b.textContent = label || 'All'; // counts live in the bar ("13 of 100 channels") and the group heading
+          b.setAttribute('aria-label', `${label || 'All'}, ${n} channels`);
           const on = label === sub;
           b.classList.toggle('on', on);
           b.setAttribute('aria-pressed', String(on));
@@ -204,6 +205,9 @@ export function enhanceSortList(root = document) {
           subRow.append(b);
         }
       }
+      // A swiped row (phone) keeps the chosen pill in view; a wrapped row (wide screen) never scrolls.
+      const chosen = subRow.querySelector('.sortlist-subbtn.on');
+      if (chosen && subRow.scrollWidth > subRow.clientWidth) subRow.scrollLeft = Math.max(0, chosen.offsetLeft - subRow.offsetLeft - 24);
       const shown = filterGroups(groups, sub);
       const total = shown.reduce((a, g) => a + g.items.length, 0);
       count.textContent = total === items.length ? `${items.length} channels` : `${total} of ${items.length} channels`;
