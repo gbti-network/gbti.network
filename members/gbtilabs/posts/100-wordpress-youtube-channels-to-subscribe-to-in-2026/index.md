@@ -24,7 +24,7 @@ To do this, we created an inclusion algorithm that gives every channel a score o
 
 ### How the score works
 
-Each channel has a score out of 100; #1 has the highest. The score rests on four measures, each ranked against every channel we measured and weighted as shown:
+Each channel has a score out of 100; #1 has the highest. We looked at four things for every channel and compared each channel with all the others. The number next to each one shows how much it counts toward the score:
 
 - **WordPress focus (40%):** share of 2026 videos about WordPress
 - **Volume (20%):** WordPress videos posted in 2026
