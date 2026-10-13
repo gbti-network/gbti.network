@@ -47,21 +47,21 @@ Subscriber count alone does not raise a score. Five channels are always included
 
 ### Who makes WordPress videos in 2026?
 
-The channels vary widely in size. The median channel has **10,500 subscribers**. Fifteen channels have **100,000 subscribers** or more, while 22 have fewer than 1,000. Together, the 100 posted **4,686 videos about WordPress in 2026**.
-
 ![The 100 channels by type: Independent creators 37; Plugin and theme companies 32; Developer educators 13; News, podcasts and shows 8; Official and community 7; Agencies and freelancers 3.](./images/the-100-by-type.svg)
+
+The channels vary widely in size. The median channel has **10,500 subscribers**. Fifteen channels have **100,000 subscribers** or more, while 22 have fewer than 1,000. Together, the 100 posted **4,686 videos about WordPress in 2026**.
 
 ### What is the topic density related to WordPress for these channels?
 
-Across all 100 channels, 4,686 of the 7,050 videos posted in 2026 are about WordPress. That is 66% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
-
 ![Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,686 of 7,050 videos (66%). Developer educators 80% of 421; Plugin and theme companies 76% of 2,220; Agencies and freelancers 67% of 628; Independent creators 63% of 2,407; Official and community 58% of 653; News, podcasts and shows 49% of 721.](./images/wordpress-vs-other-topics-by-type.svg)
+
+Across all 100 channels, 4,686 of the 7,050 videos posted in 2026 are about WordPress. That is 66% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
 
 ### AI is in nearly one title in five
 
-Of the 7,050 titles posted by the 100 channels in 2026, 1,285 use an AI term. That is 18%, or nearly one title in five. We found this interesting, but AI mentions did not affect the final scores in any way.
-
 ![Share of 2026 video titles that mention AI, by channel type. Overall 18% of 7050 titles; 75 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.](./images/ai-in-2026-titles.svg)
+
+Of the 7,050 titles posted by the 100 channels in 2026, 1,285 use an AI term. That is 18%, or nearly one title in five. We found this interesting, but AI mentions did not affect the final scores in any way.
 
 ### 16:9 (Long form) still dominates WordPress
 
