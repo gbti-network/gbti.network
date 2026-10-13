@@ -6202,7 +6202,17 @@ ${barWidthCss(s)}`;
         const parts = n.key.split("/");
         for (let i = 1; i <= parts.length; i++) keep.add(parts.slice(0, i).join("/"));
       }
-      const options2 = nodes.filter((n) => keep.has(n.key)).map((n) => ({ type: "option", key: n.key, label: n.label, depth: n.depth, muted: Boolean(q2) && !hit(n) }));
+      const options2 = nodes.filter((n) => keep.has(n.key)).map((n) => ({
+        type: "option",
+        key: n.key,
+        label: n.label,
+        depth: n.depth,
+        muted: Boolean(q2) && !hit(n),
+        crumbs: Array.isArray(n.crumbs) ? n.crumbs : []
+      }));
+      const counts = /* @__PURE__ */ new Map();
+      for (const o of options2) counts.set(o.label.toLowerCase(), (counts.get(o.label.toLowerCase()) || 0) + 1);
+      for (const o of options2) if ((counts.get(o.label.toLowerCase()) || 0) > 1) o.ambiguous = true;
       return { rows: options2, options: options2 };
     }
     const rows = [];
@@ -6311,6 +6321,9 @@ ${barWidthCss(s)}`;
   .opt.sel { color:var(--accent); font-weight:700; }
   .br { flex:none; width:9px; height:9px; margin-top:-6px; border-left:1.5px solid var(--line-2); border-bottom:1.5px solid var(--line-2); border-bottom-left-radius:3px; }
   .lb { flex:1; min-width:0; }
+  /* sow-454: the ancestor trail on a row whose label is not unique in the tree. Muted and small: it is
+     there to disambiguate, not to compete with the label. */
+  .cpath { flex:none; font-size:11px; color:var(--fg-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
   mark { background:none; color:inherit; font-weight:800; text-decoration:underline; text-underline-offset:3px; }
   .ck { width:15px; height:15px; }
   .empty { padding:14px 12px; font-size:13.5px; color:var(--fg-mute); }
@@ -6454,7 +6467,7 @@ ${barWidthCss(s)}`;
         const p = highlightParts(r.label, r.muted ? "" : q2);
         const cls = `opt${sel ? " sel" : ""}${r.muted ? " muted" : ""}${tree && r.depth === 0 ? " top" : ""}`;
         const pad = tree ? 12 + r.depth * 20 : r.depth ? 20 : 12;
-        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc2(p.pre)}${p.mid ? `<mark>${esc2(p.mid)}</mark>` : ""}${esc2(p.post)}</span>${sel ? CHECK : ""}</div>`;
+        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc2(p.pre)}${p.mid ? `<mark>${esc2(p.mid)}</mark>` : ""}${esc2(p.post)}</span>${r.ambiguous && r.crumbs?.length ? `<span class="cpath">${esc2(r.crumbs.join(PATH_SEP))}</span>` : ""}${sel ? CHECK : ""}</div>`;
       }).join("") + (inSec ? "</div>" : "");
       list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
       this._paintActive(true);
@@ -7843,7 +7856,7 @@ ${barWidthCss(s)}`;
         const stubOn = this._presetBool("publicStub");
         if (aud.mode !== "switch") {
           const icon3 = isMembers ? LOCK : GLOBE;
-          const word = isMembers ? "Members only" : "Public";
+          const word = isMembers ? "Members only, in review" : "Public";
           return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
           <div class="vislocked" data-vislocked>${icon3} <b>${word}</b></div>
           <input data-key="visibility" data-kind="enum" type="hidden" value="${esc2(aud.value)}" />

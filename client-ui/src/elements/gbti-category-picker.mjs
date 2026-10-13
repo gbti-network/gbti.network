@@ -91,6 +91,9 @@ const CSS = `
   .opt.sel { color:var(--accent); font-weight:700; }
   .br { flex:none; width:9px; height:9px; margin-top:-6px; border-left:1.5px solid var(--line-2); border-bottom:1.5px solid var(--line-2); border-bottom-left-radius:3px; }
   .lb { flex:1; min-width:0; }
+  /* sow-454: the ancestor trail on a row whose label is not unique in the tree. Muted and small: it is
+     there to disambiguate, not to compete with the label. */
+  .cpath { flex:none; font-size:11px; color:var(--fg-mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
   mark { background:none; color:inherit; font-weight:800; text-decoration:underline; text-underline-offset:3px; }
   .ck { width:15px; height:15px; }
   .empty { padding:14px 12px; font-size:13.5px; color:var(--fg-mute); }
@@ -223,7 +226,10 @@ class GbtiCategoryPicker extends GbtiElement {
       const pad = tree ? 12 + r.depth * 20 : (r.depth ? 20 : 12);
       return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">`
         + `${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ''}`
-        + `<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ''}${esc(p.post)}</span>${sel ? CHECK : ''}</div>`;
+        + `<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ''}${esc(p.post)}</span>`
+        // sow-454: when two nodes share a label, each shows where it sits so the choice is not a coin toss.
+        + `${r.ambiguous && r.crumbs?.length ? `<span class="cpath">${esc(r.crumbs.join(PATH_SEP))}</span>` : ''}`
+        + `${sel ? CHECK : ''}</div>`;
     }).join('') + (inSec ? '</div>' : '');
     list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
     this._paintActive(true);

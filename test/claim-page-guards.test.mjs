@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseHeaders, cspForPath } from '../scripts/check-headers.mjs';
 import { inviteBlocker } from '../src/lib/digest-invite-core.mjs';
+import { postErrorMessage } from '../src/lib/claim-core.mjs'; // sow-454: the refusal messages
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -289,4 +290,24 @@ test('Publish says it is on its way before the request, and takes that back if t
   // render(), which is what makes the optimistic switch safe; render only toggles visibility.
   assert.match(src, /const noteText = \$<HTMLTextAreaElement>\('\[data-claim-note-text\]', dialog\);/);
   assert.ok(src.indexOf('const noteText') < src.indexOf('function render('), 'the note box outlives a re-render');
+});
+
+test('an unedited suggested note cannot be published under the member\'s name', () => {
+  // sow-454 (defect 4, reported by a member 2026-10-13): the note box arrives PRE-FILLED with the preparer's
+  // suggestion, so pressing Publish without touching it put our words on his page in his voice. One live
+  // suggestion even ended with "(This is only a starting point. Please replace it with your own words.)",
+  // which would have been published verbatim. Both live listings were corrected by hand; this closes the trap.
+  // Refusing an unchanged note is the deterministic form of his own suggested fix, and unlike scanning for
+  // instruction-shaped sentences it cannot false-positive on a member's real words.
+  assert.match(postErrorMessage('note_unchanged'), /your own words/i);
+  assert.notEqual(postErrorMessage('note_unchanged'), postErrorMessage('some_unknown_code'), 'it needs its own message');
+  const src = read(SCRIPT);
+  const handler = src.slice(src.indexOf("noteForm?.addEventListener('submit'"));
+  const check = handler.indexOf("postErrorMessage('note_unchanged')");
+  const request = handler.indexOf('/membership/claim');
+  assert.ok(check > 0, 'the handler must refuse an unchanged note');
+  assert.ok(check < request, 'and refuse it BEFORE sending anything');
+  // Compared against the listing's own suggestion, trimmed, so whitespace alone does not count as an edit.
+  assert.match(handler, /note\.trim\(\) === suggested\.trim\(\)/);
+  assert.match(handler, /listing\?\.suggestedNote/);
 });

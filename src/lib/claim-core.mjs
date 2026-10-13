@@ -574,6 +574,14 @@ export function postOutcome(status, body) {
 
 const POST_ERRORS = {
   note_required: 'Write a note before publishing.',
+  // sow-454 (defect 4, reported by a member 2026-10-13): the note box is PRE-FILLED with the preparer's
+  // suggestion, so publishing without touching it put our words on his page in his voice. One suggestion
+  // even ended with "(This is only a starting point. Please replace it with your own words.)", which would
+  // have been published verbatim. Those two live listings were corrected; this closes the trap itself.
+  // Refusing an unchanged note is the deterministic version of his own suggestion, and it cannot
+  // false-positive the way scanning for instruction-shaped sentences would. It also keeps the standing rule
+  // that we never put first-person words in a member's mouth.
+  note_unchanged: 'This is still the suggested wording. Put it in your own words before publishing, since it appears under your name.',
   slug_taken: 'Another project on the network already uses the web address of this listing, so it cannot be published yet. Let the person who sent you the link know. Once they rename it, this same link works.',
   listing_invalid: 'This listing needs a correction before it can be published. Let the person who sent you the link know. Once they fix it, this same link works.',
   too_large: 'This listing is too large to publish as it was prepared. Let the person who sent you the link know. Once they trim it, this same link works.',

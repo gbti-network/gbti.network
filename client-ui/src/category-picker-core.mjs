@@ -60,7 +60,19 @@ export function pickerRows(vocab, query) {
       for (let i = 1; i <= parts.length; i++) keep.add(parts.slice(0, i).join('/'));
     }
     const options = nodes.filter((n) => keep.has(n.key))
-      .map((n) => ({ type: 'option', key: n.key, label: n.label, depth: n.depth, muted: Boolean(q) && !hit(n) }));
+      .map((n) => ({
+        type: 'option', key: n.key, label: n.label, depth: n.depth, muted: Boolean(q) && !hit(n),
+        crumbs: Array.isArray(n.crumbs) ? n.crumbs : [],
+      }));
+    // sow-454 (defect 9, reported by a member 2026-10-13): two nodes in the tree can carry the same label.
+    // `Entertainment` is both a top-level category and ai > prompts > entertainment, and BOTH are in use (a
+    // dozen items on the first, one prompt on the second), so neither can simply go. In tree order the
+    // indentation tells them apart, but a search flattens the list and he got two identical rows with no way
+    // to choose. Marking the collision lets the row show its ancestor trail, which fixes any future duplicate
+    // too rather than just this pair.
+    const counts = new Map();
+    for (const o of options) counts.set(o.label.toLowerCase(), (counts.get(o.label.toLowerCase()) || 0) + 1);
+    for (const o of options) if ((counts.get(o.label.toLowerCase()) || 0) > 1) o.ambiguous = true;
     return { rows: options, options };
   }
   const rows = [];

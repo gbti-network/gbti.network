@@ -182,6 +182,14 @@ export function startClaimPage(doc: Document): void {
     if (publishing || !noteText || !code) return;
     const note = noteText.value;
     if (!note.trim()) { showError(postErrorMessage('note_required')); noteText.focus(); return; }
+    // sow-454 (defect 4): the box arrives pre-filled with the preparer's suggestion, so an untouched note
+    // publishes our words under the member's name. Compared trimmed, so whitespace alone is not an edit.
+    const suggested = typeof listing?.suggestedNote === 'string' ? listing.suggestedNote : '';
+    if (suggested.trim() && note.trim() === suggested.trim()) {
+      showError(postErrorMessage('note_unchanged'));
+      noteText.focus();
+      return;
+    }
     publishing = true;
     if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Publishing'; }
     showError('');

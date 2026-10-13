@@ -61,7 +61,12 @@ export const withEditorFields = (Base) => class extends Base {
       const stubOn = this._presetBool('publicStub');
       if (aud.mode !== 'switch') {
         const icon = isMembers ? LOCK : GLOBE;
-        const word = isMembers ? 'Members only' : 'Public';
+        // sow-454 (reported by a member 2026-10-13): this read as a permanent state while the note right
+        // underneath said a superadmin reviews it for the public site, so he took the two as contradicting
+        // each other. The default itself is correct and deliberate (the one-plan model: items start
+        // members-only and a superadmin decides what goes public), so only the words changed. They now match
+        // audienceTag's label in workspace-core.mjs, which the WorkBench row has always used for the same item.
+        const word = isMembers ? 'Members only, in review' : 'Public';
         return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Audience</label>
           <div class="vislocked" data-vislocked>${icon} <b>${word}</b></div>
           <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />

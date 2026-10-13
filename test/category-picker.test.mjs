@@ -271,3 +271,22 @@ test('a selected chip or option (accent on the green tint) and the muted text pa
   assert.match(src, /\.chip\.on, \.chip\.on:hover \{ color:var\(--accent\); background:var\(--green-tint\); border-color:var\(--brand\); \}/);
   assert.doesNotMatch(src, /color:#fff; background:var\(--accent\)/, 'the white-on-mint chip is gone');
 });
+
+test('two nodes with the same label are told apart by their trail, and a unique one is left alone', () => {
+  // sow-454 (defect 9, reported by a member 2026-10-13): `Entertainment` is both a top-level category and
+  // ai > prompts > entertainment. BOTH are in use, a dozen items on the first and one prompt on the second,
+  // so neither could be removed; the fix is that a search no longer shows two identical rows. Read against the
+  // REAL taxonomy on purpose: a fixture would pass while the shipped tree stayed ambiguous.
+  const tree = yaml.load(fs.readFileSync(new URL('../house/taxonomy.yml', import.meta.url), 'utf8')).tree;
+  const nodes = treeNodesFromJson({ tree });
+  const hits = pickerRows({ kind: 'tree', nodes }, 'entertainment').options.filter((o) => o.label === 'Entertainment');
+  assert.equal(hits.length, 2, 'the duplicate is still there; this test is about telling them apart');
+  for (const o of hits) assert.equal(o.ambiguous, true, `${o.key} must be marked`);
+  const nested = hits.find((o) => o.key === 'ai/prompts/entertainment');
+  assert.deepEqual(nested.crumbs, ['AI', 'Prompts & Skills'], 'the trail is what distinguishes it');
+  assert.deepEqual(hits.find((o) => o.key === 'entertainment').crumbs, [], 'the top-level one has no trail, which is the distinction');
+  // A label that appears once must NOT be decorated, or every row grows noise.
+  const one = pickerRows({ kind: 'tree', nodes }, 'blockchain').options.filter((o) => o.label === 'Blockchain');
+  assert.ok(one.length >= 1);
+  for (const o of one) assert.ok(!o.ambiguous, 'a unique label needs no trail');
+});
