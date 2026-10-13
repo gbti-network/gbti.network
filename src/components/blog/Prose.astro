@@ -157,8 +157,9 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
   @media (prefers-reduced-motion: reduce) { .prose-gbti .md-embed-play { transition: none; } }
   /* sow-452: the ```directory block. The bar reuses the Projects directory filter pill (.tfilter); the items are
      the article's own h3 entries, reordered by src/lib/sort-list.mjs. */
-  .prose-gbti .sortlist { margin: 1.6em 0 0.4em; }
-  .prose-gbti .sortlist-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .prose-gbti .sortlist { margin: 1.6em 0 0.4em; --sortlist-top: 0px; } /* sort-list.mjs sets the real offset inline */
+  .prose-gbti .sortlist-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    position: sticky; top: var(--sortlist-top); z-index: 5; background: var(--paper-2); } /* sticky under the site header (sort-list.mjs sets the offset) */
   .prose-gbti .sortlist-lab { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); margin-right: 4px; }
   .prose-gbti .sortlist-btn { display: inline-flex; align-items: center; cursor: pointer; font-family: var(--f-mono); font-size: 12px; font-weight: 500; padding: 8px 13px; border-radius: var(--r);
     border: 1.5px solid var(--line-2); color: var(--fg-soft); background: var(--paper); transition: all .15s; white-space: nowrap; }

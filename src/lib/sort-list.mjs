@@ -139,7 +139,17 @@ export function enhanceSortList(root = document) {
     count.className = 'sortlist-count';
     count.textContent = `${items.length} channels`;
     bar.append(count);
-    box.append(bar);
+    // Owner, 2026-10-13: the bar stays on screen while the list scrolls. A sticky element only sticks inside its
+    // parent, so the entries move into the box with it, and it parks just under the site's sticky header.
+    box.append(bar, wrap);
+    const head = doc.querySelector('.site-head');
+    const view = doc.defaultView;
+    const park = () => {
+      const pos = head && view ? view.getComputedStyle(head).position : '';
+      box.style.setProperty('--sortlist-top', `${pos === 'sticky' || pos === 'fixed' ? head.getBoundingClientRect().height : 0}px`);
+    };
+    park();
+    view?.addEventListener('resize', park);
 
     function apply(mode, fromClick) {
       STATE.set(doc, mode);
@@ -161,8 +171,10 @@ export function enhanceSortList(root = document) {
         g.items.forEach((it) => wrap.append(it.el));
       }
       if (fromClick) {
+        // Back to the top of the list, stopping under the sticky header rather than behind it.
         const top = box.getBoundingClientRect().top;
-        if (top < 0) box.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        const off = parseFloat(box.style.getPropertyValue('--sortlist-top')) || 0;
+        if (top < off) view?.scrollBy({ top: top - off, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       }
     }
     apply(STATE.get(doc) || 'score', false);
