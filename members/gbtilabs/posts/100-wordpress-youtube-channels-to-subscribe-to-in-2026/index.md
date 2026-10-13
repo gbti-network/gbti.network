@@ -28,22 +28,14 @@ Our selection algorithm also discounts channels that sell their own products, me
 
 ### How the score works
 
-Each channel receives a score out of 100. The list counts down from #100 to #1, and #1 carries the highest score.
+Each channel has a score out of 100; #1 has the highest. The score rests on four measures, each ranked against every channel we measured and weighted as shown:
 
-The score rests on four measures. Each is counted by where the channel sits among all the channels we measured, from bottom to top, and weighted as shown:
+- **WordPress focus (40%):** share of 2026 videos about WordPress
+- **Volume (20%):** WordPress videos posted in 2026
+- **Reach (20%):** median views per video
+- **Engagement (20%):** views compared with subscribers
 
-- **WordPress focus (40%):** the share of its 2026 videos that are about WordPress
-- **Volume (20%):** how many WordPress videos it posted in 2026
-- **Reach (20%):** the median views of its videos
-- **Engagement efficiency (20%):** its views compared with its subscriber count
-
-Subscriber count alone is not part of the score. A large channel whose videos draw few views scores lower than a smaller channel whose videos are watched widely.
-
-Channels that sell their own product (plugin and theme companies) count at 75% of their score.
-
-The top score is 82 (#1). The lowest score in the list is 41 (#100).
-
-Five channels are always included whatever their score: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. The official WordPress channel scored 41, below the line the other channels had to clear. It posted 240 WordPress videos in 2026, but its typical video drew 27 views, against 414 for the typical channel in the study.
+Subscriber count alone does not raise a score. Plugin and theme companies count at 75%. Five channels are always included whatever their score, which is why the official WordPress channel sits at #100.
 
 ## Types of Channels Surveyed
 
