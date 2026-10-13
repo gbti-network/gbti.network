@@ -135,6 +135,18 @@
   .prose-gbti section[data-footnotes] p:last-child { margin: 0; }
   .prose-gbti section[data-footnotes] li { margin: 0.5em 0; }
   .prose-gbti .data-footnote-backref { text-decoration: none; margin-left: 4px; }
+  /* ```embed lightbox (owner, 2026-10-13): full column width, 16:9, the thumbnail and a play button; a click opens the
+     page lightbox (Lightbox.astro), so no player loads until then. The built fallback is the linked thumbnail. */
+  .prose-gbti .embed-lightbox, .prose-gbti .md-embed { position: relative; width: 100%; margin: 1.5em 0; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
+  .prose-gbti .embed-lightbox a, .prose-gbti .embed-lightbox img { display: block; width: 100%; height: 100%; margin: 0; object-fit: cover; border-radius: 0; }
+  .prose-gbti .md-embed.md-embed-portrait { aspect-ratio: 9 / 16; max-width: 360px; margin-inline: auto; }
+  .prose-gbti .md-embed-open { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0; border: 0; background: #111; cursor: pointer; }
+  .prose-gbti .md-embed-thumb { width: 100%; height: 100%; object-fit: cover; display: block; margin: 0; border-radius: 0; }
+  .prose-gbti .md-embed-panel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 600 14px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .prose-gbti .md-embed-play { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 999px; background: rgba(0, 0, 0, .65); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(0, 0, 0, .4); transition: background .15s ease, transform .15s ease; }
+  .prose-gbti .md-embed-open:hover .md-embed-play, .prose-gbti .md-embed-open:focus-visible .md-embed-play { background: var(--green); transform: scale(1.06); }
+  .prose-gbti .md-embed-open:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .prose-gbti .md-embed-play { transition: none; } }
   /* sow-452: the ```directory block. The bar reuses the Projects directory filter pill (.tfilter); the items are
      the article's own h3 entries, reordered by src/lib/sort-list.mjs. */
   .prose-gbti .sortlist { margin: 1.6em 0 0.4em; }
@@ -153,6 +165,14 @@
 <script>
   // sow-452: a ```directory block becomes a sort bar over the entries after it.
   import { enhanceSortList } from '../../lib/sort-list.mjs';
+  import { embedUrl, embedPosterHtml } from '../../../client/src/video-embed.mjs';
+  // ```embed lightbox: the built thumbnail link becomes the poster the comments use; Lightbox.astro opens it.
+  document.querySelectorAll<HTMLElement>('.prose-gbti .embed-lightbox').forEach((wrap) => {
+    const url = wrap.querySelector('a')?.getAttribute('href') || '';
+    const src = embedUrl(url);
+    const html = src ? embedPosterHtml(url, { frameSrc: src }) : '';
+    if (html) wrap.outerHTML = html;
+  });
   document.querySelectorAll('.prose-gbti').forEach((el) => enhanceSortList(el));
 
   // Code cards: upgrade every fenced code block in rendered prose into a card with a language tag + a

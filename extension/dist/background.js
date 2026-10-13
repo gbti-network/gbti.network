@@ -20585,7 +20585,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   if (info[0] === "embed") {
     const url2 = body.trim();
     const src = embedUrl(url2);
-    if (src && poster) return embedPosterHtml(url2, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url2)}` });
+    if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url2, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url2)}` });
     if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url2)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
     return `<p><a href="${escapeHtml(url2)}" target="_blank" rel="noopener">${escapeHtml(url2)}</a></p>`;
   }

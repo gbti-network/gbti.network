@@ -91,7 +91,7 @@ function serializeBlock(b) {
       return [line(head), delim, ...rows.map(line)].join('\n');
     }
     case 'image': return `![${b.alt ?? ''}](${b.url ?? ''}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
-    case 'embed': return '```embed\n' + (b.url ?? '') + '\n```';
+    case 'embed': return '```embed' + (b.lightbox ? ' lightbox' : '') + '\n' + (b.url ?? '') + '\n```'; // lightbox: owner 2026-10-13
     case 'paragraph':
     default: return String(b.text ?? '');
   }
@@ -125,7 +125,7 @@ export function parseBlocks(md) {
       i++; // skip the closing fence
       // SOW-062: ```callout <variant> and ```embed are first-class blocks; anything else stays a code block.
       if (info[0] === 'callout') blocks.push({ type: 'callout', variant: normalizeVariant(info[1]), text: code.join('\n') });
-      else if (info[0] === 'embed') blocks.push({ type: 'embed', url: code.join('\n').trim() });
+      else if (info[0] === 'embed') blocks.push({ type: 'embed', url: code.join('\n').trim(), ...(info[1] === 'lightbox' ? { lightbox: true } : {}) });
       else blocks.push({ type: 'code', lang, code: code.join('\n') });
       continue;
     }

@@ -60,7 +60,17 @@ export function parsePublishedFile(rawFileText) {
 /** sow-452: site-only fences (```directory, a sortable list) mean nothing on dev.to or Hashnode, where they would
  *  show as a code block. Drop them; the entries after them read in their source order. */
 export function stripSiteOnlyFences(body) {
-  return String(body).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+  return embedFencesToLinks(String(body)).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+}
+
+/** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts
+ *  get the video's thumbnail linking to it (YouTube), or the plain link for other providers. */
+export function embedFencesToLinks(body) {
+  return String(body).replace(/^```embed(?:[ \t][^\n]*)?\n([\s\S]*?)^```[ \t]*$/gm, (_m, inner) => {
+    const url = String(inner).trim();
+    const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+    return yt ? `[![Video](https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg)](${url})` : `<${url}>`;
+  });
 }
 
 /** Rewrite repo-relative image/link targets ("](./x)" and "](images/x)") to GitHub's raw host over the item's

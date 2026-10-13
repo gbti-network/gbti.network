@@ -4,7 +4,7 @@
 // / embed code node with a raw-HTML node BEFORE Shiki highlights it. Same hand-written style as rehypeDemoteBodyH1,
 // no new dependency. Only a NORMALIZED provider URL (via the one shared embedUrl) becomes an iframe src -- never
 // author-supplied HTML -- and callout bodies are HTML-escaped, so no author script executes.
-import { embedUrl, bareVideoLine } from '../../client/src/video-embed.mjs';
+import { embedUrl, bareVideoLine, embedPoster } from '../../client/src/video-embed.mjs';
 import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';      // - a {square} -> <ul class="list-square"> (sow-322)
@@ -29,6 +29,14 @@ function renderBlock(node) {
   // embed
   const url = String(node.value || '').trim();
   const src = embedUrl(url);
+  // ```embed lightbox (owner, 2026-10-13): no player in the page. The built markup is the video's thumbnail linking
+  // to it, so it reads without a script; Prose.astro swaps it for the poster the comment renderers draw, which opens
+  // the page lightbox, and the player loads only then.
+  const poster = String(node.meta || '').trim() === 'lightbox' && src ? embedPoster(url) : null;
+  if (poster) {
+    const face = poster.thumb ? `<img src="${esc(poster.thumb)}" alt="Play video" loading="lazy" decoding="async">` : esc(url);
+    return `<div class="embed-wrap embed-lightbox"><a href="${esc(url)}">${face}</a></div>`;
+  }
   // sow-158: sandbox matches the in-extension reader (client/src/markdown.mjs) so both renderers cage the frame.
   // 2026-09-12: allow-popups-to-escape-sandbox. The sandbox propagates into any tab the player opens (channel,
   // "Watch on YouTube"), and Chrome refuses to navigate a sandboxed context to a COOP page such as a youtube.com

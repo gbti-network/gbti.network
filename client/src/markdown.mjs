@@ -248,7 +248,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
     const src = embedUrl(url);
     // poster: a comment (autoEmbed) shows the poster the lightbox opens; the editor writes a fence for a pasted
     // video link, so without this a comment would look different after its first edit.
-    if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+    if (src && (poster || info[1] === 'lightbox')) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
     if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
     return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
   }

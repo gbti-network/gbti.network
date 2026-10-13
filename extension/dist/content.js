@@ -1143,7 +1143,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       case "image":
         return `![${b.alt ?? ""}](${b.url ?? ""}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
       case "embed":
-        return "```embed\n" + (b.url ?? "") + "\n```";
+        return "```embed" + (b.lightbox ? " lightbox" : "") + "\n" + (b.url ?? "") + "\n```";
+      // lightbox: owner 2026-10-13
       case "paragraph":
       default:
         return String(b.text ?? "");
@@ -1180,7 +1181,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         i++;
         if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
-        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
+        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim(), ...info[1] === "lightbox" ? { lightbox: true } : {} });
         else blocks.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
@@ -4367,7 +4368,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (info[0] === "embed") {
       const url = body.trim();
       const src = embedUrl(url);
-      if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+      if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
       if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
       return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
     }
