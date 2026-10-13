@@ -1,28 +1,39 @@
 ---
-type: post
-title: "100 WordPress YouTube Channels to Subscribe to in 2026"
+title: 100 WordPress YouTube Channels to Subscribe to in 2026
 slug: 100-wordpress-youtube-channels-to-subscribe-to-in-2026
-author: gbtilabs
 status: published
 visibility: public
-publishedAt: 2026-10-13
-excerpt: "The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in 2026."
-categories: ["devops", "frameworks", "wordpress"]
-tags: ["wordpress", "youtube", "lists", "research"]
+publicStub: false
+excerpt: >-
+  The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in
+  2026.
+categories:
+  - devops
+  - frameworks
+  - wordpress
+tags:
+  - wordpress
+  - youtube
+  - lists
+  - research
 layout: journal
-coverImage: "./images/wordpress-youtube-channels-2026.webp"
-redirectFrom: []
+coverImage: ./images/wordpress-youtube-channels-2026.webp
+featured: false
+publishedAt: '2026-10-13T00:00:00.000Z'
+updatedAt: '2026-10-13T22:02:10.040Z'
+type: post
+author: gbtilabs
 ---
 
 We've assembled a list of the top 100 WordPress YouTube channels to follow in 2026.
 
 ## Who's YouTubing about Wordpress in 2026? Our Selection Process
 
-To be included in our Top 100 list, a channel first had to meet one major rule: it posted at least one video about WordPress within the 2026 calendar year.
+To be included in our **Top 100 list**, a channel first had to meet one major rule: it posted **at least one video about WordPress** within the **2026 **calendar year.
 
-In our research, we found 177 channels that met this rule, leaving out hosting companies, which are not part of this study. However, we needed to narrow our list down to meet our 100-channel goal.
+In our research, we identified **177 channels** that met this rule,* excluding hosting companies*, which are not included in this study. However, we needed to narrow our list down to meet our 100-channel goal. 
 
-To do this, we created an inclusion algorithm that gives every channel a score out of 100, built from the density of WordPress-based videos within the channel, how many it posted in 2026, and how widely its videos are watched. The 100 highest scores make our top 100 list.
+To do this, we created an inclusion algorithm that gives every channel a score out of 100.
 
 ### How the score works
 
@@ -76,6 +87,7 @@ Long-form video still carries WordPress on YouTube. Most of these channels treat
 The list counts down from #100 to #1, where #1 earned the highest overall score, and the buttons above let you sort by category or subscriber count instead.
 
 ```directory
+
 ```
 
 ### #100. Gutenberg Times
