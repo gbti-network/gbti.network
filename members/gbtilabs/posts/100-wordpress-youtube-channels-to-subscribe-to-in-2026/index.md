@@ -84,6 +84,8 @@ Long-form video still carries WordPress on YouTube. Most of these channels treat
 
 ## The 100 Channels: Counting Down to #1
 
+![100 WordPress YouTube channels to subscribe to in 2026, with the WordPress logo and a grid of small play buttons shaped like one large YouTube play button](./images/wordpress-youtube-channels-2026-countdown.webp)
+
 The list counts down from #100 to #1, where #1 earned the highest overall score, and the buttons above let you sort by category or subscriber count instead.
 
 ```directory
