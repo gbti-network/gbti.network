@@ -55,7 +55,7 @@ Across all 100 channels, 4,046 of the 6,097 videos posted in 2026 are about Word
 
 ### AI is in one title in five
 
-Of the 6,097 titles posted by the 100 channels in 2026, 1,190 use an AI term. That is 20%, or one title in five.
+Of the 6,097 titles posted by the 100 channels in 2026, 1,190 use an AI term. That is 20%, or one title in five. We found this interesting, but AI mentions did not affect the final scores in any way.
 
 ![Share of 2026 video titles that mention AI, by channel type. Overall 20% of 6097 titles; 72 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 13%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.](./images/ai-in-2026-titles.svg)
 
