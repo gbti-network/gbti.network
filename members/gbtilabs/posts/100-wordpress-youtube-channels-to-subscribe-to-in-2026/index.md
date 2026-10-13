@@ -20,11 +20,32 @@ To be included in our Top 100 list, a channel first had to meet one major rule: 
 
 In our research, we found 177 channels that met this rule, leaving out hosting companies, which are not part of this study. However, we needed to narrow our list down to meet our 100-channel goal.
 
-To do this, we created an inclusion algorithm that considered the density of WordPress-based videos within the channel and combined it with the channel's overall age to determine who would be included in our top 100 lists.
+To do this, we created an inclusion algorithm that gives every channel a score out of 100, built from the density of WordPress-based videos within the channel, how many it posted in 2026, and how widely its videos are watched. The 100 highest scores make our top 100 list.
 
 We also made sure that official channels were included regardless of posting activity: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. These five are present regardless of score.
 
 Our selection algorithm also discounts channels that sell their own products, meaning plugin and theme companies had their inclusion weight reduced. This means that our list favors channels that teach and report on WordPress-related topics with fewer product-driven commercial incentives, other than to expand their influence.
+
+### How the score works
+
+Every channel that posted at least one WordPress video in 2026 was measured. 177 qualified, and 170 remained once Darrel Wilson's language editions count as one channel. The score compares each channel against those 170.
+
+Each channel receives a score out of 100. The list counts down from #100 to #1, and #1 carries the highest score.
+
+The score rests on four measures. Each is counted by where the channel sits among the 170, from bottom to top, and weighted as shown:
+
+- **WordPress focus (40%):** the share of its 2026 videos that are about WordPress
+- **Volume (20%):** how many WordPress videos it posted in 2026
+- **Reach (20%):** the median views of its videos
+- **Engagement efficiency (20%):** its views compared with its subscriber count
+
+Subscriber count alone is not part of the score. A large channel whose videos draw few views scores lower than a smaller channel whose videos are watched widely.
+
+Channels that sell their own product (plugin and theme companies) count at 75% of their score.
+
+The top score is 82 (#1). The lowest score in the list is 41 (#100).
+
+Five channels are always included whatever their score: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. The official WordPress channel scored 41, below the line the other channels had to clear. It posted 240 WordPress videos in 2026, but its typical video drew 27 views, against 414 for the typical channel in the study.
 
 ## Types of Channels Surveyed
 
@@ -60,7 +81,7 @@ WordPress YouTube is still long-form.
 
 ## The 100 Channels: Counting Down to #1
 
-The list below counts down from #100 to #1, ordered by the score each channel earned in our study. Every entry shows the channel type, subscriber count, share of 2026 videos about WordPress, number of WordPress videos posted in 2026, a thumbnail from one of those videos, and a link to subscribe.
+The list below counts down from #100 to #1, ordered by the score each channel earned in our study, so #1 scored highest. Each entry shows its score out of 100 first. Every entry shows the channel type, subscriber count, share of 2026 videos about WordPress, number of WordPress videos posted in 2026, a thumbnail from one of those videos, and a link to subscribe.
 
 Use the sort buttons above the list to view channels by category or by subscriber count, and switch back to the score order at any time.
 
@@ -77,6 +98,7 @@ https://www.youtube.com/watch?v=-QVRu0ITsOQ
 
 ```stats
 caption: Official and community · Always included
+41: score out of 100
 118K: subscribers
 60%: of 2026 videos about WordPress
 240: WordPress videos in 2026
@@ -97,6 +119,7 @@ https://www.youtube.com/watch?v=XnZ_BVzp8Y8
 
 ```stats
 caption: News, podcasts and shows
+42: score out of 100
 5.2K: subscribers
 15%: of 2026 videos about WordPress
 4: WordPress videos in 2026
@@ -117,6 +140,7 @@ https://www.youtube.com/watch?v=rbqJYI0Wg24
 
 ```stats
 caption: Independent creators · In Arabic
+43: score out of 100
 63K: subscribers
 46%: of 2026 videos about WordPress
 43: WordPress videos in 2026
@@ -137,6 +161,7 @@ https://www.youtube.com/watch?v=FgV4pxyxWr0
 
 ```stats
 caption: Plugin and theme companies
+43: score out of 100
 3.4K: subscribers
 100%: of 2026 videos about WordPress
 8: WordPress videos in 2026
@@ -157,6 +182,7 @@ https://www.youtube.com/watch?v=JVbZAc0RgM0
 
 ```stats
 caption: Independent creators
+44: score out of 100
 1M: subscribers
 40%: of 2026 videos about WordPress
 57: WordPress videos in 2026
@@ -177,6 +203,7 @@ https://www.youtube.com/watch?v=Otg5fZYlScM
 
 ```stats
 caption: Independent creators
+44: score out of 100
 21.5K: subscribers
 33%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -197,6 +224,7 @@ https://www.youtube.com/watch?v=TDSC3hZCd_g
 
 ```stats
 caption: Plugin and theme companies
+44: score out of 100
 4.1K: subscribers
 86%: of 2026 videos about WordPress
 79: WordPress videos in 2026
@@ -217,6 +245,7 @@ https://www.youtube.com/watch?v=mDd8YG7kLOE
 
 ```stats
 caption: News, podcasts and shows · In Spanish
+44: score out of 100
 3K: subscribers
 42%: of 2026 videos about WordPress
 8: WordPress videos in 2026
@@ -237,6 +266,7 @@ https://www.youtube.com/watch?v=NKTcw1Pq9dY
 
 ```stats
 caption: Plugin and theme companies
+45: score out of 100
 8.5K: subscribers
 100%: of 2026 videos about WordPress
 23: WordPress videos in 2026
@@ -257,6 +287,7 @@ https://www.youtube.com/watch?v=7WopidqB8RE
 
 ```stats
 caption: Independent creators
+45: score out of 100
 50.9K: subscribers
 22%: of 2026 videos about WordPress
 2: WordPress videos in 2026
@@ -277,6 +308,7 @@ https://www.youtube.com/watch?v=SuAy2_i_58g
 
 ```stats
 caption: News, podcasts and shows
+45: score out of 100
 507: subscribers
 31%: of 2026 videos about WordPress
 124: WordPress videos in 2026
@@ -297,6 +329,7 @@ https://www.youtube.com/watch?v=HWrKzUTKpmY
 
 ```stats
 caption: Plugin and theme companies
+45: score out of 100
 2.9K: subscribers
 70%: of 2026 videos about WordPress
 81: WordPress videos in 2026
@@ -317,6 +350,7 @@ https://www.youtube.com/watch?v=dxpoqqtwOIg
 
 ```stats
 caption: Plugin and theme companies
+45: score out of 100
 195: subscribers
 87%: of 2026 videos about WordPress
 13: WordPress videos in 2026
@@ -337,6 +371,7 @@ https://www.youtube.com/watch?v=Shd2fE9S-s4
 
 ```stats
 caption: Official and community · Always included
+45: score out of 100
 569: subscribers
 100%: of 2026 videos about WordPress
 8: WordPress videos in 2026
@@ -357,6 +392,7 @@ https://www.youtube.com/watch?v=6hMy2c3Y2jc
 
 ```stats
 caption: Plugin and theme companies
+45: score out of 100
 1.8K: subscribers
 88%: of 2026 videos about WordPress
 7: WordPress videos in 2026
@@ -377,6 +413,7 @@ https://www.youtube.com/watch?v=s0g11nwTYug
 
 ```stats
 caption: Plugin and theme companies
+45: score out of 100
 890: subscribers
 100%: of 2026 videos about WordPress
 2: WordPress videos in 2026
@@ -397,6 +434,7 @@ https://www.youtube.com/watch?v=3WrkIygDEqc
 
 ```stats
 caption: Plugin and theme companies
+46: score out of 100
 1K: subscribers
 78%: of 2026 videos about WordPress
 36: WordPress videos in 2026
@@ -417,6 +455,7 @@ https://www.youtube.com/watch?v=VTdU_Otb318
 
 ```stats
 caption: Plugin and theme companies
+46: score out of 100
 10.6K: subscribers
 77%: of 2026 videos about WordPress
 48: WordPress videos in 2026
@@ -437,6 +476,7 @@ https://www.youtube.com/watch?v=4dviIyUF58w
 
 ```stats
 caption: News, podcasts and shows
+46: score out of 100
 1.3K: subscribers
 50%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -457,6 +497,7 @@ https://www.youtube.com/watch?v=kyj9HQ901RE
 
 ```stats
 caption: Independent creators
+46: score out of 100
 64.2K: subscribers
 32%: of 2026 videos about WordPress
 12: WordPress videos in 2026
@@ -477,6 +518,7 @@ https://www.youtube.com/watch?v=GDSmxk2F7_A
 
 ```stats
 caption: Plugin and theme companies
+46: score out of 100
 2K: subscribers
 64%: of 2026 videos about WordPress
 57: WordPress videos in 2026
@@ -497,6 +539,7 @@ https://www.youtube.com/watch?v=jg5kR6C5zBg
 
 ```stats
 caption: Plugin and theme companies
+46: score out of 100
 40.8K: subscribers
 85%: of 2026 videos about WordPress
 102: WordPress videos in 2026
@@ -517,6 +560,7 @@ https://www.youtube.com/watch?v=OydtxivdH2s
 
 ```stats
 caption: Independent creators
+46: score out of 100
 209K: subscribers
 32%: of 2026 videos about WordPress
 6: WordPress videos in 2026
@@ -537,6 +581,7 @@ https://www.youtube.com/watch?v=xDqWBw8EtzI
 
 ```stats
 caption: Plugin and theme companies
+46: score out of 100
 4.9K: subscribers
 100%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -557,6 +602,7 @@ https://www.youtube.com/watch?v=5_wzjf2w6og
 
 ```stats
 caption: Plugin and theme companies
+47: score out of 100
 225K: subscribers
 73%: of 2026 videos about WordPress
 85: WordPress videos in 2026
@@ -577,6 +623,7 @@ https://www.youtube.com/watch?v=yp7K2YnAq6c
 
 ```stats
 caption: Developer educators
+47: score out of 100
 2.1K: subscribers
 47%: of 2026 videos about WordPress
 26: WordPress videos in 2026
@@ -597,6 +644,7 @@ https://www.youtube.com/watch?v=-Ryfl5PZT8k
 
 ```stats
 caption: News, podcasts and shows
+47: score out of 100
 203: subscribers
 83%: of 2026 videos about WordPress
 5: WordPress videos in 2026
@@ -617,6 +665,7 @@ https://www.youtube.com/watch?v=p0JdwEAvVkg
 
 ```stats
 caption: Independent creators
+47: score out of 100
 69.3K: subscribers
 51%: of 2026 videos about WordPress
 22: WordPress videos in 2026
@@ -637,6 +686,7 @@ https://www.youtube.com/watch?v=s2YbDBs0dXM
 
 ```stats
 caption: Independent creators · In Portuguese
+48: score out of 100
 224K: subscribers
 27%: of 2026 videos about WordPress
 25: WordPress videos in 2026
@@ -657,6 +707,7 @@ https://www.youtube.com/watch?v=KQ6Xn2rVfMg
 
 ```stats
 caption: Independent creators · In Spanish
+48: score out of 100
 14.7K: subscribers
 78%: of 2026 videos about WordPress
 14: WordPress videos in 2026
@@ -677,6 +728,7 @@ https://www.youtube.com/watch?v=2X8jUDrc1zE
 
 ```stats
 caption: Plugin and theme companies
+49: score out of 100
 10.6K: subscribers
 75%: of 2026 videos about WordPress
 3: WordPress videos in 2026
@@ -697,6 +749,7 @@ https://www.youtube.com/watch?v=kRj0fDzRMvk
 
 ```stats
 caption: Official and community
+49: score out of 100
 15.3K: subscribers
 32%: of 2026 videos about WordPress
 10: WordPress videos in 2026
@@ -717,6 +770,7 @@ https://www.youtube.com/watch?v=4bU0eZaGj3I
 
 ```stats
 caption: Plugin and theme companies
+50: score out of 100
 2.1K: subscribers
 80%: of 2026 videos about WordPress
 20: WordPress videos in 2026
@@ -737,6 +791,7 @@ https://www.youtube.com/watch?v=atwg7LfctfA
 
 ```stats
 caption: Plugin and theme companies
+50: score out of 100
 27.1K: subscribers
 100%: of 2026 videos about WordPress
 6: WordPress videos in 2026
@@ -757,6 +812,7 @@ https://www.youtube.com/watch?v=N5sOCY3bzWw
 
 ```stats
 caption: News, podcasts and shows · Always included
+50: score out of 100
 168: subscribers
 80%: of 2026 videos about WordPress
 31: WordPress videos in 2026
@@ -777,6 +833,7 @@ https://www.youtube.com/watch?v=oSK0VcwUJG0
 
 ```stats
 caption: Plugin and theme companies
+50: score out of 100
 11.2K: subscribers
 84%: of 2026 videos about WordPress
 16: WordPress videos in 2026
@@ -797,6 +854,7 @@ https://www.youtube.com/watch?v=-RYXSC_2YSc
 
 ```stats
 caption: Independent creators
+50: score out of 100
 1.24M: subscribers
 43%: of 2026 videos about WordPress
 34: WordPress videos in 2026
@@ -817,6 +875,7 @@ https://www.youtube.com/watch?v=q2bVdL_Ru1Q
 
 ```stats
 caption: Plugin and theme companies
+50: score out of 100
 1.7K: subscribers
 86%: of 2026 videos about WordPress
 85: WordPress videos in 2026
@@ -837,6 +896,7 @@ https://www.youtube.com/watch?v=3LTeKxo31ZI
 
 ```stats
 caption: Plugin and theme companies
+51: score out of 100
 3.4K: subscribers
 100%: of 2026 videos about WordPress
 22: WordPress videos in 2026
@@ -857,6 +917,7 @@ https://www.youtube.com/watch?v=iaDMySrXrS4
 
 ```stats
 caption: Developer educators
+51: score out of 100
 33.4K: subscribers
 72%: of 2026 videos about WordPress
 23: WordPress videos in 2026
@@ -877,6 +938,7 @@ https://www.youtube.com/watch?v=mloKrCbXC5o
 
 ```stats
 caption: Plugin and theme companies
+51: score out of 100
 114: subscribers
 96%: of 2026 videos about WordPress
 25: WordPress videos in 2026
@@ -897,6 +959,7 @@ https://www.youtube.com/watch?v=FxMVmhFdyy8
 
 ```stats
 caption: Developer educators
+51: score out of 100
 774: subscribers
 64%: of 2026 videos about WordPress
 7: WordPress videos in 2026
@@ -917,6 +980,7 @@ https://www.youtube.com/watch?v=GEhW7iKLoNM
 
 ```stats
 caption: Plugin and theme companies
+52: score out of 100
 13.9K: subscribers
 93%: of 2026 videos about WordPress
 75: WordPress videos in 2026
@@ -937,6 +1001,7 @@ https://www.youtube.com/watch?v=aL6MTuX4z3g
 
 ```stats
 caption: Developer educators
+52: score out of 100
 821: subscribers
 33%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -957,6 +1022,7 @@ https://www.youtube.com/watch?v=2VvIlQ4XAls
 
 ```stats
 caption: Independent creators
+52: score out of 100
 496K: subscribers
 24%: of 2026 videos about WordPress
 8: WordPress videos in 2026
@@ -977,6 +1043,7 @@ https://www.youtube.com/watch?v=4MWYMHWpVxU
 
 ```stats
 caption: News, podcasts and shows · In Spanish
+52: score out of 100
 5.5K: subscribers
 59%: of 2026 videos about WordPress
 82: WordPress videos in 2026
@@ -997,6 +1064,7 @@ https://www.youtube.com/watch?v=YspsW5svmfM
 
 ```stats
 caption: Independent creators · In Portuguese
+52: score out of 100
 60K: subscribers
 83%: of 2026 videos about WordPress
 25: WordPress videos in 2026
@@ -1017,6 +1085,7 @@ https://www.youtube.com/watch?v=nZgN15w5F0M
 
 ```stats
 caption: Official and community · Always included
+53: score out of 100
 492: subscribers
 77%: of 2026 videos about WordPress
 10: WordPress videos in 2026
@@ -1037,6 +1106,7 @@ https://www.youtube.com/watch?v=HvRCrpbs7F4
 
 ```stats
 caption: Plugin and theme companies
+53: score out of 100
 17.5K: subscribers
 100%: of 2026 videos about WordPress
 13: WordPress videos in 2026
@@ -1057,6 +1127,7 @@ https://www.youtube.com/watch?v=qdpYomYeJR0
 
 ```stats
 caption: Agencies and freelancers
+53: score out of 100
 2.2K: subscribers
 100%: of 2026 videos about WordPress
 3: WordPress videos in 2026
@@ -1077,6 +1148,7 @@ https://www.youtube.com/watch?v=jrbTG-8kXeE
 
 ```stats
 caption: Independent creators
+53: score out of 100
 196K: subscribers
 50%: of 2026 videos about WordPress
 137: WordPress videos in 2026
@@ -1097,6 +1169,7 @@ https://www.youtube.com/watch?v=aYAXU9vWY3o
 
 ```stats
 caption: Plugin and theme companies
+53: score out of 100
 15.8K: subscribers
 93%: of 2026 videos about WordPress
 39: WordPress videos in 2026
@@ -1117,6 +1190,7 @@ https://www.youtube.com/watch?v=WuYyRocjmN8
 
 ```stats
 caption: Plugin and theme companies
+54: score out of 100
 6.3K: subscribers
 91%: of 2026 videos about WordPress
 10: WordPress videos in 2026
@@ -1137,6 +1211,7 @@ https://www.youtube.com/watch?v=PEEjRlcVI88
 
 ```stats
 caption: Independent creators
+54: score out of 100
 56: subscribers
 61%: of 2026 videos about WordPress
 17: WordPress videos in 2026
@@ -1157,6 +1232,7 @@ https://www.youtube.com/watch?v=IYQUB_lbH68
 
 ```stats
 caption: News, podcasts and shows
+54: score out of 100
 1.9K: subscribers
 84%: of 2026 videos about WordPress
 71: WordPress videos in 2026
@@ -1177,6 +1253,7 @@ https://www.youtube.com/watch?v=8NSmCvEOyAw
 
 ```stats
 caption: Plugin and theme companies
+54: score out of 100
 5.5K: subscribers
 92%: of 2026 videos about WordPress
 34: WordPress videos in 2026
@@ -1197,6 +1274,7 @@ https://www.youtube.com/watch?v=ejPDRsH_Q-8
 
 ```stats
 caption: News, podcasts and shows
+55: score out of 100
 854: subscribers
 94%: of 2026 videos about WordPress
 31: WordPress videos in 2026
@@ -1217,6 +1295,7 @@ https://www.youtube.com/watch?v=uB87Sp_L0rM
 
 ```stats
 caption: Plugin and theme companies
+55: score out of 100
 9.4K: subscribers
 88%: of 2026 videos about WordPress
 7: WordPress videos in 2026
@@ -1237,6 +1316,7 @@ https://www.youtube.com/watch?v=0MpUVgXOzwQ
 
 ```stats
 caption: Independent creators
+56: score out of 100
 9.6K: subscribers
 100%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -1257,6 +1337,7 @@ https://www.youtube.com/watch?v=jR2HW5TZQB4
 
 ```stats
 caption: Developer educators
+56: score out of 100
 379: subscribers
 55%: of 2026 videos about WordPress
 11: WordPress videos in 2026
@@ -1277,6 +1358,7 @@ https://www.youtube.com/watch?v=-DPQXWLQ_zo
 
 ```stats
 caption: Plugin and theme companies
+56: score out of 100
 2.4K: subscribers
 92%: of 2026 videos about WordPress
 11: WordPress videos in 2026
@@ -1297,6 +1379,7 @@ https://www.youtube.com/watch?v=e1D_9ZKvvIE
 
 ```stats
 caption: Official and community · In Gujarati
+56: score out of 100
 369: subscribers
 42%: of 2026 videos about WordPress
 61: WordPress videos in 2026
@@ -1317,6 +1400,7 @@ https://www.youtube.com/watch?v=ZVQQlQqIz7I
 
 ```stats
 caption: Independent creators · In Spanish
+57: score out of 100
 22.9K: subscribers
 70%: of 2026 videos about WordPress
 58: WordPress videos in 2026
@@ -1337,6 +1421,7 @@ https://www.youtube.com/watch?v=WJIwxQyED6g
 
 ```stats
 caption: Plugin and theme companies
+57: score out of 100
 8.4K: subscribers
 93%: of 2026 videos about WordPress
 41: WordPress videos in 2026
@@ -1357,6 +1442,7 @@ https://www.youtube.com/watch?v=5Z2LRKeZGRA
 
 ```stats
 caption: Independent creators
+57: score out of 100
 12.1K: subscribers
 67%: of 2026 videos about WordPress
 2: WordPress videos in 2026
@@ -1377,6 +1463,7 @@ https://www.youtube.com/watch?v=SS55mrqjcHI
 
 ```stats
 caption: Independent creators · In Spanish
+58: score out of 100
 349K: subscribers
 57%: of 2026 videos about WordPress
 24: WordPress videos in 2026
@@ -1397,6 +1484,7 @@ https://www.youtube.com/watch?v=4Ea7-UnElRw
 
 ```stats
 caption: Agencies and freelancers
+58: score out of 100
 113: subscribers
 63%: of 2026 videos about WordPress
 87: WordPress videos in 2026
@@ -1417,6 +1505,7 @@ https://www.youtube.com/watch?v=JLrgTB-CSGQ
 
 ```stats
 caption: Plugin and theme companies
+58: score out of 100
 35.6K: subscribers
 91%: of 2026 videos about WordPress
 82: WordPress videos in 2026
@@ -1437,6 +1526,7 @@ https://www.youtube.com/watch?v=EqRb-8zhhZE
 
 ```stats
 caption: Independent creators
+59: score out of 100
 281K: subscribers
 58%: of 2026 videos about WordPress
 55: WordPress videos in 2026
@@ -1457,6 +1547,7 @@ https://www.youtube.com/watch?v=IoOETpe2AQU
 
 ```stats
 caption: Independent creators
+59: score out of 100
 20.1K: subscribers
 64%: of 2026 videos about WordPress
 16: WordPress videos in 2026
@@ -1477,6 +1568,7 @@ https://www.youtube.com/watch?v=iCSXp8cwE08
 
 ```stats
 caption: Developer educators
+60: score out of 100
 2.2K: subscribers
 100%: of 2026 videos about WordPress
 1: WordPress video in 2026
@@ -1497,6 +1589,7 @@ https://www.youtube.com/watch?v=7hWH_uAnIdU
 
 ```stats
 caption: Independent creators
+60: score out of 100
 12.4K: subscribers
 62%: of 2026 videos about WordPress
 10: WordPress videos in 2026
@@ -1517,6 +1610,7 @@ https://www.youtube.com/watch?v=f99ntfLkGnw
 
 ```stats
 caption: Independent creators · In Spanish
+61: score out of 100
 13.1K: subscribers
 100%: of 2026 videos about WordPress
 2: WordPress videos in 2026
@@ -1537,6 +1631,7 @@ https://www.youtube.com/watch?v=Alyx2Yf3o5k
 
 ```stats
 caption: Independent creators · In Spanish
+61: score out of 100
 45.2K: subscribers
 75%: of 2026 videos about WordPress
 42: WordPress videos in 2026
@@ -1557,6 +1652,7 @@ https://www.youtube.com/watch?v=x-r4LPthS4Y
 
 ```stats
 caption: Independent creators
+61: score out of 100
 186K: subscribers
 62%: of 2026 videos about WordPress
 77: WordPress videos in 2026
@@ -1577,6 +1673,7 @@ https://www.youtube.com/watch?v=gYkU2uh4UyM
 
 ```stats
 caption: Developer educators
+62: score out of 100
 509: subscribers
 83%: of 2026 videos about WordPress
 10: WordPress videos in 2026
@@ -1597,6 +1694,7 @@ https://www.youtube.com/watch?v=gaPZosuYW-8
 
 ```stats
 caption: Independent creators
+62: score out of 100
 528K: subscribers
 51%: of 2026 videos about WordPress
 40: WordPress videos in 2026
@@ -1617,6 +1715,7 @@ https://www.youtube.com/watch?v=NI8noRA0eCM
 
 ```stats
 caption: Developer educators · In Persian
+62: score out of 100
 7K: subscribers
 100%: of 2026 videos about WordPress
 33: WordPress videos in 2026
@@ -1637,6 +1736,7 @@ https://www.youtube.com/watch?v=Zns0tJNEMAw
 
 ```stats
 caption: Official and community
+62: score out of 100
 21: subscribers
 100%: of 2026 videos about WordPress
 13: WordPress videos in 2026
@@ -1657,6 +1757,7 @@ https://www.youtube.com/watch?v=sgIRTcTAUD0
 
 ```stats
 caption: Independent creators · In French
+63: score out of 100
 72.4K: subscribers
 69%: of 2026 videos about WordPress
 167: WordPress videos in 2026
@@ -1677,6 +1778,7 @@ https://www.youtube.com/watch?v=rYWWYqPMxi8
 
 ```stats
 caption: Independent creators
+63: score out of 100
 1.4K: subscribers
 82%: of 2026 videos about WordPress
 175: WordPress videos in 2026
@@ -1697,6 +1799,7 @@ https://www.youtube.com/watch?v=5dIo27b_Gv8
 
 ```stats
 caption: Independent creators
+64: score out of 100
 44.9K: subscribers
 62%: of 2026 videos about WordPress
 23: WordPress videos in 2026
@@ -1717,6 +1820,7 @@ https://www.youtube.com/watch?v=lvVZZt1eQZc
 
 ```stats
 caption: Independent creators
+65: score out of 100
 85.3K: subscribers
 86%: of 2026 videos about WordPress
 124: WordPress videos in 2026
@@ -1737,6 +1841,7 @@ https://www.youtube.com/watch?v=Jc9TkOLu9Hg
 
 ```stats
 caption: Independent creators · In Spanish
+65: score out of 100
 1.7K: subscribers
 86%: of 2026 videos about WordPress
 12: WordPress videos in 2026
@@ -1757,6 +1862,7 @@ https://www.youtube.com/watch?v=OsS03oG3HAg
 
 ```stats
 caption: Developer educators
+66: score out of 100
 496: subscribers
 91%: of 2026 videos about WordPress
 21: WordPress videos in 2026
@@ -1777,6 +1883,7 @@ https://www.youtube.com/watch?v=WqKAN9zztC4
 
 ```stats
 caption: Independent creators
+66: score out of 100
 163K: subscribers
 96%: of 2026 videos about WordPress
 54: WordPress videos in 2026
@@ -1797,6 +1904,7 @@ https://www.youtube.com/watch?v=XqCOuKmr3pU
 
 ```stats
 caption: Independent creators
+67: score out of 100
 33.5K: subscribers
 100%: of 2026 videos about WordPress
 6: WordPress videos in 2026
@@ -1817,6 +1925,7 @@ https://www.youtube.com/watch?v=3OeV5LBxnM4
 
 ```stats
 caption: Independent creators
+67: score out of 100
 17.2K: subscribers
 83%: of 2026 videos about WordPress
 54: WordPress videos in 2026
@@ -1837,6 +1946,7 @@ https://www.youtube.com/watch?v=6PHsWtN3lOY
 
 ```stats
 caption: Official and community · Always included
+68: score out of 100
 625: subscribers
 93%: of 2026 videos about WordPress
 39: WordPress videos in 2026
@@ -1857,6 +1967,7 @@ https://www.youtube.com/watch?v=95d2nA8kD_c
 
 ```stats
 caption: Independent creators
+68: score out of 100
 7.3K: subscribers
 80%: of 2026 videos about WordPress
 74: WordPress videos in 2026
@@ -1877,6 +1988,7 @@ https://www.youtube.com/watch?v=G1OH1QpFudE
 
 ```stats
 caption: Developer educators
+69: score out of 100
 678: subscribers
 86%: of 2026 videos about WordPress
 116: WordPress videos in 2026
@@ -1897,6 +2009,7 @@ https://www.youtube.com/watch?v=qsi6_544KdU
 
 ```stats
 caption: Independent creators · In Spanish
+72: score out of 100
 5.8K: subscribers
 100%: of 2026 videos about WordPress
 20: WordPress videos in 2026
@@ -1917,6 +2030,7 @@ https://www.youtube.com/watch?v=w6ztLWPjmM8
 
 ```stats
 caption: Developer educators
+72: score out of 100
 3.6K: subscribers
 100%: of 2026 videos about WordPress
 4: WordPress videos in 2026
@@ -1937,6 +2051,7 @@ https://www.youtube.com/watch?v=fUnsTCF95u0
 
 ```stats
 caption: Agencies and freelancers
+72: score out of 100
 28.9K: subscribers
 98%: of 2026 videos about WordPress
 147: WordPress videos in 2026
@@ -1957,6 +2072,7 @@ https://www.youtube.com/watch?v=SWnvP3d33cM
 
 ```stats
 caption: Independent creators
+73: score out of 100
 29.3K: subscribers
 93%: of 2026 videos about WordPress
 25: WordPress videos in 2026
@@ -1977,6 +2093,7 @@ https://www.youtube.com/watch?v=CauIAgsTJbQ
 
 ```stats
 caption: Agencies and freelancers
+74: score out of 100
 93.9K: subscribers
 54%: of 2026 videos about WordPress
 184: WordPress videos in 2026
@@ -1997,6 +2114,7 @@ https://www.youtube.com/watch?v=qe9aL5Df1vg
 
 ```stats
 caption: Developer educators
+75: score out of 100
 359: subscribers
 88%: of 2026 videos about WordPress
 60: WordPress videos in 2026
@@ -2017,6 +2135,7 @@ https://www.youtube.com/watch?v=D9SOYg_URSE
 
 ```stats
 caption: Independent creators
+75: score out of 100
 354K: subscribers
 100%: of 2026 videos about WordPress
 9: WordPress videos in 2026
@@ -2037,6 +2156,7 @@ https://www.youtube.com/watch?v=DkVFEgwbZdg
 
 ```stats
 caption: Independent creators · In French
+77: score out of 100
 71.3K: subscribers
 90%: of 2026 videos about WordPress
 46: WordPress videos in 2026
@@ -2057,6 +2177,7 @@ https://www.youtube.com/watch?v=n-ETaiZvHns
 
 ```stats
 caption: Developer educators
+82: score out of 100
 4.5K: subscribers
 100%: of 2026 videos about WordPress
 24: WordPress videos in 2026
