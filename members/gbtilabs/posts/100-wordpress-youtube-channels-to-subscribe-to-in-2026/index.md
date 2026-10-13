@@ -35,7 +35,7 @@ Each channel has a score out of 100; #1 has the highest. We looked at four thing
 >
 > Each part is where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
 
-Subscriber count alone does not raise a score. Plugin and theme companies count at 75%. Five channels are always included whatever their score, which is why the official WordPress channel sits at #100.
+Subscriber count alone does not raise a score. Channels run by plugin or theme companies keep only three quarters of the score the formula gives them. We lowered their score because those channels often make videos to sell their own products, and we wanted to favor channels that teach and share news. Five channels are always included whatever their score, which is why the official WordPress channel sits at #100.
 
 ## Types of Channels Surveyed
 
