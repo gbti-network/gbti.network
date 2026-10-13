@@ -28,11 +28,9 @@ Our selection algorithm also discounts channels that sell their own products, me
 
 ### How the score works
 
-Every channel that posted at least one WordPress video in 2026 was measured. 177 qualified, and 170 remained once Darrel Wilson's language editions count as one channel. The score compares each channel against those 170.
-
 Each channel receives a score out of 100. The list counts down from #100 to #1, and #1 carries the highest score.
 
-The score rests on four measures. Each is counted by where the channel sits among the 170, from bottom to top, and weighted as shown:
+The score rests on four measures. Each is counted by where the channel sits among all the channels we measured, from bottom to top, and weighted as shown:
 
 - **WordPress focus (40%):** the share of its 2026 videos that are about WordPress
 - **Volume (20%):** how many WordPress videos it posted in 2026
