@@ -99,6 +99,9 @@ function collectItems(box) {
   return items;
 }
 
+/** Elements pinned to the top of the page that the sticky sort bar must sit below. */
+export const STICKY_STACK = '.site-head, .pv-bar';
+
 /** Upgrade every .sortlist placeholder under root into a sort bar over the entries that follow it. */
 export function enhanceSortList(root = document) {
   const doc = root.ownerDocument || root;
@@ -142,14 +145,22 @@ export function enhanceSortList(root = document) {
     // Owner, 2026-10-13: the bar stays on screen while the list scrolls. A sticky element only sticks inside its
     // parent, so the entries move into the box with it, and it parks just under the site's sticky header.
     box.append(bar, wrap);
-    const head = doc.querySelector('.site-head');
+    // The offset is the bottom of everything already pinned to the top of the page: the site header, and on the
+    // WorkBench preview the PREVIEW strip under it (owner, 2026-10-13: the bar hid behind that strip).
     const view = doc.defaultView;
+    const stack = [...doc.querySelectorAll(STICKY_STACK)];
     const park = () => {
-      const pos = head && view ? view.getComputedStyle(head).position : '';
-      box.style.setProperty('--sortlist-top', `${pos === 'sticky' || pos === 'fixed' ? head.getBoundingClientRect().height : 0}px`);
+      let off = 0;
+      for (const el of stack) {
+        const cs = view?.getComputedStyle(el);
+        if (!cs || (cs.position !== 'sticky' && cs.position !== 'fixed') || cs.display === 'none') continue;
+        off = Math.max(off, (parseFloat(cs.top) || 0) + el.getBoundingClientRect().height);
+      }
+      box.style.setProperty('--sortlist-top', `${Math.round(off)}px`);
     };
     park();
     view?.addEventListener('resize', park);
+    if (view?.ResizeObserver) { const ro = new view.ResizeObserver(park); stack.forEach((el) => ro.observe(el)); } // the strip's note can change its height
 
     function apply(mode, fromClick) {
       STATE.set(doc, mode);

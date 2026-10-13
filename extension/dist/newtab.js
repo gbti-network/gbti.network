@@ -5581,7 +5581,7 @@ ${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offs
 ${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
 ${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
 ${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
-${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line}}
+${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:.9em}
 ${s} .gbti-reveal-body p{margin:8px 0 12px}
 ${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
 ${s} .gbti-reveal-body ul{margin:0 0 12px}
