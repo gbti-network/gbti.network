@@ -64,9 +64,10 @@ export function stripSiteOnlyFences(body) {
   return dataBlocksToMarkdown(embedFencesToLinks(String(body))).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
 }
 
-/** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link). */
+/** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link).
+ *  sow-455: a ```reveal is written out open (its weights, note and body). */
 export function dataBlocksToMarkdown(body) {
-  return String(body).replace(/^```(tags|bar|facts|button|stats)(?:[ \t][^\n]*)?\n([\s\S]*?)^```[ \t]*$/gm, (m, name, inner) => dataBlockToMarkdown(name, inner) ?? m);
+  return String(body).replace(/^```(tags|bar|facts|button|stats|reveal)(?:[ \t]([^\n]*))?\n([\s\S]*?)^```[ \t]*$/gm, (m, name, meta, inner) => dataBlockToMarkdown(name, inner, meta || '') ?? m);
 }
 
 /** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts

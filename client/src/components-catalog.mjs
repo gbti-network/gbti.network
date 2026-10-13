@@ -73,6 +73,14 @@ export const COMPONENTS = Object.freeze([
     renders: 'Site, preview and reader: an outlined button, or filled with primary. Cross-posts: a plain link.',
   },
   {
+    name: 'reveal',
+    kind: 'fence',
+    purpose: 'A section readers can skip or open. A short summary always shows (an optional weight bar with a legend, and an optional note); the part after --- stays closed until the reader clicks the label. Weights must add up to 100, at most 6 parts. The part after --- takes paragraphs, "- " lists, **bold**, *italic*, `code` and links.',
+    syntax: `${F}reveal <label, such as Show the full formula>\nweights: <Name> <number>, <Name> <number>\nnote: <optional line under the bar>\n---\n<what opens on request>\n${F}`,
+    example: `${F}reveal Show the full formula\nweights: Focus 40, Volume 20, Reach 20, Engagement 20\nnote: Then **× 0.75** for channels run by plugin or theme companies.\n---\n**Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**\n\n- **Focus:** share of 2026 videos about WordPress\n${F}`,
+    renders: 'Site, preview and reader: the summary, then a Show and Hide toggle, closed at first. Cross-posts: everything written out open.',
+  },
+  {
     name: 'image layout',
     kind: 'suffix',
     purpose: `Place an image. Add words in braces after the image line: ${IMAGE_LAYOUT_WORDS.join(', ')} (wrap goes with left or right).`,

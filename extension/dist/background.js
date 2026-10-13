@@ -18268,7 +18268,7 @@ async function requireAdmin(ctx) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
 var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
@@ -18340,7 +18340,86 @@ function parseButton(body) {
   if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
   return { label, url: safeUrl(url2), rawUrl: url2 };
 }
+var REVEAL_MAX_PARTS = 6;
+var REVEAL_DEFAULT_LABEL = "Show more";
+function parseWeights(v) {
+  const parts = String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const out = [];
+  for (const p of parts) {
+    const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
+    if (!m || !m[1].trim()) return null;
+    out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
+  }
+  return out;
+}
+function parseReveal(body, meta3 = "") {
+  const src = String(body ?? "").split("\n");
+  const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
+  const head = cut < 0 ? [] : src.slice(0, cut);
+  const rest = cut < 0 ? src : src.slice(cut + 1);
+  const out = { label: String(meta3 ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
+  for (const l of head.map((x) => x.trim()).filter(Boolean)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "weights") {
+      out.weightsRaw = v;
+      out.weights = parseWeights(v);
+    } else if (key === "note") out.note = v;
+    else out.unknown.push(l);
+  }
+  return out;
+}
+var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+function revealBodyHtml(md) {
+  const out = [];
+  let para = [];
+  let list = [];
+  const flush = () => {
+    if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc2(l))).join(" ")}</p>`);
+    if (list.length) out.push(`<ul>${list.map((l) => `<li>${inlineMd(esc2(l))}</li>`).join("")}</ul>`);
+    para = [];
+    list = [];
+  };
+  for (const raw of String(md).split("\n")) {
+    const l = raw.trim();
+    const item = l.match(/^[-*]\s+(.*)$/);
+    if (!l) {
+      flush();
+      continue;
+    }
+    if (item) {
+      if (para.length) flush();
+      list.push(item[1]);
+      continue;
+    }
+    if (list.length) flush();
+    para.push(l);
+  }
+  flush();
+  return out.join("");
+}
+function weightWidths(weights) {
+  const total = weights.reduce((a, w) => a + w.n, 0) || 1;
+  const ws = weights.map((w) => Math.round(100 * w.n / total));
+  ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
+  return ws;
+}
+function renderReveal(body, meta3) {
+  const r = parseReveal(body, meta3);
+  if (!r.body && !r.weights && !r.note) return null;
+  const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
+  let top = "";
+  if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
+    const ws = weightWidths(r.weights);
+    top += '<div class="gbti-reveal-weights">' + r.weights.map((w, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc2(w.name)}</span> <span class="gbti-reveal-pct">${w.n}%</span></span>`).join(" ") + "</div>";
+  } else if (r.weightsRaw) top += `<p>${esc2(r.weightsRaw)}</p>`;
+  if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc2(r.note))}</div>`;
+  if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
+  return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc2(r.label)}</span><span class="gbti-reveal-hide">${esc2(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+}
 function renderDataBlock(name, body, meta3 = "") {
+  if (name === "reveal") return renderReveal(body, meta3);
   if (name === "tags") {
     const { tags } = parseTags(body);
     if (!tags.length) return null;

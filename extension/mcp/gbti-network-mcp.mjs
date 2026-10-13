@@ -18576,7 +18576,7 @@ async function requireAdmin(ctx2) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18644,6 +18644,36 @@ function parseButton(body) {
   if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
   return { label, url: safeUrl(url2), rawUrl: url2 };
 }
+var REVEAL_MAX_PARTS = 6;
+var REVEAL_DEFAULT_LABEL = "Show more";
+function parseWeights(v) {
+  const parts = String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const out = [];
+  for (const p of parts) {
+    const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
+    if (!m || !m[1].trim()) return null;
+    out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
+  }
+  return out;
+}
+function parseReveal(body, meta3 = "") {
+  const src = String(body ?? "").split("\n");
+  const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
+  const head = cut < 0 ? [] : src.slice(0, cut);
+  const rest = cut < 0 ? src : src.slice(cut + 1);
+  const out = { label: String(meta3 ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
+  for (const l of head.map((x) => x.trim()).filter(Boolean)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "weights") {
+      out.weightsRaw = v;
+      out.weights = parseWeights(v);
+    } else if (key === "note") out.note = v;
+    else out.unknown.push(l);
+  }
+  return out;
+}
 var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
 function checkComponentBlocks(md) {
   const out = [];
@@ -18691,6 +18721,15 @@ function checkComponentBlocks(md) {
       const b = parseButton(text);
       if (!b.label) warn("button needs its label on the first line");
       if (!b.url) warn(`button needs an http or https URL on the second line (got "${b.rawUrl}")`);
+    }
+    if (name === "reveal") {
+      const r = parseReveal(text, meta3);
+      if (r.weightsRaw && !r.weights) warn(`reveal weights "${r.weightsRaw}" do not parse; write "Name 40, Name 60"`);
+      if (r.weights && r.weights.length > REVEAL_MAX_PARTS) warn(`reveal draws at most ${REVEAL_MAX_PARTS} weights (got ${r.weights.length})`);
+      if (r.weights && r.weights.reduce((a, w) => a + w.n, 0) !== 100) warn(`reveal weights add up to ${r.weights.reduce((a, w) => a + w.n, 0)}, not 100`);
+      for (const u of r.unknown) warn(`reveal line "${u}" is not weights: or note:`);
+      if (!r.hasCut) warn("reveal needs a line with --- before the part that opens on request");
+      else if (!r.body) warn("reveal has nothing after ---, so there is nothing to open");
     }
     i = j;
   }
@@ -20330,6 +20369,26 @@ Subscribe to @WordPress
 https://www.youtube.com/@WordPress?sub_confirmation=1
 ${F}`,
     renders: "Site, preview and reader: an outlined button, or filled with primary. Cross-posts: a plain link."
+  },
+  {
+    name: "reveal",
+    kind: "fence",
+    purpose: 'A section readers can skip or open. A short summary always shows (an optional weight bar with a legend, and an optional note); the part after --- stays closed until the reader clicks the label. Weights must add up to 100, at most 6 parts. The part after --- takes paragraphs, "- " lists, **bold**, *italic*, `code` and links.',
+    syntax: `${F}reveal <label, such as Show the full formula>
+weights: <Name> <number>, <Name> <number>
+note: <optional line under the bar>
+---
+<what opens on request>
+${F}`,
+    example: `${F}reveal Show the full formula
+weights: Focus 40, Volume 20, Reach 20, Engagement 20
+note: Then **× 0.75** for channels run by plugin or theme companies.
+---
+**Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
+
+- **Focus:** share of 2026 videos about WordPress
+${F}`,
+    renders: "Site, preview and reader: the summary, then a Show and Hide toggle, closed at first. Cross-posts: everything written out open."
   },
   {
     name: "image layout",

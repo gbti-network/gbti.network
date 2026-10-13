@@ -5340,7 +5340,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats"];
+  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
   var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
   function parsePercent(v2) {
@@ -5412,7 +5412,86 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
     return { label, url: safeUrl(url), rawUrl: url };
   }
+  var REVEAL_MAX_PARTS = 6;
+  var REVEAL_DEFAULT_LABEL = "Show more";
+  function parseWeights(v2) {
+    const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const out = [];
+    for (const p of parts) {
+      const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
+      if (!m || !m[1].trim()) return null;
+      out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
+    }
+    return out;
+  }
+  function parseReveal(body, meta = "") {
+    const src = String(body ?? "").split("\n");
+    const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
+    const head = cut < 0 ? [] : src.slice(0, cut);
+    const rest = cut < 0 ? src : src.slice(cut + 1);
+    const out = { label: String(meta ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
+    for (const l of head.map((x) => x.trim()).filter(Boolean)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "weights") {
+        out.weightsRaw = v2;
+        out.weights = parseWeights(v2);
+      } else if (key === "note") out.note = v2;
+      else out.unknown.push(l);
+    }
+    return out;
+  }
+  var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  function revealBodyHtml(md) {
+    const out = [];
+    let para = [];
+    let list = [];
+    const flush = () => {
+      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
+      if (list.length) out.push(`<ul>${list.map((l) => `<li>${inlineMd(esc3(l))}</li>`).join("")}</ul>`);
+      para = [];
+      list = [];
+    };
+    for (const raw of String(md).split("\n")) {
+      const l = raw.trim();
+      const item = l.match(/^[-*]\s+(.*)$/);
+      if (!l) {
+        flush();
+        continue;
+      }
+      if (item) {
+        if (para.length) flush();
+        list.push(item[1]);
+        continue;
+      }
+      if (list.length) flush();
+      para.push(l);
+    }
+    flush();
+    return out.join("");
+  }
+  function weightWidths(weights) {
+    const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
+    const ws = weights.map((w2) => Math.round(100 * w2.n / total));
+    ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
+    return ws;
+  }
+  function renderReveal(body, meta) {
+    const r = parseReveal(body, meta);
+    if (!r.body && !r.weights && !r.note) return null;
+    const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
+    let top = "";
+    if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
+      const ws = weightWidths(r.weights);
+      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
+    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
+    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
+    if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
+    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+  }
   function renderDataBlock(name, body, meta = "") {
+    if (name === "reveal") return renderReveal(body, meta);
     if (name === "tags") {
       const { tags } = parseTags(body);
       if (!tags.length) return null;
@@ -5477,6 +5556,35 @@ ${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12p
 ${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
 ${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
 ${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
+${s} .gbti-reveal{margin:1.2em 0;padding:16px;border:1px solid ${t.line};border-radius:10px}
+${s} .gbti-reveal-weights{display:flex;gap:2px;height:14px;margin:0 0 12px}
+${s} .gbti-reveal-seg{display:block;flex:0 1 auto;min-width:4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:first-child{border-radius:4px 0 0 4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:last-child{border-radius:0 4px 4px 0}
+${s} .gbti-reveal-seg-1{background:#0f6f40}
+${s} .gbti-reveal-seg-2{background:#1f9e5f}
+${s} .gbti-reveal-seg-3{background:#4fbf86}
+${s} .gbti-reveal-seg-4{background:#93d9b4}
+${s} .gbti-reveal-seg-5{background:#c4ebd5}
+${s} .gbti-reveal-seg-6{background:#0b4f2e}
+${s} .gbti-reveal-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px;margin:0 0 12px;font-size:.9em}
+${s} .gbti-reveal-key{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow-wrap:normal}
+${s} .gbti-reveal-swatch{flex:none;width:10px;height:10px;border-radius:3px}
+${s} .gbti-reveal-name{font-weight:700;color:${t.fg}}
+${s} .gbti-reveal-pct{font-family:${t.mono};font-size:.85em;color:${t.soft}}
+${s} .gbti-reveal-note{margin:0 0 4px;font-size:.9em;color:${t.soft}}
+${s} .gbti-reveal-note strong{color:${t.fg}}
+${s} .gbti-reveal-more{margin:0}
+${s} .gbti-reveal-toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;list-style:none;font-size:.9em;font-weight:700;color:${t.green700}}
+${s} .gbti-reveal-toggle::-webkit-details-marker{display:none}
+${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
+${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
+${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line}}
+${s} .gbti-reveal-body p{margin:8px 0 12px}
+${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
+${s} .gbti-reveal-body ul{margin:0 0 12px}
 ${barWidthCss(s)}`;
   }
 
