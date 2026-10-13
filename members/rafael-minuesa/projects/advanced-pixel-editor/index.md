@@ -59,7 +59,7 @@ links:
     url: https://wordpress.org/support/plugin/advanced-pixel-editor/
     label: Support forum
 updatedAt: '2026-10-13T21:56:59.772Z'
-publishedAt: '2026-10-13T21:57:00.349Z'
+publishedAt: '2026-10-13T22:01:43.152Z'
 type: project
 author: rafael-minuesa
 ---
