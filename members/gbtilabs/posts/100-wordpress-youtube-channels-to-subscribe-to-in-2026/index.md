@@ -9,6 +9,7 @@ excerpt: "The GBTI Network has assembled a research list of 100 WordPress YouTub
 categories: ["devops", "frameworks", "wordpress"]
 tags: ["wordpress", "youtube", "lists", "research"]
 layout: journal
+coverImage: "./images/wordpress-youtube-channels-2026.webp"
 redirectFrom: []
 ---
 
