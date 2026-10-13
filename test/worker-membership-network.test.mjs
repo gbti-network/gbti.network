@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   contentPathsFromTree, sharePathsFromTree, authorFromContentPath, mergeIndexAndUnlisted, unlistedItemFrom,
-  readContentTree, listNetworkContent, listNetworkShares, TREE_CACHE_KEY,
+  readContentTree, listNetworkContent, listNetworkShares, listOwnContent, TREE_CACHE_KEY,
 } from '../workers/signup/membership-network.mjs';
 import { workerSource } from './lib/worker-source.mjs';
 
@@ -22,6 +22,9 @@ const TREE = [
   { path: 'members/alice/posts', type: 'tree' },
 ];
 const FILES = {
+  // sow-454: present so the own-content test can read it live when the index is unreachable. The
+  // network-content tests never blob-read it, because the index lists it, so they are unaffected.
+  'members/alice/posts/hello/index.md': '---\ntitle: Hello\nstatus: published\npublishedAt: 2026-03-01T00:00:00Z\n---\nbody',
   'members/bob/prompts/summarise/index.md': '---\ntitle: Summarise\nstatus: published\n---\nbody',
   'members/bob/projects/tool/index.md': '---\ntitle: Tool\nstatus: draft\n---\nbody',
   'members/carol/products/legacy/index.md': '---\ntitle: Legacy\n---\nbody',
@@ -148,4 +151,90 @@ test('the two network routes accept the website cookie session, and both handler
   assert.match(idx, /await listNetworkContent\(request, env, \{ allowCookie: true \}\) : await listNetworkShares\(request, env, \{ allowCookie: true \}\)/);
   const src = read('workers/signup/membership-network.mjs');
   assert.equal((src.match(/const superadmin = await authorizeSuper\(request, env, deps\);/g) || []).length, 2, 'both handlers pass their deps (allowCookie rides in them) to authorizeSuper');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// sow-454: GET /membership/own-content. The WorkBench listed a member's own work from the published index, a
+// BUILD ARTIFACT, so anything just published was invisible for the two to three minutes the site takes to
+// rebuild. A member published his first project from an invitation on 2026-10-13, opened the WorkBench, and was
+// told he had no projects. These pin the three things that make the replacement safe: it is scoped to the
+// caller's own FOLDER, it marks what the site cannot serve yet, and it fails closed.
+
+const ownOk = async () => ({ ok: true, githubId: '42', login: 'Alice' });
+const ownDeps = (extra = {}) => ({
+  fetchImpl: fakeGitHub(), kv: null, getToken: async () => 'tok', upstream: 'gbti-network/gbti.network',
+  site: 'https://gbti.network', authorize: ownOk, folderFor: async () => 'alice', ...extra,
+});
+
+test('own-content lists the caller\'s own items, published and not, and marks what the site cannot serve yet', async () => {
+  const r = await listOwnContent(req('/membership/own-content?type=post'), {}, ownDeps());
+  assert.equal(r.status, 200);
+  assert.equal(r.body.folder, 'alice');
+  // The published one comes from the index and is NOT building; the draft is on main only and is unlisted.
+  const rows = r.body.items.map((i) => [i.path, i.status, Boolean(i.unlisted)]);
+  assert.deepEqual(rows, [
+    ['members/alice/posts/hello/index.md', 'published', false],
+    ['members/alice/posts/hidden/index.md', 'draft', true],
+  ]);
+});
+
+test('own-content never reaches another member\'s folder, whatever the type', async () => {
+  for (const type of ['post', 'prompt', 'project']) {
+    const r = await listOwnContent(req(`/membership/own-content?type=${type}`), {}, ownDeps());
+    assert.equal(r.status, 200);
+    for (const it of r.body.items) {
+      assert.ok(it.path.startsWith('members/alice/'), `${type} leaked ${it.path}`);
+    }
+  }
+  // bob owns the prompt and the project in the fixture tree, so alice's lists are empty rather than his.
+  const prompts = await listOwnContent(req('/membership/own-content?type=prompt'), {}, ownDeps());
+  assert.deepEqual(prompts.body.items, []);
+});
+
+test('own-content is scoped by the FOLDER, never the login, because the two can differ', async () => {
+  // The caller signs in as `Alice` but their folder is `bob` (a rename, sow-428). The answer must follow the
+  // folder: a login-keyed read would show them nothing and, worse, could point someone at a stranger's work.
+  const r = await listOwnContent(req('/membership/own-content?type=project'), {}, ownDeps({ folderFor: async () => 'bob' }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.items.map((i) => [i.path, i.status]), [['members/bob/projects/tool/index.md', 'draft']]);
+});
+
+test('own-content refuses an unauthorized caller and reads nothing', async () => {
+  const f = fakeGitHub();
+  const denied = async () => ({ ok: false, status: 403, body: { error: 'forbidden', message: 'this account is not permitted' } });
+  const r = await listOwnContent(req('/membership/own-content?type=post'), {}, ownDeps({ fetchImpl: f, authorize: denied }));
+  assert.equal(r.status, 403);
+  assert.equal(f.calls.length, 0, 'a refused caller must not cause a single upstream read');
+});
+
+test('own-content with no folder yet is an empty list, not an error', async () => {
+  const r = await listOwnContent(req('/membership/own-content?type=post'), {}, ownDeps({ folderFor: async () => null }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.items, []);
+  assert.equal(r.body.folder, null);
+});
+
+test('own-content rejects a type it does not know', async () => {
+  for (const q of ['', '?type=', '?type=share', '?type=profile']) {
+    const r = await listOwnContent(req(`/membership/own-content${q}`), {}, ownDeps());
+    assert.equal(r.status, 400, q);
+  }
+});
+
+test('own-content fails closed when the tree cannot be read', async () => {
+  const broken = async (url) => (String(url).includes('/git/trees/') ? { ok: false, status: 500, json: async () => ({}) } : { ok: true, json: async () => ({ items: [] }) });
+  const r = await listOwnContent(req('/membership/own-content?type=post'), {}, ownDeps({ fetchImpl: broken }));
+  assert.equal(r.status, 502);
+  assert.ok(!r.body.items, 'a failed read must not answer with an empty list that reads as "you have nothing"');
+});
+
+test('own-content survives an unreachable index by reading everything live', async () => {
+  // The index is how it knows what is already on the site. Unreachable means every own item is read from main
+  // and carries its real status: slower, and still correct. It must never drop to an empty list.
+  const noIndex = async (url, init) => (String(url).includes('-index.json') ? { ok: false, status: 503, json: async () => ({}) } : fakeGitHub()(url, init));
+  const r = await listOwnContent(req('/membership/own-content?type=post'), {}, ownDeps({ fetchImpl: noIndex }));
+  assert.equal(r.status, 200);
+  const paths = r.body.items.map((i) => i.path).sort();
+  assert.deepEqual(paths, ['members/alice/posts/hello/index.md', 'members/alice/posts/hidden/index.md']);
+  assert.ok(r.body.items.every((i) => i.unlisted), 'with no index, everything is read live and marked unlisted');
 });

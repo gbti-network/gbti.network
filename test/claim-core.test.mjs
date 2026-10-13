@@ -417,7 +417,11 @@ test('a new account (welcome=1) is handed on to the welcome steps from every sta
     assert.equal(claimView(s).actions.filter((a) => a.label === 'Continue to the welcome steps').length, 0, `${s} without welcome`);
   }
   const claimed = claimView('claimed', { welcome: true, projectUrl: 'https://gbti.network/projects/widget/' });
-  assert.equal(claimed.redirect, '/welcome/?next=%2Fprojects%2Fwidget%2F');
+  // sow-454: the automatic redirect carries NO onward target. It used to pass next=/projects/<slug>/, and the
+  // project page does not exist until the site rebuilds, so skipping onboarding landed a brand new member on a
+  // 404 looking at their own work. The project is still offered as an action they choose to press.
+  assert.equal(claimed.redirect, '/welcome/');
+  assert.ok(claimed.actions.some((a) => a.href === 'https://gbti.network/projects/widget/'), 'the project stays reachable by choice');
   assert.ok(WELCOME_REDIRECT_MS >= 3000, 'long enough to read the success first');
   assert.equal(claimView('claimed', { welcome: false }).redirect, null);
   assert.equal(claimView('inactive', { welcome: true }).redirect, null, 'only a claim sends the page on by itself');
@@ -428,11 +432,13 @@ test('the success view links the project only through safeHref, and the welcome 
   assert.deepEqual(ok.actions.map((a) => [a.label, a.href]), [['View your project', 'https://gbti.network/projects/widget/'], ['Open your WorkBench', '/workbench/']]);
   const bad = claimView('claimed', { projectUrl: 'javascript:alert(1)' });
   assert.deepEqual(bad.actions.map((a) => a.href), ['/workbench/']);
-  assert.equal(welcomeHref('https://gbti.network/projects/widget/'), '/welcome/?next=%2Fprojects%2Fwidget%2F');
-  assert.equal(welcomeHref('https://evil.example/projects/widget/?x=1'), '/welcome/?next=%2Fprojects%2Fwidget%2F', 'the path only, never the host');
-  assert.equal(welcomeHref('https://gbti.network/account/'), '/welcome/');
-  assert.equal(welcomeHref('javascript:alert(1)'), '/welcome/');
-  assert.equal(welcomeHref(null), '/welcome/');
+  // sow-454: the welcome hand-off no longer forwards to the project page, whatever it is, because that page
+  // takes two to three minutes to build and a new member was being sent to a 404 on their own listing. There
+  // is deliberately nothing to sanitise here any more: every input yields the same safe destination.
+  for (const u of ['https://gbti.network/projects/widget/', 'https://evil.example/projects/widget/?x=1',
+    'https://gbti.network/account/', 'javascript:alert(1)', null, undefined, '']) {
+    assert.equal(welcomeHref(u), '/welcome/', String(u));
+  }
 });
 
 test('wrong account offers sign out; the free-year states offer membership; the preparer gets no claim control', () => {

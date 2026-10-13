@@ -406,6 +406,32 @@ export function sortItems(items, sort = DEFAULT_SORT) {
   }
 }
 
+
+/**
+ * Is this item published but not yet on the live site? (sow-454)
+ *
+ * The own-content read marks anything the published index does not carry yet with `unlisted`. For a DRAFT
+ * that means nothing special, since a draft has no page by design. For a PUBLISHED item it means the commit
+ * has landed and the site has not rebuilt, which takes two to three minutes, so the row must say "building"
+ * rather than claim it is live, and must NOT offer a View link: that link is the 404 a member reported
+ * landing on when he published his first project from an invitation on 2026-10-13.
+ */
+export function isBuilding(item) {
+  return Boolean(item && item.unlisted && item.status === 'published');
+}
+
+/**
+ * The row's "building" tag, or null when it is not one. Shaped like audienceTag so the element only renders;
+ * keeping the words here is also what keeps the element under its own line ratchet.
+ */
+export function buildingTag(item) {
+  if (!isBuilding(item)) return null;
+  return {
+    label: 'building',
+    title: 'Published. The site rebuilds after a publish, so this page appears in about 2 to 3 minutes.',
+  };
+}
+
 /** Filter by publish state: 'all' (everything), 'published' (status published), 'draft' (anything NOT published). */
 export function filterByStatus(items, status = 'all') {
   const list = Array.isArray(items) ? items : [];

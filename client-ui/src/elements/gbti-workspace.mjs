@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
+import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { readStored } from '../storage.mjs'; // sow-347: a stored-setting read that cannot throw
 
@@ -458,7 +458,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     // indistinguishable from one nobody has read yet, which is the owner's rule that a dismissal is silent.
     const aud = audienceTag(it);
     const vis = aud ? `<span class="tag" title="${esc(aud.title)}">${esc(aud.label)}</span>` : '';
-    const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '';
+    const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '', bt = buildingTag(it); // sow-454: bt = published but not rebuilt yet, so no public page and no View link
     const flip = it.status === 'published'
       ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
       : it.status === 'draft'
@@ -468,7 +468,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     // have no public page). Host-aware: a same-origin path on the website, the absolute site URL in a new browser
     // tab in the extension (chrome-extension:// pages cannot resolve a site-relative path), mirroring the workspace's
     // existing external-link pattern (the PR + membership anchors).
-    const pub = it.status === 'published' ? publicPathFor({ type: it.type, path: it.path }) : null;
+    const pub = it.status === 'published' && !bt ? publicPathFor({ type: it.type, path: it.path }) : null;
     const isExt = (typeof location !== 'undefined' && location.protocol === 'chrome-extension:');
     const view = pub
       ? `<a class="btn" href="${esc(isExt ? SITE + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ''} title="View the live page">View</a>`
@@ -477,7 +477,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     const who = this._scopeNow() === 'house' && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : '';
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
       + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
-      + `<span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      + `<span class="right">${who}${status} ${bt ? `<span class="tag" title="${esc(bt.title)}">${esc(bt.label)}</span>` : ''}${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),

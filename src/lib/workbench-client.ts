@@ -342,8 +342,21 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
         } catch { /* fall through to the network-folder view */ }
         return { items: networkContent(rawItems, 9999).map((it: any) => ({ ...it, status: 'published' })) };
       }
-      const items = memberContent(rawItems, user, 9999).map((it: any) => ({ ...it, status: 'published' }));
-      return { items };
+      const indexItems = memberContent(rawItems, user, 9999).map((it: any) => ({ ...it, status: 'published' }));
+      // sow-454: the index above is a BUILD ARTIFACT, so on its own it cannot show anything published in the
+      // last two to three minutes. A member published his first project from an invitation on 2026-10-13,
+      // opened this screen and was told he had no projects: nothing was wrong, the site had not rebuilt, and an
+      // item created HERE looked fine only because it leaves a KV draft record that shows at once. The Worker
+      // reads the repository, which is what the agent surface always did, and marks anything not yet in the
+      // index so it can be shown as building rather than claimed to be live.
+      //
+      // Fail-soft on purpose: a refused or failed call leaves the index view exactly as it was, so this can
+      // never be the reason the screen is empty. That is the failure it exists to prevent.
+      try {
+        const own = await workerGet(`/membership/own-content?type=${encodeURIComponent(String(type))}`);
+        if (Array.isArray(own?.items)) return { items: own.items };
+      } catch { /* the index view below is still correct, just behind */ }
+      return { items: indexItems };
     },
     // sow-317: every member's shares (drafts included) for the Network content scope; superadmin-only at the Worker.
     async networkShares() { return workerGet('/membership/network-shares'); },

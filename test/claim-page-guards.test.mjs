@@ -263,3 +263,30 @@ test('the copy follows the writing rules: no dashes, no contractions, "free year
   assert.match(astroWords('<p>It is here - yet</p>'), / - /);
   assert.doesNotMatch(astroWords('<style>.x { width: calc(100% - 32px); }</style><p>ok</p>'), / - /, 'CSS is not copy');
 });
+
+test('Publish says it is on its way before the request, and takes that back if the request is refused', () => {
+  // sow-454 (defect 5, reported by a member 2026-10-13). The POST to /membership/claim does the claim AND the
+  // commit server-side and took about twenty seconds for him, and the dialog only switched to its "on its way"
+  // state after the response. So the most important click in the whole flow showed a dead button with no
+  // spinner and no message. This is a SOURCE-ORDER guard rather than a behavioural one because the handler is
+  // DOM-bound and this repository has no DOM harness: what it pins is the one thing that can regress silently,
+  // that the optimistic state is applied BEFORE the await and undone on a refusal.
+  const src = read(SCRIPT);
+  const handler = src.slice(src.indexOf("noteForm?.addEventListener('submit'"));
+  assert.ok(handler, 'the submit handler should be findable');
+  const optimistic = handler.indexOf("apply('publishing')");
+  const request = handler.indexOf('/membership/claim');
+  assert.ok(optimistic > 0, "Publish must switch to the 'publishing' state");
+  assert.ok(request > 0, 'the handler must still send the claim');
+  assert.ok(optimistic < request, 'the state must be applied BEFORE the request, not after the answer');
+  // Refused: the optimistic state has to be given back, or he is left watching a success that never happens.
+  const refusal = handler.indexOf("outcome.state === 'ready' && outcome.error");
+  assert.ok(refusal > request, 'the refusal branch should come after the request');
+  const revert = handler.indexOf('apply(beforePublish', refusal);
+  const shown = handler.indexOf('showError(postErrorMessage(outcome.error))', refusal);
+  assert.ok(revert > refusal && revert < shown, 'a refusal must restore the previous state, then show why');
+  // The note box must NOT be rebuilt by that round trip, or his words are gone. It is queried once, outside
+  // render(), which is what makes the optimistic switch safe; render only toggles visibility.
+  assert.match(src, /const noteText = \$<HTMLTextAreaElement>\('\[data-claim-note-text\]', dialog\);/);
+  assert.ok(src.indexOf('const noteText') < src.indexOf('function render('), 'the note box outlives a re-render');
+});

@@ -16,6 +16,8 @@
 
 import { getInstallationToken } from './github-app.mjs';
 import { authorizeSuperadmin } from './membership-admin.mjs';
+import { authorizeMemberCheap } from './membership-content.mjs'; // sow-454: own-content listing is identity + ban, no Stripe call
+import { memberFolderFor } from './member-folder.mjs'; // sow-454: the FOLDER, which is not always the login
 import { readBlobsGraphQL, readBlobsRest } from './membership-shares.mjs';
 import { parseContentFile, shareSummary, byShareNewest } from '../../client/src/content-ops.mjs';
 
@@ -172,6 +174,73 @@ export async function listNetworkContent(request, env, deps = {}) {
     unlisted = unlistedEntries.map((e) => { const t = texts.get(e.path); return typeof t === 'string' ? unlistedItemFrom(e, t) : null; }).filter(Boolean);
   }
   return { status: 200, body: { ok: true, items: mergeIndexAndUnlisted(indexItems, unlisted), type } };
+}
+
+/**
+ * GET /membership/own-content?type=post|prompt|project: the CALLER'S OWN items, read from the repository
+ * rather than from the published index.
+ *
+ * WHY THIS EXISTS (sow-454). The WorkBench listed a member's own content from the same-origin
+ * `/<type>-index.json`, which is a BUILD ARTIFACT, so nothing they published appeared until the site
+ * rebuilt two to three minutes later. An item created in the WorkBench has a KV draft record that shows
+ * instantly and so seemed to exist at once; an item published any other way (a claimed invitation, an
+ * agent, a direct commit) had no draft record and was simply ABSENT. A member published his first project
+ * from an invitation on 2026-10-13, opened the WorkBench, and was told he had no projects at all. Nothing
+ * was broken and it healed itself, which is why it would have looked unreproducible by the time anyone
+ * checked. The agent path never had this: it reads the repository, which is what this route does for the
+ * browser.
+ *
+ * Returns the complete own list, published and not, each unlisted row carrying `unlisted: true` so the
+ * caller can say "building" instead of claiming it is live.
+ *
+ * The gate is identity AND not-banned (authorizeMemberCheap), deliberately not paid: a lapse no longer
+ * unpublishes anything (SOW-197), so a lapsed member must still see their own published work, and skipping
+ * the Stripe derive keeps a call that runs on every WorkBench load cheap. Scoped by the caller's FOLDER as
+ * the members-index gives it, never by their login, because the two can differ (sow-428) and a login-keyed
+ * read could point one caller at another member's folder.
+ */
+export async function listOwnContent(request, env, deps = {}) {
+  const {
+    fetchImpl = globalThis.fetch, kv = env?.SIGNUP_KV, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
+    getToken = getInstallationToken, authorize = authorizeMemberCheap, folderFor = memberFolderFor,
+    site = env?.SITE_ORIGIN || 'https://gbti.network',
+  } = deps;
+  const who = await authorize(request, env, deps);
+  if (!who.ok) return { status: who.status, body: who.body };
+  const type = new URL(request.url).searchParams.get('type') || '';
+  if (!TYPE_INDEX[type]) return { status: 400, body: { error: 'bad_request', message: 'type must be post, prompt or project' } };
+
+  const folder = await folderFor(env, who.githubId, who.login, { fetchImpl, kv, getToken });
+  // No folder yet means nothing has ever been published under this account, so an empty list is the honest
+  // answer rather than an error. memberFolderFor never throws and falls back to the lowercased login.
+  if (!folder) return { status: 200, body: { ok: true, items: [], type, folder: null } };
+  const prefix = `members/${folder}/`;
+
+  let tree;
+  try { tree = await readContentTree(env, { fetchImpl, kv, upstream, getToken }); }
+  catch { return { status: 502, body: { error: 'listing_failed', message: 'could not read your content right now' } }; }
+
+  // The published set, from the site's own index, narrowed to this folder. An unreachable index reads as
+  // empty, so everything on main is then read live and carries its real status: slower, never wrong.
+  let indexItems = [];
+  try {
+    const r = await fetchImpl(`${site}/${TYPE_INDEX[type]}`, { headers: { Accept: 'application/json', 'User-Agent': 'gbti-network' } });
+    const j = r && r.ok ? await r.json().catch(() => null) : null;
+    if (Array.isArray(j?.items)) indexItems = j.items.filter((it) => typeof it?.path === 'string' && it.path.startsWith(prefix));
+  } catch { indexItems = []; }
+  const listed = new Set(indexItems.map((it) => it.path));
+  const unlistedEntries = tree.content.filter((e) => e.type === type && typeof e.path === 'string' && e.path.startsWith(prefix) && !listed.has(e.path));
+
+  let unlisted = [];
+  if (unlistedEntries.length) {
+    let instToken;
+    try { instToken = await getToken(env, { fetchImpl, kv }); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+    const io = { fetchImpl, token: instToken, upstream };
+    const paths = unlistedEntries.map((e) => e.path);
+    const texts = (await readBlobsGraphQL(paths, io)) ?? (await readBlobsRest(paths, io));
+    unlisted = unlistedEntries.map((e) => { const t = texts.get(e.path); return typeof t === 'string' ? unlistedItemFrom(e, t) : null; }).filter(Boolean);
+  }
+  return { status: 200, body: { ok: true, items: mergeIndexAndUnlisted(indexItems, unlisted), type, folder } };
 }
 
 /** GET /membership/network-shares: every member's shares, drafts included, newest first, capped. */

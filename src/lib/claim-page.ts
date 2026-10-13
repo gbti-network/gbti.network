@@ -185,6 +185,18 @@ export function startClaimPage(doc: Document): void {
     publishing = true;
     if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Publishing'; }
     showError('');
+    // sow-454 (defect 5, reported by a member 2026-10-13): this request does the claim AND the commit
+    // server-side, which took about twenty seconds for him, and the dialog only switched to its "on its way"
+    // state once the response landed. So a new member watched a dead button with no spinner and no message,
+    // on the most important click of the whole flow, and his automation saw no request in the tab because it
+    // goes to another origin. The state is honest the moment it is sent.
+    //
+    // Safe to switch before the answer: render() only toggles visibility and sets text on nodes that already
+    // exist, so the note box below is the SAME element and keeps his text if we come back to it. `publishing`
+    // is a polling state, so the page also starts asking the server what happened, which means a dropped
+    // response no longer loses the outcome.
+    const beforePublish = state;
+    apply('publishing');
     let outcome: { state: string; projectUrl?: string | null; error?: string };
     try {
       const csrf = readCookie('gbti_csrf');
@@ -199,7 +211,13 @@ export function startClaimPage(doc: Document): void {
     }
     publishing = false;
     if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = 'Publish'; }
-    if (outcome.state === 'ready' && outcome.error) { showError(postErrorMessage(outcome.error)); return; }
+    if (outcome.state === 'ready' && outcome.error) {
+      // Refused, so take back the optimistic state and put his note back in front of him. Reverting to the
+      // state we left (rather than always 'ready') keeps a redeem-first invitation on its own step.
+      apply(beforePublish === 'publishing' ? 'ready' : beforePublish);
+      showError(postErrorMessage(outcome.error));
+      return;
+    }
     apply(outcome.state, { projectUrl: outcome.projectUrl ?? null });
   });
 

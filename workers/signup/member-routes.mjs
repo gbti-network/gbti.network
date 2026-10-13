@@ -39,7 +39,7 @@ import { handleDiscordInvite } from './discord-invite.mjs';
 import { listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewFileContent, itemRevisions } from './github-app.mjs';
 import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner-scoped repo-draft listing
 import { listSharesFeed, listMyShares } from './membership-shares.mjs';
-import { listNetworkContent, listNetworkShares } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
+import { listNetworkContent, listNetworkShares, listOwnContent } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
 import { corsHeaders } from './cors.mjs'; // sow-158 Phase 1b: credentialed reflected-origin CORS for cookie routes
 import { json, clientsFromEnv, MEMBERSHIP_CORS } from './route-helpers.mjs';
@@ -477,6 +477,19 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
       // allowCookie: the WorkBench on the website has no bearer token; without it the second superadmin saw
       // "a GitHub bearer token is required" on Network shares (2026-09-11). The role is still the fresh mirror.
       const r = pathname === '/membership/network-content' ? await listNetworkContent(request, env, { allowCookie: true }) : await listNetworkShares(request, env, { allowCookie: true });
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization, Cookie' });
+    }
+  }
+
+  // sow-454: the caller's OWN content, read from the repository instead of the published index, so a
+  // just-published item is not invisible for the two to three minutes the site takes to rebuild. allowCookie
+  // for the same reason as the route above: the website WorkBench holds no bearer token. Never cached: the
+  // whole point is that it is current, and it is per-member, so Vary carries both credentials.
+  if (pathname === '/membership/own-content') {
+    const cors = corsHeaders(request, env, { credentials: true });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (method === 'GET') {
+      const r = await listOwnContent(request, env, { allowCookie: true });
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization, Cookie' });
     }
   }

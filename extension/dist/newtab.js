@@ -3664,6 +3664,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return list.sort((a, b) => dateOf(b) - dateOf(a) || byTitle(a, b));
     }
   }
+  function isBuilding(item) {
+    return Boolean(item && item.unlisted && item.status === "published");
+  }
+  function buildingTag(item) {
+    if (!isBuilding(item)) return null;
+    return {
+      label: "building",
+      title: "Published. The site rebuilds after a publish, so this page appears in about 2 to 3 minutes."
+    };
+  }
   function filterByStatus(items, status = "all") {
     const list = Array.isArray(items) ? items : [];
     if (status === "published") return list.filter((x) => x?.status === "published");
@@ -28803,13 +28813,13 @@ ${BLOCKED_PILL_CSS}
       const status = it2.status ? `<span class="tag ${it2.status === "published" ? "ok" : ""}">${esc2(it2.status)}</span>` : "";
       const aud = audienceTag(it2);
       const vis = aud ? `<span class="tag" title="${esc2(aud.title)}">${esc2(aud.label)}</span>` : "";
-      const stagedTag = (this._drafts || []).some((d) => d.path === it2.path) ? `<span class="tag">staged edits</span>` : "";
+      const stagedTag = (this._drafts || []).some((d) => d.path === it2.path) ? `<span class="tag">staged edits</span>` : "", bt2 = buildingTag(it2);
       const flip = it2.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it2.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
-      const pub = it2.status === "published" ? publicPathFor({ type: it2.type, path: it2.path }) : null;
+      const pub = it2.status === "published" && !bt2 ? publicPathFor({ type: it2.type, path: it2.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE21 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it2) ? `<span class="tag who">@${esc2(authorOf(it2))}</span>` : "";
-      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${bt2 ? `<span class="tag" title="${esc2(bt2.title)}">${esc2(bt2.label)}</span>` : ""}${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and (superadmins only, sow-404) the pull requests needing attention. Tiles are <a> links so they need no JS wiring.

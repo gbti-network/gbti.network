@@ -597,14 +597,16 @@ export function postErrorMessage(error) {
  * to continue to when the address is one of ours. `/welcome/` accepts same-site paths only (safeNext).
  */
 /** @param {string|null|undefined} projectUrl @returns {string} */
-export function welcomeHref(projectUrl) {
-  const u = safeHref(projectUrl);
-  if (u) {
-    try {
-      const p = new URL(u).pathname;
-      if (/^\/projects\/[a-z0-9][a-z0-9-]*\/$/.test(p)) return `/welcome/?next=${encodeURIComponent(p)}`;
-    } catch { /* fall through to the plain welcome */ }
-  }
+export function welcomeHref(_projectUrl) {
+  // sow-454 (defect 3, reported by a member 2026-10-13): this used to carry `next=/projects/<slug>/`, and the
+  // success panel follows it automatically after WELCOME_REDIRECT_MS. The project page does not exist for
+  // another two to three minutes, because the site has to rebuild, so skipping onboarding landed a brand new
+  // member on "We could not find that page" looking at their own work. The page was never missing; we sent
+  // them there too early.
+  //
+  // The hand-off to the welcome steps stays, without the onward target. The project link is still offered as
+  // an action the member chooses to press, under this state's own sentence saying the page takes a few
+  // minutes to build, so a deliberate click is informed where the automatic redirect was not.
   return '/welcome/';
 }
 

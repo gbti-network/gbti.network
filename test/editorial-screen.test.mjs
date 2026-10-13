@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import {
   typeLabel, rowDecidable, waitedFor, rowSummary, decidePrompt, decidedMessage, queueSummary,
 } from '../client-ui/src/editorial-queue-view.mjs';
-import { audienceTag } from '../client-ui/src/workspace-core.mjs';
+import { audienceTag, isBuilding, buildingTag } from '../client-ui/src/workspace-core.mjs';
 import { EDITORIAL_STATE } from '../membership/editorial-queue.mjs';
 
 const ROOT = new URL('../', import.meta.url);
@@ -185,4 +185,20 @@ test('no surface promises the author a message that is never sent', () => {
   const submit = read('src/pages/submit-content/index.astro');
   assert.match(submit, /email saying so/, 'it must still say what the author DOES get');
   assert.match(submit, /stays exactly where it is|stays published for members/, 'and what happens to a piece that is not taken');
+});
+
+test('a published item the site has not rebuilt yet reads as building, and nothing else does', () => {
+  // sow-454: own-content marks anything the published index does not carry yet with `unlisted`. On a DRAFT
+  // that means nothing (a draft has no page by design); on a PUBLISHED item it means the commit landed and the
+  // rebuild has not, which is the two-to-three-minute window a member fell into on 2026-10-13.
+  assert.equal(isBuilding({ status: 'published', unlisted: true }), true);
+  assert.equal(isBuilding({ status: 'draft', unlisted: true }), false, 'a draft is not building, it is a draft');
+  assert.equal(isBuilding({ status: 'published' }), false, 'already on the site');
+  assert.equal(isBuilding({ status: 'published', unlisted: false }), false);
+  for (const junk of [null, undefined, {}, 'published', 0]) assert.equal(isBuilding(junk), false, String(junk));
+  const t = buildingTag({ status: 'published', unlisted: true });
+  assert.equal(t.label, 'building');
+  assert.match(t.title, /2 to 3 minutes/, 'the tooltip has to say how long, or it reads as an error');
+  assert.equal(buildingTag({ status: 'published' }), null);
+  assert.equal(buildingTag({ status: 'draft', unlisted: true }), null);
 });
