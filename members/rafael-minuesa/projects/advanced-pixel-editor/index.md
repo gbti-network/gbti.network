@@ -1,17 +1,16 @@
 ---
 title: 'Advanced Pixel Editor: Edit Media Library Images Without Leaving WordPress'
 slug: advanced-pixel-editor
-author: rafael-minuesa
 shortDescription: >-
-  A WordPress plugin that edits Media Library images inside the dashboard, with ImageMagick doing the
-  work on the server. It covers contrast and sharpening against a live before and after slider, crop,
-  resize, rotate and flip, and an AI edit from a written prompt through the provider already connected
-  to WordPress.
+  A WordPress plugin that edits Media Library images inside the dashboard, with ImageMagick doing
+  the work on the server. It covers contrast and sharpening against a live before and after slider,
+  crop, resize, rotate and flip, and an AI edit from a written prompt through the provider already
+  connected to WordPress.
 categories:
   - devops
   - frameworks
   - wordpress
-status: draft
+status: published
 visibility: public
 publicStub: false
 pricing: free
@@ -32,13 +31,14 @@ platforms:
   - WordPress
 icon: ./images/ape-icon-128.webp
 featuredImage: ./images/ape-featured.webp
+banner: ./images/banner-1544x500.png
 gallery:
   - src: ./images/ape-editor.webp
     caption: >-
-      Contrast against a live before and after slider, dragged to compare the edit with the original.
+      Contrast against a live before and after slider, dragged to compare the edit with the
+      original.
   - src: ./images/ape-crop.webp
-    caption: >-
-      Crop with an interactive overlay and aspect presets, beside resize and DPI.
+    caption: Crop with an interactive overlay and aspect presets, beside resize and DPI.
   - src: ./images/ape-media-library.webp
     caption: >-
       The Advanced Editor button sits next to Edit Image on the attachment page, and in both Media
@@ -47,6 +47,7 @@ gallery:
     caption: >-
       The Advanced Filters panel in the Pro add-on, with sepia and vignette shown alongside
       brightness, saturation, hue, auto levels, blur, noise reduction and emboss.
+sidebarPosition: right
 links:
   - type: repository
     url: https://github.com/rafael-minuesa/advanced-pixel-editor
@@ -57,6 +58,10 @@ links:
   - type: support
     url: https://wordpress.org/support/plugin/advanced-pixel-editor/
     label: Support forum
+updatedAt: '2026-10-13T21:56:59.772Z'
+publishedAt: '2026-10-13T21:57:00.349Z'
+type: project
+author: rafael-minuesa
 ---
 
 Advanced Pixel Editor edits the images already in a WordPress Media Library without leaving the
