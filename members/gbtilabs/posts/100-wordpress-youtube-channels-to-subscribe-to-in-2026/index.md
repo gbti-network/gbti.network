@@ -22,10 +22,6 @@ In our research, we found 177 channels that met this rule, leaving out hosting c
 
 To do this, we created an inclusion algorithm that gives every channel a score out of 100, built from the density of WordPress-based videos within the channel, how many it posted in 2026, and how widely its videos are watched. The 100 highest scores make our top 100 list.
 
-We also made sure that official channels were included regardless of posting activity: the official WordPress channel, WordCamp Europe, WordCamp Asia, Gutenberg Times and WP Tavern. These five are present regardless of score.
-
-Our selection algorithm also discounts channels that sell their own products, meaning plugin and theme companies had their inclusion weight reduced. This means that our list favors channels that teach and report on WordPress-related topics with fewer product-driven commercial incentives, other than to expand their influence.
-
 ### How the score works
 
 Each channel has a score out of 100; #1 has the highest. The score rests on four measures, each ranked against every channel we measured and weighted as shown:
