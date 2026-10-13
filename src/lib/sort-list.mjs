@@ -82,12 +82,16 @@ function collectItems(box) {
       items.push(cur);
     } else if (cur) {
       cur.nodes.push(n);
+      // sow-453: a ```tags block names the category (its first tag); the stats line is the fallback.
+      const tag = n.matches?.('.gbti-tags') ? n.querySelector('.gbti-tag') : null;
+      if (tag) cur.tagType = tag.textContent.trim();
       if (cur.subscribers == null) {
         const s = parseStats(n.textContent);
         if (s) { cur.type = s.type; cur.subscribers = s.subscribers; }
       }
     }
   }
+  for (const it of items) if (it.tagType) it.type = it.tagType;
   return items;
 }
 

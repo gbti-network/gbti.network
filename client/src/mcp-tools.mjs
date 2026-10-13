@@ -29,6 +29,7 @@ import {
   prepareListingOp,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
+import { listComponents } from './components-catalog.mjs';
 // sow-271: resolve the retired `product` type name at the MCP BOUNDARY, so nothing downstream has to know it
 // ever existed. Accepting it in TYPE_ENUM alone is not enough: the SUBDIR maps carry an alias but the TYPES
 // allow-lists in github-reader.mjs and repo-fs.mjs do not, so a legacy value would pass the schema and then
@@ -128,9 +129,16 @@ export const TOOLS = [
     inputSchema: obj({ path: { type: 'string' } }, ['path']),
     handler: (ctx, args) => getContentItem(ctx, { path: args?.path }),
   },
+  // sow-453 (owner, 2026-10-13): writers' agents list the article component library instead of guessing at it.
+  {
+    name: 'list_components',
+    description: 'List the article component library: every block you can use in a markdown body (callout, embed with lightbox, the sortable directory, tags, bar, facts, button, image layout words, list styles), each with its purpose, exact syntax, an example and how it shows on the site and in cross-posts. No sign-in needed. validate_content warns about a malformed block.',
+    inputSchema: obj({}),
+    handler: () => listComponents(),
+  },
   {
     name: 'validate_content',
-    description: 'Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }.',
+    description: 'Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }, plus `warnings` for any malformed component block (see list_components).',
     inputSchema: obj({ type: TYPE_ENUM, input: { type: 'object' }, body: { type: 'string' } }, ['type', 'input']),
     handler: (ctx, args) => validateContent(ctx, { type: canonicalType(args?.type) || undefined, input: args?.input, body: args?.body }),
   },
@@ -162,7 +170,7 @@ export const TOOLS = [
   },
   {
     name: 'add_post',
-    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article; call list_components for the blocks it can use (tags, bar, facts, button, callout, embed and more). author is forced to you.',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'post' }),
   },

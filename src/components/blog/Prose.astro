@@ -2,7 +2,15 @@
 // Article body styling — reproduces the legacy blog post-content look
 // (source: .data/ops/design-ops/legacy-css/portfolio-lite-child__post.css):
 // ~1.2em body, deep-green blockquotes, monospace figcaptions, rounded media.
+import { dataBlocksCss } from '../../../client/src/content-blocks.mjs';
+// sow-453: the article component library (tags, bar, facts, button), styled from the V3 tokens in both themes.
+const blocksCss = dataBlocksCss('.prose-gbti', {
+  fg: 'var(--fg)', soft: 'var(--fg-soft)', mute: 'var(--fg-mute)', line: 'var(--line)', line2: 'var(--line-2)', rest: 'var(--line-2)',
+  green: 'var(--green)', green700: 'var(--green-700)', greenTint: 'var(--green-tint)',
+  greenBorder: 'color-mix(in srgb, var(--green) 40%, transparent)', surface: 'var(--paper-2)', mono: 'var(--f-mono)',
+});
 ---
+<style is:inline set:html={blocksCss}></style>
 <div class="prose-gbti">
   <slot />
 </div>

@@ -4,6 +4,7 @@
 //
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
+import { checkComponentBlocks } from './content-blocks.mjs';
 import { buildContentFile, parseContentFile, ContentValidationError, byCommentOldest, NETWORK_CONTENT_OWNER } from './content-ops.mjs';
 import { canSeeShares } from './membership.mjs';
 import { getCommentEchoes as workerGetCommentEchoes, reapCommentEchoes as workerReapCommentEchoes } from './member-comment-echo-client.mjs';
@@ -247,7 +248,9 @@ export function validateContent(ctx, { type, input, body } = {}) {
   const id = requireIdentity(ctx);
   try {
     const built = buildContentFile({ type, username: id.username, input, body });
-    return { valid: true, path: built.path };
+    // sow-453: component blocks are checked too, as WARNINGS (a valid file stays valid), so an agent can fix them.
+    const warnings = checkComponentBlocks(body);
+    return warnings.length ? { valid: true, path: built.path, warnings } : { valid: true, path: built.path };
   } catch (err) {
     if (err instanceof ContentValidationError) return { valid: false, error: err.message, issues: err.issues };
     return { valid: false, error: err.message };

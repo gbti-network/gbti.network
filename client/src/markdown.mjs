@@ -5,6 +5,7 @@
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
+import { DATA_BLOCKS, renderDataBlock } from './content-blocks.mjs';
 import { bareTweetLine, tweetBlockHtml } from './tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
 import { takeListRun, listHtml, isListLine } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
@@ -238,6 +239,8 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   // sow-452: a sortable list placeholder. The WorkBench preview upgrades it (src/lib/sort-list.mjs); the reader
   // leaves it empty, so the entries after it read in their source order.
   if (info[0] === 'directory') return '<div class="sortlist"></div>';
+  // sow-453: tags, bar, facts, button, through the one module the site uses too.
+  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body); if (html != null) return html; }
   if (info[0] === 'embed') {
     const url = body.trim();
     // Frame the SOW-092 relay, never the provider directly. This renderer only ever runs off-https (the

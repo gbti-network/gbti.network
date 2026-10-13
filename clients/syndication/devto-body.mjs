@@ -9,6 +9,7 @@
 //   4. prepend the rendered byline intro (the {fullName}/{member-url} template) + a blank line;
 //   5. normalize tags for dev.to (lowercase alphanumeric, max 4; fallback: the taxonomy path leaves).
 
+import { dataBlockToMarkdown } from '../../client/src/content-blocks.mjs';
 import yaml from 'js-yaml';
 import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
@@ -60,7 +61,12 @@ export function parsePublishedFile(rawFileText) {
 /** sow-452: site-only fences (```directory, a sortable list) mean nothing on dev.to or Hashnode, where they would
  *  show as a code block. Drop them; the entries after them read in their source order. */
 export function stripSiteOnlyFences(body) {
-  return embedFencesToLinks(String(body)).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+  return dataBlocksToMarkdown(embedFencesToLinks(String(body))).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+}
+
+/** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link). */
+export function dataBlocksToMarkdown(body) {
+  return String(body).replace(/^```(tags|bar|facts|button)[ \t]*\n([\s\S]*?)^```[ \t]*$/gm, (m, name, inner) => dataBlockToMarkdown(name, inner) ?? m);
 }
 
 /** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts

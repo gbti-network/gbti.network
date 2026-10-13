@@ -7,7 +7,8 @@
 import { embedUrl, bareVideoLine, embedPoster } from '../../client/src/video-embed.mjs';
 import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
-import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';      // - a {square} -> <ul class="list-square"> (sow-322)
+import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';
+import { DATA_BLOCKS, renderDataBlock } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -212,6 +213,8 @@ export function remarkContentBlocks() {
         }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };
+        } else if (n && n.type === 'code' && DATA_BLOCKS.includes(n.lang) && renderDataBlock(n.lang, n.value) != null) {
+          node.children[i] = { type: 'html', value: renderDataBlock(n.lang, n.value) };
         } else if (n && n.type === 'code' && n.lang === 'directory') {
           // sow-452: a sortable list. The placeholder only; src/lib/sort-list.mjs reads the h3 entries after it.
           node.children[i] = { type: 'html', value: '<div class="sortlist"></div>' };

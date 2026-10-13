@@ -3254,8 +3254,8 @@ var allowsEval = /* @__PURE__ */ cached(() => {
     return false;
   }
   try {
-    const F = Function;
-    new F("");
+    const F2 = Function;
+    new F2("");
     return true;
   } catch (_) {
     return false;
@@ -3869,14 +3869,14 @@ function toDotPath(_path) {
   return segs.join("");
 }
 function prettifyError(error51) {
-  const lines = [];
+  const lines2 = [];
   const issues = [...error51.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
   for (const issue2 of issues) {
-    lines.push(`✖ ${issue2.message}`);
+    lines2.push(`✖ ${issue2.message}`);
     if (issue2.path?.length)
-      lines.push(`  → at ${toDotPath(issue2.path)}`);
+      lines2.push(`  → at ${toDotPath(issue2.path)}`);
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 
 // node_modules/zod/v4/core/parse.js
@@ -4694,19 +4694,19 @@ var Doc = class {
       return;
     }
     const content = arg;
-    const lines = content.split("\n").filter((x) => x);
-    const minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
-    const dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
+    const lines2 = content.split("\n").filter((x) => x);
+    const minIndent = Math.min(...lines2.map((x) => x.length - x.trimStart().length));
+    const dedented = lines2.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
     for (const line of dedented) {
       this.content.push(line);
     }
   }
   compile() {
-    const F = Function;
+    const F2 = Function;
     const args = this?.args;
     const content = this?.content ?? [``];
-    const lines = [...content.map((x) => `  ${x}`)];
-    return new F(...args, lines.join("\n"));
+    const lines2 = [...content.map((x) => `  ${x}`)];
+    return new F2(...args, lines2.join("\n"));
   }
 };
 
@@ -6725,9 +6725,9 @@ var $ZodFunction = /* @__PURE__ */ $constructor("$ZodFunction", (inst, def) => {
     return payload;
   };
   inst.input = (...args) => {
-    const F = inst.constructor;
+    const F2 = inst.constructor;
     if (Array.isArray(args[0])) {
-      return new F({
+      return new F2({
         type: "function",
         input: new $ZodTuple({
           type: "tuple",
@@ -6737,15 +6737,15 @@ var $ZodFunction = /* @__PURE__ */ $constructor("$ZodFunction", (inst, def) => {
         output: inst._def.output
       });
     }
-    return new F({
+    return new F2({
       type: "function",
       input: args[0],
       output: inst._def.output
     });
   };
   inst.output = (output) => {
-    const F = inst.constructor;
-    return new F({
+    const F2 = inst.constructor;
+    return new F2({
       type: "function",
       input: inst._def.input,
       output
@@ -17381,17 +17381,17 @@ function cleanUrlsInProse(text) {
 function stripTrackingParamsInText(input) {
   const src = String(input ?? "");
   if (!src || !/https?:\/\//i.test(src)) return src;
-  const lines = src.split("\n");
+  const lines2 = src.split("\n");
   let fence = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+  for (let i = 0; i < lines2.length; i++) {
+    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines2[i]);
     if (f) {
       if (!fence) fence = f[1].length;
       else if (f[1].length >= fence && !f[2].trim()) fence = 0;
       continue;
     }
     if (fence) continue;
-    const line = lines[i];
+    const line = lines2[i];
     if (!/https?:\/\//i.test(line)) continue;
     let out = "";
     let last = 0;
@@ -17402,9 +17402,9 @@ function stripTrackingParamsInText(input) {
       last = m.index + m[0].length;
     }
     out += cleanUrlsInProse(line.slice(last));
-    lines[i] = out;
+    lines2[i] = out;
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 
 // membership/share-category.mjs
@@ -18514,6 +18514,104 @@ async function requireAdmin(ctx2) {
   return { id, role, rolesParsed, readText };
 }
 
+// client/src/content-blocks.mjs
+var DATA_BLOCKS = ["tags", "bar", "facts", "button"];
+var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+function parsePercent(v) {
+  const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 0 && n <= 100 ? n : null;
+}
+var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+function keyValue(line) {
+  const i = line.indexOf(":");
+  if (i <= 0) return { k: null, v: line };
+  return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
+}
+function parseBar(body) {
+  const out = { label: "", value: null, raw: "", note: "", unknown: [] };
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "label") out.label = v;
+    else if (key === "value") {
+      out.raw = v;
+      out.value = parsePercent(v);
+    } else if (key === "note") out.note = v;
+    else out.unknown.push(l);
+  }
+  return out;
+}
+function parseFacts(body) {
+  const rows = [];
+  const bad = [];
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    if (!k) {
+      bad.push(l);
+      continue;
+    }
+    const m = v.match(/^(.*?)\s*\{bar\}\s*$/);
+    const value = m ? m[1].trim() : v;
+    rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
+  }
+  return { rows, bad };
+}
+function parseButton(body) {
+  const ls = lines(body);
+  let label = ls[0] ?? "";
+  let url2 = ls[1] ?? "";
+  if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
+  return { label, url: safeUrl(url2), rawUrl: url2 };
+}
+var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
+function checkComponentBlocks(md) {
+  const out = [];
+  const src = String(md ?? "").split("\n");
+  for (let i = 0; i < src.length; i++) {
+    const open = src[i].match(/^```(\w+)(?:[ \t]+(.*))?$/);
+    if (!open) continue;
+    const name = open[1];
+    const meta3 = (open[2] || "").trim();
+    let j = i + 1;
+    const body = [];
+    while (j < src.length && !/^```\s*$/.test(src[j])) body.push(src[j++]);
+    const at = i + 1;
+    const warn = (message) => out.push({ line: at, block: name, message });
+    if (j >= src.length) {
+      if (KNOWN_FENCES.includes(name)) warn("the block is never closed with ```");
+      break;
+    }
+    const text = body.join("\n");
+    if (name === "callout" && meta3 && !["info", "note", "warning", "tip"].includes(meta3)) warn(`callout variant "${meta3}" is not one of info, note, warning, tip; it shows as note`);
+    if (name === "embed") {
+      if (meta3 && meta3 !== "lightbox") warn(`embed option "${meta3}" is not known; only "lightbox" is`);
+      if (!/^https?:\/\//.test(text.trim())) warn("embed needs one video URL on its own line");
+    }
+    if (name === "tags" && !lines(text).length) warn("tags is empty; put one tag per line");
+    if (name === "bar") {
+      const b = parseBar(text);
+      if (b.value == null) warn(`bar needs "value:" as a whole percentage from 0% to 100% (got "${b.raw}")`);
+      if (!b.label) warn('bar needs a "label:" line');
+      for (const u of b.unknown) warn(`bar line "${u}" is not label:, value: or note:`);
+    }
+    if (name === "facts") {
+      const f = parseFacts(text);
+      if (!f.rows.length) warn('facts is empty; write one "Label: value" per line');
+      for (const l of f.bad) warn(`facts line "${l}" has no "Label:" before its value`);
+      for (const r of f.rows) if (r.barAsked && r.bar == null) warn(`facts row "${r.k}" asks for {bar} but "${r.v}" is not a percentage`);
+    }
+    if (name === "button") {
+      const b = parseButton(text);
+      if (!b.label) warn("button needs its label on the first line");
+      if (!b.url) warn(`button needs an http or https URL on the second line (got "${b.rawUrl}")`);
+    }
+    i = j;
+  }
+  return out;
+}
+
 // client/src/member-comment-echo-client.mjs
 var trimBase = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var CommentEchoClientError = class extends Error {
@@ -19029,14 +19127,14 @@ function describeContentPublish(built, { hasIntro } = {}) {
   const title = `Publish ${label}: ${name}`;
   const blurb = built?.frontmatter?.shortDescription || built?.frontmatter?.excerpt || "";
   const cats = Array.isArray(built?.frontmatter?.categories) ? built.frontmatter.categories.join(" > ") : "";
-  const lines = [`## ${name}`, ""];
-  if (blurb) lines.push(blurb, "");
-  lines.push(`- Type: ${label}`);
-  if (cats) lines.push(`- Category: ${cats}`);
-  lines.push(`- Path: \`${built?.path ?? ""}\``);
-  if (hasIntro) lines.push("- Includes the from-the-author intro comment.");
-  lines.push("", "_Published through the GBTI Network client._");
-  return { title, message: title, body: lines.join("\n") };
+  const lines2 = [`## ${name}`, ""];
+  if (blurb) lines2.push(blurb, "");
+  lines2.push(`- Type: ${label}`);
+  if (cats) lines2.push(`- Category: ${cats}`);
+  lines2.push(`- Path: \`${built?.path ?? ""}\``);
+  if (hasIntro) lines2.push("- Includes the from-the-author intro comment.");
+  lines2.push("", "_Published through the GBTI Network client._");
+  return { title, message: title, body: lines2.join("\n") };
 }
 function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   const note = String(authorNote ?? "").trim();
@@ -19432,7 +19530,8 @@ function validateContent(ctx2, { type, input, body } = {}) {
   const id = requireIdentity(ctx2);
   try {
     const built = buildContentFile({ type, username: id.username, input, body });
-    return { valid: true, path: built.path };
+    const warnings = checkComponentBlocks(body);
+    return warnings.length ? { valid: true, path: built.path, warnings } : { valid: true, path: built.path };
   } catch (err) {
     if (err instanceof ContentValidationError) return { valid: false, error: err.message, issues: err.issues };
     return { valid: false, error: err.message };
@@ -20019,6 +20118,141 @@ function logout(ctx2) {
   return { ok: true, message: "Signed out locally. Revoke the token at https://github.com/settings/applications to fully revoke." };
 }
 
+// client/src/image-attrs.mjs
+var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
+
+// client/src/list-attrs.mjs
+var BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
+var NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
+var LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
+var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
+
+// client/src/components-catalog.mjs
+var F = "```";
+var COMPONENTS = Object.freeze([
+  {
+    name: "callout",
+    kind: "fence",
+    purpose: "A highlighted box for a tip, a warning, a note or extra information.",
+    syntax: `${F}callout <info|note|warning|tip>
+Text of the callout. **Bold**, *italic*, \`code\` and [links](https://example.com) work.
+${F}`,
+    example: `${F}callout tip
+Save your work before you update a plugin.
+${F}`,
+    renders: "Site, preview and extension reader: a coloured box. Cross-posts: a code block."
+  },
+  {
+    name: "embed",
+    kind: "fence",
+    purpose: "A video player (YouTube, Vimeo, TikTok, Rumble). Add the word lightbox to show a full-width poster that opens the player in the page lightbox, which loads nothing until the reader clicks.",
+    syntax: `${F}embed [lightbox]
+<one video URL>
+${F}`,
+    example: `${F}embed lightbox
+https://www.youtube.com/watch?v=n-ETaiZvHns
+${F}`,
+    renders: "Site: the player, or with lightbox a poster that opens the lightbox. Preview and reader: the same. Cross-posts: the video thumbnail linking to it."
+  },
+  {
+    name: "directory",
+    kind: "fence",
+    purpose: 'A sortable list. Put it just before a run of entries; each entry is a "### #N. Name" heading and what follows it, up to the next "##" heading. Readers sort by score (the order written), category (the first tag of each entry) or subscribers.',
+    syntax: `${F}directory
+${F}`,
+    example: `${F}directory
+${F}
+
+### #2. Second channel
+...
+
+### #1. First channel
+...`,
+    renders: "Site and preview: a sort bar over the entries. Reader and cross-posts: nothing; the entries stay in the order written."
+  },
+  {
+    name: "tags",
+    kind: "fence",
+    purpose: "A row of tags. The first tag is the primary one (green); the rest are outlined. In a directory, the first tag is the entry's category.",
+    syntax: `${F}tags
+<primary tag>
+<more tags, one per line>
+${F}`,
+    example: `${F}tags
+Official and community
+Always included
+${F}`,
+    renders: "Site, preview and reader: chips. Cross-posts: an italic line."
+  },
+  {
+    name: "bar",
+    kind: "fence",
+    purpose: "One measure as a labelled bar from 0% to 100%, with an optional note under it.",
+    syntax: `${F}bar
+label: <what is measured>
+value: <whole percentage, 0% to 100%>
+note: <optional line under the bar>
+${F}`,
+    example: `${F}bar
+label: 2026 videos about WordPress
+value: 60%
+note: 118K subscribers · 240 WordPress videos in 2026
+${F}`,
+    renders: 'Site, preview and reader: the label and value over a bar. Cross-posts: "**60%** label (note)".'
+  },
+  {
+    name: "facts",
+    kind: "fence",
+    purpose: 'A labelled fact table, one "Label: value" per line. Add {bar} after a percentage to draw a small bar in that row.',
+    syntax: `${F}facts
+<Label>: <value>
+<Label>: <percentage> {bar}
+${F}`,
+    example: `${F}facts
+Type: Official and community
+Subscribers: 118K
+About WordPress: 60% {bar}
+${F}`,
+    renders: "Site, preview and reader: a two-column table. Cross-posts: a bulleted list with bold labels."
+  },
+  {
+    name: "button",
+    kind: "fence",
+    purpose: "A link shown as a button. The label on the first line, an http or https URL on the second.",
+    syntax: `${F}button
+<label>
+<https URL>
+${F}`,
+    example: `${F}button
+Subscribe to @WordPress
+https://www.youtube.com/@WordPress?sub_confirmation=1
+${F}`,
+    renders: "Site, preview and reader: an outlined button. Cross-posts: a plain link."
+  },
+  {
+    name: "image layout",
+    kind: "suffix",
+    purpose: `Place an image. Add words in braces after the image line: ${IMAGE_LAYOUT_WORDS.join(", ")} (wrap goes with left or right).`,
+    syntax: "![alt text](./images/name.webp){<words>}",
+    example: "![A dashboard screenshot](./images/dashboard.webp){full}",
+    renders: "Site, preview and reader: the layout. Cross-posts: the image, with the brace words shown as text after it."
+  },
+  {
+    name: "list style",
+    kind: "suffix",
+    purpose: `Change a list's markers. Add one word in braces to the FIRST item: ${LIST_STYLE_WORDS.join(", ")}.`,
+    syntax: "- First item {<word>}",
+    example: "1. First step {lower-alpha}\n2. Second step",
+    renders: "Site, preview and reader: the marker style. Cross-posts: a plain list, with the brace word shown as text."
+  }
+]);
+function listComponents() {
+  return {
+    components: COMPONENTS.map((c) => ({ ...c })),
+    notes: "Blocks go in the markdown body. A fence is three backticks, the block name, the lines, then three backticks. validate_content warns about a malformed block before you publish."
+  };
+}
+
 // client/src/mcp-tools.mjs
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
@@ -20082,9 +20316,16 @@ var TOOLS = [
     inputSchema: obj({ path: { type: "string" } }, ["path"]),
     handler: (ctx2, args) => getContentItem(ctx2, { path: args?.path })
   },
+  // sow-453 (owner, 2026-10-13): writers' agents list the article component library instead of guessing at it.
+  {
+    name: "list_components",
+    description: "List the article component library: every block you can use in a markdown body (callout, embed with lightbox, the sortable directory, tags, bar, facts, button, image layout words, list styles), each with its purpose, exact syntax, an example and how it shows on the site and in cross-posts. No sign-in needed. validate_content warns about a malformed block.",
+    inputSchema: obj({}),
+    handler: () => listComponents()
+  },
   {
     name: "validate_content",
-    description: "Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }.",
+    description: "Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }, plus `warnings` for any malformed component block (see list_components).",
     inputSchema: obj({ type: TYPE_ENUM, input: { type: "object" }, body: { type: "string" } }, ["type", "input"]),
     handler: (ctx2, args) => validateContent(ctx2, { type: canonicalType(args?.type) || void 0, input: args?.input, body: args?.body })
   },
@@ -20116,7 +20357,7 @@ var TOOLS = [
   },
   {
     name: "add_post",
-    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article; call list_components for the blocks it can use (tags, bar, facts, button, callout, embed and more). author is forced to you.',
     inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "post" })
   },

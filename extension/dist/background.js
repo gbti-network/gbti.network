@@ -3812,14 +3812,14 @@ function toDotPath(_path) {
   return segs.join("");
 }
 function prettifyError(error51) {
-  const lines = [];
+  const lines2 = [];
   const issues = [...error51.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
   for (const issue2 of issues) {
-    lines.push(`✖ ${issue2.message}`);
+    lines2.push(`✖ ${issue2.message}`);
     if (issue2.path?.length)
-      lines.push(`  → at ${toDotPath(issue2.path)}`);
+      lines2.push(`  → at ${toDotPath(issue2.path)}`);
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 
 // node_modules/zod/v4/core/parse.js
@@ -4637,9 +4637,9 @@ var Doc = class {
       return;
     }
     const content = arg;
-    const lines = content.split("\n").filter((x) => x);
-    const minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
-    const dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
+    const lines2 = content.split("\n").filter((x) => x);
+    const minIndent = Math.min(...lines2.map((x) => x.length - x.trimStart().length));
+    const dedented = lines2.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
     for (const line of dedented) {
       this.content.push(line);
     }
@@ -4648,8 +4648,8 @@ var Doc = class {
     const F = Function;
     const args = this?.args;
     const content = this?.content ?? [``];
-    const lines = [...content.map((x) => `  ${x}`)];
-    return new F(...args, lines.join("\n"));
+    const lines2 = [...content.map((x) => `  ${x}`)];
+    return new F(...args, lines2.join("\n"));
   }
 };
 
@@ -17319,17 +17319,17 @@ function cleanUrlsInProse(text) {
 function stripTrackingParamsInText(input) {
   const src = String(input ?? "");
   if (!src || !/https?:\/\//i.test(src)) return src;
-  const lines = src.split("\n");
+  const lines2 = src.split("\n");
   let fence = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+  for (let i = 0; i < lines2.length; i++) {
+    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines2[i]);
     if (f) {
       if (!fence) fence = f[1].length;
       else if (f[1].length >= fence && !f[2].trim()) fence = 0;
       continue;
     }
     if (fence) continue;
-    const line = lines[i];
+    const line = lines2[i];
     if (!/https?:\/\//i.test(line)) continue;
     let out = "";
     let last = 0;
@@ -17340,9 +17340,9 @@ function stripTrackingParamsInText(input) {
       last = m.index + m[0].length;
     }
     out += cleanUrlsInProse(line.slice(last));
-    lines[i] = out;
+    lines2[i] = out;
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 
 // membership/share-category.mjs
@@ -18254,6 +18254,86 @@ async function requireAdmin(ctx) {
   if (!isAdminRole(role)) throw new OperationError("forbidden", `this requires admin (you are ${role})`);
   return { id, role, rolesParsed, readText };
 }
+
+// client/src/content-blocks.mjs
+var DATA_BLOCKS = ["tags", "bar", "facts", "button"];
+var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+function parsePercent(v) {
+  const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 0 && n <= 100 ? n : null;
+}
+var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+function keyValue(line) {
+  const i = line.indexOf(":");
+  if (i <= 0) return { k: null, v: line };
+  return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
+}
+function parseTags(body) {
+  return { tags: lines(body) };
+}
+function parseBar(body) {
+  const out = { label: "", value: null, raw: "", note: "", unknown: [] };
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "label") out.label = v;
+    else if (key === "value") {
+      out.raw = v;
+      out.value = parsePercent(v);
+    } else if (key === "note") out.note = v;
+    else out.unknown.push(l);
+  }
+  return out;
+}
+function parseFacts(body) {
+  const rows = [];
+  const bad = [];
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    if (!k) {
+      bad.push(l);
+      continue;
+    }
+    const m = v.match(/^(.*?)\s*\{bar\}\s*$/);
+    const value = m ? m[1].trim() : v;
+    rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
+  }
+  return { rows, bad };
+}
+function parseButton(body) {
+  const ls = lines(body);
+  let label = ls[0] ?? "";
+  let url2 = ls[1] ?? "";
+  if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
+  return { label, url: safeUrl(url2), rawUrl: url2 };
+}
+function renderDataBlock(name, body) {
+  if (name === "tags") {
+    const { tags } = parseTags(body);
+    if (!tags.length) return null;
+    return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc2(t)}</span>`).join("")}</div>`;
+  }
+  if (name === "bar") {
+    const b = parseBar(body);
+    if (b.value == null) return b.label || b.note ? `<p>${esc2([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
+    return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc2(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc2(b.note)}</div>` : "") + "</div>";
+  }
+  if (name === "facts") {
+    const { rows } = parseFacts(body);
+    if (!rows.length) return null;
+    return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc2(r.k)}</dt><dd><span>${esc2(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
+  }
+  if (name === "button") {
+    const b = parseButton(body);
+    if (!b.label) return null;
+    return b.url ? `<div class="gbti-button-row"><a class="gbti-button" href="${esc2(b.url)}">${esc2(b.label)}</a></div>` : `<p>${esc2(b.label)}</p>`;
+  }
+  return null;
+}
+var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
 
 // client/src/member-comment-echo-client.mjs
 var trimBase = (signupBase) => String(signupBase || "").replace(/\/$/, "");
@@ -20239,13 +20319,13 @@ function opensRun(items, i) {
   const it = items[i];
   return !!it && opensRunBefore(items, i, it.depth, it.ordered);
 }
-function takeListRun(lines, start = 0) {
+function takeListRun(lines2, start = 0) {
   const items = [];
   const stack = [0];
   let topOrdered = null;
   let i = start;
-  while (i < lines.length) {
-    const m = LIST_ITEM_RE.exec(String(lines[i] ?? ""));
+  while (i < lines2.length) {
+    const m = LIST_ITEM_RE.exec(String(lines2[i] ?? ""));
     if (!m) break;
     const indent = m[1].replace(/\t/g, "    ").length;
     const ordered = /^\d/.test(m[2]);
@@ -20485,10 +20565,10 @@ function escapeKeepingLinks(s, keep) {
   return escapeHtml(stripped);
 }
 var FN_ID = "[A-Za-z0-9_-]+";
-function collectFootnoteIds(lines) {
+function collectFootnoteIds(lines2) {
   const ids = /* @__PURE__ */ new Set();
   let fence = 0;
-  for (const line of lines) {
+  for (const line of lines2) {
     const f = /^(`{3,})(.*)$/.exec(line);
     if (f) {
       if (!fence) fence = f[1].length;
@@ -20503,10 +20583,10 @@ function collectFootnoteIds(lines) {
 }
 var LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
 var defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-function collectLinkDefs(lines) {
+function collectLinkDefs(lines2) {
   const defs = /* @__PURE__ */ new Map();
   let fence = 0;
-  for (const line of lines) {
+  for (const line of lines2) {
     const f = /^(`{3,})(.*)$/.exec(line);
     if (f) {
       if (!fence) fence = f[1].length;
@@ -20582,6 +20662,10 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
     return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
   }
   if (info[0] === "directory") return '<div class="sortlist"></div>';
+  if (DATA_BLOCKS.includes(info[0])) {
+    const html = renderDataBlock(info[0], body);
+    if (html != null) return html;
+  }
   if (info[0] === "embed") {
     const url2 = body.trim();
     const src = embedUrl(url2);
@@ -20627,7 +20711,7 @@ function renderMarkdown(md, opts = {}) {
 }
 function renderDoc(md, ids, opts = {}, nest = null) {
   const autoEmbed = !!opts.autoEmbed;
-  const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
   const ranges = [];
   const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
@@ -20641,14 +20725,14 @@ function renderDoc(md, ids, opts = {}, nest = null) {
   let codeBuf = [];
   let codeLang = "";
   const footnotes = nest ? nest.footnotes : [];
-  const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
+  const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines2), counts: /* @__PURE__ */ new Map() };
   const linkKeep = nest ? nest.linkKeep : [];
-  const defs = nest ? nest.defs : collectLinkDefs(lines);
+  const defs = nest ? nest.defs : collectLinkDefs(lines2);
   const flushList = () => {
   };
   let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
+  while (i < lines2.length) {
+    const line = lines2[i];
     const fence = /^(`{3,})(.*)$/.exec(line);
     if (fence) {
       if (!inCode) {
@@ -20682,8 +20766,8 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       flushList();
       const parts = [def[2].trim()];
       i++;
-      while (i < lines.length && /^ {4,}\S/.test(lines[i])) {
-        parts.push(lines[i].trim());
+      while (i < lines2.length && /^ {4,}\S/.test(lines2[i])) {
+        parts.push(lines2[i].trim());
         i++;
       }
       footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
@@ -20705,16 +20789,16 @@ function renderDoc(md, ids, opts = {}, nest = null) {
         continue;
       }
     }
-    const esc2 = escapeKeepingLinks(line, linkKeep);
+    const esc3 = escapeKeepingLinks(line, linkKeep);
     let m;
-    if (m = /^(#{1,6})\s+(.*)$/.exec(esc2)) {
+    if (m = /^(#{1,6})\s+(.*)$/.exec(esc3)) {
       flushList();
       emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
       i++;
       continue;
     }
     if (isListLine(line)) {
-      const run = takeListRun(lines, i);
+      const run = takeListRun(lines2, i);
       emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
       i = run.next;
       continue;
@@ -20723,8 +20807,8 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       flushList();
       const quoteStart = i;
       const inner = [];
-      while (i < lines.length && QUOTE_LINE.test(lines[i])) {
-        inner.push(lines[i].replace(QUOTE_LINE, ""));
+      while (i < lines2.length && QUOTE_LINE.test(lines2[i])) {
+        inner.push(lines2[i].replace(QUOTE_LINE, ""));
         i++;
       }
       const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes, defs }).html;
@@ -20737,7 +20821,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       i++;
       continue;
     }
-    const aligns = i + 1 < lines.length ? tableAlignments(lines[i + 1]) : null;
+    const aligns = i + 1 < lines2.length ? tableAlignments(lines2[i + 1]) : null;
     if (aligns && line.includes("|")) {
       const tableStart = i;
       flushList();
@@ -20746,8 +20830,8 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       const head = `<thead><tr>${cols(splitTableRow(line), "th")}</tr></thead>`;
       i += 2;
       const rows = [];
-      while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
-        rows.push(splitTableRow(lines[i]));
+      while (i < lines2.length && lines2[i].includes("|") && !/^\s*$/.test(lines2[i])) {
+        rows.push(splitTableRow(lines2[i]));
         i++;
       }
       const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
@@ -20761,7 +20845,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     }
     if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
       flushList();
-      while (i < lines.length && LINK_DEF_RE.test(lines[i]) && !/^ {0,3}\[\^/.test(lines[i])) i++;
+      while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
       continue;
     }
     const fig = parseImageLine(line);
@@ -20774,17 +20858,17 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     }
     flushList();
     const paraStart = i;
-    const para = [hardBreak(esc2, line)];
+    const para = [hardBreak(esc3, line)];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
-      para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
+    while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
+      para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
       i++;
     }
     const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
     emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
   }
   flushList();
-  if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);
+  if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines2.length - 1);
   if (nest) return { html: out.join("\n"), blocks: ranges };
   const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
   if (referenced.length) {
