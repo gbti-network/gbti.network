@@ -135,9 +135,26 @@
   .prose-gbti section[data-footnotes] p:last-child { margin: 0; }
   .prose-gbti section[data-footnotes] li { margin: 0.5em 0; }
   .prose-gbti .data-footnote-backref { text-decoration: none; margin-left: 4px; }
+  /* sow-452: the ```directory block. The bar reuses the Projects directory filter pill (.tfilter); the items are
+     the article's own h3 entries, reordered by src/lib/sort-list.mjs. */
+  .prose-gbti .sortlist { margin: 1.6em 0 0.4em; }
+  .prose-gbti .sortlist-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .prose-gbti .sortlist-lab { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); margin-right: 4px; }
+  .prose-gbti .sortlist-btn { display: inline-flex; align-items: center; cursor: pointer; font-family: var(--f-mono); font-size: 12px; font-weight: 500; padding: 8px 13px; border-radius: var(--r);
+    border: 1.5px solid var(--line-2); color: var(--fg-soft); background: var(--paper); transition: all .15s; white-space: nowrap; }
+  .prose-gbti .sortlist-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .prose-gbti .sortlist-btn.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
+  .prose-gbti .sortlist-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  .prose-gbti .sortlist-count { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); }
+  .prose-gbti .sortlist-group { margin: 2em 0 0.2em; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
+  @media (prefers-reduced-motion: reduce) { .prose-gbti .sortlist-btn { transition: none; } }
 </style>
 
 <script>
+  // sow-452: a ```directory block becomes a sort bar over the entries after it.
+  import { enhanceSortList } from '../../lib/sort-list.mjs';
+  document.querySelectorAll('.prose-gbti').forEach((el) => enhanceSortList(el));
+
   // Code cards: upgrade every fenced code block in rendered prose into a card with a language tag + a
   // working Copy button (the same enhancement the extension reader applies, so the two surfaces match).
   // Runs once per page; shiki emits data-language on the <pre>.

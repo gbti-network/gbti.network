@@ -57,6 +57,12 @@ export function parsePublishedFile(rawFileText) {
   return { ok: true, fm, body: text.slice(m[0].length) };
 }
 
+/** sow-452: site-only fences (```directory, a sortable list) mean nothing on dev.to or Hashnode, where they would
+ *  show as a code block. Drop them; the entries after them read in their source order. */
+export function stripSiteOnlyFences(body) {
+  return String(body).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+}
+
 /** Rewrite repo-relative image/link targets ("](./x)" and "](images/x)") to GitHub's raw host over the item's
  *  folder. Shared by the dev.to + Hashnode pipelines (neither can resolve repo-relative paths). */
 export function rewriteRelativeImages(body, item, cdnBase = DEVTO_CDN_BASE) {
@@ -101,7 +107,7 @@ export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', s
   body = body.trim();
   if (!body) return { ok: false, reason: 'the public body is empty' };
 
-  body = rewriteRelativeImages(body, item); // relative targets -> the CDN over the item's folder
+  body = rewriteRelativeImages(stripSiteOnlyFences(body), item); // relative targets -> the CDN over the item's folder
 
   // SOW-138: the public body runs through the admin/popup body template ({body} = the article verbatim; the
   // default '{body}' reproduces today's post exactly). The article is NEVER sanitized/truncated (renderBodyTemplate).

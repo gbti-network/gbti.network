@@ -4,7 +4,7 @@
 // SOW-016 members-marker cut, and the relative-image CDN rewrite stay byte-identical to dev.to. The ONLY
 // difference is the tag SHAPE: Hashnode wants [{ name, slug }] (max 5), not dev.to's flat lowercase strings.
 
-import { contentPathFor, parsePublishedFile, rewriteRelativeImages, MEMBERS_MARKER } from './devto-body.mjs';
+import { contentPathFor, parsePublishedFile, rewriteRelativeImages, stripSiteOnlyFences, MEMBERS_MARKER } from './devto-body.mjs';
 import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
 export { contentPathFor };
@@ -55,7 +55,7 @@ export function prepareHashnodeBody(rawFileText, item, { intro = '', footer = ''
   body = body.trim();
   if (!body) return { ok: false, reason: 'the public body is empty' };
 
-  body = rewriteRelativeImages(body, item); // relative targets -> the CDN over the item's folder
+  body = rewriteRelativeImages(stripSiteOnlyFences(body), item); // relative targets -> the CDN over the item's folder
 
   // SOW-138: the public body runs through the admin body template ({body} = the article verbatim; the default
   // '{body}' reproduces today's post). The article is NEVER sanitized/truncated (renderBodyTemplate).

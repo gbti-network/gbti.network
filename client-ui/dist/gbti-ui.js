@@ -4398,6 +4398,7 @@ ${listStyleProseCss(".doc-blocks")}
       const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
       return `<div class="md-callout md-callout-${v2}"><div class="md-callout-body">${html}</div></div>`;
     }
+    if (info[0] === "directory") return '<div class="sortlist"></div>';
     if (info[0] === "embed") {
       const url = body.trim();
       const src = embedUrl(url);
