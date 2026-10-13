@@ -29,7 +29,7 @@ platforms:
   - WordPress
 icon: ./images/bsr-icon-128.webp
 featuredImage: ./images/bsr-radar.webp
-bannerPreset: ink
+banner: ./images/banner-1544x500.png
 gallery:
   - src: ./images/bsr-classes.webp
     caption: >-
@@ -58,7 +58,7 @@ links:
     label: Lighter build (wordpress.org)
   - type: repository
     url: https://github.com/ProWoos-Devs/bot-storm-radar
-updatedAt: '2026-10-13T21:26:38.557Z'
+updatedAt: '2026-10-13T21:28:42.236Z'
 publishedAt: '2026-10-13T21:26:38.995Z'
 type: project
 author: rafael-minuesa
