@@ -24,12 +24,16 @@ To do this, we created an inclusion algorithm that gives every channel a score o
 
 ### How the score works
 
-Each channel has a score out of 100; #1 has the highest. We looked at four things for every channel and compared each channel with all the others. The number next to each one shows how much it counts toward the score:
+Each channel has a score out of 100; #1 has the highest. We looked at four things for every channel and compared each channel with all the others. The number in front of each one shows how much it counts toward the score:
 
-- **WordPress focus (40%):** share of 2026 videos about WordPress
-- **Volume (20%):** WordPress videos posted in 2026
-- **Reach (20%):** median views per video
-- **Engagement (20%):** views compared with subscribers
+> **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement)**
+>
+> - **Focus:** share of 2026 videos about WordPress
+> - **Volume:** WordPress videos posted in 2026
+> - **Reach:** median views per video
+> - **Engagement:** views compared with subscribers
+>
+> Each part is where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
 
 Subscriber count alone does not raise a score. Plugin and theme companies count at 75%. Five channels are always included whatever their score, which is why the official WordPress channel sits at #100.
 
