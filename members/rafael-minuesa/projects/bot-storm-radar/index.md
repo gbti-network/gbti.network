@@ -69,7 +69,7 @@ On the GitHub build, a must-use plugin loads the gate before the rest of WordPre
 
 The plugin verifies with a test request that the gate really runs first, and if another `auto_prepend_file` is already set it reports the conflict rather than replacing it. Dropping an empty file named `disabled` into the data directory turns the gate off without wp-admin.
 
-## Two builds, and why they differ
+## Two builds
 
 The wordpress.org build does not carry the early gate. The plugin directory does not accept a plugin that writes PHP files, ships a must-use plugin or sets `auto_prepend_file`, so that build makes the same decisions later, on `plugins_loaded`, using rules kept in an autoloaded option. The refusals still happen; they cost more, because WordPress and the database have already loaded by then. Abuse reporting is GitHub-build only.
 
