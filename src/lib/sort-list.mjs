@@ -69,6 +69,15 @@ export function orderItems(items, mode) {
   return [{ label: null, items: list.sort(byRankDesc) }];
 }
 
+/**
+ * Owner, 2026-10-13: in the category view each category is also a sub-filter. Keep only the group named `sub`; no
+ * sub (or one that is not a group) keeps them all.
+ */
+export function filterGroups(groups, sub) {
+  if (!sub || !groups.some((g) => g.label === sub)) return groups;
+  return groups.filter((g) => g.label === sub);
+}
+
 // ---- page side ----
 
 const STATE = new WeakMap(); // the list's document -> the last mode chosen, so a re-render keeps the view
@@ -142,6 +151,14 @@ export function enhanceSortList(root = document) {
     count.className = 'sortlist-count';
     count.textContent = `${items.length} channels`;
     bar.append(count);
+    // The category sub-filters: a second row inside the same sticky bar, shown only in the category view.
+    const subRow = doc.createElement('div');
+    subRow.className = 'sortlist-sub';
+    subRow.setAttribute('role', 'group');
+    subRow.setAttribute('aria-label', 'Show one category');
+    subRow.hidden = true;
+    bar.append(subRow);
+    let sub = null;
     // Owner, 2026-10-13: the bar stays on screen while the list scrolls. A sticky element only sticks inside its
     // parent, so the entries move into the box with it, and it parks just under the site's sticky header.
     box.append(bar, wrap);
@@ -169,8 +186,29 @@ export function enhanceSortList(root = document) {
         b.classList.toggle('on', on);
         b.setAttribute('aria-pressed', String(on));
       });
-      wrap.querySelectorAll('.sortlist-group').forEach((g) => g.remove());
-      for (const g of orderItems(items, mode)) {
+      const groups = orderItems(items, mode);
+      if (mode !== 'category') sub = null;
+      if (sub && !groups.some((g) => g.label === sub)) sub = null;
+      subRow.hidden = mode !== 'category';
+      subRow.replaceChildren();
+      if (mode === 'category') {
+        for (const [label, n] of [[null, items.length], ...groups.map((g) => [g.label, g.items.length])]) {
+          const b = doc.createElement('button');
+          b.type = 'button';
+          b.className = 'sortlist-btn sortlist-subbtn';
+          b.textContent = label ? `${label} (${n})` : `All (${n})`;
+          const on = label === sub;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+          b.addEventListener('click', () => { sub = label; apply('category', true); });
+          subRow.append(b);
+        }
+      }
+      const shown = filterGroups(groups, sub);
+      const total = shown.reduce((a, g) => a + g.items.length, 0);
+      count.textContent = total === items.length ? `${items.length} channels` : `${total} of ${items.length} channels`;
+      wrap.replaceChildren(); // filtered-out entries stay in memory, ready to come back
+      for (const g of shown) {
         if (g.label) {
           const h = doc.createElement('div');
           h.className = 'sortlist-group';

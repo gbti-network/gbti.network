@@ -11,7 +11,7 @@ import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeStringify from 'rehype-stringify';
-import { parseRank, parseSubscribers, parseStats, orderItems, SORT_MODES } from '../src/lib/sort-list.mjs';
+import { parseRank, parseSubscribers, parseStats, orderItems, filterGroups, SORT_MODES } from '../src/lib/sort-list.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 import { sanitizeSchema } from '../src/lib/markdown-sanitize.mjs';
 import { renderMarkdown } from '../client/src/markdown.mjs';
@@ -71,6 +71,13 @@ test('subscribers is largest first, ties keep the countdown, unknown counts last
 test('category groups by type, biggest group first, countdown inside', () => {
   const g = orderItems(ITEMS, 'category');
   assert.deepEqual(g.map((x) => [x.label, x.items.map((i) => i.rank)]), [['B', [5, 3, 1]], ['A', [4, 2]]]);
+});
+
+test('category sub-filters keep one group, and no or an unknown sub keeps them all', () => {
+  const g = orderItems(ITEMS, 'category');
+  assert.deepEqual(filterGroups(g, 'A').map((x) => [x.label, x.items.map((i) => i.rank)]), [['A', [4, 2]]]);
+  assert.equal(filterGroups(g, null), g);
+  assert.equal(filterGroups(g, 'Z'), g);
 });
 
 test('an unknown mode falls back to the countdown and the input is not mutated', () => {
