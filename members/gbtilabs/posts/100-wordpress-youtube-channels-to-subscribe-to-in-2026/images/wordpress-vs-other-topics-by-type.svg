@@ -1,25 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="350" viewBox="0 0 760 350" role="img" aria-label="Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,046 of 6,097 videos (66%). Plugin and theme companies 83% of 1,237; Developer educators 80% of 421; Agencies and freelancers 67% of 631; Independent creators 63% of 2,408; Official and community 58% of 653; News, podcasts and shows 48% of 747." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-<title>Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,046 of 6,097 videos (66%). Plugin and theme companies 83% of 1,237; Developer educators 80% of 421; Agencies and freelancers 67% of 631; Independent creators 63% of 2,408; Official and community 58% of 653; News, podcasts and shows 48% of 747.</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="350" viewBox="0 0 760 350" role="img" aria-label="Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,686 of 7,050 videos (66%). Developer educators 80% of 421; Plugin and theme companies 76% of 2,220; Agencies and freelancers 67% of 628; Independent creators 63% of 2,407; Official and community 58% of 653; News, podcasts and shows 49% of 721." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,686 of 7,050 videos (66%). Developer educators 80% of 421; Plugin and theme companies 76% of 2,220; Agencies and freelancers 67% of 628; Independent creators 63% of 2,407; Official and community 58% of 653; News, podcasts and shows 49% of 721.</title>
 <rect x="0.5" y="0.5" width="759" height="349" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">How much of their 2026 output is about WordPress</text>
-<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">4,046 of the 6,097 videos the 100 posted in 2026 (66%), by channel type</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">4,686 of the 7,050 videos the 100 posted in 2026 (66%), by channel type</text>
 <rect x="28" y="85" width="10" height="10" rx="2" fill="#2a78d6"/>
 <text x="44.0" y="94.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">About WordPress</text>
 <rect x="174.0" y="85" width="10" height="10" rx="2" fill="#a8a69d"/>
 <text x="190.0" y="94.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Other topics</text>
-<text x="28.0" y="126.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies (29 channels)</text>
-<path d="M318.0,112.0 H622.9 Q622.9,112.0 622.9,112.0 V132.0 Q622.9,132.0 622.9,132.0 H318.0 Z" fill="#2a78d6"/>
-<path d="M624.9,112.0 H680.0 Q684.0,112.0 684.0,116.0 V128.0 Q684.0,132.0 680.0,132.0 H624.9 Z" fill="#a8a69d"/>
-<text x="692.0" y="126.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">83%</text>
-<text x="28.0" y="160.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators (13 channels)</text>
-<path d="M318.0,146.0 H610.8 Q610.8,146.0 610.8,146.0 V166.0 Q610.8,166.0 610.8,166.0 H318.0 Z" fill="#2a78d6"/>
-<path d="M612.8,146.0 H680.0 Q684.0,146.0 684.0,150.0 V162.0 Q684.0,166.0 680.0,166.0 H612.8 Z" fill="#a8a69d"/>
-<text x="692.0" y="160.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">80%</text>
-<text x="28.0" y="194.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers (4 channels)</text>
-<path d="M318.0,180.0 H562.1 Q562.1,180.0 562.1,180.0 V200.0 Q562.1,200.0 562.1,200.0 H318.0 Z" fill="#2a78d6"/>
-<path d="M564.1,180.0 H680.0 Q684.0,180.0 684.0,184.0 V196.0 Q684.0,200.0 680.0,200.0 H564.1 Z" fill="#a8a69d"/>
+<text x="28.0" y="126.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators (13 channels)</text>
+<path d="M318.0,112.0 H610.8 Q610.8,112.0 610.8,112.0 V132.0 Q610.8,132.0 610.8,132.0 H318.0 Z" fill="#2a78d6"/>
+<path d="M612.8,112.0 H680.0 Q684.0,112.0 684.0,116.0 V128.0 Q684.0,132.0 680.0,132.0 H612.8 Z" fill="#a8a69d"/>
+<text x="692.0" y="126.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">80%</text>
+<text x="28.0" y="160.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies (32 channels)</text>
+<path d="M318.0,146.0 H594.7 Q594.7,146.0 594.7,146.0 V166.0 Q594.7,166.0 594.7,166.0 H318.0 Z" fill="#2a78d6"/>
+<path d="M596.7,146.0 H680.0 Q684.0,146.0 684.0,150.0 V162.0 Q684.0,166.0 680.0,166.0 H596.7 Z" fill="#a8a69d"/>
+<text x="692.0" y="160.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">76%</text>
+<text x="28.0" y="194.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers (3 channels)</text>
+<path d="M318.0,180.0 H561.8 Q561.8,180.0 561.8,180.0 V200.0 Q561.8,200.0 561.8,200.0 H318.0 Z" fill="#2a78d6"/>
+<path d="M563.8,180.0 H680.0 Q684.0,180.0 684.0,184.0 V196.0 Q684.0,200.0 680.0,200.0 H563.8 Z" fill="#a8a69d"/>
 <text x="692.0" y="194.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">67%</text>
-<text x="28.0" y="228.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (38 channels)</text>
+<text x="28.0" y="228.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (37 channels)</text>
 <path d="M318.0,214.0 H548.9 Q548.9,214.0 548.9,214.0 V234.0 Q548.9,234.0 548.9,234.0 H318.0 Z" fill="#2a78d6"/>
 <path d="M550.9,214.0 H680.0 Q684.0,214.0 684.0,218.0 V230.0 Q684.0,234.0 680.0,234.0 H550.9 Z" fill="#a8a69d"/>
 <text x="692.0" y="228.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">63%</text>
@@ -27,9 +27,9 @@
 <path d="M318.0,248.0 H531.4 Q531.4,248.0 531.4,248.0 V268.0 Q531.4,268.0 531.4,268.0 H318.0 Z" fill="#2a78d6"/>
 <path d="M533.4,248.0 H680.0 Q684.0,248.0 684.0,252.0 V264.0 Q684.0,268.0 680.0,268.0 H533.4 Z" fill="#a8a69d"/>
 <text x="692.0" y="262.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">58%</text>
-<text x="28.0" y="296.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows (9 channels)</text>
-<path d="M318.0,282.0 H492.9 Q492.9,282.0 492.9,282.0 V302.0 Q492.9,302.0 492.9,302.0 H318.0 Z" fill="#2a78d6"/>
-<path d="M494.9,282.0 H680.0 Q684.0,282.0 684.0,286.0 V298.0 Q684.0,302.0 680.0,302.0 H494.9 Z" fill="#a8a69d"/>
-<text x="692.0" y="296.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">48%</text>
+<text x="28.0" y="296.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows (8 channels)</text>
+<path d="M318.0,282.0 H497.3 Q497.3,282.0 497.3,282.0 V302.0 Q497.3,302.0 497.3,302.0 H318.0 Z" fill="#2a78d6"/>
+<path d="M499.3,282.0 H680.0 Q684.0,282.0 684.0,286.0 V298.0 Q684.0,302.0 680.0,302.0 H499.3 Z" fill="#a8a69d"/>
+<text x="692.0" y="296.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">49%</text>
 <text x="28.0" y="332.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
 </svg>
