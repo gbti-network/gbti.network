@@ -3,8 +3,9 @@ type: post
 title: "100 WordPress YouTube Channels to Subscribe to in 2026"
 slug: 100-wordpress-youtube-channels-to-subscribe-to-in-2026
 author: gbtilabs
-status: draft
+status: published
 visibility: public
+publishedAt: 2026-10-13
 excerpt: "The GBTI Network has assembled a research list of 100 WordPress YouTube channels to follow in 2026."
 categories: ["devops", "frameworks", "wordpress"]
 tags: ["wordpress", "youtube", "lists", "research"]
