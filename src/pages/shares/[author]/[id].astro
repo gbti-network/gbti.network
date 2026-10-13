@@ -53,6 +53,9 @@ const profiles = await getCollection('profile');
 const profile = profiles.find((p) => p.data.username === d.author);
 const avatar = authorAvatar(d.author, profile?.data.avatar);
 const headline = profile?.data.headline;
+// sow-454: prefer the profile's displayName, as authors.ts documents and ContentMeta/AuthorBox do. The bare
+// folder read as a machine name on a member's own share, including in the page title and the og description.
+const authorName = profile?.data.displayName ?? authorDisplay(d.author);
 const body = (share.rendered?.html ?? '').trim();
 // sow-145: every outbound click-through carries the UTM attribution for the source publication.
 const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
@@ -71,7 +74,7 @@ const linkWords = { audio: 'Listen to it on', video: 'Watch video on', read: 'Re
 // drift apart on it. When a creator resolves (a stored YouTube or Vimeo channel, or a profile derived from the
 // link itself) the card names them and the action becomes Subscribe or Follow; otherwise it is exactly the
 // domain card with Visit that it has always been.
-const srcCard = d.url ? sourceCardModel({ url: d.url, memberName: authorDisplay(d.author), creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
+const srcCard = d.url ? sourceCardModel({ url: d.url, memberName: authorName, creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
 // The action keeps this page's own outbound decoration, as the Visit link always had.
 const srcActionHref = srcCard ? utmUrl(srcCard.action.href, { campaign: 'shares' }) : undefined;
 // sow-283: when the share points at our hosted copy, declare its real pixel size to link-preview scrapers, read
@@ -86,7 +89,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   } catch { ogImageSize = undefined; }
 }
 ---
-<BaseLayout ogImageSize={ogImageSize} cardSource={cardSource} title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
+<BaseLayout ogImageSize={ogImageSize} cardSource={cardSource} title={title} description={desc ?? `A link ${authorName} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">
@@ -97,10 +100,10 @@ if (cover && cover.author === d.author && cover.id === d.id) {
         <span class="share-src-stack">
           {srcDomain
             ? <a href={outUrl} target="_blank" rel="noopener nofollow" aria-label={`Visit ${srcDomain}`}><img class="sss-src" alt="" width="36" height="36" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" /></a>
-            : <a href={profileHref(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar, seed: d.author }} class="av" size={36} /></a>}
-          {srcDomain && <a class="sss-member" href={profileHref(d.author)} aria-label={authorDisplay(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar, seed: d.author }} class="av" size={20} /></a>}
+            : <a href={profileHref(d.author)}><Avatar item={{ name: authorName, avatar, seed: d.author }} class="av" size={36} /></a>}
+          {srcDomain && <a class="sss-member" href={profileHref(d.author)} aria-label={authorName}><Avatar item={{ name: authorName, avatar, seed: d.author }} class="av" size={20} /></a>}
         </span>
-        <span class="tmeta"><a class="who" href={profileHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}{d.updatedAt && <span class="share-edited"><span class="dotsep"></span>edited {formatDate(d.updatedAt)}</span>}</span>
+        <span class="tmeta"><a class="who" href={profileHref(d.author)}>{authorName}</a><span class="dotsep"></span>{formatDate(d.createdAt)}{d.updatedAt && <span class="share-edited"><span class="dotsep"></span>edited {formatDate(d.updatedAt)}</span>}</span>
         {/* sow-304: the Edit control. Hidden in the static page; the script below reveals it to the share's author
             or a superadmin (the same rule as every other content page, wired through wireEditAffordance since
             2026-09-11). It deep-links into the WorkBench, which opens the composer on this share; for a superadmin
@@ -121,10 +124,10 @@ if (cover && cover.author === d.author && cover.id === d.id) {
       {body && (
         <article class:list={['card', 'share-member-note', isNetworkAuthor(d.author) && 'share-member-note--house']} style="padding:24px;margin-top:26px">
           <div class="flex items-center g12">
-            <a href={profileHref(d.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(d.author), avatar, seed: d.author }} size={44} class="rounded-full" /></a>
+            <a href={profileHref(d.author)} class="shrink-0"><Avatar item={{ name: authorName, avatar, seed: d.author }} size={44} class="rounded-full" /></a>
             <div>
               <p class="eyebrow" style="color:var(--green-700)">From the member</p>
-              <a href={profileHref(d.author)} class="link" style="font-weight:700;display:inline-flex">{authorDisplay(d.author)}</a>
+              <a href={profileHref(d.author)} class="link" style="font-weight:700;display:inline-flex">{authorName}</a>
             </div>
           </div>
           <div class="cmt-rich" style="margin-top:14px;color:var(--fg)" set:html={body} />
@@ -161,13 +164,13 @@ if (cover && cover.author === d.author && cover.id === d.id) {
       <SyndicateNow type="share" id={d.id} author={d.author} authorName={profile?.data.displayName} title={d.title || ''} blurb={d.shortDescription} url={d.url} visibility={d.visibility} category={d.category} tags={d.tags} links={profile?.data.links} image={isShareCoverUrl(d.image) ? shareCoverUrl(parseShareCoverUrl(d.image).author, parseShareCoverUrl(d.image).file) : undefined} />
       <div class="card side-author-card">
         <a href={profileHref(d.author)} class="sac-head">
-          <Avatar item={{ name: authorDisplay(d.author), avatar, seed: d.author }} class="av" size={52} />
+          <Avatar item={{ name: authorName, avatar, seed: d.author }} class="av" size={52} />
           <span class="sac-info">
-            <span class="sac-name">{authorDisplay(d.author)}</span>
+            <span class="sac-name">{authorName}</span>
             {headline && <span class="sac-role">{headline}</span>}
           </span>
         </a>
-        <SubscribeButton name={authorDisplay(d.author)} username={d.author} variant="ghost" />
+        <SubscribeButton name={authorName} username={d.author} variant="ghost" />
       </div>
       {srcCard && (
         <div class="card news-source-card">

@@ -20,6 +20,8 @@ interface Props {
 const { projects, project, eyebrow = "Editor's pick", heading = 'Featured projects' } = Astro.props;
 const items = (projects ?? (project ? [project] : [])).filter(Boolean);
 const profileByUser = new Map((await getCollection('profile')).map((p) => [p.data.username, p.data]));
+// sow-454: prefer the profile's displayName, as authors.ts documents and ContentMeta/AuthorBox do; the bare folder read as a machine name on a member's own work.
+const nameOf = (u: string) => profileByUser.get(u)?.displayName ?? authorDisplay(u);
 
 // sow-269: the family colour comes from the one shared list (see ProjectDirectory.astro).
 const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
@@ -63,7 +65,7 @@ const isSlider = items.length > 1;
                   <p class="lead"><InlineCode text={p.data.shortDescription ?? ''} /></p>
                   <div class="pfeat-cta">
                     <a class="btn btn-primary" href={`/projects/${p.data.slug}/`}>View details <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#g-arrow"/></svg></a>
-                    <span class="prow-author"><Avatar item={{ name: authorDisplay(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar), seed: author }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={profileHref(author)}>{authorDisplay(author)}</a> : <span>{authorDisplay(author)}</span>}</span>
+                    <span class="prow-author"><Avatar item={{ name: nameOf(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar), seed: author }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={profileHref(author)}>{nameOf(author)}</a> : <span>{nameOf(author)}</span>}</span>
                   </div>
                 </div>
               </article>

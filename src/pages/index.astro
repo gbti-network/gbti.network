@@ -235,7 +235,7 @@ const SHOPTALK = {
                 {it.thumb && <img class="pop-thumb" src={it.thumb} alt="" loading="lazy" decoding="async" />}
                 <div class="pop-info">
                   <div class="pop-title">{it.title}</div>
-                  <div class="pop-meta"><span class={`kind-tag kt-${typeWord(it)}`}><svg class="kt-ico" viewBox="0 0 24 24" aria-hidden="true"><use href={`#${contentIcon(typeWord(it))}`}/></svg>{typeWord(it)}</span><span class="pop-by"><Avatar item={authorItem(it.author, avatarIndex)} size={18} class="pop-av" />{authorDisplay(it.author)}</span></div>
+                  <div class="pop-meta"><span class={`kind-tag kt-${typeWord(it)}`}><svg class="kt-ico" viewBox="0 0 24 24" aria-hidden="true"><use href={`#${contentIcon(typeWord(it))}`}/></svg>{typeWord(it)}</span><span class="pop-by"><Avatar item={authorItem(it.author, avatarIndex)} size={18} class="pop-av" />{avatarIndex.byUsername.get(it.author)?.name ?? authorDisplay(it.author)}</span></div>
                 </div>
               </a>
             ))}

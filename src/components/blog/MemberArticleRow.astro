@@ -16,6 +16,8 @@ interface Props {
 const { post } = Astro.props;
 const d = post.data;
 const category = d.categories?.[0] ? categoryLabel(d.categories[0]) : undefined;
+// sow-454: prefer the profile's displayName, as authors.ts documents and ContentMeta/AuthorBox do; the bare folder read as a machine name on a member's own work.
+// buildAvatarIndex already resolves `name` to displayName (falling back to the folder).
 const index = buildAvatarIndex(await getCollection('profile'));
 const comments = await getCollection('comment');
 const stack = avatarStack({ author: d.author, contributors: d.contributors, comments, targetType: 'post', targetSlug: d.slug, index });
@@ -39,7 +41,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
       <span aria-hidden="true">·</span>
       <span class="flex items-center gap-1.5">
         <StackedAvatars items={stack} size="sm" max={4} />
-        <a href={profileHref(d.author)} class="link" style="font-weight:600">{authorDisplay(d.author)}</a>
+        <a href={profileHref(d.author)} class="link" style="font-weight:600">{index.byUsername.get(d.author)?.name ?? authorDisplay(d.author)}</a>
       </span>
     </div>
   </div>
