@@ -5,7 +5,7 @@ slug: bot-storm-radar
 author: rafael-minuesa
 status: draft
 visibility: public
-shortDescription: "A WordPress plugin that reads bot traffic as a crowd rather than one visitor at a time. Thousands of addresses making a single request each look harmless to any per-IP tool, so it scores the swarm as a whole and refuses scanner probes before a page is built."
+shortDescription: "A WordPress plugin that scores bot traffic as a crowd rather than one visitor at a time, because thousands of addresses making a single request each look harmless to any per-IP tool. It also refuses scanner probes before a page is built."
 categories: ["devops", "security"]
 tags:
   - wordpress
@@ -32,7 +32,7 @@ gallery:
   - src: "./images/bsr-timeline.webp"
     caption: "Every state change is logged with the numbers behind it: the ratios, the volume against the baseline, and which rung was engaged."
   - src: "./images/bsr-bans.webp"
-    caption: "The Bans tab carries the evidence for each one: what tripped it, which paths were probed, the user agent, and the minute it happened."
+    caption: "The Bans tab carries the evidence for each ban: what tripped it, which paths were probed, the user agent, and the minute it happened."
   - src: "./images/bsr-settings.webp"
     caption: "Bans start in observe mode, listing what would have happened before anything is refused. Probe refusal works in both modes."
 links:
@@ -47,15 +47,15 @@ links:
     url: "https://github.com/ProWoos-Devs/bot-storm-radar"
 ---
 
-Bot Storm Radar watches a WordPress site's traffic as a crowd instead of judging one visitor at a time. A swarm of thousands of addresses that each make a single request looks perfectly ordinary to any per-IP rate limiter, because no individual address does anything wrong. The plugin scores the crowd instead.
+Bot Storm Radar watches a WordPress site's traffic as a crowd and scores it as a whole, instead of judging one visitor at a time. A swarm of thousands of addresses that each make a single request looks perfectly ordinary to any per-IP rate limiter, because no individual address does anything wrong.
 
 ## What it measures
 
 Every minute it counts the distinct addresses that visited, how many made exactly one request, how many loaded a stylesheet or a script the way a real browser does, and how widely the user-agent strings are spread. Those become a storm score from 0 to 100, compared against a baseline learned over seven days, and gated by traffic volume so a quiet site stays at 0.
 
-Requests are classified as html, search, rest, xmlrpc, login, admin-ajax, asset or 404, with WooCommerce classes added when WooCommerce is present. Counters are kept in sliding one-minute and ten-minute windows keyed by address, IPv4 /24, IPv6 /48, user-agent hash and session, held in a persistent object cache where one exists, then APCu, then transients.
+Requests are classified as `html`, `search`, `rest`, `xmlrpc`, `login`, `admin-ajax`, `asset` or `404`, with WooCommerce classes added when WooCommerce is present. Counters are kept in sliding one-minute and ten-minute windows keyed by address, IPv4 /24, IPv6 /48, user-agent hash and session, held in a persistent object cache where one exists, then APCu, then transients.
 
-The site moves between four states, calm, warning, storm and cooling, and each transition is logged with the numbers that caused it. Addresses claiming to be Googlebot, Bingbot, Applebot or Yandex are checked by reverse and forward DNS before they are believed.
+The site moves between four states (calm, warning, storm and cooling), and each transition is logged with the numbers that caused it. Addresses claiming to be Googlebot, Bingbot, Applebot or Yandex are checked by reverse and forward DNS before they are believed.
 
 ## What it refuses
 
@@ -65,7 +65,9 @@ Bans start in observe mode, where every trip is listed as a ban that would have 
 
 ## The early gate
 
-On the GitHub build, a must-use plugin loads the gate before the rest of WordPress. It reads a small state file and touches neither WordPress nor the database, so a refused probe costs almost nothing. Turning on early protection goes one step further and writes an `auto_prepend_file` line into `.user.ini` under PHP-FPM, or a `php_value` line into `.htaccess` under Apache with mod_php, so the gate runs before PHP loads WordPress at all. The plugin verifies with a test request that the gate really runs first, and if another `auto_prepend_file` is already set it reports the conflict rather than replacing it. Dropping an empty file named `disabled` into the data directory turns the gate off without wp-admin.
+On the GitHub build, a must-use plugin loads the gate before the rest of WordPress. It reads a small state file and touches neither WordPress nor the database, so a refused probe costs almost nothing. Turning on early protection goes one step further and writes an `auto_prepend_file` line into `.user.ini` under PHP-FPM, or a `php_value` line into `.htaccess` under Apache with mod_php, so the gate runs before PHP loads WordPress at all.
+
+The plugin verifies with a test request that the gate really runs first, and if another `auto_prepend_file` is already set it reports the conflict rather than replacing it. Dropping an empty file named `disabled` into the data directory turns the gate off without wp-admin.
 
 ## Two builds, and why they differ
 
