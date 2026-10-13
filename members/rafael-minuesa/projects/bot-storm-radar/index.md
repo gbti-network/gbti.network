@@ -1,12 +1,21 @@
 ---
-type: project
-title: "Bot Storm Radar: Score the Swarm, Not the Address"
+title: 'Bot Storm Radar: Score the Swarm, Not the Address'
 slug: bot-storm-radar
-author: rafael-minuesa
-status: draft
+shortDescription: >-
+  A WordPress plugin that scores bot traffic as a crowd rather than one visitor at a time, because
+  thousands of addresses making a single request each look harmless to any per-IP tool. It also
+  refuses scanner probes before a page is built.
+categories:
+  - devops
+  - security
+status: published
 visibility: public
-shortDescription: "A WordPress plugin that scores bot traffic as a crowd rather than one visitor at a time, because thousands of addresses making a single request each look harmless to any per-IP tool. It also refuses scanner probes before a page is built."
-categories: ["devops", "security"]
+publicStub: false
+pricing: free
+version: 0.6.0
+license: GPL-2.0
+licenseUrl: https://spdx.org/licenses/GPL-2.0-only.html
+requires: WordPress 6.0+, PHP 7.4+
 tags:
   - wordpress
   - bot-detection
@@ -18,33 +27,41 @@ tags:
   - open-source
 platforms:
   - WordPress
-pricing: free
-version: 0.6.0
-requires: WordPress 6.0+, PHP 7.4+
-license: GPL-2.0
-licenseUrl: https://spdx.org/licenses/GPL-2.0-only.html
-icon: "./images/bsr-icon-128.webp"
-featuredImage: "./images/bsr-radar.webp"
+icon: ./images/bsr-icon-128.webp
+featuredImage: ./images/bsr-radar.webp
 bannerPreset: ink
 gallery:
-  - src: "./images/bsr-classes.webp"
-    caption: "Traffic broken down by request class, with good-bot claims verified by reverse and forward DNS: 732 real Googlebot visits against 152 fakes."
-  - src: "./images/bsr-timeline.webp"
-    caption: "Every state change is logged with the numbers behind it: the ratios, the volume against the baseline, and which rung was engaged."
-  - src: "./images/bsr-bans.webp"
-    caption: "The Bans tab carries the evidence for each ban: what tripped it, which paths were probed, the user agent, and the minute it happened."
-  - src: "./images/bsr-settings.webp"
-    caption: "Bans start in observe mode, listing what would have happened before anything is refused. Probe refusal works in both modes."
+  - src: ./images/bsr-classes.webp
+    caption: >-
+      Traffic broken down by request class, with good-bot claims verified by reverse and forward
+      DNS: 732 real Googlebot visits against 152 fakes.
+  - src: ./images/bsr-timeline.webp
+    caption: >-
+      Every state change is logged with the numbers behind it: the ratios, the volume against the
+      baseline, and which rung was engaged.
+  - src: ./images/bsr-bans.webp
+    caption: >-
+      The Bans tab carries the evidence for each ban: what tripped it, which paths were probed, the
+      user agent, and the minute it happened.
+  - src: ./images/bsr-settings.webp
+    caption: >-
+      Bans start in observe mode, listing what would have happened before anything is refused. Probe
+      refusal works in both modes.
+sidebarPosition: right
 links:
   - type: download
-    url: "https://github.com/ProWoos-Devs/bot-storm-radar/releases/latest"
-    label: "Full build (GitHub releases)"
+    url: https://github.com/ProWoos-Devs/bot-storm-radar/releases/latest
+    label: Full build (GitHub releases)
     primary: true
   - type: download
-    url: "https://wordpress.org/plugins/bot-storm-radar/"
-    label: "Lighter build (wordpress.org)"
+    url: https://wordpress.org/plugins/bot-storm-radar/
+    label: Lighter build (wordpress.org)
   - type: repository
-    url: "https://github.com/ProWoos-Devs/bot-storm-radar"
+    url: https://github.com/ProWoos-Devs/bot-storm-radar
+updatedAt: '2026-10-13T21:26:38.557Z'
+publishedAt: '2026-10-13T21:26:38.995Z'
+type: project
+author: rafael-minuesa
 ---
 
 Bot Storm Radar watches a WordPress site's traffic as a crowd and scores it as a whole, instead of judging one visitor at a time. A swarm of thousands of addresses that each make a single request looks perfectly ordinary to any per-IP rate limiter, because no individual address does anything wrong.
