@@ -194,6 +194,11 @@ export const withEditorActions = (Base) => class extends Base {
   }
 
   async doPublish() {
+    // sow-454 (defect 6, reported by a member 2026-10-13): a validation failure leaves its red banner on
+    // screen, and this method never cleared it, so fixing the fields and pressing Publish again showed
+    // "Publishing…" under the OLD error. Clearing on entry is the only correct moment: the success and
+    // failure paths below both write their own banner, so clearing there would race with them.
+    this._bannerClear();
     const restore = this._btnBusy('#publish', 'Publishing…');
     this._setChip('Publishing…', 'busy');
     this.out('Publishing…');
@@ -229,6 +234,16 @@ export const withEditorActions = (Base) => class extends Base {
       // the "Staged draft . not published" label came straight back on the next repaint of an editor that had
       // just published successfully. The workspace clears its copy on the gbti-published event.
       this.staged = false;
+      // sow-454 (reported by a member 2026-10-13): the toolbar said "Published" while the line under the
+      // title still read "Draft", so a member who had just published could not tell whether it worked.
+      // liveLabel is computed in render() from preset.input.status, which a publish never updated, so the
+      // stale word survived until a reload. Update the preset (any later render is then right) and the two
+      // nodes in place, because a full re-render here would throw away cursor and scroll in a live editor.
+      if (this.preset?.input) this.preset.input.status = 'published';
+      const liveEl = this.$('[data-livelabel]');
+      if (liveEl) liveEl.textContent = 'Live';
+      this.$('[data-slugmeta]')?.classList.remove('staged');
+      this.$('[data-slugmeta]')?.classList.add('pub');
       // SOW-112 QA (owner-directed): the publish-expectation banner appears only AFTER Publish is pressed.
       // sow-404: members no longer see pull requests, so the banner no longer points at them.
       this._banner(`Publishing is not instant. The site rebuilds after you publish, so your change reaches the live site in about 2 to 3 minutes.`);
@@ -268,6 +283,15 @@ export const withEditorActions = (Base) => class extends Base {
   }
 
   // SOW-112 QA: put a message in the top banner slot. cls '' = info (green), 'warn' = amber, 'danger' = red.
+  /** Hide the publish banner and drop its severity. Paired with _banner, which never un-hides on its own. */
+  _bannerClear() {
+    const pb = this.$('#pubbanner');
+    if (!pb) return;
+    pb.classList.remove('warn', 'danger');
+    pb.innerHTML = '';
+    pb.hidden = true;
+  }
+
   _banner(html, cls = '') {
     const pb = this.$('#pubbanner');
     if (!pb) return;

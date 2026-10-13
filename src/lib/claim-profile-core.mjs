@@ -124,6 +124,13 @@ export function profileInitial(name) {
  * name.
  */
 export function cardAuthor(listing, viewerFolder = null) {
+  // sow-454: ProjectCard.astro prints the profile's displayName now (through buildAvatarIndex, which
+  // already resolved it), where it used to print the bare folder, so the example card prints a name first.
+  // noteCardName in claim-core.mjs carries the same rule and the two are asserted equal in
+  // test/claim-preview-core.test.mjs, because claim-profile-core imports claim-core and cannot be imported
+  // back by it, so the rule cannot live in one function.
+  const name = clean(listing?.recipientName).slice(0, NAME_MAX);
+  if (name) return name;
   if (isFolder(viewerFolder)) return String(viewerFolder).toLowerCase();
   if (isGithubLogin(listing?.githubLogin)) return listing.githubLogin.toLowerCase();
   return profileName(listing);

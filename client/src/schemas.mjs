@@ -26,6 +26,7 @@ const titleText = () => z.string().refine((s) => s.trim().length > 0, 'title mus
 import { z } from 'zod';
 import { SLUG_MAX } from '../../membership/item-id.mjs';
 import { BANNER_PRESET_KEYS } from '../../src/lib/banner-presets.mjs';
+import { CONTENT_LINK_TYPE_KEYS } from '../../src/lib/content-link-types.mjs'; // sow-454: one source for the link types
 
 // sow-354: every store keyed by the slug (drafts, staged images, the publish branch) is sized for SLUG_MAX.
 const SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
@@ -68,7 +69,7 @@ const contributors = z
 const contentLinks = z
   .array(
     z.object({
-      type: z.enum(['homepage', 'repository', 'mirror', 'download', 'documentation', 'support']),
+      type: z.enum(CONTENT_LINK_TYPE_KEYS),
       url: z.string().url(),
       label: z.string().optional(),
       visibility: z.enum(['public', 'members']).default('public'),

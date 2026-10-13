@@ -117,11 +117,17 @@ test('profileName: the recipient name, cleaned and capped; then the tied login; 
   assert.equal(profileName({ recipientName: 42 }), 'Your name');
 });
 
-test('cardAuthor: the GBTI folder the card will print once published, when it is known', () => {
-  assert.equal(cardAuthor(LISTING), 'sam-rivera', 'a tied login, lower-cased as a new folder is');
-  assert.equal(cardAuthor(LISTING, 'samr'), 'samr', 'the viewer\'s own folder wins when they are the person invited');
+test('cardAuthor: the display name the card will print once published, else the folder', () => {
+  // sow-454: ProjectCard.astro prints the profile's displayName now (via buildAvatarIndex, which already
+  // resolved it) where it used to print the bare folder, so the example card leads with the name. The folder
+  // fallbacks are kept for a listing with no recipient name, because a folder still beats a placeholder.
+  assert.equal(cardAuthor(LISTING), 'Sam Rivera', 'the name, which is what the published card shows');
+  assert.equal(cardAuthor(LISTING, 'samr'), 'Sam Rivera', 'the name wins over the viewer folder too');
+  assert.equal(cardAuthor({ ...LISTING, recipientName: '' }), 'sam-rivera', 'no name: the tied login, lower-cased as a new folder is');
+  assert.equal(cardAuthor({ ...LISTING, recipientName: '' }, 'samr'), 'samr', 'no name: the viewer\'s own folder');
   assert.equal(cardAuthor({ ...LISTING, githubLogin: null }), 'Sam Rivera', 'neither known: the name');
   assert.equal(cardAuthor({ ...LISTING, githubLogin: null }, 'Not A Folder'), 'Sam Rivera');
+  assert.equal(cardAuthor({ recipientName: '', githubLogin: null }), 'Your name', 'nothing known at all');
 });
 
 test('projectsHeading: as the published profile writes it', () => {

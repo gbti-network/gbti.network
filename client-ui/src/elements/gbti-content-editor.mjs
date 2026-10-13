@@ -260,7 +260,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
              <section class="docsec" id="secAuthorNote">
                <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
                <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || 'gbti')}</span>
-                 <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
+                 <textarea class="an-text" id="authornote" aria-label="From the author note" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : '';
     const discussionSection = (isPub && slug && ['post', 'project', 'prompt'].includes(this.type)) ? `
              <section class="docsec" id="secDiscussion">
@@ -353,7 +353,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
                // Details rail (permalinkFieldHtml), above Short description.
                const slugVal = `<span class="slug-val locked">${esc(this.presetStr(p.slug) || '')}</span>`;
                const metaCls = this.staged ? ' staged' : (isPub ? ' pub' : '');
-               return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
+               return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}" data-slugmeta><span class="pubdot"></span><span data-livelabel>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
              })()}
              ${isPrompt ? kindSectionHtml(kind) + skillSectionsHtml({ kind, skillFile: this.preset?.skillFile || '' }) : ''}
              <div class="doc-view-row">

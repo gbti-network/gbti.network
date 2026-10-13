@@ -27,6 +27,10 @@ const projects = typeof limit === 'number' ? allProducts.slice(0, limit) : allPr
 
 // Author profiles, so attribution shows the real avatar and links only when a profile page exists.
 const profileByUser = new Map((await getCollection('profile')).map((p) => [p.data.username, p.data]));
+// sow-454: this file preferred the profile's displayName in the author popover and printed the bare folder
+// on the row and the card beside it, so one member appeared under two names on the same screen. One helper,
+// used everywhere a person is named here, so the two cannot drift apart again.
+const nameOf = (u: string) => profileByUser.get(u)?.displayName ?? authorDisplay(u);
 
 // sow-269: a project's family (colour + glyph + chip) comes from the one shared list, so the directory, the
 // "Recently created" row and the featured spotlight cannot name different sets again.
@@ -97,12 +101,12 @@ const desc = (p: any) => p.data.shortDescription ?? '';
           </div>
           <div class="prow-author">
             <div class="author-hover">
-              <Avatar item={{ name: authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="prow-av" size={44} />
+              <Avatar item={{ name: nameOf(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="prow-av" size={44} />
               <div class="author-pop card" role="tooltip">
                 <div class="author-pop-top">
-                  <Avatar item={{ name: profileByUser.get(p.data.author)?.displayName ?? authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="apop-av" size={46} />
+                  <Avatar item={{ name: nameOf(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="apop-av" size={46} />
                   <div>
-                    <span class="author-pop-name">{profileByUser.get(p.data.author)?.displayName ?? authorDisplay(p.data.author)}</span>
+                    <span class="author-pop-name">{nameOf(p.data.author)}</span>
                     {profileByUser.get(p.data.author)?.headline && <span class="author-pop-head">{profileByUser.get(p.data.author)?.headline}</span>}
                   </div>
                 </div>
@@ -113,8 +117,8 @@ const desc = (p: any) => p.data.shortDescription ?? '';
             </div>
             <div class="prow-author-meta">
               {profileByUser.has(p.data.author)
-                ? <a href={profileHref(p.data.author)}>{authorDisplay(p.data.author)}</a>
-                : <span class="prow-author-name">{authorDisplay(p.data.author)}</span>}
+                ? <a href={profileHref(p.data.author)}>{nameOf(p.data.author)}</a>
+                : <span class="prow-author-name">{nameOf(p.data.author)}</span>}
               {p.data.publishedAt && <span class="prow-sub">Submitted {formatDate(p.data.publishedAt)}</span>}
             </div>
             <FavoriteButton targetType="project" targetSlug={p.data.slug} count={favoriteCount('project', p.data.slug)} size="sm" />

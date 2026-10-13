@@ -143,32 +143,46 @@ test('the byline wears the claimant face only in a claimant state; everyone else
   for (const s of ['preview_only', 'wrong_account', 'not_permitted', 'claimed', 'inactive']) assert.ok(!CLAIMANT_STATES.includes(s), s);
 });
 
-test('the note card name is the folder the published card prints, not the byline display name', () => {
-  // Published: the byline reads the profile name, the pinned card authorDisplay(folder) (Comments.astro).
+test('the note card name is the display name the published card prints, not the folder', () => {
+  // sow-454: BOTH halves of this changed together, and that is the point of the test. The published card
+  // used to print authorDisplay(folder), so a member saw `gsusi` on his own project while the byline above
+  // it read "Jesus Iniesta". Comments.astro now prefers the profile's displayName, so this preview prints a
+  // name too, or it would promise something the published page does not deliver.
+  //
+  // The preview cannot know the exact value: the claim writes displayName from the claimant's GitHub name
+  // (membership-claim.mjs), which this page never sees. The recipient name is the closest knowable thing and
+  // is the same words for a person, so that is what both surfaces predict.
   const comments = read('src/components/blog/Comments.astro');
-  assert.match(comments, /const introName = intro \? authorDisplay\(intro\.data\.author\) : '';/, 'the published card prints the folder');
+  assert.match(comments, /const nameOf = \(username: string\) => profileName\.get\(username\) \?\? authorDisplay\(username\);/, 'the published card prefers the profile name');
+  assert.match(comments, /const introName = intro \? nameOf\(intro\.data\.author\) : '';/);
   assert.match(comments, /class="link" style="font-weight:700;display:inline-flex">\{introName\}<\/a>/);
+  // The name map must be built from the collection this file already loads for the avatars, not a second read.
+  assert.match(comments, /const profileName = new Map\(/);
   const tied = { recipientName: 'Rob Rochford', githubLogin: 'RobRoch' };
   const untied = { recipientName: 'Rob Rochford', githubLogin: null };
   const claimant = { username: 'RobRoch', login: 'RobRoch', githubId: '42' };
-  // Signed in as the person invited, with a folder: that folder.
-  assert.equal(noteCardName({ state: 'ready', signal: claimant, listing: untied }), 'robroch');
-  // A tied invitation, signed out or signed in as someone else: the bound login, lower-cased as a new folder is.
-  assert.equal(noteCardName({ state: 'signin', signal: null, listing: tied }), 'robroch');
-  assert.equal(noteCardName({ state: 'wrong_account', signal: { username: 'other' }, listing: tied }), 'robroch');
-  // Untied and signed out, or a non-claimant state: the recipient name, as the byline has it.
+  // A recipient name is known, so every state prints it: the card and the byline above it finally agree.
+  assert.equal(noteCardName({ state: 'ready', signal: claimant, listing: untied }), 'Rob Rochford');
+  assert.equal(noteCardName({ state: 'signin', signal: null, listing: tied }), 'Rob Rochford');
+  assert.equal(noteCardName({ state: 'wrong_account', signal: { username: 'other' }, listing: tied }), 'Rob Rochford');
   assert.equal(noteCardName({ state: 'signin', signal: null, listing: untied }), 'Rob Rochford');
   assert.equal(noteCardName({ state: 'preview_only', signal: { username: 'atwellpub' }, listing: untied }), 'Rob Rochford', 'never the preparer');
+  // With NO recipient name the folder fallback is still there, because a folder is better than a placeholder.
+  assert.equal(noteCardName({ state: 'ready', signal: claimant, listing: { recipientName: '' } }), 'robroch', 'the claimant folder');
+  assert.equal(noteCardName({ state: 'signin', signal: null, listing: { recipientName: '', githubLogin: 'RobRoch' } }), 'robroch', 'the bound login, lower-cased');
   assert.equal(noteCardName({ state: 'ready', signal: { username: 'Not A Folder' }, listing: { recipientName: '' } }), 'Your name');
   assert.equal(noteCardName({ state: 'signin', listing: { recipientName: 'Rob', githubLogin: 'bad login' } }), 'Rob', 'a malformed login is no folder');
   assert.equal(noteCardName(), 'Your name');
-  // The example profile's card prints the same rule, so the two pages name the person alike.
-  for (const [listing, folder] of [[tied, null], [untied, null], [untied, 'robroch'], [tied, 'robroch']]) {
+  // THE INVARIANT, unchanged and the reason both functions exist: the example profile's card and the note
+  // card name the person alike. claim-profile-core imports claim-core, so the rule cannot live in one
+  // function, and this is what keeps the two copies honest.
+  for (const [listing, folder] of [[tied, null], [untied, null], [untied, 'robroch'], [tied, 'robroch'],
+    [{ recipientName: '', githubLogin: 'RobRoch' }, null], [{ recipientName: '' }, 'robroch']]) {
     const state = folder ? 'ready' : 'signin';
     const signal = folder ? { username: folder } : null;
     assert.equal(noteCardName({ state, signal, listing }), cardAuthor(listing, folder), JSON.stringify([listing, folder]));
   }
-  // The byline keeps the display name.
+  // The byline keeps the display name, and now the card matches it rather than contradicting it.
   assert.equal(bylineIdentity({ state: 'ready', signal: claimant, recipientName: 'Rob Rochford' }).name, 'Rob Rochford');
   // And the page passes the card this name, with the byline's face.
   const page = read('src/lib/claim-page.ts');

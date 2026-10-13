@@ -5,6 +5,7 @@
 
 import { esc } from '../base.mjs';
 import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
+import { CONTENT_LINK_TYPES, CONTENT_LINK_TYPE_KEYS } from '../../../src/lib/content-link-types.mjs'; // sow-454: the one source for link types
 import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break) + P3 unique upload names
 import { GRIP, IMG, PLUS, TRASH } from './editor-icons.mjs';
 
@@ -18,17 +19,31 @@ export const withEditorRows = (Base) => class extends Base {
     return `<label>Links <span class="hint">· buttons on the project page</span></label>
       <div class="linkrows" data-links>${rows}</div>
       <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
-      <datalist id="lk-types">${['download', 'project', 'repository', 'github', 'website', 'docs', 'demo'].map((k) => `<option value="${k}"></option>`).join('')}</datalist>
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
   }
 
+  // sow-454 (defect 1, reported by a member 2026-10-13): the type was a free-text input backed by a
+  // datalist of seven suggestions, five of which the schema rejects, so picking one from our own list
+  // failed on Publish with `links.0.type: Invalid input` and the four values that DO validate were never
+  // offered. A select cannot produce an invalid value, and its options come from the one source in
+  // project-page.mjs that the schema reads too.
   _linkRowHtml(l = {}, i) {
     const { type, kind, url, label, visibility, ...extra } = l || {};
-    const t = esc(type || kind || '');
+    const tRaw = String(type || kind || '');
+    const t = esc(tRaw);
+    const onList = CONTENT_LINK_TYPE_KEYS.includes(tRaw);
+    const typeOptions = [`<option value=""${tRaw ? '' : ' selected'}>type</option>`]
+      .concat(CONTENT_LINK_TYPES.map((o) => `<option value="${o.key}"${tRaw === o.key ? ' selected' : ''}>${esc(o.label)}</option>`))
+      // A value this build does not know (hand-authored, or from an older schema) keeps an option of its
+      // own and stays selected, so merely OPENING the editor can never silently rewrite it. Nothing in the
+      // repository needs this today; it is here because a select that drops an unknown value is a data
+      // loss nobody would see until the item was saved.
+      .concat(tRaw && !onList ? [`<option value="${t}" selected>${t}</option>`] : [])
+      .join('');
     const vis = visibility === 'members' ? 'members' : 'public';
     return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? '1' : '0'}" data-extra="${esc(JSON.stringify(extra))}">
       <div class="lr-top">
-        <input class="inp lk-type" list="lk-types" placeholder="type" value="${t}" />
+        <select class="selbox lk-type" aria-label="Link type">${typeOptions}</select>
         <input class="inp lk-url" type="text" placeholder="https://" value="${esc(url || '')}" />
         <button class="lr-del" type="button" data-lrdel title="Remove">${TRASH}</button>
       </div>
@@ -68,6 +83,10 @@ export const withEditorRows = (Base) => class extends Base {
     const wrap = this.$('[data-links]');
     if (!wrap) return;
     wrap.addEventListener('input', () => this._serializeLinks());
+    // sow-454: the type control is a <select> now. A select does fire `input` in current browsers, but
+    // `change` is its canonical event and serializing twice is a no-op, so both are wired rather than
+    // resting on which one a given engine emits.
+    wrap.addEventListener('change', () => this._serializeLinks());
     wrap.addEventListener('click', (e) => {
       const del = e.target.closest('[data-lrdel]');
       if (del) { e.preventDefault(); del.closest('.linkrow')?.remove(); this._serializeLinks(); return; }

@@ -18,6 +18,10 @@ import ContentActions from '../../components/ContentActions.astro';
 import ContentFooter from '../../components/ContentFooter.astro';
 import { hasPublicPage, isPublic, isStub, contentRepoPath } from '../../lib/content';
 import { authorDisplay, authorAvatar } from '../../lib/authors';
+// sow-454: this page used to carry its own copy of the link labels, a third place the same vocabulary
+// was written down. linkLabel reads the one source in project-page.mjs, which projects/[slug].astro already
+// imports, so both detail pages now label a link identically by construction.
+import { linkLabel } from '../../lib/project-page.mjs';
 import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
@@ -77,11 +81,6 @@ const skillView = !!skillFile || !!membersSkill;
 // SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
 const paid = d.pricing && d.pricing !== 'free';
 const links = d.links ?? [];
-const LINK_LABELS: Record<string, string> = {
-  homepage: 'Homepage', repository: 'Repository', mirror: 'Mirror',
-  download: 'Download', documentation: 'Documentation', support: 'Support',
-};
-const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABELS[l.type] ?? l.type;
 
 // Canonical URL for the unified share control (ContentActions -> ShareRow builds the per-platform links).
 const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;

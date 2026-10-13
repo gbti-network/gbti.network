@@ -6,6 +6,8 @@
 // We implement the small slice of MCP we need (initialize, tools/list, tools/call) rather than pull an SDK,
 // matching this repo's no-SDK pattern and keeping it unit-testable with no install.
 
+import { CONTENT_LINK_TYPES_SENTENCE } from '../../src/lib/content-link-types.mjs'; // sow-454: the one source for link types
+import { listVocabulary } from './vocabulary.mjs'; // sow-454: the controlled vocabularies, readable before writing
 import {
   OperationError,
   CLIENT_VERSION,
@@ -164,7 +166,7 @@ export const TOOLS = [
   },
   {
     name: 'add_product',
-    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[], license (an exact id from house/licenses.yml, e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, links[] (each { type, url, label?, visibility? }, where type is one of ' + CONTENT_LINK_TYPES_SENTENCE + ' and nothing else validates), license (an exact id from house/licenses.yml, call list_vocabulary for the full list; e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'project' }),
   },
@@ -178,6 +180,14 @@ export const TOOLS = [
   // exposed as a tool, so an agent could create a draft with status:"draft" and then never list, read, publish
   // or discard it. A staged draft lives in the private store, where nothing else would ever show it to them.
   // Thin wrappers, no new logic.
+  {
+    // sow-454: an agent could not discover the category tree, the link types or the licence ids from ANY of
+    // the other tools, so all three were guesses that validate_content could only refuse after the fact.
+    name: 'list_vocabulary',
+    description: 'List the controlled vocabularies an author must match EXACTLY: the category tree as ordered `categories` paths, the valid link `type` values, and the licence ids. Call this BEFORE authoring a project, prompt or post rather than guessing: a value outside these lists fails validation on publish. Read-only, and it reads the same files the site build reads, so it is never out of date.',
+    inputSchema: obj({}),
+    handler: (ctx) => listVocabulary(ctx),
+  },
   {
     name: 'list_drafts',
     description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, and whether it still validates against the current schema.',
@@ -276,7 +286,7 @@ export const TOOLS = [
   // optional `suggestedNote`, a factual starting point their note box opens with, which they edit or keep.
   {
     name: 'prepare_listing',
-    description: 'SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.',
+    description: 'SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, pricingUrl, links[] (http or https, public only; each type is one of ' + CONTENT_LINK_TYPES_SENTENCE + '), license (an exact id from house/licenses.yml, call list_vocabulary for the full list) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.',
     inputSchema: obj(
       {
         input: { type: 'object', description: 'The project frontmatter, with image fields as ./images/<name> references.' },

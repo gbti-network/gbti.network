@@ -16922,6 +16922,18 @@ var BANNER_PRESETS = [
 ];
 var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
+// src/lib/content-link-types.mjs
+var CONTENT_LINK_TYPES = Object.freeze([
+  { key: "homepage", label: "Homepage" },
+  { key: "repository", label: "Repository" },
+  { key: "mirror", label: "Mirror" },
+  { key: "download", label: "Download" },
+  { key: "documentation", label: "Documentation" },
+  { key: "support", label: "Support" }
+]);
+var CONTENT_LINK_TYPE_KEYS = Object.freeze(CONTENT_LINK_TYPES.map((t) => t.key));
+var CONTENT_LINK_TYPES_SENTENCE = CONTENT_LINK_TYPE_KEYS.join(", ");
+
 // client/src/schemas.mjs
 var titleText = () => external_exports.string().refine((s) => s.trim().length > 0, "title must not be empty");
 var SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
@@ -16952,7 +16964,7 @@ var contributors = external_exports.array(
 ).default([]);
 var contentLinks = external_exports.array(
   external_exports.object({
-    type: external_exports.enum(["homepage", "repository", "mirror", "download", "documentation", "support"]),
+    type: external_exports.enum(CONTENT_LINK_TYPE_KEYS),
     url: external_exports.string().url(),
     label: external_exports.string().optional(),
     visibility: external_exports.enum(["public", "members"]).default("public"),

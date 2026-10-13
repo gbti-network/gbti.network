@@ -14702,7 +14702,7 @@ ${listStyleProseCss(".doc-blocks")}
         .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
         .linkrow .lr-top, .linkrow .lr-bot { display:flex; align-items:center; gap:8px; }
-        .linkrow .lk-type { flex:none; width:118px; }
+        .linkrow .lk-type { flex:none; width:152px; } /* sow-454: a select, so it fits 'Documentation' plus the chevron */
         .linkrow .lk-url, .linkrow .lk-label { flex:1; min-width:0; }
         .linkrow .inp { padding:7px 9px; font-size:12.5px; }
         .lr-del { flex:none; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface); color:var(--s-fg-mute); cursor:pointer; }
@@ -14874,7 +14874,11 @@ ${listStyleProseCss(".doc-blocks")}
   var withEditorFields = (Base2) => class extends Base2 {
     fieldHtml(f, value, visible = true) {
       const v2 = value == null ? "" : Array.isArray(value) ? value.join(", ") : value instanceof Date ? Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10) : typeof value === "object" ? JSON.stringify(value) : String(value);
-      const label = `<label>${esc2(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}${f.hint ? ` <span class="hint">· ${esc2(f.hint)}</span>` : ""}</label>`;
+      const fid = `f-${f.key}`;
+      const labelParts = `${esc2(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}`;
+      const hintSpan = f.hint ? ` <span class="hint">· ${esc2(f.hint)}</span>` : "";
+      const label = `<label>${labelParts}${hintSpan}</label>`;
+      const labelFor = `<label for="${fid}">${labelParts}${hintSpan}</label>`;
       const wrap = (inner, cls = "") => `<div class="fld${cls ? " " + cls : ""}" data-fkey="${f.key}"${visible ? "" : " hidden"}>${inner}</div>`;
       if (f.kind === "enum" && f.key === "visibility") {
         const aud = audienceControl({
@@ -14910,7 +14914,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (f.kind === "enum" && f.key === "status") {
         const opts = (f.options || ["draft", "published"]).map((o) => `<option ${o === v2 ? "selected" : ""}>${esc2(o)}</option>`).join("");
-        return wrap(`${label}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc2(v2 || "draft")}</span></span><select class="selbox" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
+        return wrap(`${labelFor}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc2(v2 || "draft")}</span></span><select class="selbox" id="${fid}" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
       }
       if (f.kind === "enum" && f.key === "galleryStyle") {
         const cards = [
@@ -14944,18 +14948,18 @@ ${listStyleProseCss(".doc-blocks")}
         return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc2(cur)}" /></div>`);
       }
       if (f.kind === "enum") {
-        return wrap(`${label}<select class="selbox" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v2 ? "selected" : ""}>${esc2(o)}</option>`).join("")}</select>`);
+        return wrap(`${labelFor}<select class="selbox" id="${fid}" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v2 ? "selected" : ""}>${esc2(o)}</option>`).join("")}</select>`);
       }
       if (f.kind === "boolean") {
         const on = !!value;
-        return wrap(`<div class="tglrow"><div><div class="tt">${esc2(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc2(f.desc)}</div>` : ""}</div><button class="tgl ${on ? "on" : ""}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? "checked" : ""} hidden />`);
+        return wrap(`<div class="tglrow"><div><div class="tt">${esc2(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc2(f.desc)}</div>` : ""}</div><button class="tgl ${on ? "on" : ""}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}" aria-label="${esc2(f.label || f.key)}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? "checked" : ""} hidden />`);
       }
       if (f.kind === "array") {
         const arr = String(v2).split(",").map((s) => s.trim()).filter(Boolean);
         if (f.key === "categories") return wrap(`${label}${categoryFieldHtml(arr)}`);
         const accent = f.key !== "tags";
         const chips = arr.map((c) => `<span class="chip2 ${accent ? "" : "chip-neutral"}">${esc2(c)}<span class="x" data-rm>${X}</span></span>`).join("");
-        return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc2(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc2(arr.join(", "))}" />`);
+        return wrap(`${labelFor}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" id="${fid}" placeholder="${esc2(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc2(arr.join(", "))}" />`);
       }
       if (f.kind === "image") {
         const url = v2 ? this.resolveCover(v2) : "";
@@ -14964,16 +14968,17 @@ ${listStyleProseCss(".doc-blocks")}
         const frameStyle = framed ? ` style="aspect-ratio:${esc2(f.frame)}${f.previewPx ? `;max-width:${Number(f.previewPx)}px` : ""}"` : "";
         const picker = framed ? "" : '<div class="framepick"><button type="button" class="on" data-frame="card4">4:3 card</button><button type="button" data-frame="hero">Hero</button></div>';
         const hint = f.hint ? `<div class="urlprev" style="color:var(--s-fg-soft)">${esc2(f.hint)}</div>` : "";
+        const labelNoHint = `<label for="${fid}">${labelParts}</label>`;
         const presetVal = f.key === "banner" ? String(this.preset?.input?.bannerPreset || "") : "";
         const swatchesHtml = f.key === "banner" ? `<div class="swatchrow" data-swatches>${BANNER_PRESETS.map((p) => `<button type="button" class="swatch${p.key === presetVal ? " on" : ""}" data-preset="${p.key}" title="${esc2(p.label)}">
           <span class="sw-dot" style="background:linear-gradient(150deg,${p.from},${p.to})"></span>${esc2(p.label)}</button>`).join("")}
         <input data-key="bannerPreset" data-kind="enum" type="hidden" value="${esc2(presetVal)}" /></div>` : "";
-        return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}${hint}
+        return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${labelNoHint}${hint}
         <div class="cover" data-cover>
           ${picker}
           <div class="coverframe${framed ? "" : " card4"}" data-coverframe${frameStyle}>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st></span></div>
+          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st></span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ""}
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc2(v2)}" />
         </div></div>`;
@@ -14985,10 +14990,10 @@ ${listStyleProseCss(".doc-blocks")}
         return wrap(this._galleryInner(f, value));
       }
       if (f.kind === "textarea" || f.kind === "json") {
-        return wrap(`${label}<textarea class="ta" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc2(f.placeholder || "")}">${esc2(v2)}</textarea>`);
+        return wrap(`${labelFor}<textarea class="ta" id="${fid}" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc2(f.placeholder || "")}">${esc2(v2)}</textarea>`);
       }
       const mono = f.kind === "date" || f.key === "slug";
-      return wrap(`${label}<input class="inp${mono ? " mono" : ""}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc2(v2)}" placeholder="${esc2(f.placeholder || "")}" />`);
+      return wrap(`${labelFor}<input class="inp${mono ? " mono" : ""}" id="${fid}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc2(v2)}" placeholder="${esc2(f.placeholder || "")}" />`);
     }
     _presetBool(key) {
       return !!this.preset?.input?.[key];
@@ -15171,6 +15176,18 @@ ${listStyleProseCss(".doc-blocks")}
     return true;
   }
 
+  // src/lib/content-link-types.mjs
+  var CONTENT_LINK_TYPES = Object.freeze([
+    { key: "homepage", label: "Homepage" },
+    { key: "repository", label: "Repository" },
+    { key: "mirror", label: "Mirror" },
+    { key: "download", label: "Download" },
+    { key: "documentation", label: "Documentation" },
+    { key: "support", label: "Support" }
+  ]);
+  var CONTENT_LINK_TYPE_KEYS = Object.freeze(CONTENT_LINK_TYPES.map((t) => t.key));
+  var CONTENT_LINK_TYPES_SENTENCE = CONTENT_LINK_TYPE_KEYS.join(", ");
+
   // src/lib/project-page.mjs
   var REPOSITORY = "repository";
   function isImageValue(v2) {
@@ -15209,12 +15226,10 @@ ${listStyleProseCss(".doc-blocks")}
     return null;
   }
   var LINK_LABELS = {
-    homepage: "Homepage",
-    repository: "Repository",
-    mirror: "Mirror",
-    download: "Download",
-    documentation: "Documentation",
-    support: "Support",
+    ...Object.fromEntries(CONTENT_LINK_TYPES.map((t) => [t.key, t.label])),
+    // `pricing` is SYNTHETIC and deliberately absent from the authorable list above: resolvePrimaryCta and
+    // railLinks build a pricing link from the item's `pricingUrl` field at render time, so it needs a label
+    // here but must never be offered to an author or accepted by the schema.
     pricing: "Pricing"
   };
   function linkLabel(link) {
@@ -15332,16 +15347,23 @@ ${listStyleProseCss(".doc-blocks")}
       return `<label>Links <span class="hint">· buttons on the project page</span></label>
       <div class="linkrows" data-links>${rows}</div>
       <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
-      <datalist id="lk-types">${["download", "project", "repository", "github", "website", "docs", "demo"].map((k) => `<option value="${k}"></option>`).join("")}</datalist>
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc2(JSON.stringify(links))}" />`;
     }
+    // sow-454 (defect 1, reported by a member 2026-10-13): the type was a free-text input backed by a
+    // datalist of seven suggestions, five of which the schema rejects, so picking one from our own list
+    // failed on Publish with `links.0.type: Invalid input` and the four values that DO validate were never
+    // offered. A select cannot produce an invalid value, and its options come from the one source in
+    // project-page.mjs that the schema reads too.
     _linkRowHtml(l = {}, i) {
       const { type, kind: kind2, url, label, visibility, ...extra } = l || {};
-      const t = esc2(type || kind2 || "");
+      const tRaw = String(type || kind2 || "");
+      const t = esc2(tRaw);
+      const onList = CONTENT_LINK_TYPE_KEYS.includes(tRaw);
+      const typeOptions = [`<option value=""${tRaw ? "" : " selected"}>type</option>`].concat(CONTENT_LINK_TYPES.map((o) => `<option value="${o.key}"${tRaw === o.key ? " selected" : ""}>${esc2(o.label)}</option>`)).concat(tRaw && !onList ? [`<option value="${t}" selected>${t}</option>`] : []).join("");
       const vis = visibility === "members" ? "members" : "public";
       return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? "1" : "0"}" data-extra="${esc2(JSON.stringify(extra))}">
       <div class="lr-top">
-        <input class="inp lk-type" list="lk-types" placeholder="type" value="${t}" />
+        <select class="selbox lk-type" aria-label="Link type">${typeOptions}</select>
         <input class="inp lk-url" type="text" placeholder="https://" value="${esc2(url || "")}" />
         <button class="lr-del" type="button" data-lrdel title="Remove">${TRASH}</button>
       </div>
@@ -15382,6 +15404,7 @@ ${listStyleProseCss(".doc-blocks")}
       const wrap = this.$("[data-links]");
       if (!wrap) return;
       wrap.addEventListener("input", () => this._serializeLinks());
+      wrap.addEventListener("change", () => this._serializeLinks());
       wrap.addEventListener("click", (e) => {
         const del = e.target.closest("[data-lrdel]");
         if (del) {
@@ -16318,6 +16341,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `${unread}<ol>${li}</ol>`;
     }
     async doPublish() {
+      this._bannerClear();
       const restore = this._btnBusy("#publish", "Publishing…");
       this._setChip("Publishing…", "busy");
       this.out("Publishing…");
@@ -16334,6 +16358,11 @@ ${listStyleProseCss(".doc-blocks")}
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
         this.staged = false;
+        if (this.preset?.input) this.preset.input.status = "published";
+        const liveEl = this.$("[data-livelabel]");
+        if (liveEl) liveEl.textContent = "Live";
+        this.$("[data-slugmeta]")?.classList.remove("staged");
+        this.$("[data-slugmeta]")?.classList.add("pub");
         this._banner(`Publishing is not instant. The site rebuilds after you publish, so your change reaches the live site in about 2 to 3 minutes.`);
         const renameNote = res?.renamed ? ` The permalink changed from ${esc2(res.renamed.from)} to ${esc2(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : "";
         const ownerLabel = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
@@ -16363,6 +16392,14 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     // SOW-112 QA: put a message in the top banner slot. cls '' = info (green), 'warn' = amber, 'danger' = red.
+    /** Hide the publish banner and drop its severity. Paired with _banner, which never un-hides on its own. */
+    _bannerClear() {
+      const pb = this.$("#pubbanner");
+      if (!pb) return;
+      pb.classList.remove("warn", "danger");
+      pb.innerHTML = "";
+      pb.hidden = true;
+    }
     _banner(html, cls = "") {
       const pb = this.$("#pubbanner");
       if (!pb) return;
@@ -16638,7 +16675,7 @@ ${listStyleProseCss(".doc-blocks")}
              <section class="docsec" id="secAuthorNote">
                <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
                <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || "gbti")}</span>
-                 <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
+                 <textarea class="an-text" id="authornote" aria-label="From the author note" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : "";
       const discussionSection = isPub && slug && ["post", "project", "prompt"].includes(this.type) ? `
              <section class="docsec" id="secDiscussion">
@@ -16704,7 +16741,7 @@ ${listStyleProseCss(".doc-blocks")}
              ${(() => {
           const slugVal = `<span class="slug-val locked">${esc2(this.presetStr(p.slug) || "")}</span>`;
           const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
-          return `<div class="doc-slug"><span class="slug-base">${esc2(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc2(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc2(localLabel)}</span>` : ""}</span></div>`;
+          return `<div class="doc-slug"><span class="slug-base">${esc2(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}" data-slugmeta><span class="pubdot"></span><span data-livelabel>${esc2(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc2(localLabel)}</span>` : ""}</span></div>`;
         })()}
              ${isPrompt ? kindSectionHtml(kind2) + skillSectionsHtml({ kind: kind2, skillFile: this.preset?.skillFile || "" }) : ""}
              <div class="doc-view-row">

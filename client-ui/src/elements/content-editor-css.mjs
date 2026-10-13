@@ -200,7 +200,7 @@ export const CONTENT_EDITOR_CSS = `
         .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
         .linkrow .lr-top, .linkrow .lr-bot { display:flex; align-items:center; gap:8px; }
-        .linkrow .lk-type { flex:none; width:118px; }
+        .linkrow .lk-type { flex:none; width:152px; } /* sow-454: a select, so it fits 'Documentation' plus the chevron */
         .linkrow .lk-url, .linkrow .lk-label { flex:1; min-width:0; }
         .linkrow .inp { padding:7px 9px; font-size:12.5px; }
         .lr-del { flex:none; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface); color:var(--s-fg-mute); cursor:pointer; }

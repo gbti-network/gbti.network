@@ -80,7 +80,9 @@ test('a body that begins with an embed starts below the avatar: the name row tak
   const eav = px(/\.cav \{ width:(\d+)px;/, e, 'posting avatar');
   assert.equal(px(/\.main:has\(> \.body > :is\(\.md-tweet\.is-ready, \.md-embed\):first-child\) > \.meta \{ min-height:(\d+)px; \}/, e, 'posting rule'), eav);
   const s = read('src/components/blog/Comments.astro');
-  const sav = px(/class="shrink-0"><Avatar item=\{\{ name: authorDisplay\(c\.data\.author\)[^>]*size=\{(\d+)\}/, s, 'site avatar');
+  // The name expression is deliberately NOT pinned here: this test is about the avatar size matching the
+  // CSS min-height, and pinning how the name is computed made it fail when that changed (sow-454).
+  const sav = px(/class="shrink-0"><Avatar item=\{\{ name: [^,]+, avatar: avatarOf\(c\.data\.author\)[^>]*size=\{(\d+)\}/, s, 'site avatar');
   assert.match(s, /<div class="cmt-col" style="flex:1;min-width:0">\s*\n\s*<div class="cmt-meta flex items-center g8 body-sm muted">/);
   const rule = s.match(/\.cmt-col:has\(> \.cmt-rich > :is\(\.md-tweet\.is-ready, \.md-embed, \.embed-wrap\):first-child\) > \.cmt-meta,\s*\n\s*\.cmt-col:has\(gbti-locked-content\[data-embed-first\]\) > \.cmt-meta \{ min-height: (\d+)px; \}/);
   assert.ok(rule, 'the public body and a members-only body');

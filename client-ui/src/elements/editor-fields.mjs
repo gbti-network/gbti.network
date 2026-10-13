@@ -28,7 +28,20 @@ export const withEditorFields = (Base) => class extends Base {
       : value instanceof Date ? (Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10))
       : typeof value === 'object' ? JSON.stringify(value)
       : String(value);
-    const label = `<label>${esc(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ''}${f.hint ? ` <span class="hint">· ${esc(f.hint)}</span>` : ''}</label>`;
+    // sow-454 (defect 7, reported by a member 2026-10-13): not one control in this editor had an accessible
+    // name. The labels were siblings of their controls with no `for` and no wrapping, so a screen reader (and
+    // any agent reading the accessibility tree) saw an unlabelled text box. The shadow roots are open, so the
+    // tree was never the problem; the missing association was.
+    //
+    // `label` stays unassociated for the branches whose control is a GROUP of buttons (the layout cards, the
+    // audience switch, the gallery-style cards): each of those buttons carries its own visible text, so it is
+    // already named, and a `for` pointing at a group would be a lie. `labelFor` is for the branches with one
+    // focusable control, and those controls take the matching id.
+    const fid = `f-${f.key}`;
+    const labelParts = `${esc(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ''}`;
+    const hintSpan = f.hint ? ` <span class="hint">· ${esc(f.hint)}</span>` : '';
+    const label = `<label>${labelParts}${hintSpan}</label>`;
+    const labelFor = `<label for="${fid}">${labelParts}${hintSpan}</label>`;
     const wrap = (inner, cls = '') => `<div class="fld${cls ? ' ' + cls : ''}" data-fkey="${f.key}"${visible ? '' : ' hidden'}>${inner}</div>`;
 
     // SOW-062 P6: visibility -> segmented switch + optional public-stub sub-block (publicStub is folded in here).
@@ -71,7 +84,7 @@ export const withEditorFields = (Base) => class extends Base {
     // status -> dotpill + select
     if (f.kind === 'enum' && f.key === 'status') {
       const opts = (f.options || ['draft', 'published']).map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('');
-      return wrap(`${label}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc(v || 'draft')}</span></span><select class="selbox" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
+      return wrap(`${labelFor}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc(v || 'draft')}</span></span><select class="selbox" id="${fid}" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
     }
     // sow-174: gallery layout -> three illustrated cards (Auto / Grid / Carousel) instead of a bare select,
     // matching the design mock's own live toggle. "Auto" is an empty value: the hidden input's default
@@ -119,12 +132,12 @@ export const withEditorFields = (Base) => class extends Base {
     }
     // generic enum -> styled selbox
     if (f.kind === 'enum') {
-      return wrap(`${label}<select class="selbox" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`);
+      return wrap(`${labelFor}<select class="selbox" id="${fid}" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`);
     }
     // boolean -> toggle
     if (f.kind === 'boolean') {
       const on = !!value;
-      return wrap(`<div class="tglrow"><div><div class="tt">${esc(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc(f.desc)}</div>` : ''}</div><button class="tgl ${on ? 'on' : ''}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? 'checked' : ''} hidden />`);
+      return wrap(`<div class="tglrow"><div><div class="tt">${esc(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc(f.desc)}</div>` : ''}</div><button class="tgl ${on ? 'on' : ''}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}" aria-label="${esc(f.label || f.key)}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? 'checked' : ''} hidden />`);
     }
     // array -> chips (value arrives comma-joined; hidden input keeps the comma string for gather())
     if (f.kind === 'array') {
@@ -132,7 +145,7 @@ export const withEditorFields = (Base) => class extends Base {
       if (f.key === 'categories') return wrap(`${label}${categoryFieldHtml(arr)}`); // sow-227: one path, from the tree
       const accent = f.key !== 'tags';
       const chips = arr.map((c) => `<span class="chip2 ${accent ? '' : 'chip-neutral'}">${esc(c)}<span class="x" data-rm>${X}</span></span>`).join('');
-      return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc(f.placeholder || 'Add…')}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc(arr.join(', '))}" />`);
+      return wrap(`${labelFor}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" id="${fid}" placeholder="${esc(f.placeholder || 'Add…')}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc(arr.join(', '))}" />`);
     }
     // image / cover (current control; the reframe is deferred to rail-2)
     if (f.kind === 'image') {
@@ -146,7 +159,14 @@ export const withEditorFields = (Base) => class extends Base {
       const picker = framed
         ? ''
         : '<div class="framepick"><button type="button" class="on" data-frame="card4">4:3 card</button><button type="button" data-frame="hero">Hero</button></div>';
+      // sow-454 (defect 8, reported by a member 2026-10-13): `label` above already renders f.hint as a
+      // small "· hint" span, and this block rendered the SAME text again underneath, so every Media field
+      // showed its help twice. The image hints are long and instructional ("Must be 16:10 (1280x800)..."),
+      // so the readable block below is the right home for them and the label is the copy that goes: a
+      // 200-character hint crammed into a label is why it looked like two different pieces of help.
       const hint = f.hint ? `<div class="urlprev" style="color:var(--s-fg-soft)">${esc(f.hint)}</div>` : '';
+      // Associated with the "Choose image" button below, which is the control a keyboard reaches.
+      const labelNoHint = `<label for="${fid}">${labelParts}</label>`;
       // sow-174: the banner field alone also offers a curated color preset, an alternative to uploading an
       // image (resolveHero() in project-page.mjs treats an uploaded image and a chosen preset as mutually
       // exclusive). bannerPreset is not its own row -- it is excluded from RAIL_SCHEMA and hiddenFields both,
@@ -156,12 +176,12 @@ export const withEditorFields = (Base) => class extends Base {
         `<button type="button" class="swatch${p.key === presetVal ? ' on' : ''}" data-preset="${p.key}" title="${esc(p.label)}">
           <span class="sw-dot" style="background:linear-gradient(150deg,${p.from},${p.to})"></span>${esc(p.label)}</button>`).join('')}
         <input data-key="bannerPreset" data-kind="enum" type="hidden" value="${esc(presetVal)}" /></div>` : '';
-      return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? '' : ' hidden'}>${label}${hint}
+      return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? '' : ' hidden'}>${labelNoHint}${hint}
         <div class="cover" data-cover>
           ${picker}
           <div class="coverframe${framed ? '' : ' card4'}" data-coverframe${frameStyle}>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? 'Replace image' : 'Choose image'}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? '' : ' hidden'}>Remove</button><span class="up-st" data-cover-st></span></div>
+          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? 'Replace image' : 'Choose image'}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? '' : ' hidden'}>Remove</button><span class="up-st" data-cover-st></span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ''}
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;
@@ -181,11 +201,11 @@ export const withEditorFields = (Base) => class extends Base {
     }
     // textarea / json -> .ta
     if (f.kind === 'textarea' || f.kind === 'json') {
-      return wrap(`${label}<textarea class="ta" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`);
+      return wrap(`${labelFor}<textarea class="ta" id="${fid}" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`);
     }
     // text / date / number -> .inp
     const mono = f.kind === 'date' || f.key === 'slug';
-    return wrap(`${label}<input class="inp${mono ? ' mono' : ''}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" />`);
+    return wrap(`${labelFor}<input class="inp${mono ? ' mono' : ''}" id="${fid}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" />`);
   }
 
   _presetBool(key) { return !!this.preset?.input?.[key]; }

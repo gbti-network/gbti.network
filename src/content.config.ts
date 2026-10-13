@@ -1,6 +1,7 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { BANNER_PRESET_KEYS } from './lib/banner-presets.mjs';
+import { CONTENT_LINK_TYPE_KEYS } from './lib/content-link-types.mjs'; // sow-454: one source for the link types
 import { SLUG_MAX } from '../membership/item-id.mjs';
 
 // sow-354: every store keyed by the slug (drafts, staged images, the publish branch) is sized for SLUG_MAX.
@@ -66,7 +67,7 @@ const contributors = z
 const contentLinks = z
   .array(
     z.object({
-      type: z.enum(['homepage', 'repository', 'mirror', 'download', 'documentation', 'support']),
+      type: z.enum(CONTENT_LINK_TYPE_KEYS as unknown as [string, ...string[]]),
       url: z.string().url(),
       label: z.string().optional(), // user-facing override; defaults from `type`
       visibility: z.enum(['public', 'members']).default('public'),

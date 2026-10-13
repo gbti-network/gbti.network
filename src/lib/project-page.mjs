@@ -7,6 +7,8 @@
 // The page itself then stays declarative: it renders what these return and branches on nothing.
 
 /** At or above this many screenshots an unset `galleryStyle` resolves to the carousel. */
+import { CONTENT_LINK_TYPES } from './content-link-types.mjs'; // sow-454: the one source for link types
+
 export const CAROUSEL_THRESHOLD = 6;
 
 /** Below this many contents entries the rail drops the list entirely (no one-item table of contents). */
@@ -171,12 +173,10 @@ export function railLinks(links, primary, pricingUrl, pricing) {
 }
 
 const LINK_LABELS = {
-  homepage: 'Homepage',
-  repository: 'Repository',
-  mirror: 'Mirror',
-  download: 'Download',
-  documentation: 'Documentation',
-  support: 'Support',
+  ...Object.fromEntries(CONTENT_LINK_TYPES.map((t) => [t.key, t.label])),
+  // `pricing` is SYNTHETIC and deliberately absent from the authorable list above: resolvePrimaryCta and
+  // railLinks build a pricing link from the item's `pricingUrl` field at render time, so it needs a label
+  // here but must never be offered to an author or accepted by the schema.
   pricing: 'Pricing',
 };
 

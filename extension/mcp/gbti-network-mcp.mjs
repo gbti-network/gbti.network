@@ -16979,6 +16979,18 @@ var BANNER_PRESETS = [
 ];
 var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
+// src/lib/content-link-types.mjs
+var CONTENT_LINK_TYPES = Object.freeze([
+  { key: "homepage", label: "Homepage" },
+  { key: "repository", label: "Repository" },
+  { key: "mirror", label: "Mirror" },
+  { key: "download", label: "Download" },
+  { key: "documentation", label: "Documentation" },
+  { key: "support", label: "Support" }
+]);
+var CONTENT_LINK_TYPE_KEYS = Object.freeze(CONTENT_LINK_TYPES.map((t) => t.key));
+var CONTENT_LINK_TYPES_SENTENCE = CONTENT_LINK_TYPE_KEYS.join(", ");
+
 // client/src/schemas.mjs
 var titleText = () => external_exports.string().refine((s) => s.trim().length > 0, "title must not be empty");
 var SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
@@ -17009,7 +17021,7 @@ var contributors = external_exports.array(
 ).default([]);
 var contentLinks = external_exports.array(
   external_exports.object({
-    type: external_exports.enum(["homepage", "repository", "mirror", "download", "documentation", "support"]),
+    type: external_exports.enum(CONTENT_LINK_TYPE_KEYS),
     url: external_exports.string().url(),
     label: external_exports.string().optional(),
     visibility: external_exports.enum(["public", "members"]).default("public"),
@@ -18401,6 +18413,55 @@ function buildContext(store) {
       }
       return membershipFlight;
     }
+  };
+}
+
+// membership/licenses.mjs
+var isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function licenseEntries(doc) {
+  const src = isObj(doc) ? doc.licenses : null;
+  if (!isObj(src)) return [];
+  const out = [];
+  for (const [id, value] of Object.entries(src)) {
+    const key = String(id || "").trim();
+    if (!key) continue;
+    const url2 = isObj(value) ? String(value.url ?? "").trim() : "";
+    out.push({ id: key, url: /^https:\/\//i.test(url2) ? url2 : null });
+  }
+  return out;
+}
+
+// client/src/vocabulary.mjs
+var TAXONOMY_PATH = "house/taxonomy.yml";
+var LICENSES_PATH = "house/licenses.yml";
+var readYaml = async (ctx2, rel) => {
+  try {
+    return index_vite_proxy_tmp_default.load(await ctx2?.reader?.readFile?.(rel) || "") ?? {};
+  } catch {
+    return {};
+  }
+};
+function categoryPaths(tree, prefix = []) {
+  const out = [];
+  for (const [key, node] of Object.entries(tree && typeof tree === "object" ? tree : {})) {
+    const path4 = [...prefix, key];
+    out.push({ path: path4, label: node && node.label || key });
+    if (node && node.children) out.push(...categoryPaths(node.children, path4));
+  }
+  return out;
+}
+async function listVocabulary(ctx2) {
+  const [taxDoc, licDoc] = await Promise.all([readYaml(ctx2, TAXONOMY_PATH), readYaml(ctx2, LICENSES_PATH)]);
+  const categories = categoryPaths(taxDoc?.tree || {});
+  return {
+    linkTypes: CONTENT_LINK_TYPES.map((t) => ({ type: t.key, label: t.label })),
+    licenses: licenseEntries(licDoc).map((l) => ({ id: l.id, url: l.url })),
+    categories: categories.map((c) => ({ categories: c.path, label: c.label })),
+    notes: [
+      "A `categories` value is one ordered path from this list, as an array. Every node is a valid stopping point.",
+      "A link `type` must be one of linkTypes exactly; nothing else validates.",
+      "A `license` must be an id from licenses exactly. Custom also requires licenseUrl."
+    ]
   };
 }
 
@@ -20392,7 +20453,7 @@ var TOOLS = [
   },
   {
     name: "add_product",
-    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[], license (an exact id from house/licenses.yml, e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, links[] (each { type, url, label?, visibility? }, where type is one of ' + CONTENT_LINK_TYPES_SENTENCE + " and nothing else validates), license (an exact id from house/licenses.yml, call list_vocabulary for the full list; e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)",
     inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "project" })
   },
@@ -20406,6 +20467,14 @@ var TOOLS = [
   // exposed as a tool, so an agent could create a draft with status:"draft" and then never list, read, publish
   // or discard it. A staged draft lives in the private store, where nothing else would ever show it to them.
   // Thin wrappers, no new logic.
+  {
+    // sow-454: an agent could not discover the category tree, the link types or the licence ids from ANY of
+    // the other tools, so all three were guesses that validate_content could only refuse after the fact.
+    name: "list_vocabulary",
+    description: "List the controlled vocabularies an author must match EXACTLY: the category tree as ordered `categories` paths, the valid link `type` values, and the licence ids. Call this BEFORE authoring a project, prompt or post rather than guessing: a value outside these lists fails validation on publish. Read-only, and it reads the same files the site build reads, so it is never out of date.",
+    inputSchema: obj({}),
+    handler: (ctx2) => listVocabulary(ctx2)
+  },
   {
     name: "list_drafts",
     description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, and whether it still validates against the current schema.',
@@ -20504,7 +20573,7 @@ var TOOLS = [
   // optional `suggestedNote`, a factual starting point their note box opens with, which they edit or keep.
   {
     name: "prepare_listing",
-    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (taxonomy path), tags[], pricing, pricingUrl, links[] (http or https, public only), license (an exact id from house/licenses.yml) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
+    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, pricingUrl, links[] (http or https, public only; each type is one of " + CONTENT_LINK_TYPES_SENTENCE + "), license (an exact id from house/licenses.yml, call list_vocabulary for the full list) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
     inputSchema: obj(
       {
         input: { type: "object", description: "The project frontmatter, with image fields as ./images/<name> references." },

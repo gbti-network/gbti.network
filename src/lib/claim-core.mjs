@@ -476,10 +476,19 @@ export function bylineIdentity({ state = '', signal = null, recipientName = '' }
  * @returns {string}
  */
 export function noteCardName({ state = '', signal = null, listing = null } = {}) {
+  // sow-454: the published card prints the profile's DISPLAY NAME now (Comments.astro), where it used to
+  // print the folder, so this preview prints a name first or it would misrepresent its own result. The
+  // recipient name is the closest thing the page can know: the claim writes the profile's displayName from
+  // the claimant's GitHub name (membership-claim.mjs), which this page cannot see, and for a person those
+  // are the same words. It also ends the oddity of the byline and the card beneath it naming one person
+  // two different ways on the same screen.
+  const named = bylineName(listing?.recipientName);
+  if (named !== 'Your name') return named;
+  // With no name to show, fall back to the folder the claim would publish under, as before.
   const own = signal && CLAIMANT_STATES.includes(state) && typeof signal.username === 'string' ? signal.username.toLowerCase() : '';
   if (isFolder(own)) return own;
   const tied = listing && isGithubLogin(listing.githubLogin) ? listing.githubLogin.toLowerCase() : '';
-  return tied || bylineName(listing?.recipientName);
+  return tied || named;
 }
 
 /** The note card's label while it shows the preparer's suggestion untouched, and once it shows anything else. */

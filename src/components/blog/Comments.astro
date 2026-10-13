@@ -49,13 +49,22 @@ const intro = notes.length ? notes[notes.length - 1] : null;
 const thread = published
   .filter((c) => !notes.includes(c))
   .filter((c) => c.data.visibility !== 'members' || c.data.encryptedBody);
-const introName = intro ? authorDisplay(intro.data.author) : '';
-
 // Resolve each comment author's avatar from their member profile (else the house Gravatar for `gbti`,
 // else the letter disc). authorAvatar needs the profile avatar passed in, so build a username -> url map.
 const profiles = await getCollection('profile');
 const profileAvatar = new Map(profiles.map((p) => [p.data.username, p.data.avatar]));
 const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(username));
+// sow-454 (reported by a member 2026-10-13): his "From the author" card read `gsusi` while his profile
+// held "Jesus Iniesta". authors.ts states the intended design in its own header, that a caller holding a
+// profile prefers its displayName and only a caller without one falls through to the handle, and
+// ContentMeta/AuthorBox both do that. This file had the profiles in hand for the avatars and still used
+// the bare handle for the name, and computed introName ABOVE the line that loads them, so it could not
+// have done otherwise. One map, read in all three places a name is shown here.
+const profileName = new Map(
+  profiles.filter((p) => p.data.displayName).map((p) => [p.data.username, p.data.displayName as string]),
+);
+const nameOf = (username: string) => profileName.get(username) ?? authorDisplay(username);
+const introName = intro ? nameOf(intro.data.author) : '';
 ---
 <section id="comments" class:list={[!wide && 'mx-auto']} style={`margin-top:48px${wide ? '' : ';max-width:800px'}`}>
   {intro && (
@@ -93,10 +102,10 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
     <ul style="list-style:none;padding:0;margin-top:24px;display:flex;flex-direction:column;gap:24px">
       {thread.map((c) => (
         <li class="card" style="padding:20px;display:flex;gap:14px;align-items:flex-start;--embed-out-l:78px;--embed-out-r:20px">
-          <a href={profileHref(c.data.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(c.data.author), avatar: avatarOf(c.data.author), seed: c.data.author }} size={44} class="rounded-full" /></a>
+          <a href={profileHref(c.data.author)} class="shrink-0"><Avatar item={{ name: nameOf(c.data.author), avatar: avatarOf(c.data.author), seed: c.data.author }} size={44} class="rounded-full" /></a>
           <div class="cmt-col" style="flex:1;min-width:0">
             <div class="cmt-meta flex items-center g8 body-sm muted">
-              <a href={profileHref(c.data.author)} class="link" style="font-size:15px">{authorDisplay(c.data.author)}</a>
+              <a href={profileHref(c.data.author)} class="link" style="font-size:15px">{nameOf(c.data.author)}</a>
               <span aria-hidden="true">·</span>
               <time datetime={c.data.createdAt.toISOString()}>{formatDate(c.data.createdAt)}</time>
             </div>
