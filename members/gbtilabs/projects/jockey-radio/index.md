@@ -29,7 +29,7 @@ platforms:
 icon: ./images/jockey-radio-icon-128x128.webp
 iconLarge: ./images/jockey-radio-icon-256x256.webp
 featuredImage: ./images/jockey-radio-featured.webp
-bannerPreset: mods
+bannerPreset: ink
 gallery:
   - src: ./images/jockey-radio-shot-1.webp
     caption: >-
@@ -69,14 +69,12 @@ links:
     url: https://github.com/gbti-network/jockey-radio/issues
     label: Report an issue
 publishedAt: '2026-10-13T00:00:00.000Z'
-updatedAt: '2026-10-14T13:21:58.599Z'
+updatedAt: '2026-10-14T13:22:46.702Z'
 type: project
 author: gbtilabs
 ---
 
-Create a disc, place it in a jukebox, and nearby players hear the audio through
-[Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat). Players listen with the standard
-Simple Voice Chat client, so no other client mod is needed.
+Create a disc, place it in a jukebox, and nearby players hear the audio through [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat). Players listen with the standard Simple Voice Chat client, so no other client mod is needed.
 
 ## Audio sources
 
@@ -144,3 +142,14 @@ Jockey Radio has not yet been load-tested at large-server scale. Testing so far 
 simultaneous audio sources on the development host. Jukeboxes playing the same disc share one upstream
 feed, but each active jukebox still needs its own encoder and Simple Voice Chat channel. Increase usage
 gradually while watching server tick time, CPU, memory, and network traffic.
+
+## AI disclosure
+
+Jockey Radio is developed by the GBTI Network, a team with over 20 years of combined experience in product
+and application development. We use modern AI coding tools (Claude Code, Codex, and OpenClaw) as
+assistants in our workflow. AI-generated code is present in the project.
+
+## License
+
+Jockey Radio is a GBTI project distributed under an All Rights Reserved license. The source is published on
+GitHub.
