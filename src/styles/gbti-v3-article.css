@@ -121,15 +121,8 @@
 .art-e-col .prose-gbti h3 { font-size: 20px; margin: 30px 0 10px; }
 .art-e-col .prose-gbti > :first-child { margin-top: 0; }
 
-.art-e-aside { position: sticky; top: calc(var(--art-off) + 14px); align-self: start; display: flex; flex-direction: column; gap: 16px; }
+.art-e-aside { position: sticky; top: var(--rail-top, calc(var(--art-off) + 14px)); /* --rail-top: pd-enhance fitStickyRail */ align-self: start; display: flex; flex-direction: column; gap: 16px; }
 .art-e-aside > * + * { padding-top: 15px; border-top: 1px solid var(--line); }
-/* Owner, 2026-10-14: a rail taller than the window (pd-enhance fitStickyRail adds .rail-tall) scrolls with the
-   article, stretched down its full length, and its Contents list sticks under the header instead, scrolling on its
-   own when long. The list takes the page's colour so the rail's lower blocks pass cleanly beneath it. */
-.art-e-aside.rail-tall, .art-j-rail.rail-tall { position: relative; top: auto; align-self: stretch; }
-.art-e-aside.rail-tall > .art-toc, .art-j-rail.rail-tall > .art-toc {
-  position: sticky; top: calc(var(--art-off) + 14px); z-index: 2; background: var(--paper-2);
-  max-height: calc(100vh - var(--art-off) - 28px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 
 /* Responsive overrides LAST, deliberately after every base rule above: several of these re-set a property
    (display, position, flex-direction) a base rule above also sets on the SAME selector, and same-specificity
@@ -165,7 +158,7 @@
 
 /* sow-352: the rail follows the article in the source (so a phone stacks it after the body); here it is placed by
    position, left of both the article and the closing sections. */
-.art-j-rail { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: calc(var(--art-off) + 14px); align-self: start; display: flex; flex-direction: column; gap: 18px; }
+.art-j-rail { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: var(--rail-top, calc(var(--art-off) + 14px)); /* --rail-top: pd-enhance fitStickyRail */ align-self: start; display: flex; flex-direction: column; gap: 18px; }
 .art-j-rail > * + * { padding-top: 16px; border-top: 1px solid var(--line); }
 
 .art-j-col, .art-j-close { grid-column: 2; min-width: 0; max-width: 660px; }

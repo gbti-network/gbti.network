@@ -18,23 +18,25 @@
  * (product's `data-pd-toc*`, the article layouts' `data-art-toc*`) without duplicating this function.
  */
 /**
- * Owner, 2026-10-14: a sticky rail taller than the window could never show its bottom, so a long article's Contents
- * list was cut off and could not be reached. When the rail is taller than the room under the header it gets
- * `rail-tall`: the rail then scrolls with the article and its Contents list sticks under the header instead,
- * scrolling on its own when it is long (gbti-v3-article.css). When the rail fits, nothing changes: the whole rail
- * sticks, as before. Not a scroll box on the whole rail, because that would clip what draws outside it (the share
- * buttons' tooltips above, the Save list past its right edge). Returns a stop function.
+ * Owner, 2026-10-14: a sticky rail taller than the window could never show its bottom, so an article's Contents list
+ * (now the rail's last block) could not be reached. When the rail is taller than the room under the header, its sticky
+ * `top` goes negative by the difference: the rail scrolls up with the article until its bottom is in view, then
+ * sticks there, so the Contents list stays on screen once the reader has scrolled past everything above it. When the
+ * rail fits, the stylesheet's own top applies and the whole rail sticks, as before. Not a scroll box on the rail,
+ * which would clip what draws outside it (the share buttons' tooltips, the Save list past its right edge).
+ * The rail's stylesheet reads `top: var(--rail-top, <its usual top>)`. Returns a stop function.
  */
 export function fitStickyRail(rail, gap = 14) {
   if (!rail || typeof window === 'undefined') return () => {};
   let queued = false;
   const fit = () => {
     queued = false;
-    rail.classList.remove('rail-tall');
+    rail.style.removeProperty('--rail-top');
     const cs = getComputedStyle(rail);
     if (cs.position !== 'sticky') return; // stacked on a phone: the rail scrolls with the page anyway
     const top = parseFloat(cs.top) || 0;
-    rail.classList.toggle('rail-tall', top + rail.getBoundingClientRect().height + gap > window.innerHeight);
+    const h = rail.getBoundingClientRect().height;
+    if (top + h + gap > window.innerHeight) rail.style.setProperty('--rail-top', `${Math.round(window.innerHeight - h - gap)}px`);
   };
   const queue = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(queue) : null;
@@ -42,19 +44,6 @@ export function fitStickyRail(rail, gap = 14) {
   window.addEventListener('resize', queue, { passive: true });
   fit();
   return () => { ro?.disconnect(); window.removeEventListener('resize', queue); };
-}
-
-/**
- * Scroll a contents list that scrolls on its own (a tall rail's sticky Contents) so the highlighted entry stays in
- * view. Moves the list only, never the page: scrollIntoView would scroll the window as well.
- */
-export function keepInView(list, item) {
-  if (!list || !item || list.scrollHeight <= list.clientHeight) return;
-  const box = list.getBoundingClientRect();
-  const r = item.getBoundingClientRect();
-  const pad = 8;
-  if (r.top < box.top + pad) list.scrollTop -= box.top + pad - r.top;
-  else if (r.bottom > box.bottom - pad) list.scrollTop += r.bottom - (box.bottom - pad);
 }
 
 export function initToc(root = document, prefix = 'pd') {
@@ -73,8 +62,6 @@ export function initToc(root = document, prefix = 'pd') {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
         for (const t of targets) t.a.classList.toggle('on', t.el === e.target);
-        const on = targets.find((t) => t.el === e.target);
-        if (on) keepInView(nav, on.a);
       }
     },
     { rootMargin: '-12% 0px -74% 0px', threshold: 0 },

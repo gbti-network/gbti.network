@@ -92,8 +92,6 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
         <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} author={d.author} categories={d.categories} count={favoriteCount('post', d.slug, aliasSlugsOf(d))} />
       </div>
 
-      <ArticleContents toc={toc} label="Contents" />
-
       {category && (
         <div>
           <span class="art-rail-lab">Category</span>
@@ -119,6 +117,11 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
       <div class="rail-digest">
         <DigestSubscribe variant="rail" heading="Subscribe to the GBTI Digest" />
       </div>
+
+      {/* Owner, 2026-10-14: Contents comes LAST, so it is what stays in view once the reader has scrolled past the rest
+          of the rail (pd-enhance fitStickyRail pins a tall rail by its bottom). It used to sit in the middle and could
+          not be reached on a short window, then stuck over the tags. */}
+      <ArticleContents toc={toc} label="Contents" />
     </aside>
 
     <div class="art-j-close">
@@ -130,7 +133,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
 <script>
   import { initToc, fitStickyRail } from '../../lib/pd-enhance.mjs';
   initToc(document, 'art');
-  fitStickyRail(document.querySelector('.art-j-rail')); // a rail taller than the window keeps its Contents in view instead
+  fitStickyRail(document.querySelector('.art-j-rail')); // a rail taller than the window scrolls with the article until its end shows, then sticks
 
   // sow-183: the owner/superadmin Edit pill. See projects/[slug].astro / src/lib/content.ts for the shared pattern.
   import { wireEditAffordance } from '../../lib/content';
