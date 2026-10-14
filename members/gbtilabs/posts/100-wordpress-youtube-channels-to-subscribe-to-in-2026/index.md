@@ -45,19 +45,17 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 ---
 **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
 
-- **Focus:** share of 2026 videos about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with repeated description footers excluded.
-- **Volume:** WordPress videos posted in 2026
-- **Reach:** median views per video
-- **Engagement:** views compared with subscribers
-- **Seller:** 0.75 for channels run by plugin or theme companies, and 1 for every other channel. Those channels often make videos to sell their own products, and we wanted to favor channels that teach and share news.
-
-Focus, Volume, Reach and Engagement are each where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
+- **Focus:** What share of the channel's 2026 videos are about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with repeated description footers excluded.
+- **Volume:** How many of a channel's videos posted in 2026 were related to WordPress.
+- **Reach:** How many views a channel's typical video gets. Typical means the median views per video, counted over every video the channel posted in the 12 months before 10 October 2026, when data collection stopped. Only videos longer than three minutes are used, so Shorts do not decide it. If a channel posted no video longer than three minutes in that window, all of its videos from that window are used instead.
+- **Engagement:** How many views a channel's typical video gets compared with how many subscribers the channel has. This is the same median views used for Reach, divided by the subscriber count. A channel with fewer than 100 subscribers is treated as having 100, so a channel with only a handful of subscribers does not jump to the top.
+- **Seller:** Whether the channel is run by a plugin or theme company. Those channels get 0.75 and every other channel gets 1. They often make videos to sell their own products, and we wanted to favor channels that teach and share news.
 
 Five WordPress community channels are always included, whatever their score: WordCampAsia (#11), WordCampEU (#52), WordPress Tavern (#57), the official WordPress channel (#91), and Gutenberg Times (#100). The first four scored high enough to make the list on their own. Gutenberg Times is on the list because of this rule, which is why it sits at #100.
 ```
 
 ```callout warning
-Heads up! Our scoring algorithm is not perfect! Over 14,000 videos were analyzed and we're bound to have missed or misinterpreted a video's relevance. Thanks for understanding and we'll do even better in 2027.
+Heads up! Our scoring algorithm is not perfect! Over 14,000 videos were analyzed and we're bound to have missed or misinterpreted video relevance on several occasions per channel. Thanks for understanding and we'll do even better in 2027.
 ```
 
 ## Types of Channels Surveyed
