@@ -1,18 +1,21 @@
 ---
-type: project
-title: Jockey Radio
+title: 'Minecraft Fabric Mod: Jockey Radio'
 slug: jockey-radio
-author: gbtilabs
-status: published
-visibility: public
 shortDescription: >-
-  A Minecraft Fabric server mod that puts live radio, streams, and custom audio on music discs, played
-  through jukebox speakers with Simple Voice Chat.
+  A Minecraft Fabric server mod that puts live radio, streams, and custom audio on music discs,
+  played through jukebox speakers with Simple Voice Chat.
 categories:
   - entertainment
   - gaming
   - minecraft
   - mods
+status: published
+visibility: public
+publicStub: false
+pricing: free
+license: Custom
+licenseUrl: https://github.com/gbti-network/jockey-radio/blob/main/LICENSE
+requires: Minecraft 26.2 with Fabric API and Simple Voice Chat 2.6.21+
 tags:
   - minecraft
   - fabric
@@ -23,25 +26,31 @@ tags:
   - music-discs
 platforms:
   - Minecraft Java
-pricing: free
-requires: Minecraft 26.2 with Fabric API and Simple Voice Chat 2.6.21+
-license: Custom
-licenseUrl: https://github.com/gbti-network/jockey-radio/blob/main/LICENSE
 icon: ./images/jockey-radio-icon-128x128.webp
 iconLarge: ./images/jockey-radio-icon-256x256.webp
 featuredImage: ./images/jockey-radio-featured.webp
 bannerPreset: mods
 gallery:
   - src: ./images/jockey-radio-shot-1.webp
-    caption: Nearby players hear the jukebox through Simple Voice Chat while the HUD reports that the station is on air.
+    caption: >-
+      Nearby players hear the jukebox through Simple Voice Chat while the HUD reports that the
+      station is on air.
   - src: ./images/jockey-radio-shot-2.webp
-    caption: Connect an HLS playlist, internet radio station, podcast feed, or HTTP audio stream, and set its range and look.
+    caption: >-
+      Connect an HLS playlist, internet radio station, podcast feed, or HTTP audio stream, and set
+      its range and look.
   - src: ./images/jockey-radio-shot-3.webp
-    caption: Set up an RTMP receiver for OBS, DJ software, broadcast automation, or a relay, with its port, stream key, and public host.
+    caption: >-
+      Set up an RTMP receiver for OBS, DJ software, broadcast automation, or a relay, with its port,
+      stream key, and public host.
   - src: ./images/jockey-radio-shot-4.webp
-    caption: Copy the RTMP server, stream key, or full ingest URL, then test, monitor, or give the finished disc in game.
+    caption: >-
+      Copy the RTMP server, stream key, or full ingest URL, then test, monitor, or give the finished
+      disc in game.
   - src: ./images/jockey-radio-shot-5.webp
-    caption: Loop or play audio files kept on the server or reached over HTTP, with repeat behavior, radius, colors, and styles.
+    caption: >-
+      Loop or play audio files kept on the server or reached over HTTP, with repeat behavior,
+      radius, colors, and styles.
   - src: ./images/jockey-radio-shot-6.webp
     caption: Radio discs can take the look of any disc in Minecraft's music-disc collection.
 sidebarPosition: right
@@ -59,7 +68,10 @@ links:
   - type: support
     url: https://github.com/gbti-network/jockey-radio/issues
     label: Report an issue
-publishedAt: 2026-10-13
+publishedAt: '2026-10-13T00:00:00.000Z'
+updatedAt: '2026-10-14T13:21:02.464Z'
+type: project
+author: gbtilabs
 ---
 
 Create a disc, place it in a jukebox, and nearby players hear the audio through
@@ -71,11 +83,16 @@ Simple Voice Chat client, so no other client mod is needed.
 Each radio disc plays one source:
 
 - **HLS and internet radio:** HLS playlists, SavePoint station streams, Icecast streams, HTTP audio, and
+
   compatible broadcast endpoints.
+
 - **RTMP receive:** the Minecraft server becomes an RTMP ingest endpoint, so you can broadcast directly from
+
   OBS, SavePoint, or other broadcasting software or relays.
+
 - **Direct URLs and local audio:** play a direct audio URL or loop a file kept on the server.
 - **SavePoint:** connect a SavePoint station over HLS, or push a live SavePoint broadcast into Minecraft over
+
   RTMP. The [Now Playing API](https://savepoint.fm/docs/api/now-playing-api) shows the current track in the
   boss bar.
 
