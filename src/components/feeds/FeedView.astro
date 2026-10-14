@@ -31,6 +31,9 @@ interface Props {
   fold?: boolean;
 }
 const { narrow, items, membersItems = [], avatarIndex, membersShareCount, fold = true } = Astro.props;
+// Owner, 2026-10-14: a feed tab shows 30 items per load before the Next button. The list's default of 10 left Projects
+// at 10 of its 19 public items. The homepage keeps 10, since it passes no pageSize.
+const FEED_PAGE_SIZE = 30;
 // sow-389: the phone bar names the feed as its chip does.
 const foldLabel = FEED_NAV.find((t) => t.key === narrow)?.label ?? 'All';
 
@@ -135,7 +138,7 @@ for (const it of narrowed) {
       </div>
     </>
   ) : (
-    <FeedList items={narrowed} membersItems={membersNarrowed} avatarIndex={avatarIndex} />
+    <FeedList items={narrowed} membersItems={membersNarrowed} avatarIndex={avatarIndex} pageSize={FEED_PAGE_SIZE} />
   )}
 
   {/* sow-370 (owner, 2026-09-19): the join panel sits at the FOOT of the feed rather than after the fourth
