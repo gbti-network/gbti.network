@@ -17,6 +17,7 @@ import { cardTitleFor } from '../lib/link-card.mjs'; // sow-445: the link card n
 import CookieConsent from '../components/CookieConsent.astro';
 import DigestInvite from '../components/mail/DigestInvite.astro';
 import Lightbox from '../components/Lightbox.astro';
+import BackToTop from '../components/BackToTop.astro'; // owner, 2026-10-14: desktop back-to-top, bottom right
 import CloudflareAnalytics from '../components/CloudflareAnalytics.astro';
 import { knownImageSize } from '../lib/og-image-size.mjs';
 import { SIGNUP_BASE } from '../lib/membership'; // sow-158 Phase 2: the Worker origin, stamped site-wide for the cookie hydrator
@@ -154,6 +155,7 @@ const ogImageSize = measuredOgImageSize ?? knownImageSize(ogImage || DEFAULT_OG_
         page, which carries its own chrome (today only the archived Codeable lander, a sales page it stays off anyway). */}
     {!bare && <DigestInvite />}
     <Lightbox />{/* SOW-175: site-wide click-to-enlarge for body images + product galleries */}
+    {!bare && <BackToTop />}
     {/* SOW-030: reflect the GBTI extension's page-safe identity signal onto <html> (is-gbti-member /
         is-gbti-paid / data-gbti-role) so components + CSS can show a signed-in / member experience. Presentation
         only and UNTRUSTED for security (see src/lib/member-signal.ts); the token never reaches the page.

@@ -122,8 +122,9 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
 </section>
 
 <script>
-  import { initToc } from '../../lib/pd-enhance.mjs';
+  import { initToc, fitStickyRail } from '../../lib/pd-enhance.mjs';
   initToc(document, 'art');
+  fitStickyRail(document.querySelector('.art-e-aside')); // a rail taller than the window keeps its Contents in view instead
 
   // sow-183: the owner/superadmin Edit pill (either the hero or the flat-header variant -- exactly one
   // renders, never both). See projects/[slug].astro / src/lib/content.ts for the shared pattern.

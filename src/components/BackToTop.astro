@@ -1,0 +1,46 @@
+---
+// Owner, 2026-10-14: "a return to the top button added to the bottom right side of the screen on desktop." One round
+// button, fixed bottom right, shown once the reader is a screen down the page. Desktop only (a fine pointer and a wide
+// window): on a phone the browser already returns to the top from its own bar, and a fixed button would cover text.
+// The cookie notice sits above it while it is open (z-index 400 against 300 here).
+---
+<button type="button" class="to-top" data-to-top aria-label="Back to top" title="Back to top" hidden>
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+
+<style>
+  .to-top { display: none; }
+  @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+    .to-top {
+      position: fixed; right: 24px; bottom: 24px; z-index: 300;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; padding: 0; border-radius: 999px; cursor: pointer;
+      background: var(--paper); color: var(--fg); border: 1.5px solid var(--line-2);
+      box-shadow: var(--sh-md);
+      transition: border-color .15s, color .15s, transform .15s;
+    }
+    .to-top:hover { border-color: var(--green); color: var(--green); transform: translateY(-2px); }
+    .to-top:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+    .to-top[hidden] { display: none; }
+  }
+</style>
+
+<script>
+  const btn = document.querySelector<HTMLButtonElement>('[data-to-top]');
+  if (btn) {
+    // Shown once the reader is a full screen down; rAF-throttled so a scroll does one read per frame.
+    let queued = false;
+    const sync = () => { queued = false; btn.hidden = window.scrollY < window.innerHeight; };
+    const onScroll = () => { if (!queued) { queued = true; requestAnimationFrame(sync); } };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    sync();
+    btn.addEventListener('click', () => {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+      // Keyboard users land at the top of the page, not on a button that is about to hide.
+      const main = document.getElementById('main');
+      if (main) { main.setAttribute('tabindex', '-1'); main.focus({ preventScroll: true }); }
+    });
+  }
+</script>
