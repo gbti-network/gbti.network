@@ -18375,22 +18375,35 @@ function revealBodyHtml(md) {
   const out = [];
   let para = [];
   let list = [];
+  let blank = false;
   const flush = () => {
     if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc2(l))).join(" ")}</p>`);
-    if (list.length) out.push(`<ul>${list.map((l) => `<li>${inlineMd(esc2(l))}</li>`).join("")}</ul>`);
+    if (list.length) out.push(`<ul>${list.map((it) => `<li>${inlineMd(esc2(it.text))}${it.sub.some((s) => s.trim()) ? revealBodyHtml(it.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
     para = [];
     list = [];
   };
   for (const raw of String(md).split("\n")) {
     const l = raw.trim();
-    const item = l.match(/^[-*]\s+(.*)$/);
     if (!l) {
-      flush();
+      if (list.length) blank = true;
+      else flush();
       continue;
     }
+    if (list.length && /^\s{2,}\S/.test(raw)) {
+      const it = list[list.length - 1];
+      if (blank) it.sub.push("");
+      it.sub.push(raw.replace(/^\s{2,4}/, ""));
+      blank = false;
+      continue;
+    }
+    if (blank) {
+      flush();
+      blank = false;
+    }
+    const item = l.match(/^[-*]\s+(.*)$/);
     if (item) {
       if (para.length) flush();
-      list.push(item[1]);
+      list.push({ text: item[1], sub: [] });
       continue;
     }
     if (list.length) flush();

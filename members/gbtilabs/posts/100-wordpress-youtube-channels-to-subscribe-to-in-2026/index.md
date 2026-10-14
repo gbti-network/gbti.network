@@ -45,8 +45,17 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 ---
 **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
 
-- **Focus:** What share of the channel's 2026 videos are about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with repeated description footers excluded.
-- **Volume:** How many of a channel's videos posted in 2026 were related to WordPress.
+- **Focus:** What share of the channel's 2026 videos are about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video is credited as WordPress the same way as under Volume, below.
+- **Volume:** How many of a channel's videos posted in 2026 were related to WordPress. The algorithm credits a video if its title names WordPress, or if it has a WordPress tag in addition to the video's own description mentioning WordPress. A title also counts when it names a WordPress product such as WooCommerce, Gutenberg or Elementor.
+
+  Before a description is read, we cut:
+
+  - Repeated description footers. A line that appears in three or more of the channel's video descriptions is treated as a footer and cut. Lines are compared loosely (by their letters only), so a footer with a changed number, date or emoji still counts as the same line.
+  - Links. Every web address is cut.
+  - Hashtag lines. A line made only of hashtags is cut.
+  - The channel's own brand name. A channel's own brand (for example "Elementor" on Elementor's own channel) never counts as the WordPress mention in its tags or descriptions. Its titles still count normally. A company that names itself in every tag and description tells us nothing about one video.
+
+  Only the first 300 characters of what is left are read, which is where creators usually say what the video is about.
 - **Reach:** How many views a channel's typical video gets. Typical means the median views per video, counted over every video the channel posted in the 12 months before 10 October 2026, when data collection stopped. Only videos longer than three minutes are used, so Shorts do not decide it. If a channel posted no video longer than three minutes in that window, all of its videos from that window are used instead.
 - **Engagement:** How many views a channel's typical video gets compared with how many subscribers the channel has. This is the same median views used for Reach, divided by the subscriber count. A channel with fewer than 100 subscribers is treated as having 100, so a channel with only a handful of subscribers does not jump to the top.
 - **Seller:** Whether the channel is run by a plugin or theme company. Those channels get 0.75 and every other channel gets 1. They often make videos to sell their own products, and we wanted to favor channels that teach and share news.
@@ -70,7 +79,7 @@ The channels vary widely in size. The median channel has **10,500 subscribers**.
 
 ![Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,725 of 6,707 videos (70%). Plugin and theme companies 86% of 1,914; Developer educators 81% of 388; Agencies and freelancers 68% of 569; Independent creators 68% of 2,168; Official and community 64% of 814; News, podcasts and shows 46% of 854.](./images/wordpress-vs-other-topics-by-type.svg)
 
-Across all 100 channels, 4,725 of the 6,707 videos posted in 2026 are about WordPress. That is 70% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
+Across all 100 channels, 4,725 of the 6,707 videos posted in 2026 are about WordPress. That is 70% of total videos posted.
 
 ### AI is in nearly one title in five
 

@@ -130,21 +130,32 @@ const inlineMd = (escaped) => escaped
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
 
-/** The reveal body: blank lines split paragraphs, "- " or "* " lines make a list. */
+/** The reveal body: blank lines split paragraphs, "- " or "* " lines make a list. Lines indented under a list item
+ *  (owner, 2026-10-14: the Volume factor's own list of what is cut from a description) belong to that item and are
+ *  rendered the same way inside it, so an item can hold its own paragraphs and a nested list. */
 function revealBodyHtml(md) {
   const out = [];
   let para = [];
-  let list = [];
+  let list = []; // [{ text, sub: the item's indented lines, dedented }]
+  let blank = false;
   const flush = () => {
     if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc(l))).join(' ')}</p>`);
-    if (list.length) out.push(`<ul>${list.map((l) => `<li>${inlineMd(esc(l))}</li>`).join('')}</ul>`);
+    if (list.length) out.push(`<ul>${list.map((it) => `<li>${inlineMd(esc(it.text))}${it.sub.some((s) => s.trim()) ? revealBodyHtml(it.sub.join('\n')) : ''}</li>`).join('')}</ul>`);
     para = []; list = [];
   };
   for (const raw of String(md).split('\n')) {
     const l = raw.trim();
+    if (!l) { if (list.length) blank = true; else flush(); continue; }
+    if (list.length && /^\s{2,}\S/.test(raw)) { // under the last item
+      const it = list[list.length - 1];
+      if (blank) it.sub.push('');
+      it.sub.push(raw.replace(/^\s{2,4}/, ''));
+      blank = false;
+      continue;
+    }
+    if (blank) { flush(); blank = false; }
     const item = l.match(/^[-*]\s+(.*)$/);
-    if (!l) { flush(); continue; }
-    if (item) { if (para.length) flush(); list.push(item[1]); continue; }
+    if (item) { if (para.length) flush(); list.push({ text: item[1], sub: [] }); continue; }
     if (list.length) flush();
     para.push(l);
   }

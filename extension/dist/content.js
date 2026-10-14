@@ -4321,22 +4321,35 @@ ${listStyleProseCss(".doc-blocks")}
     const out = [];
     let para = [];
     let list = [];
+    let blank2 = false;
     const flush = () => {
       if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
-      if (list.length) out.push(`<ul>${list.map((l) => `<li>${inlineMd(esc3(l))}</li>`).join("")}</ul>`);
+      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
       para = [];
       list = [];
     };
     for (const raw of String(md).split("\n")) {
       const l = raw.trim();
-      const item = l.match(/^[-*]\s+(.*)$/);
       if (!l) {
-        flush();
+        if (list.length) blank2 = true;
+        else flush();
         continue;
       }
+      if (list.length && /^\s{2,}\S/.test(raw)) {
+        const it2 = list[list.length - 1];
+        if (blank2) it2.sub.push("");
+        it2.sub.push(raw.replace(/^\s{2,4}/, ""));
+        blank2 = false;
+        continue;
+      }
+      if (blank2) {
+        flush();
+        blank2 = false;
+      }
+      const item = l.match(/^[-*]\s+(.*)$/);
       if (item) {
         if (para.length) flush();
-        list.push(item[1]);
+        list.push({ text: item[1], sub: [] });
         continue;
       }
       if (list.length) flush();

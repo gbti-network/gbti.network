@@ -67,6 +67,20 @@ test('HTML: weight bar, legend, note, a closed details with Show and Hide labels
   assert.doesNotMatch(renderDataBlock('reveal', '---\n<script>x</script> [a](javascript:alert(1))'), /<script|href="javascript/);
 });
 
+test('body: lines indented under an item stay in that item, as its own paragraphs and nested list', () => {
+  const body = ['- **Volume:** Counted.', '', '  Before reading, we cut:', '', '  - Footers.', '  - Links.', '', '  Only the start is read.', '- **Reach:** Views.', '', 'After.'].join('\n');
+  const html = renderDataBlock('reveal', `---\n${body}`);
+  assert.match(html, /<div class="gbti-reveal-body"><ul><li><strong>Volume:<\/strong> Counted\.<p>Before reading, we cut:<\/p><ul><li>Footers\.<\/li><li>Links\.<\/li><\/ul><p>Only the start is read\.<\/p><\/li><li><strong>Reach:<\/strong> Views\.<\/li><\/ul><p>After\.<\/p><\/div>/);
+  // unindented text keeps the old behaviour: a blank line ends the list, an unindented item after it starts a new one
+  assert.match(renderDataBlock('reveal', '---\n- a\n\n- b\n\nc'), /<ul><li>a<\/li><\/ul><ul><li>b<\/li><\/ul><p>c<\/p>/);
+  assert.match(renderDataBlock('reveal', '---\n- a\nb'), /<ul><li>a<\/li><\/ul><p>b<\/p>/);
+});
+
+test('site: a nested list in the reveal body survives the sanitizer', async () => {
+  const html = await site(`${F}reveal Show\n---\n- Top\n\n  - Inner\n${F}\n`);
+  assert.match(html, /<li>Top<ul><li>Inner<\/li><\/ul><\/li>/);
+});
+
 test('site: the sanitizer keeps exactly the reveal classes and drops look-alikes', async () => {
   const html = await site(`Lead\n\n${REVEAL}\n`);
   for (const c of ['gbti-reveal', 'gbti-reveal-weights', 'gbti-reveal-seg gbti-reveal-seg-1 gbti-bar-w-40', 'gbti-reveal-legend', 'gbti-reveal-key', 'gbti-reveal-swatch', 'gbti-reveal-note', 'gbti-reveal-more', 'gbti-reveal-toggle', 'gbti-reveal-chev', 'gbti-reveal-show', 'gbti-reveal-hide', 'gbti-reveal-body']) {
