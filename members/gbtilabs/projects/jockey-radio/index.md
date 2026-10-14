@@ -2,7 +2,7 @@
 type: project
 title: Jockey Radio
 slug: jockey-radio
-author: atwellpub
+author: gbtilabs
 status: published
 visibility: public
 shortDescription: >-
