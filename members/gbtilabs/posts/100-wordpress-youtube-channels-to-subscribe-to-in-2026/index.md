@@ -45,7 +45,7 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 ---
 **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
 
-- **Focus:** share of 2026 videos about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with channel-wide tags and repeated description footers excluded.
+- **Focus:** share of 2026 videos about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with repeated description footers excluded.
 - **Volume:** WordPress videos posted in 2026
 - **Reach:** median views per video
 - **Engagement:** views compared with subscribers
@@ -54,31 +54,31 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 Focus, Volume, Reach and Engagement are each where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
 ```
 
-Subscriber count alone does not raise a score. Five WordPress community channels are always included, whatever their score: WordCampAsia (#13), WordCampEU (#55), WordPress Tavern (#56), the official WordPress channel (#99), and Gutenberg Times (#100). The first three scored high enough to make the list on their own. The official WordPress channel and Gutenberg Times are on the list because of this rule, which is why they sit at #99 and #100.
+Subscriber count alone does not raise a score. Five WordPress community channels are always included, whatever their score: WordCampAsia (#14), WordCampEU (#55), WordPress Tavern (#58), the official WordPress channel (#99), and Gutenberg Times (#100). The first three scored high enough to make the list on their own. The official WordPress channel and Gutenberg Times are on the list because of this rule, which is why they sit at #99 and #100.
 
 ## Types of Channels Surveyed
 
 ### Who makes WordPress videos in 2026?
 
-![The 100 channels by type: Independent creators 38; Plugin and theme companies 32; Developer educators 12; News, podcasts and shows 8; Official and community 7; Agencies and freelancers 3.](./images/the-100-by-type.svg)
+![The 100 channels by type: Independent creators 38; Plugin and theme companies 31; Developer educators 12; News, podcasts and shows 8; Official and community 8; Agencies and freelancers 3.](./images/the-100-by-type.svg)
 
-The channels vary widely in size. The median channel has **10,600 subscribers**. Sixteen channels have **100,000 subscribers** or more, while 22 have fewer than 1,000. Together, the 100 posted **4,929 videos about WordPress in 2026**.
+The channels vary widely in size. The median channel has **10,600 subscribers**. Sixteen channels have **100,000 subscribers** or more, while 22 have fewer than 1,000. Together, the 100 posted **4,866 videos about WordPress in 2026**.
 
 ### What is the topic density related to WordPress for these channels?
 
-![Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,929 of 7,110 videos (69%). Developer educators 81% of 420; Plugin and theme companies 81% of 2,238; Agencies and freelancers 67% of 628; Independent creators 66% of 2,450; Official and community 61% of 653; News, podcasts and shows 49% of 721.](./images/wordpress-vs-other-topics-by-type.svg)
+![Share of the videos posted in 2026 that are about WordPress, by channel type. All 100 channels: 4,866 of 6,894 videos (71%). Plugin and theme companies 86% of 1,968; Developer educators 81% of 420; Agencies and freelancers 67% of 628; Independent creators 66% of 2,450; Official and community 62% of 707; News, podcasts and shows 50% of 721.](./images/wordpress-vs-other-topics-by-type.svg)
 
-Across all 100 channels, 4,929 of the 7,110 videos posted in 2026 are about WordPress. That is 69% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
+Across all 100 channels, 4,866 of the 6,894 videos posted in 2026 are about WordPress. That is 71% of total videos posted. So this list ended up representing channels that trend to creating videos about or involving WordPress.
 
 ### AI is in nearly one title in five
 
-![Share of 2026 video titles that mention AI, by channel type. Overall 19% of 7110 titles; 76 of the 100 channels used an AI term at least once. Independent creators 22%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.](./images/ai-in-2026-titles.svg)
+![Share of 2026 video titles that mention AI, by channel type. Overall 19% of 6894 titles; 76 of the 100 channels used an AI term at least once. Independent creators 22%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.](./images/ai-in-2026-titles.svg)
 
-Of the 7,110 titles posted by the 100 channels in 2026, 1,351 use an AI term. That is 19%, or nearly one title in five. We found this interesting, but AI mentions did not affect the final scores in any way.
+Of the 6,894 titles posted by the 100 channels in 2026, 1,323 use an AI term. That is 19%, or nearly one title in five. We found this interesting, but AI mentions did not affect the final scores in any way.
 
 ### 16:9 (Long form) still dominates WordPress
 
-![How the 100 channels use YouTube Shorts: 17 have posted no Shorts, 77 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts.](./images/shorts-habit-of-the-100.svg)
+![How the 100 channels use YouTube Shorts: 17 have posted no Shorts, 78 post some Shorts (up to half of their uploads), 5 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts.](./images/shorts-habit-of-the-100.svg)
 
 Long-form video still carries WordPress on YouTube. Most of these channels treat Shorts as a side dish: only about 6% of the typical channel's uploads are Shorts, and 17 channels have posted none at all.
 
@@ -125,8 +125,8 @@ https://www.youtube.com/watch?v=-QVRu0ITsOQ
 caption: Official and community · Always included
 42: score out of 100
 118K: subscribers
-60%: of 2026 videos about WordPress
-240: WordPress videos in 2026
+62%: of 2026 videos about WordPress
+246: WordPress videos in 2026
 ```
 
 ```button primary
@@ -134,49 +134,28 @@ Subscribe to @WordPress
 https://www.youtube.com/@WordPress?sub_confirmation=1
 ```
 
-### #98. Melapress
+### #98. Negocios y WordPress
 
-Melapress publishes security analysis, panel discussions and administrative guides focused on WordPress and multisite hardening. The 2026 titles examine developer documentation practices, passkey implementation, membership site risks and the broader threat landscape including prompt injection and cross-platform vulnerabilities. The channel also produces survey findings and interviews with practitioners such as Milana Cap of XWP.
+Negocios y WordPress is a Spanish-language podcast and community for WordPress professionals and freelancers looking to grow their business. The 2026 episodes cover AI agents, the WordPress 7.1 and 7.0 releases, performance optimization, and page builders such as Elementor and Bricks. Other topics include OpenCode, hosting from cPanel to Vercel, and experiments with AI-assisted development and design tools.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=9_2GdvB9-l0
+https://www.youtube.com/watch?v=mDd8YG7kLOE
 ```
 
 ```stats
-caption: Plugin and theme companies
+caption: News, podcasts and shows · In Spanish
 43: score out of 100
-272: subscribers
-49%: of 2026 videos about WordPress
-132: WordPress videos in 2026
+3K: subscribers
+42%: of 2026 videos about WordPress
+8: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @melapresshq
-https://www.youtube.com/@melapresshq?sub_confirmation=1
+Subscribe to @negociosWP
+https://www.youtube.com/@negociosWP?sub_confirmation=1
 ```
 
-### #97. Within WordPress
-
-Within WordPress publishes interviews and event coverage with a focus on agency strategy, publishing workflows, and technical SEO. The 2026 episodes include conversations on agentic search, WooCommerce development, JavaScript-only sites, and CloudFest business programming. One episode is about growing a YouTube channel with WordPress tutorials while building a pizza business.
-
-```embed lightbox
-https://www.youtube.com/watch?v=-Ryfl5PZT8k
-```
-
-```stats
-caption: News, podcasts and shows
-43: score out of 100
-203: subscribers
-83%: of 2026 videos about WordPress
-5: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @WithinWordPress
-https://www.youtube.com/@WithinWordPress?sub_confirmation=1
-```
-
-### #96. WPBeginner
+### #97. WPBeginner
 
 WPBeginner publishes English-language WordPress tutorials for building sites, increasing traffic, and growing online businesses. The channel covers AI website building, form creation, menu editing, and WordPress updates, with walkthroughs of tools like WPVibe and demonstrations of tasks delegated to ChatGPT.
 
@@ -197,7 +176,7 @@ Subscribe to @wpbeginner
 https://www.youtube.com/@wpbeginner?sub_confirmation=1
 ```
 
-### #95. Mr Web
+### #96. Mr Web
 
 Mr Web covers WordPress alongside broader web design and business automation topics. Tutorials in 2026 include translating entire WordPress sites without duplication, comparing membership plugins, and integrating Figma workflows into WordPress through Kirki. The channel also tests AI tools for web design and covers affiliate programs and sales funnels.
 
@@ -218,7 +197,7 @@ Subscribe to @mr_web
 https://www.youtube.com/@mr_web?sub_confirmation=1
 ```
 
-### #94. WP Minute Podcasts
+### #95. WP Minute Podcasts
 
 WP Minute Podcasts is the home for The WP Minute and The WP Minute+ podcasts, with full episodes the channel says it uploads weekly. The 2026 catalog mixes short-form commentary on AI subscriptions, email management, and event strategy with a longer interview with Brian Richards on restructuring LoopConf around attendee-funded events. The channel also carries episodes on WordPress core development, design workflows, and letting AI run business systems.
 
@@ -239,28 +218,28 @@ Subscribe to @wpminutepodcasts
 https://www.youtube.com/@wpminutepodcasts?sub_confirmation=1
 ```
 
-### #93. Negocios y WordPress
+### #94. Within WordPress
 
-Negocios y WordPress is a Spanish-language podcast and community for WordPress professionals and freelancers looking to grow their business. The 2026 episodes cover AI agents, the WordPress 7.1 and 7.0 releases, performance optimization, and page builders such as Elementor and Bricks. Other topics include OpenCode, hosting from cPanel to Vercel, and experiments with AI-assisted development and design tools.
+Within WordPress publishes interviews and event coverage with a focus on agency strategy, publishing workflows, and technical SEO. The 2026 episodes include conversations on agentic search, WooCommerce development, JavaScript-only sites, and CloudFest business programming. One episode is about growing a YouTube channel with WordPress tutorials while building a pizza business.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=mDd8YG7kLOE
+https://www.youtube.com/watch?v=-Ryfl5PZT8k
 ```
 
 ```stats
-caption: News, podcasts and shows · In Spanish
-44: score out of 100
-3K: subscribers
-42%: of 2026 videos about WordPress
-8: WordPress videos in 2026
+caption: News, podcasts and shows
+43: score out of 100
+203: subscribers
+83%: of 2026 videos about WordPress
+5: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @negociosWP
-https://www.youtube.com/@negociosWP?sub_confirmation=1
+Subscribe to @WithinWordPress
+https://www.youtube.com/@WithinWordPress?sub_confirmation=1
 ```
 
-### #92. WooCommerce
+### #93. WooCommerce
 
 WooCommerce publishes merchant success stories and platform demonstrations from the maker of the e-commerce plugin. The channel features case studies on scaling from startup to high-volume operations, alongside a demo of building a search experience with Jetpack Search.
 
@@ -270,7 +249,7 @@ https://www.youtube.com/watch?v=atwg7LfctfA
 
 ```stats
 caption: Plugin and theme companies
-44: score out of 100
+43: score out of 100
 27.1K: subscribers
 100%: of 2026 videos about WordPress
 6: WordPress videos in 2026
@@ -281,7 +260,7 @@ Subscribe to @WooCommerce
 https://www.youtube.com/@WooCommerce?sub_confirmation=1
 ```
 
-### #91. Wordfence
+### #92. Wordfence
 
 Wordfence publishes weekly WordPress vulnerability reports and numbered security news briefings. The 2026 titles address WordPress plugin flaws, browser engine exploits, firewall bypasses and supply-chain attacks affecting adjacent platforms.
 
@@ -302,7 +281,7 @@ Subscribe to @WordfenceOfficial
 https://www.youtube.com/@WordfenceOfficial?sub_confirmation=1
 ```
 
-### #90. Mesaque M. Academia Web Pro-X
+### #91. Mesaque M. Academia Web Pro-X
 
 Mesaque M. at Academia Web Pro-X publishes Portuguese-language WordPress and Elementor tutorials for beginners, emphasizing low-code and AI-assisted approaches. The channel covers n8n automation, AI integration for business scaling, and vibe coding techniques, alongside WordPress connector setups for major AI platforms and automated content generation tools.
 
@@ -314,8 +293,8 @@ https://www.youtube.com/watch?v=LcNaj70AXr8
 caption: Independent creators · In Portuguese
 44: score out of 100
 79.6K: subscribers
-44%: of 2026 videos about WordPress
-47: WordPress videos in 2026
+45%: of 2026 videos about WordPress
+48: WordPress videos in 2026
 ```
 
 ```button primary
@@ -323,7 +302,7 @@ Subscribe to @AcademiaWPX
 https://www.youtube.com/@AcademiaWPX?sub_confirmation=1
 ```
 
-### #89. Greyd
+### #90. Greyd
 
 Greyd publishes tutorials and conversation series from Germany on scaling WordPress businesses. The channel covers form conversions, dynamic forms, frontend post editing, multisite setup, and global content management. The Greyd Conversations series features discussions on agency growth, AI's impact on website requirements, event reshaping, and security best practices.
 
@@ -344,49 +323,7 @@ Subscribe to @greydsuite
 https://www.youtube.com/@greydsuite?sub_confirmation=1
 ```
 
-### #88. WPExperts
-
-WPExperts publishes tutorials and product walkthroughs centered on WooCommerce store management, with a recurring focus on password protection for products, categories and entire shop pages. The channel also covers sales agent functionality, including commission structures, discount controls and intercommunication tools. According to its description, the channel represents a development agency that also builds plugins for wholesale, quoting and currency switching.
-
-```embed lightbox
-https://www.youtube.com/watch?v=Fxf_8JbdbBQ
-```
-
-```stats
-caption: Plugin and theme companies
-45: score out of 100
-883: subscribers
-90%: of 2026 videos about WordPress
-53: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @WPExpertsio
-https://www.youtube.com/@WPExpertsio?sub_confirmation=1
-```
-
-### #87. WPMayor
-
-WPMayor reviews WordPress tools and services, and describes its aim as helping viewers get to know the latest ones for building sites. The 2026 coverage includes a salon booking plugin with recurring revenue features for agencies and a free block editor extension for responsive controls.
-
-```embed lightbox
-https://www.youtube.com/watch?v=4dviIyUF58w
-```
-
-```stats
-caption: News, podcasts and shows
-45: score out of 100
-1.3K: subscribers
-50%: of 2026 videos about WordPress
-1: WordPress video in 2026
-```
-
-```button primary
-Subscribe to @WPMayor
-https://www.youtube.com/@WPMayor?sub_confirmation=1
-```
-
-### #86. Meta Box
+### #89. Meta Box
 
 Meta Box teaches custom field development and dynamic content in WordPress. The channel covers meta box creation for posts, users, and terms, alongside display techniques with MB Views and block bindings. Recent tutorials address AI agent integration for data management, WooCommerce HPOS compatibility, and advanced filtering with dynamic status and date ranges.
 
@@ -407,7 +344,28 @@ Subscribe to @MetaBoxWP
 https://www.youtube.com/@MetaBoxWP?sub_confirmation=1
 ```
 
-### #85. Dave Foy
+### #88. WP Accessibility Day
+
+WP Accessibility Day publishes recordings from a free 24-hour virtual conference focused on WordPress and accessibility. The channel offers talks on engineering accessible forms, designing accessibility into products, manual testing with screen readers, and the intersection of accessibility with artificial intelligence. Content arrives as full conference sessions, a keynote promo, and volunteer promotions.
+
+```embed lightbox
+https://www.youtube.com/watch?v=VgCeL4VI-Z4
+```
+
+```stats
+caption: Official and community
+45: score out of 100
+965: subscribers
+56%: of 2026 videos about WordPress
+30: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @WPA11yDay
+https://www.youtube.com/@WPA11yDay?sub_confirmation=1
+```
+
+### #87. Dave Foy
 
 Dave Foy publishes English-language WordPress tutorials for non-coder web designers, with a focus on the Bricks builder. The channel covers AI integration workflows, CSS class strategies, and practical experiments with letting AI tools build within Bricks.
 
@@ -428,7 +386,28 @@ Subscribe to @DaveFoy
 https://www.youtube.com/@DaveFoy?sub_confirmation=1
 ```
 
-### #84. Wpmet
+### #86. WPExperts
+
+WPExperts publishes tutorials and product walkthroughs centered on WooCommerce store management, with a recurring focus on password protection for products, categories and entire shop pages. The channel also covers sales agent functionality, including commission structures, discount controls and intercommunication tools. According to its description, the channel represents a development agency that also builds plugins for wholesale, quoting and currency switching.
+
+```embed lightbox
+https://www.youtube.com/watch?v=Fxf_8JbdbBQ
+```
+
+```stats
+caption: Plugin and theme companies
+45: score out of 100
+883: subscribers
+92%: of 2026 videos about WordPress
+54: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @WPExpertsio
+https://www.youtube.com/@WPExpertsio?sub_confirmation=1
+```
+
+### #85. Wpmet
 
 Wpmet offers step-by-step tutorials and feature walkthroughs for WordPress builders working in Elementor and Gutenberg, with frequent coverage of popup design, image galleries and booking systems. The channel demonstrates no-code approaches to navigation effects, map embedding and section protection. Its 2026 titles include introductions to PopupKit, Rox Appointment Booking and ElementsKit add-ons.
 
@@ -438,7 +417,7 @@ https://www.youtube.com/watch?v=gn2wYZMXWeg
 
 ```stats
 caption: Plugin and theme companies
-46: score out of 100
+45: score out of 100
 53K: subscribers
 88%: of 2026 videos about WordPress
 113: WordPress videos in 2026
@@ -449,28 +428,28 @@ Subscribe to @Wpmet
 https://www.youtube.com/@Wpmet?sub_confirmation=1
 ```
 
-### #83. Craylor
+### #84. Alex Cooper
 
-Craylor publishes English-language software recommendations and tutorials for entrepreneurs, with WordPress content covering AI tools, hosting, and website building. The channel includes coverage of WordCamp events, community questions, and broader explorations of AI's impact on the WordPress ecosystem.
+Alex Cooper publishes English-language content on AI, online business, and WordPress, including marketplace builds, animation tools, and performance optimization. The channel covers side projects, SaaS sales with WordPress plugins, and AI learning resources, alongside broader topics in self-development and internet business models.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=kyj9HQ901RE
+https://www.youtube.com/watch?v=p0JdwEAvVkg
 ```
 
 ```stats
 caption: Independent creators
 46: score out of 100
-64.2K: subscribers
-34%: of 2026 videos about WordPress
-13: WordPress videos in 2026
+69.3K: subscribers
+51%: of 2026 videos about WordPress
+22: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @craylor
-https://www.youtube.com/@craylor?sub_confirmation=1
+Subscribe to @alexcooperai
+https://www.youtube.com/@alexcooperai?sub_confirmation=1
 ```
 
-### #82. Make Dream Website
+### #83. Make Dream Website
 
 Make Dream Website publishes English-language WordPress tutorials demonstrating AI-assisted website building with Claude Fable and Claude Design. The channel covers 3D website creation, portfolio builds, animation effects, and deployment to hosting, alongside Elementor tutorials for advanced menu and hover effects.
 
@@ -489,6 +468,27 @@ caption: Independent creators
 ```button primary
 Subscribe to @MakeDreamWebsite
 https://www.youtube.com/@MakeDreamWebsite?sub_confirmation=1
+```
+
+### #82. Craylor
+
+Craylor publishes English-language software recommendations and tutorials for entrepreneurs, with WordPress content covering AI tools, hosting, and website building. The channel includes coverage of WordCamp events, community questions, and broader explorations of AI's impact on the WordPress ecosystem.
+
+```embed lightbox
+https://www.youtube.com/watch?v=kyj9HQ901RE
+```
+
+```stats
+caption: Independent creators
+46: score out of 100
+64.2K: subscribers
+34%: of 2026 videos about WordPress
+13: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @craylor
+https://www.youtube.com/@craylor?sub_confirmation=1
 ```
 
 ### #81. GeneratePress
@@ -512,28 +512,49 @@ Subscribe to @GeneratePress
 https://www.youtube.com/@GeneratePress?sub_confirmation=1
 ```
 
-### #80. Alex Cooper
+### #80. PublishPress
 
-Alex Cooper publishes English-language content on AI, online business, and WordPress, including marketplace builds, animation tools, and performance optimization. The channel covers side projects, SaaS sales with WordPress plugins, and AI learning resources, alongside broader topics in self-development and internet business models.
+PublishPress teaches content publishing workflows in WordPress through its plugin suite. The channel covers series and issues, author management, revision control, custom statuses, and scheduled content changes. Recent content addresses podcast platform building, AI deep research for plugin development, and security incidents in the WordPress ecosystem.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=p0JdwEAvVkg
+https://www.youtube.com/watch?v=3WrkIygDEqc
 ```
 
 ```stats
-caption: Independent creators
+caption: Plugin and theme companies
 46: score out of 100
-69.3K: subscribers
-51%: of 2026 videos about WordPress
-22: WordPress videos in 2026
+1K: subscribers
+78%: of 2026 videos about WordPress
+36: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @alexcooperai
-https://www.youtube.com/@alexcooperai?sub_confirmation=1
+Subscribe to @PublishPress
+https://www.youtube.com/@PublishPress?sub_confirmation=1
 ```
 
-### #79. MyMainWP
+### #79. Comunidad ElemenPros - Elementor & WordPress
+
+Comunidad ElemenPros publishes Spanish-language Elementor and WordPress tutorials. The channel covers Elementor beta releases, version updates, and new features, with content aimed at Spanish-speaking users of the Elementor ecosystem.
+
+```embed lightbox
+https://www.youtube.com/watch?v=f99ntfLkGnw
+```
+
+```stats
+caption: Independent creators · In Spanish
+46: score out of 100
+13.1K: subscribers
+100%: of 2026 videos about WordPress
+2: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @elemenpros
+https://www.youtube.com/@elemenpros?sub_confirmation=1
+```
+
+### #78. MyMainWP
 
 MyMainWP publishes tutorials on centralized WordPress site management. The channel covers bulk updates, security monitoring, user and password management, cache control, and WooCommerce status tracking across multiple sites. Recent content includes MainWP 6.3 features, network activity review, and MCP server integration with Claude Code for workflow automation.
 
@@ -545,8 +566,8 @@ https://www.youtube.com/watch?v=GDSmxk2F7_A
 caption: Plugin and theme companies
 47: score out of 100
 2K: subscribers
-64%: of 2026 videos about WordPress
-57: WordPress videos in 2026
+65%: of 2026 videos about WordPress
+58: WordPress videos in 2026
 ```
 
 ```button primary
@@ -554,49 +575,7 @@ Subscribe to @MyMainWP
 https://www.youtube.com/@MyMainWP?sub_confirmation=1
 ```
 
-### #78. PublishPress
-
-PublishPress teaches content publishing workflows in WordPress through its plugin suite. The channel covers series and issues, author management, revision control, custom statuses, and scheduled content changes. Recent content addresses podcast platform building, AI deep research for plugin development, and security incidents in the WordPress ecosystem.
-
-```embed lightbox
-https://www.youtube.com/watch?v=3WrkIygDEqc
-```
-
-```stats
-caption: Plugin and theme companies
-47: score out of 100
-1K: subscribers
-78%: of 2026 videos about WordPress
-36: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @PublishPress
-https://www.youtube.com/@PublishPress?sub_confirmation=1
-```
-
-### #77. Comunidad ElemenPros - Elementor & WordPress
-
-Comunidad ElemenPros publishes Spanish-language Elementor and WordPress tutorials. The channel covers Elementor beta releases, version updates, and new features, with content aimed at Spanish-speaking users of the Elementor ecosystem.
-
-```embed lightbox
-https://www.youtube.com/watch?v=f99ntfLkGnw
-```
-
-```stats
-caption: Independent creators · In Spanish
-47: score out of 100
-13.1K: subscribers
-100%: of 2026 videos about WordPress
-2: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @elemenpros
-https://www.youtube.com/@elemenpros?sub_confirmation=1
-```
-
-### #76. MotoPress
+### #77. MotoPress
 
 MotoPress publishes tutorials and product walkthroughs centered on its hotel booking plugin, along with WordPress events calendar tools. Recent videos demonstrate Stripe payment integrations, Apple Pay and Google Pay setup, booking rule configuration, and calendar redesigns in version 6.0. The channel also covers short-term rental website builds and synchronization with online travel agencies through an iCal channel manager.
 
@@ -617,28 +596,28 @@ Subscribe to @MotoPressPlugins
 https://www.youtube.com/@MotoPressPlugins?sub_confirmation=1
 ```
 
-### #75. Gravity Forms
+### #76. Ryan Welcher Codes
 
-Gravity Forms publishes tutorials on its WordPress form builder, with coverage of payments, surveys, and AI integrations. The channel demonstrates Basecamp connections, NPS survey building, Cloudflare email delivery, and local site development with Studio. Recent releases focus on the Gravity Forms MCP for AI agent connectivity and new Labs add-ons.
+Ryan Welcher Codes focuses on custom block development, Gutenberg customization, Full Site Editing, theme.json, and modern WordPress workflows. The channel describes Ryan Welcher as a Developer Advocate sponsored by Automattic and a core contributor to WordPress and Gutenberg. The channel includes live coding streams on Twitch and covers contributions to WordPress core. Recent titles address Advanced Query Loop development, custom icons in WordPress 7.1, WordPress Studio Code, iframe handling, and third-party library integration.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=HWrKzUTKpmY
+https://www.youtube.com/watch?v=yp7K2YnAq6c
 ```
 
 ```stats
-caption: Plugin and theme companies
-48: score out of 100
-2.9K: subscribers
-74%: of 2026 videos about WordPress
-85: WordPress videos in 2026
+caption: Developer educators
+47: score out of 100
+2.1K: subscribers
+53%: of 2026 videos about WordPress
+29: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @GravityWP
-https://www.youtube.com/@GravityWP?sub_confirmation=1
+Subscribe to @RyanWelcherCodes
+https://www.youtube.com/@RyanWelcherCodes?sub_confirmation=1
 ```
 
-### #74. Jamie WP
+### #75. Jamie WP
 
 Jamie WP publishes English-language WordPress content with a focus on eCommerce, email automation, and plugin integrations. The channel covers Claude Cowork connections, sticky header techniques, scam awareness, and strategies for repeat purchases and triggered email campaigns in online stores.
 
@@ -648,7 +627,7 @@ https://www.youtube.com/watch?v=OydtxivdH2s
 
 ```stats
 caption: Independent creators
-48: score out of 100
+47: score out of 100
 209K: subscribers
 37%: of 2026 videos about WordPress
 7: WordPress videos in 2026
@@ -659,7 +638,7 @@ Subscribe to @jamiewp
 https://www.youtube.com/@jamiewp?sub_confirmation=1
 ```
 
-### #73. The Admin Bar
+### #74. The Admin Bar
 
 The Admin Bar publishes WordPress tutorials, interviews, and product demos presented by Kyle Van Deusen. The channel describes itself as the place for WordPress professionals to ask questions and find answers, and its 2026 titles concentrate on GenerateBlocks features including design tokens, form builders, and CSS editors, alongside broader subjects such as cookie compliance, artificial intelligence integration, and techniques for faster, more consistent website builds.
 
@@ -680,70 +659,28 @@ Subscribe to @TheAdminBar
 https://www.youtube.com/@TheAdminBar?sub_confirmation=1
 ```
 
-### #72. Descomplicando Sites
+### #73. HasThemes
 
-Descomplicando Sites publishes Portuguese-language WordPress, Elementor, and WooCommerce tutorials for beginners, with step-by-step site creation guidance. The channel covers AI integrations including Claude and ChatGPT, payment setup for Brazilian markets, Chrome extension development, and selling websites, including high-ticket websites.
-
-```embed lightbox
-https://www.youtube.com/watch?v=s2YbDBs0dXM
-```
-
-```stats
-caption: Independent creators · In Portuguese
-48: score out of 100
-224K: subscribers
-34%: of 2026 videos about WordPress
-31: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @DescomplicandoSites
-https://www.youtube.com/@DescomplicandoSites?sub_confirmation=1
-```
-
-### #71. Ryan Welcher Codes
-
-Ryan Welcher Codes focuses on custom block development, Gutenberg customization, Full Site Editing, theme.json, and modern WordPress workflows. The channel describes Ryan Welcher as a Developer Advocate sponsored by Automattic and a core contributor to WordPress and Gutenberg. The channel includes live coding streams on Twitch and covers contributions to WordPress core. Recent titles address Advanced Query Loop development, custom icons in WordPress 7.1, WordPress Studio Code, iframe handling, and third-party library integration.
+HasThemes publishes WooCommerce and Elementor tutorials from Bangladesh. The channel covers store customization through ShopLentor, including checkout optimization, product filtering, category browsing, and wholesale pricing with Whols. Recent content includes AppSumo lifetime deal announcements and a founder introduction video. A title calls ShopLentor a plugin for Elementor and Gutenberg.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=yp7K2YnAq6c
-```
-
-```stats
-caption: Developer educators
-48: score out of 100
-2.1K: subscribers
-53%: of 2026 videos about WordPress
-29: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @RyanWelcherCodes
-https://www.youtube.com/@RyanWelcherCodes?sub_confirmation=1
-```
-
-### #70. WPDeveloper
-
-WPDeveloper produces tutorials on plugin setup and integration, with sustained attention to Elementor extensions, documentation systems and caching tools. The 2026 titles cover migration between SEO plugins, mega menu construction, AI-assisted documentation writing and MCP server connections for both ThinkRank and NotificationX. The channel describes itself as the maker of Essential Addons, BetterDocs, EmbedPress and xSpeed Cache, among other products.
-
-```embed lightbox
-https://www.youtube.com/watch?v=y9_7YYeX1ww
+https://www.youtube.com/watch?v=TDSC3hZCd_g
 ```
 
 ```stats
 caption: Plugin and theme companies
-49: score out of 100
-12.9K: subscribers
-84%: of 2026 videos about WordPress
-62: WordPress videos in 2026
+48: score out of 100
+4.1K: subscribers
+90%: of 2026 videos about WordPress
+83: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @WPDeveloper
-https://www.youtube.com/@WPDeveloper?sub_confirmation=1
+Subscribe to @hasthemes
+https://www.youtube.com/@hasthemes?sub_confirmation=1
 ```
 
-### #69. WPManageNinja
+### #72. WPManageNinja
 
 WPManageNinja publishes plugin tutorials and workflow demonstrations for the Fluent suite, covering forms, CRM, cart, booking and community tools. The 2026 titles include AI agent integrations through MCP, email failure monitoring, WhatsApp marketing setup and digital signature collection. According to its description, the channel is made for WordPress beginners, agencies, small business owners and developers.
 
@@ -764,28 +701,70 @@ Subscribe to @WPManageNinja
 https://www.youtube.com/@WPManageNinja?sub_confirmation=1
 ```
 
-### #68. HasThemes
+### #71. WPDeveloper
 
-HasThemes publishes WooCommerce and Elementor tutorials from Bangladesh. The channel covers store customization through ShopLentor, including checkout optimization, product filtering, category browsing, and wholesale pricing with Whols. Recent content includes AppSumo lifetime deal announcements and a founder introduction video. A title calls ShopLentor a plugin for Elementor and Gutenberg.
+WPDeveloper produces tutorials on plugin setup and integration, with sustained attention to Elementor extensions, documentation systems and caching tools. The 2026 titles cover migration between SEO plugins, mega menu construction, AI-assisted documentation writing and MCP server connections for both ThinkRank and NotificationX. The channel describes itself as the maker of Essential Addons, BetterDocs, EmbedPress and xSpeed Cache, among other products.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=TDSC3hZCd_g
+https://www.youtube.com/watch?v=y9_7YYeX1ww
 ```
 
 ```stats
 caption: Plugin and theme companies
 49: score out of 100
-4.1K: subscribers
-90%: of 2026 videos about WordPress
-83: WordPress videos in 2026
+12.9K: subscribers
+85%: of 2026 videos about WordPress
+63: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @hasthemes
-https://www.youtube.com/@hasthemes?sub_confirmation=1
+Subscribe to @WPDeveloper
+https://www.youtube.com/@WPDeveloper?sub_confirmation=1
 ```
 
-### #67. Build With Barn2
+### #70. Gravity Forms
+
+Gravity Forms publishes tutorials on its WordPress form builder, with coverage of payments, surveys, and AI integrations. The channel demonstrates Basecamp connections, NPS survey building, Cloudflare email delivery, and local site development with Studio. Recent releases focus on the Gravity Forms MCP for AI agent connectivity and new Labs add-ons.
+
+```embed lightbox
+https://www.youtube.com/watch?v=HWrKzUTKpmY
+```
+
+```stats
+caption: Plugin and theme companies
+49: score out of 100
+2.9K: subscribers
+77%: of 2026 videos about WordPress
+89: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @GravityWP
+https://www.youtube.com/@GravityWP?sub_confirmation=1
+```
+
+### #69. Descomplicando Sites
+
+Descomplicando Sites publishes Portuguese-language WordPress, Elementor, and WooCommerce tutorials for beginners, with step-by-step site creation guidance. The channel covers AI integrations including Claude and ChatGPT, payment setup for Brazilian markets, Chrome extension development, and selling websites, including high-ticket websites.
+
+```embed lightbox
+https://www.youtube.com/watch?v=s2YbDBs0dXM
+```
+
+```stats
+caption: Independent creators · In Portuguese
+49: score out of 100
+224K: subscribers
+36%: of 2026 videos about WordPress
+33: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @DescomplicandoSites
+https://www.youtube.com/@DescomplicandoSites?sub_confirmation=1
+```
+
+### #68. Build With Barn2
 
 Build With Barn2 offers video tutorials from the United Kingdom on optimizing a website or ecommerce business, covering WordPress, Shopify, and Wix. The channel covers document libraries, wholesale registration, discount management, and WooCommerce setup, alongside live Q&A sessions. Recent content includes CSV imports, file sharing plugin comparisons, and manual order processing.
 
@@ -806,7 +785,7 @@ Subscribe to @buildwithbarn2
 https://www.youtube.com/@buildwithbarn2?sub_confirmation=1
 ```
 
-### #66. Themeisle: WordPress Tutorials & Reviews
+### #67. Themeisle: WordPress Tutorials & Reviews
 
 Themeisle publishes WordPress tutorials and reviews from Romania for beginners and advanced users. The channel covers image offloading to CDN, AI-assisted site building with Claude and Otter Blocks, LMS creation, and WooCommerce customization. Recent tutorials focus on connecting Claude Code to WordPress through MCP and generating complete sites from prompts.
 
@@ -816,7 +795,7 @@ https://www.youtube.com/watch?v=jg5kR6C5zBg
 
 ```stats
 caption: Plugin and theme companies
-50: score out of 100
+49: score out of 100
 40.8K: subscribers
 85%: of 2026 videos about WordPress
 102: WordPress videos in 2026
@@ -825,6 +804,27 @@ caption: Plugin and theme companies
 ```button primary
 Subscribe to @Themeisle
 https://www.youtube.com/@Themeisle?sub_confirmation=1
+```
+
+### #66. Create a Pro Website
+
+Tutorials on building websites without code, with a 2026 focus on AI-assisted creation using Claude and GPT-6 Astra alongside WordPress and Elementor. The channel covers portfolio and business sites, deployment methods, domain selection, and income generation from simple websites. Formats include full build walkthroughs, tool comparisons, and beginner-oriented WordPress introductions.
+
+```embed lightbox
+https://www.youtube.com/watch?v=2VvIlQ4XAls
+```
+
+```stats
+caption: Independent creators
+49: score out of 100
+496K: subscribers
+24%: of 2026 videos about WordPress
+8: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @CreateaProWebsite
+https://www.youtube.com/@CreateaProWebsite?sub_confirmation=1
 ```
 
 ### #65. Emmanuel Gutiérrez / Diseño Web en Wordpress
@@ -911,28 +911,7 @@ Subscribe to @BuddybossWP
 https://www.youtube.com/@BuddybossWP?sub_confirmation=1
 ```
 
-### #61. Create a Pro Website
-
-Tutorials on building websites without code, with a 2026 focus on AI-assisted creation using Claude and GPT-6 Astra alongside WordPress and Elementor. The channel covers portfolio and business sites, deployment methods, domain selection, and income generation from simple websites. Formats include full build walkthroughs, tool comparisons, and beginner-oriented WordPress introductions.
-
-```embed lightbox
-https://www.youtube.com/watch?v=2VvIlQ4XAls
-```
-
-```stats
-caption: Independent creators
-50: score out of 100
-496K: subscribers
-24%: of 2026 videos about WordPress
-8: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @CreateaProWebsite
-https://www.youtube.com/@CreateaProWebsite?sub_confirmation=1
-```
-
-### #60. Remkus de Vries
+### #61. Remkus de Vries
 
 Remkus de Vries creates tutorials, deep dives, and real-world lessons for WordPress professionals on performance, security, Cloudflare, AI, and site architecture. The channel describes the presenter as having worked with agencies, enterprise organizations, hosting companies, and product teams. Recent titles cover WooCommerce performance, child themes in modern WordPress, event participation, and a video on WordPress problems and plugins.
 
@@ -942,7 +921,7 @@ https://www.youtube.com/watch?v=FxMVmhFdyy8
 
 ```stats
 caption: Developer educators
-51: score out of 100
+50: score out of 100
 774: subscribers
 64%: of 2026 videos about WordPress
 7: WordPress videos in 2026
@@ -951,6 +930,27 @@ caption: Developer educators
 ```button primary
 Subscribe to @remkusdevries
 https://www.youtube.com/@remkusdevries?sub_confirmation=1
+```
+
+### #60. Ferdy Korpershoek
+
+Ferdy Korpershoek publishes tutorials on building WordPress websites with free and paid tools, including Elementor, Divi, CartFlows, LearnDash, and various themes. The channel focuses on monetization through services, products, courses, advertising, and affiliate marketing. 2026 titles emphasize AI integration in web design, with coverage of Elementor MCP, ChatGPT-6 Astra and Claude Fable 5.1 for client work and business transformation.
+
+```embed lightbox
+https://www.youtube.com/watch?v=-RYXSC_2YSc
+```
+
+```stats
+caption: Independent creators
+50: score out of 100
+1.24M: subscribers
+48%: of 2026 videos about WordPress
+38: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @ferdycom
+https://www.youtube.com/@ferdycom?sub_confirmation=1
 ```
 
 ### #59. Happy Addons
@@ -963,7 +963,7 @@ https://www.youtube.com/watch?v=3LTeKxo31ZI
 
 ```stats
 caption: Plugin and theme companies
-51: score out of 100
+50: score out of 100
 3.4K: subscribers
 100%: of 2026 videos about WordPress
 22: WordPress videos in 2026
@@ -974,25 +974,25 @@ Subscribe to @happyaddons
 https://www.youtube.com/@happyaddons?sub_confirmation=1
 ```
 
-### #58. Ferdy Korpershoek
+### #58. WP Tavern
 
-Ferdy Korpershoek publishes tutorials on building WordPress websites with free and paid tools, including Elementor, Divi, CartFlows, LearnDash, and various themes. The channel focuses on monetization through services, products, courses, advertising, and affiliate marketing. 2026 titles emphasize AI integration in web design, with coverage of Elementor MCP, ChatGPT-6 Astra and Claude Fable 5.1 for client work and business transformation.
+WordPress Tavern publishes interview-driven episodes on the people and mechanics of the WordPress ecosystem. The 2026 lineup covers project contracts for AI development, security in the AI era, trust in hosting, legacy PHP risks, and the bridge between WordPress education and industry. Other episodes address accessibility in themes, beginner anxiety, and the state of freelance WordPress work on platforms like Upwork.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=-RYXSC_2YSc
+https://www.youtube.com/watch?v=N5sOCY3bzWw
 ```
 
 ```stats
-caption: Independent creators
+caption: News, podcasts and shows · Always included
 51: score out of 100
-1.24M: subscribers
-48%: of 2026 videos about WordPress
-38: WordPress videos in 2026
+168: subscribers
+80%: of 2026 videos about WordPress
+31: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @ferdycom
-https://www.youtube.com/@ferdycom?sub_confirmation=1
+Subscribe to @wptavern
+https://www.youtube.com/@wptavern?sub_confirmation=1
 ```
 
 ### #57. Tutor LMS
@@ -1016,25 +1016,25 @@ Subscribe to @tutorlms
 https://www.youtube.com/@tutorlms?sub_confirmation=1
 ```
 
-### #56. WP Tavern
+### #56. Formidable Forms
 
-WordPress Tavern publishes interview-driven episodes on the people and mechanics of the WordPress ecosystem. The 2026 lineup covers project contracts for AI development, security in the AI era, trust in hosting, legacy PHP risks, and the bridge between WordPress education and industry. Other episodes address accessibility in themes, beginner anxiety, and the state of freelance WordPress work on platforms like Upwork.
+Formidable Forms teaches how to turn WordPress forms into applications beyond simple contact forms. The channel covers views, directories, job boards, and searchable databases built from form entries, alongside payment integrations, quiz timers, discount codes, and data protection. Recent tutorials emphasize AI connections to Claude, ChatGPT, and Cursor, plus MCP-based form building.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=N5sOCY3bzWw
+https://www.youtube.com/watch?v=WuYyRocjmN8
 ```
 
 ```stats
-caption: News, podcasts and shows · Always included
+caption: Plugin and theme companies
 52: score out of 100
-168: subscribers
-80%: of 2026 videos about WordPress
-31: WordPress videos in 2026
+6.3K: subscribers
+91%: of 2026 videos about WordPress
+10: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @wptavern
-https://www.youtube.com/@wptavern?sub_confirmation=1
+Subscribe to @FormidableForms
+https://www.youtube.com/@FormidableForms?sub_confirmation=1
 ```
 
 ### #55. WordCamp Europe
@@ -1058,28 +1058,7 @@ Subscribe to @wordcampeurope
 https://www.youtube.com/@wordcampeurope?sub_confirmation=1
 ```
 
-### #54. Formidable Forms
-
-Formidable Forms teaches how to turn WordPress forms into applications beyond simple contact forms. The channel covers views, directories, job boards, and searchable databases built from form entries, alongside payment integrations, quiz timers, discount codes, and data protection. Recent tutorials emphasize AI connections to Claude, ChatGPT, and Cursor, plus MCP-based form building.
-
-```embed lightbox
-https://www.youtube.com/watch?v=WuYyRocjmN8
-```
-
-```stats
-caption: Plugin and theme companies
-52: score out of 100
-6.3K: subscribers
-91%: of 2026 videos about WordPress
-10: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @FormidableForms
-https://www.youtube.com/@FormidableForms?sub_confirmation=1
-```
-
-### #53. Imran Sayed - Codeytek Academy
+### #54. Imran Sayed - Codeytek Academy
 
 Imran Sayed of Codeytek Academy publishes coding tutorials from beginner to advanced levels across WordPress, WooCommerce, PHP, Laravel, Python, JavaScript, React, Next.js, Gatsby, Node.js, and GraphQL. The channel describes the presenter as a full stack developer, WordCamp speaker, meetup organizer, and theme and plugin developer. Recent titles include AI agent building, Claude integration with WordPress, Figma-to-theme conversion, PHP-only block registration in WordPress 7.0, and WordPress core development tooling.
 
@@ -1089,7 +1068,7 @@ https://www.youtube.com/watch?v=iaDMySrXrS4
 
 ```stats
 caption: Developer educators
-53: score out of 100
+52: score out of 100
 33.4K: subscribers
 75%: of 2026 videos about WordPress
 24: WordPress videos in 2026
@@ -1100,7 +1079,7 @@ Subscribe to @Codeytek
 https://www.youtube.com/@Codeytek?sub_confirmation=1
 ```
 
-### #52. WP Umbrella
+### #53. WP Umbrella
 
 WP Umbrella says it shares practical guides and real examples for WordPress professionals who manage client sites at scale. The channel covers care plan profitability, malware detection, security hardening, backup strategies, and maintenance automation. Recent content includes a title on building a profitable WordPress care business in the age of AI and titles that compare it with ManageWP.
 
@@ -1121,7 +1100,7 @@ Subscribe to @wpumbrella6366
 https://www.youtube.com/@wpumbrella6366?sub_confirmation=1
 ```
 
-### #51. WP Speed Matters
+### #52. WP Speed Matters
 
 WP Speed Matters says it offers tips, recommendations, performance testing, and optimization techniques for WordPress sites. The channel covers improvements in WordPress 7.1, CSS and JavaScript combination strategies, and the performance impact of plugin and theme updates.
 
@@ -1142,7 +1121,7 @@ Subscribe to @wpspeedmatters
 https://www.youtube.com/@wpspeedmatters?sub_confirmation=1
 ```
 
-### #50. Jonathan Jernigan
+### #51. Jonathan Jernigan
 
 Jonathan Jernigan publishes English-language WordPress content spanning tutorials, live streams, and discussions. The channel covers DNS fundamentals, query loop implementations with GenerateBlocks, and broader discussions of the WordPress ecosystem.
 
@@ -1163,28 +1142,28 @@ Subscribe to @Permaslug
 https://www.youtube.com/@Permaslug?sub_confirmation=1
 ```
 
-### #49. Elegant Themes
+### #50. Imran Siddiq - Web Squadron
 
-Elegant Themes teaches Divi 5 through tutorials, live streams, and feature updates. The channel covers AI-assisted website conversion audits, copy generation, inconsistency detection, and variable management. Recent tutorials demonstrate how to convert screenshots into native Divi sections, build a complete page with queued AI instructions, and create a complete button system with AI.
+Imran Siddiq at Web Squadron publishes English-language WordPress design and business content, with a focus on Elementor tutorials and live business discussions. The channel covers CSS techniques, cookie compliance, AI-assisted redesigns, and MCP challenges, alongside live chat sessions about web design business operations.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=5_wzjf2w6og
+https://www.youtube.com/watch?v=jrbTG-8kXeE
 ```
 
 ```stats
-caption: Plugin and theme companies
-54: score out of 100
-225K: subscribers
-85%: of 2026 videos about WordPress
-99: WordPress videos in 2026
+caption: Independent creators
+53: score out of 100
+196K: subscribers
+54%: of 2026 videos about WordPress
+149: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @elegantthemes
-https://www.youtube.com/@elegantthemes?sub_confirmation=1
+Subscribe to @websquadron
+https://www.youtube.com/@websquadron?sub_confirmation=1
 ```
 
-### #48. WordPress Help
+### #49. WordPress Help
 
 WordPress Help is a Spanish-language channel from Fernando Tellado with tutorials, guides, live website analysis, and commentary on WordPress. The 2026 catalog covers hacked site recovery, robots.txt on multisite networks, AI files for search engines, and WordPress 7.2 alongside security plugins and the block editor. Titles include the #DoctorWordPress tips and consultations show and the #WordPressChronicles news and commentary show, both with Fernando Tellado.
 
@@ -1194,7 +1173,7 @@ https://www.youtube.com/watch?v=4MWYMHWpVxU
 
 ```stats
 caption: News, podcasts and shows · In Spanish
-54: score out of 100
+53: score out of 100
 5.5K: subscribers
 61%: of 2026 videos about WordPress
 84: WordPress videos in 2026
@@ -1205,25 +1184,46 @@ Subscribe to @AyudaWPes
 https://www.youtube.com/@AyudaWPes?sub_confirmation=1
 ```
 
-### #47. Imran Siddiq - Web Squadron
+### #48. WPMayor
 
-Imran Siddiq at Web Squadron publishes English-language WordPress design and business content, with a focus on Elementor tutorials and live business discussions. The channel covers CSS techniques, cookie compliance, AI-assisted redesigns, and MCP challenges, alongside live chat sessions about web design business operations.
+WPMayor reviews WordPress tools and services, and describes its aim as helping viewers get to know the latest ones for building sites. The 2026 coverage includes a salon booking plugin with recurring revenue features for agencies and a free block editor extension for responsive controls.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=jrbTG-8kXeE
+https://www.youtube.com/watch?v=4dviIyUF58w
 ```
 
 ```stats
-caption: Independent creators
+caption: News, podcasts and shows
 54: score out of 100
-196K: subscribers
-54%: of 2026 videos about WordPress
-149: WordPress videos in 2026
+1.3K: subscribers
+100%: of 2026 videos about WordPress
+2: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @websquadron
-https://www.youtube.com/@websquadron?sub_confirmation=1
+Subscribe to @WPMayor
+https://www.youtube.com/@WPMayor?sub_confirmation=1
+```
+
+### #47. WP Speed Fix - WordPress Speed Optimization & SEO
+
+WP Speed Fix describes itself as specialists in technical SEO and WordPress site speed optimization, offering tutorials on Core Web Vitals, backend troubleshooting, and WooCommerce performance. The channel provides configuration guides for caching plugins and site audit services. Recent titles address add-to-cart speed fixes, search function optimization, hosting-specific issues, and plugin settings for Flying Press and WP Rocket.
+
+```embed lightbox
+https://www.youtube.com/watch?v=jR2HW5TZQB4
+```
+
+```stats
+caption: Developer educators
+54: score out of 100
+379: subscribers
+55%: of 2026 videos about WordPress
+11: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @wpspeedfix
+https://www.youtube.com/@wpspeedfix?sub_confirmation=1
 ```
 
 ### #46. OllieWP
@@ -1236,7 +1236,7 @@ https://www.youtube.com/watch?v=-DPQXWLQ_zo
 
 ```stats
 caption: Plugin and theme companies
-55: score out of 100
+54: score out of 100
 2.4K: subscribers
 92%: of 2026 videos about WordPress
 11: WordPress videos in 2026
@@ -1247,25 +1247,25 @@ Subscribe to @OllieWP
 https://www.youtube.com/@OllieWP?sub_confirmation=1
 ```
 
-### #45. WP Speed Fix - WordPress Speed Optimization & SEO
+### #45. Curso WordPress Definitivo
 
-WP Speed Fix describes itself as specialists in technical SEO and WordPress site speed optimization, offering tutorials on Core Web Vitals, backend troubleshooting, and WooCommerce performance. The channel provides configuration guides for caching plugins and site audit services. Recent titles address add-to-cart speed fixes, search function optimization, hosting-specific issues, and plugin settings for Flying Press and WP Rocket.
+Videoaulas, dicas e tutoriais sobre WordPress e WooCommerce. The channel publishes in Portuguese, with content covering store setup in WooCommerce, product and shipping configuration, payment integration with Mercado Pago and Correios, and foundational WordPress skills including menus, headers, and email configuration. Tutorials range from complete purchase flows to specific regional shipping rules for Brazilian stores.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=jR2HW5TZQB4
+https://www.youtube.com/watch?v=YspsW5svmfM
 ```
 
 ```stats
-caption: Developer educators
+caption: Independent creators · In Portuguese
 55: score out of 100
-379: subscribers
-55%: of 2026 videos about WordPress
-11: WordPress videos in 2026
+60K: subscribers
+83%: of 2026 videos about WordPress
+25: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @wpspeedfix
-https://www.youtube.com/@wpspeedfix?sub_confirmation=1
+Subscribe to @wpdefinitivo
+https://www.youtube.com/@wpdefinitivo?sub_confirmation=1
 ```
 
 ### #44. BestInWP
@@ -1289,28 +1289,7 @@ Subscribe to @BestInWP
 https://www.youtube.com/@BestInWP?sub_confirmation=1
 ```
 
-### #43. Curso WordPress Definitivo
-
-Videoaulas, dicas e tutoriais sobre WordPress e WooCommerce. The channel publishes in Portuguese, with content covering store setup in WooCommerce, product and shipping configuration, payment integration with Mercado Pago and Correios, and foundational WordPress skills including menus, headers, and email configuration. Tutorials range from complete purchase flows to specific regional shipping rules for Brazilian stores.
-
-```embed lightbox
-https://www.youtube.com/watch?v=YspsW5svmfM
-```
-
-```stats
-caption: Independent creators · In Portuguese
-55: score out of 100
-60K: subscribers
-83%: of 2026 videos about WordPress
-25: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @wpdefinitivo
-https://www.youtube.com/@wpdefinitivo?sub_confirmation=1
-```
-
-### #42. WPForms - WordPress Forms Plugin
+### #43. WPForms - WordPress Forms Plugin
 
 WPForms produces tutorials on its drag-and-drop WordPress form builder, which the channel describes as the most beginner friendly WordPress contact form plugin. The channel covers contact forms, subscription forms, payment forms, and surveys, with recent attention to AI-assisted form creation, dashboard management, spam protection, and specialized fields such as rankings and QR codes. Payment titles cover Paystack and Mercado Pago.
 
@@ -1320,7 +1299,7 @@ https://www.youtube.com/watch?v=aYAXU9vWY3o
 
 ```stats
 caption: Plugin and theme companies
-56: score out of 100
+55: score out of 100
 15.8K: subscribers
 93%: of 2026 videos about WordPress
 39: WordPress videos in 2026
@@ -1331,7 +1310,7 @@ Subscribe to @wpforms
 https://www.youtube.com/@wpforms?sub_confirmation=1
 ```
 
-### #41. POSIMYTH - WordPress Tutorials
+### #42. POSIMYTH - WordPress Tutorials
 
 POSIMYTH publishes Elementor and WordPress blocks tutorials from India, with a focus on e-commerce and AI-assisted site building. The channel demonstrates WooCommerce customization, including checkout, cart, and product pages, alongside full website generation with AI prompts. The channel also promotes its own plugins: The Plus Addons for Elementor, NexterWP, UiChemy for Figma conversion, and WDesignKit for templates.
 
@@ -1352,7 +1331,7 @@ Subscribe to @posimyth
 https://www.youtube.com/@posimyth?sub_confirmation=1
 ```
 
-### #40. Beaver Builder
+### #41. Beaver Builder
 
 Beaver Builder publishes tutorials on its WordPress page builder, with a strong focus on AI-assisted workflows in 2026. The channel demonstrates how to convert designs from Figma, ChatGPT, Lovable, and Claude into WordPress sites, along with custom module creation and MCP connections. Additional content addresses AI slop avoidance, local site building, and animated landing pages for users who want visual building without surrendering control.
 
@@ -1373,7 +1352,7 @@ Subscribe to @BeaverBuilderWP
 https://www.youtube.com/@BeaverBuilderWP?sub_confirmation=1
 ```
 
-### #39. WordPress Plugins from A to Z
+### #40. WordPress Plugins from A to Z
 
 WP Plugins A to Z says it runs a live show every Monday with plugin reviews and community discussion. Amber and John describe, review, and rate free, freemium, and premium WordPress plugins on air, alongside WordPress and tech news. Every other week, John hosts live interviews with WordPress community members or a solo show on Plugin Pulse, covering topics from site hardening to plugin repository changes and WordPress 7.0 updates.
 
@@ -1383,7 +1362,7 @@ https://www.youtube.com/watch?v=ejPDRsH_Q-8
 
 ```stats
 caption: News, podcasts and shows
-57: score out of 100
+56: score out of 100
 854: subscribers
 94%: of 2026 videos about WordPress
 31: WordPress videos in 2026
@@ -1392,6 +1371,27 @@ caption: News, podcasts and shows
 ```button primary
 Subscribe to @Wppluginsatoz
 https://www.youtube.com/@Wppluginsatoz?sub_confirmation=1
+```
+
+### #39. MarketHax | Cursos de WordPress y WooCommerce
+
+MarketHax publishes Spanish-language WordPress and WooCommerce free courses, covering website creation, online store setup, and AI-assisted building. The channel includes tutorials on booking systems, blog integration, SEO optimization, and the Gutenberg block editor.
+
+```embed lightbox
+https://www.youtube.com/watch?v=SS55mrqjcHI
+```
+
+```stats
+caption: Independent creators · In Spanish
+57: score out of 100
+349K: subscribers
+57%: of 2026 videos about WordPress
+24: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @markethax
+https://www.youtube.com/@markethax?sub_confirmation=1
 ```
 
 ### #38. InstaWP
@@ -1415,25 +1415,25 @@ Subscribe to @instawp
 https://www.youtube.com/@instawp?sub_confirmation=1
 ```
 
-### #37. MarketHax | Cursos de WordPress y WooCommerce
+### #37. Elegant Themes
 
-MarketHax publishes Spanish-language WordPress and WooCommerce free courses, covering website creation, online store setup, and AI-assisted building. The channel includes tutorials on booking systems, blog integration, SEO optimization, and the Gutenberg block editor.
+Elegant Themes teaches Divi 5 through tutorials, live streams, and feature updates. The channel covers AI-assisted website conversion audits, copy generation, inconsistency detection, and variable management. Recent tutorials demonstrate how to convert screenshots into native Divi sections, build a complete page with queued AI instructions, and create a complete button system with AI.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=SS55mrqjcHI
+https://www.youtube.com/watch?v=5_wzjf2w6og
 ```
 
 ```stats
-caption: Independent creators · In Spanish
+caption: Plugin and theme companies
 58: score out of 100
-349K: subscribers
-57%: of 2026 videos about WordPress
-24: WordPress videos in 2026
+225K: subscribers
+93%: of 2026 videos about WordPress
+109: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @markethax
-https://www.youtube.com/@markethax?sub_confirmation=1
+Subscribe to @elegantthemes
+https://www.youtube.com/@elegantthemes?sub_confirmation=1
 ```
 
 ### #36. Let's Build WordPress
@@ -1478,28 +1478,7 @@ Subscribe to @WPBuilds
 https://www.youtube.com/@WPBuilds?sub_confirmation=1
 ```
 
-### #34. sergioks
-
-sergioks publishes Spanish-language WordPress tutorials for people who are not programmers, covering AI tools, SEO workflows, and WooCommerce management. The channel compares plugins, explores headless WordPress hosting options, and demonstrates connecting WordPress to Claude via MCP for content and search optimization.
-
-```embed lightbox
-https://www.youtube.com/watch?v=ZVQQlQqIz7I
-```
-
-```stats
-caption: Independent creators · In Spanish
-59: score out of 100
-22.9K: subscribers
-71%: of 2026 videos about WordPress
-59: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @sergioks
-https://www.youtube.com/@sergioks?sub_confirmation=1
-```
-
-### #33. Hong Kong WordPress Meetup
+### #34. Hong Kong WordPress Meetup
 
 Hong Kong WordPress Meetup posts recordings of its local meetup sessions, with talks delivered in both English and Chinese. Recent subjects include digital accessibility, AI-assisted design, user experience principles applied to WordPress, and comparisons of WordPress with Hugo and Astro as open source content management systems.
 
@@ -1509,7 +1488,7 @@ https://www.youtube.com/watch?v=Zns0tJNEMAw
 
 ```stats
 caption: Official and community
-59: score out of 100
+58: score out of 100
 21: subscribers
 100%: of 2026 videos about WordPress
 13: WordPress videos in 2026
@@ -1520,28 +1499,7 @@ Subscribe to @Hong-Kong-WordPress-Meetup
 https://www.youtube.com/@Hong-Kong-WordPress-Meetup?sub_confirmation=1
 ```
 
-### #32. WPVaat
-
-WPVaat publishes content in Gujarati on WordPress trends, principles, and practical guidance. The channel produces podcast episodes and event coverage, including a run of videos on WordCamp Rajasthan 2026 covering venue selection, attendee experiences, local tourism, and the planning work behind the event. According to its description, the channel aims to make technology discussions accessible across generations and says it is working to add subtitles to every video so that viewers with hearing disabilities can follow along.
-
-```embed lightbox
-https://www.youtube.com/watch?v=e1D_9ZKvvIE
-```
-
-```stats
-caption: Official and community · In Gujarati
-59: score out of 100
-369: subscribers
-52%: of 2026 videos about WordPress
-76: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @wpvaat
-https://www.youtube.com/@wpvaat?sub_confirmation=1
-```
-
-### #31. WPoets TV
+### #33. WPoets TV
 
 WPoets TV covers WordPress engineering, marketing results, and open-source community stories from Pune, India. The channel describes itself as bridging high-level web engineering and marketing results, from WordPress performance and its Awesome Enterprise platform to WordCamp highlights and tech interviews. 2026 titles include coverage of WordCamp Rajasthan, IndiaFOSS 2026, Global FinTech Fest, and community contributor journeys.
 
@@ -1562,7 +1520,28 @@ Subscribe to @wpoetswebexperts
 https://www.youtube.com/@wpoetswebexperts?sub_confirmation=1
 ```
 
-### #30. Rino de Boer
+### #32. sergioks
+
+sergioks publishes Spanish-language WordPress tutorials for people who are not programmers, covering AI tools, SEO workflows, and WooCommerce management. The channel compares plugins, explores headless WordPress hosting options, and demonstrates connecting WordPress to Claude via MCP for content and search optimization.
+
+```embed lightbox
+https://www.youtube.com/watch?v=ZVQQlQqIz7I
+```
+
+```stats
+caption: Independent creators · In Spanish
+59: score out of 100
+22.9K: subscribers
+71%: of 2026 videos about WordPress
+59: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @sergioks
+https://www.youtube.com/@sergioks?sub_confirmation=1
+```
+
+### #31. Rino de Boer
 
 Rino de Boer publishes English-language WordPress content examining AI tools, builder plugins, and the evolving role of page builders. The channel covers vibe coding implementations, AI theme development, and comparisons of AI models for website building.
 
@@ -1581,6 +1560,27 @@ caption: Independent creators
 ```button primary
 Subscribe to @rinodeboer
 https://www.youtube.com/@rinodeboer?sub_confirmation=1
+```
+
+### #30. WPVaat
+
+WPVaat publishes content in Gujarati on WordPress trends, principles, and practical guidance. The channel produces podcast episodes and event coverage, including a run of videos on WordCamp Rajasthan 2026 covering venue selection, attendee experiences, local tourism, and the planning work behind the event. According to its description, the channel aims to make technology discussions accessible across generations and says it is working to add subtitles to every video so that viewers with hearing disabilities can follow along.
+
+```embed lightbox
+https://www.youtube.com/watch?v=e1D_9ZKvvIE
+```
+
+```stats
+caption: Official and community · In Gujarati
+59: score out of 100
+369: subscribers
+54%: of 2026 videos about WordPress
+79: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @wpvaat
+https://www.youtube.com/@wpvaat?sub_confirmation=1
 ```
 
 ### #29. Breakdance
@@ -1740,7 +1740,7 @@ https://www.youtube.com/watch?v=Jc9TkOLu9Hg
 
 ```stats
 caption: Independent creators · In Spanish
-64: score out of 100
+63: score out of 100
 1.7K: subscribers
 86%: of 2026 videos about WordPress
 12: WordPress videos in 2026
@@ -1751,28 +1751,7 @@ Subscribe to @EdwinCepedaWeb
 https://www.youtube.com/@EdwinCepedaWeb?sub_confirmation=1
 ```
 
-### #21. Webkima
-
-Webkima publishes Persian-language tutorials on WordPress theme development and programming. The channel offers sequential sessions on building WordPress themes with HTML and CSS fundamentals. Recent titles continue a numbered lesson series on theme building and programming.
-
-```embed lightbox
-https://www.youtube.com/watch?v=NI8noRA0eCM
-```
-
-```stats
-caption: Developer educators · In Persian
-64: score out of 100
-7K: subscribers
-100%: of 2026 videos about WordPress
-33: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @webkima
-https://www.youtube.com/@webkima?sub_confirmation=1
-```
-
-### #20. La Máquina del Branding
+### #21. La Máquina del Branding
 
 La Máquina del Branding publishes Spanish-language content on building digital projects with WordPress, including AI-assisted workflows, plugin development, and performance optimization. The channel offers a free WordPress course covering hooks, queries, functions, and PHP fundamentals, alongside podcast episodes and community resources.
 
@@ -1791,6 +1770,27 @@ caption: Independent creators · In Spanish
 ```button primary
 Subscribe to @yan_lmb
 https://www.youtube.com/@yan_lmb?sub_confirmation=1
+```
+
+### #20. Webkima
+
+Webkima publishes Persian-language tutorials on WordPress theme development and programming. The channel offers sequential sessions on building WordPress themes with HTML and CSS fundamentals. Recent titles continue a numbered lesson series on theme building and programming.
+
+```embed lightbox
+https://www.youtube.com/watch?v=NI8noRA0eCM
+```
+
+```stats
+caption: Developer educators · In Persian
+64: score out of 100
+7K: subscribers
+100%: of 2026 videos about WordPress
+33: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @webkima
+https://www.youtube.com/@webkima?sub_confirmation=1
 ```
 
 ### #19. WPMarmite - Créez et lancez votre site WordPress
@@ -1877,28 +1877,7 @@ Subscribe to @Lytbox_Academy
 https://www.youtube.com/@Lytbox_Academy?sub_confirmation=1
 ```
 
-### #15. SiteKrafter
-
-SiteKrafter publishes English-language content focused on Divi 5, including live Q&A sessions, workflow tutorials, and AI agent demonstrations. The channel covers page building, rebranding techniques, and video hosting alternatives, with walkthroughs of specific Divi 5 features and integrations.
-
-```embed lightbox
-https://www.youtube.com/watch?v=lvVZZt1eQZc
-```
-
-```stats
-caption: Independent creators
-69: score out of 100
-85.3K: subscribers
-86%: of 2026 videos about WordPress
-124: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @sitekrafter
-https://www.youtube.com/@sitekrafter?sub_confirmation=1
-```
-
-### #14. Nayyar Shaikh
+### #15. Nayyar Shaikh
 
 Nayyar Shaikh publishes English-language WordPress tutorials focused on building complete websites for specific industries and use cases. The channel covers travel booking, real estate directories, job portals, online courses, food delivery, and eCommerce stores, often demonstrating particular themes and tools in step-by-step builds.
 
@@ -1908,7 +1887,7 @@ https://www.youtube.com/watch?v=D9SOYg_URSE
 
 ```stats
 caption: Independent creators
-70: score out of 100
+69: score out of 100
 354K: subscribers
 100%: of 2026 videos about WordPress
 9: WordPress videos in 2026
@@ -1919,7 +1898,7 @@ Subscribe to @NayyarShaikh
 https://www.youtube.com/@NayyarShaikh?sub_confirmation=1
 ```
 
-### #13. WordCamp Asia
+### #14. WordCamp Asia
 
 WordCamp Asia publishes talks and behind-the-scenes coverage from what the channel describes as the premier open source web summit of Asia. The channel records sessions on WordPress for startup founders, content security policy, HTML parsing, and design longevity, alongside introductions to the event's emcees, volunteers, and organizing teams. The channel's description addresses developers, digital marketers, UI/UX designers, and tech entrepreneurs.
 
@@ -1929,7 +1908,7 @@ https://www.youtube.com/watch?v=6PHsWtN3lOY
 
 ```stats
 caption: Official and community · Always included
-71: score out of 100
+70: score out of 100
 625: subscribers
 93%: of 2026 videos about WordPress
 39: WordPress videos in 2026
@@ -1940,7 +1919,7 @@ Subscribe to @wordcampasia
 https://www.youtube.com/@wordcampasia?sub_confirmation=1
 ```
 
-### #12. WP Simple Hacks - Wordpress tips and tricks
+### #13. WP Simple Hacks - Wordpress tips and tricks
 
 WP Simple Hacks publishes English-language WordPress tips and workflow shortcuts for freelancers, small businesses, and consultants. The channel covers AI plugins for site optimization, WooCommerce features, CRM tools, booking systems, and browser extensions, with demonstrations of specific plugins like FunnelKit, Foenix AI, and ThinkRank AI.
 
@@ -1959,6 +1938,27 @@ caption: Independent creators
 ```button primary
 Subscribe to @wpsimplehacks
 https://www.youtube.com/@wpsimplehacks?sub_confirmation=1
+```
+
+### #12. Tutoriales WooCommerce - Diego Nieto
+
+Diego Nieto publishes Spanish-language WooCommerce tutorials for managing online stores, covering product variations, pricing, checkout customization, and email configuration. The channel also addresses WordPress maintenance tasks such as PHP version changes and SMTP setup.
+
+```embed lightbox
+https://www.youtube.com/watch?v=qsi6_544KdU
+```
+
+```stats
+caption: Independent creators · In Spanish
+71: score out of 100
+5.8K: subscribers
+100%: of 2026 videos about WordPress
+20: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @DiegoNieto
+https://www.youtube.com/@DiegoNieto?sub_confirmation=1
 ```
 
 ### #11. WordPress Tutorials - WPLearningLab
@@ -1982,25 +1982,25 @@ Subscribe to @wplearninglab
 https://www.youtube.com/@wplearninglab?sub_confirmation=1
 ```
 
-### #10. Tutoriales WooCommerce - Diego Nieto
+### #10. SiteKrafter
 
-Diego Nieto publishes Spanish-language WooCommerce tutorials for managing online stores, covering product variations, pricing, checkout customization, and email configuration. The channel also addresses WordPress maintenance tasks such as PHP version changes and SMTP setup.
+SiteKrafter publishes English-language content focused on Divi 5, including live Q&A sessions, workflow tutorials, and AI agent demonstrations. The channel covers page building, rebranding techniques, and video hosting alternatives, with walkthroughs of specific Divi 5 features and integrations.
 
 ```embed lightbox
-https://www.youtube.com/watch?v=qsi6_544KdU
+https://www.youtube.com/watch?v=lvVZZt1eQZc
 ```
 
 ```stats
-caption: Independent creators · In Spanish
-72: score out of 100
-5.8K: subscribers
-100%: of 2026 videos about WordPress
-20: WordPress videos in 2026
+caption: Independent creators
+73: score out of 100
+85.3K: subscribers
+92%: of 2026 videos about WordPress
+133: WordPress videos in 2026
 ```
 
 ```button primary
-Subscribe to @DiegoNieto
-https://www.youtube.com/@DiegoNieto?sub_confirmation=1
+Subscribe to @sitekrafter
+https://www.youtube.com/@sitekrafter?sub_confirmation=1
 ```
 
 ### #9. Jonathan Bossenger
@@ -2045,28 +2045,7 @@ Subscribe to @WPSimplifiedBySunil
 https://www.youtube.com/@WPSimplifiedBySunil?sub_confirmation=1
 ```
 
-### #7. Seahawk Media
-
-Seahawk Media produces the WP Legends podcast, hosted by Gautam Khorana, alongside tutorials on WordPress search and web design fundamentals. The podcast features interviews with founders and executives across hosting, domains, SEO, and the open web. The channel describes itself as born from the WordPress community and now a global services company partnering with hosts, agencies, and SaaS companies.
-
-```embed lightbox
-https://www.youtube.com/watch?v=CauIAgsTJbQ
-```
-
-```stats
-caption: Agencies and freelancers
-74: score out of 100
-93.9K: subscribers
-55%: of 2026 videos about WordPress
-186: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @seahawkmedia
-https://www.youtube.com/@seahawkmedia?sub_confirmation=1
-```
-
-### #6. WPGIZ
+### #7. WPGIZ
 
 WPGIZ publishes English-language WordPress tutorials for beginners, covering site setup, eCommerce, AI content generation, and plugin overviews. The channel emphasizes building and managing WordPress sites without coding knowledge, with walkthroughs of tools like Tutor LMS, Kirki, and WordPress.com features.
 
@@ -2076,7 +2055,7 @@ https://www.youtube.com/watch?v=95d2nA8kD_c
 
 ```stats
 caption: Independent creators
-74: score out of 100
+73: score out of 100
 7.3K: subscribers
 83%: of 2026 videos about WordPress
 76: WordPress videos in 2026
@@ -2085,6 +2064,27 @@ caption: Independent creators
 ```button primary
 Subscribe to @WPGIZ
 https://www.youtube.com/@WPGIZ?sub_confirmation=1
+```
+
+### #6. Seahawk Media
+
+Seahawk Media produces the WP Legends podcast, hosted by Gautam Khorana, alongside tutorials on WordPress search and web design fundamentals. The podcast features interviews with founders and executives across hosting, domains, SEO, and the open web. The channel describes itself as born from the WordPress community and now a global services company partnering with hosts, agencies, and SaaS companies.
+
+```embed lightbox
+https://www.youtube.com/watch?v=CauIAgsTJbQ
+```
+
+```stats
+caption: Agencies and freelancers
+73: score out of 100
+93.9K: subscribers
+55%: of 2026 videos about WordPress
+186: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @seahawkmedia
+https://www.youtube.com/@seahawkmedia?sub_confirmation=1
 ```
 
 ### #5. System 22 Web Design | Divi Theme Elementor WP
@@ -2129,28 +2129,7 @@ Subscribe to @wpworkshophq
 https://www.youtube.com/@wpworkshophq?sub_confirmation=1
 ```
 
-### #3. JAKSON
-
-Jakson publishes English-language WordPress tutorials with a focus on the block editor, Gutenberg patterns, and full site editing. The channel covers AI tools for WordPress, SEO strategies, server configuration, and CSS techniques, alongside reviews of WordPress releases and new builder plugins.
-
-```embed lightbox
-https://www.youtube.com/watch?v=SWnvP3d33cM
-```
-
-```stats
-caption: Independent creators
-80: score out of 100
-29.3K: subscribers
-100%: of 2026 videos about WordPress
-27: WordPress videos in 2026
-```
-
-```button primary
-Subscribe to @wpjakson
-https://www.youtube.com/@wpjakson?sub_confirmation=1
-```
-
-### #2. Alexis FH - Tutoriels WordPress
+### #3. Alexis FH - Tutoriels WordPress
 
 Alexis FH publishes French-language WordPress and WooCommerce tutorials for building professional sites, online stores, booking systems, and marketplace platforms. The channel covers AI integration with WordPress, including plugins like Novamira and Bymiles AI, and explores agentic CMS capabilities through tools such as Claude and ChatGPT connected via MCP.
 
@@ -2160,7 +2139,7 @@ https://www.youtube.com/watch?v=DkVFEgwbZdg
 
 ```stats
 caption: Independent creators · In French
-80: score out of 100
+79: score out of 100
 71.3K: subscribers
 90%: of 2026 videos about WordPress
 46: WordPress videos in 2026
@@ -2169,6 +2148,27 @@ caption: Independent creators · In French
 ```button primary
 Subscribe to @alexisfh
 https://www.youtube.com/@alexisfh?sub_confirmation=1
+```
+
+### #2. JAKSON
+
+Jakson publishes English-language WordPress tutorials with a focus on the block editor, Gutenberg patterns, and full site editing. The channel covers AI tools for WordPress, SEO strategies, server configuration, and CSS techniques, alongside reviews of WordPress releases and new builder plugins.
+
+```embed lightbox
+https://www.youtube.com/watch?v=SWnvP3d33cM
+```
+
+```stats
+caption: Independent creators
+79: score out of 100
+29.3K: subscribers
+100%: of 2026 videos about WordPress
+27: WordPress videos in 2026
+```
+
+```button primary
+Subscribe to @wpjakson
+https://www.youtube.com/@wpjakson?sub_confirmation=1
 ```
 
 ### #1. Elliott Richmond
