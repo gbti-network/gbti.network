@@ -20,7 +20,7 @@ layout: journal
 coverImage: ./images/wordpress-youtube-channels-2026.webp
 featured: false
 publishedAt: '2026-10-13T00:00:00.000Z'
-updatedAt: '2026-10-13T22:02:10.040Z'
+updatedAt: '2026-10-14T13:29:50.656Z'
 type: post
 author: gbtilabs
 ---
