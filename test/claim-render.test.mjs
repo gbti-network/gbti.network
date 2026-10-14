@@ -331,12 +331,12 @@ test('the preview card is pinned where Comments.astro pins it, with its label, i
   assert.match(section, /^<section id="comments" class="mx-auto" style="margin-top:48px;max-width:800px">/);
   assert.ok(section.indexOf('data-cl-note') < section.indexOf('0 Comments'), 'the note sits above the count, as published');
   assert.match(section, /<h2 class="h3" style="margin-top:40px">0 Comments<\/h2>/);
-  assert.match(section, /No comments yet\. Be the first\./);
+  // Owner, 2026-10-14: neither the published page nor its preview shows a "No comments yet" card any more.
+  assert.doesNotMatch(section, /No comments yet/);
   const comments = read('src/components/blog/Comments.astro');
   assert.match(comments, /<section id="comments" class:list=\{\[!wide && 'mx-auto'\]\} style=\{`margin-top:48px\$\{wide \? '' : ';max-width:800px'\}`\}>/);
   assert.match(comments, /<h2 class="h3" style=\{intro \? 'margin-top:40px' : ''\}/);
-  assert.match(comments, /<div class="card" data-comments-empty style="padding:24px;background:var\(--tint-warm\);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">/);
-  assert.match(section, /<div class="card" style="padding:24px;background:var\(--tint-warm\);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">/);
+  assert.doesNotMatch(comments, /No comments yet|data-comments-empty/);
   // The note body rules are Comments.astro's own (they ship only on a page that renders Comments).
   const rules = [...listing.matchAll(/^\s*(\.cmt-rich[^{]*\{[^}]*\})/gm)].map((m) => m[1]);
   assert.ok(rules.length >= 3, 'the copied body rules were found');

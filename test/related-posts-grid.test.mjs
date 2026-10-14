@@ -9,7 +9,8 @@ const src = readFileSync(ROOT + 'src/components/blog/RelatedPosts.astro', 'utf8'
 
 test('the grid auto-fits with a 240px floor, capped to the count, centred', () => {
   assert.match(src, /\.rel-grid \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(240px, 1fr\)\)/, 'as many columns as fit, each at least 240px');
-  assert.match(src, /max-width: calc\(var\(--n\) \* 340px \+ \(var\(--n\) - 1\) \* 32px\)/, 'n cards at the three-up width plus the gaps');
+  // 2026-10-14: a three-up card is a third of the full-width container (three fill it, the banner's width).
+  assert.match(src, /max-width: calc\(var\(--n\) \* \(100% - 64px\) \/ 3 \+ \(var\(--n\) - 1\) \* 32px\)/, 'n cards at the three-up width plus the gaps');
   assert.match(src, /\.rel-grid \{[^}]*margin: 0 auto/, 'centred under the heading');
   assert.match(src, /style=\{`--n:\$\{related\.length\}`\}/, 'the count the component already knows drives the cap');
 });

@@ -1,6 +1,6 @@
 ---
 // sow-179 Phase 2: this page resolves which of the three article layouts renders the post, then stays thin.
-// ContentFooter + the article-only closing blocks (OpenHistory / RelatedPosts / ContributionCredits /
+// ContentFooter + the article-only closing blocks (OpenHistory / ContributionCredits; RelatedPosts sits under the extension banner /
 // FavoritedBy) are composed once here and slotted into every layout's "closing" slot, so a layout may
 // reorder them (Journal moves FavoritedBy into its rail) but never re-implements them.
 import { imageFieldSize } from '../../lib/og-image-size.mjs'; // sow-294: declare the preview image's size
@@ -75,7 +75,6 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
     <SyndicateNow slot="tools" type="post" slug={d.slug} author={d.author || 'gbti'} authorName={authorProfile?.displayName} title={d.title} blurb={d.shortDescription} url={postUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={authorProfile?.links} image={synThumb ?? undefined} />
     <ContentFooter slot="closing" type="post" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} invite={false} />
     <OpenHistory slot="closing" filePath={post.filePath} author={d.author} contributors={d.contributors} />
-    <RelatedPosts slot="closing" post={post} />
     <ContributionCredits slot="closing" contributors={d.contributors} />
     {/* sow-183 QA fix: a slotted child's slot attribute must be a STATIC STRING, never any non-literal
         expression (`slot={expr}`, including a ternary's branches even when each branch is itself a literal
@@ -97,6 +96,10 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
       reader who has the extension and follows the extension-CTA site setting, both inside the component. The wrapper
       only adds room above the footer (the homepage leaves about 58px below the banner; on its own it leaves 18). */}
   <div class="art-xbn"><ExtensionBanner /></div>
+  {/* Owner, 2026-10-14: Related posts sit under the extension banner, in the same page-width container, so the two
+      are one width and the article's sidebar ends with the closing column (comments and the follow card) instead of
+      running on beside the related cards. */}
+  <div class="wrap art-rel"><RelatedPosts post={post} /></div>
   <EditHooks type="post" owner={d.author} slug={d.slug} />
   <TouchSignal type="post" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />
 </BaseLayout>
@@ -105,6 +108,11 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
   /* The room below the article banner, which goes when the banner does: the CTA switch is off (nothing renders) or the
      reader has the extension (its content script stamps <html data-gbti-extension>, which hides the banner). */
   .art-xbn { padding-bottom: 40px; }
+  /* Related posts follow the banner (40px under it plus 16px here), then leave room above the footer. With the banner
+     hidden they follow the article directly; with no related posts the block is empty and takes no room. */
+  .art-rel { padding-bottom: 58px; }
+  .art-rel:not(:has(.rel-posts)) { padding-bottom: 0; }
+  .art-rel :global(.rel-posts) { margin-top: 16px; }
   .art-xbn:not(:has(.xbn)) { padding-bottom: 0; }
   :global(html[data-gbti-extension]) .art-xbn { padding-bottom: 0; }
 </style>

@@ -90,15 +90,9 @@ const introName = intro ? nameOf(intro.data.author) : '';
     {thread.length} {thread.length === 1 ? 'Comment' : 'Comments'}
   </h2>
 
-  {thread.length === 0 ? (
-    <div class="card" data-comments-empty style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
-      <p class="body-sm muted" style="margin:0">
-        No comments yet. Be the first.<span class="cmt-join-pitch"> Members comment from the GBTI local client, where comments are
-        submitted as pull requests and auto-published for paid members.</span>
-      </p>
-      <a href="/membership/" class="link cmt-join-pitch">Become a member <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
-    </div>
-  ) : (
+  {/* Owner, 2026-10-14: no empty-thread card. It repeated the composer's own "Comments are for members" invitation just
+      below it (and still described the retired local client), so an empty thread is the heading and the composer. */}
+  {thread.length > 0 && (
     <ul style="list-style:none;padding:0;margin-top:24px;display:flex;flex-direction:column;gap:24px">
       {thread.map((c) => (
         <li class="card" style="padding:20px;display:flex;gap:14px;align-items:flex-start;--embed-out-l:78px;--embed-out-r:20px">
@@ -135,9 +129,6 @@ const introName = intro ? nameOf(intro.data.author) : '';
 </section>
 
 <style is:global>
-  /* Owner QA 2026-07-22: a signed-in active member never sees the become-a-member pitch (the SOW-030
-     presentation signal; the real gate stays server-side). */
-  html.is-gbti-member-active .cmt-join-pitch { display: none; }
   /* Rendered comment / author-note markdown: give paragraphs real spacing and make links read as links. */
   .cmt-rich { overflow-wrap: anywhere; } /* sow-443: a bare long link wraps instead of running past the card */
   .cmt-rich > :first-child { margin-top: 0; }

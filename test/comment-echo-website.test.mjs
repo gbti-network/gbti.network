@@ -60,7 +60,10 @@ test('website client: postComment writes the echo (awaited, bounded) and names i
 test('the page: the comment section mounts <gbti-comment-echoes> before the composer and exposes the count + empty-state hooks it updates', () => {
   const page = read('src/components/blog/Comments.astro');
   assert.match(page, /<h2 class="h3"[^>]*data-comments-count=\{thread\.length\}>/);
-  assert.match(page, /<div class="card" data-comments-empty /);
+  // Owner, 2026-10-14: the "No comments yet" card is gone (the composer's own invitation said the same); the echoes
+  // element looks for it null-safe, so an empty thread is just the heading count it updates.
+  assert.doesNotMatch(page, /data-comments-empty/);
+  assert.match(read('client-ui/src/elements/gbti-comment-echoes.mjs'), /if \(empty\) empty\.hidden = pendingCount > 0;/, 'the lookup tolerates its absence');
   const mount = page.indexOf('<gbti-comment-echoes data-gbti-target-type={targetType} data-gbti-target-slug={targetSlug}></gbti-comment-echoes>');
   const composer = page.indexOf('<CommentBox targetType={targetType} targetSlug={targetSlug} readerPath={itemReaderPath} />');
   assert.ok(mount > 0 && composer > mount, 'the echoes sit between the built thread and the composer');
