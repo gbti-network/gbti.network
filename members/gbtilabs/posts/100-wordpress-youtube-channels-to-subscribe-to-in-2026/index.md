@@ -54,7 +54,7 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 Focus, Volume, Reach and Engagement are each where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
 ```
 
-Subscriber count alone does not raise a score. Five channels are always included whatever their score, which is why Gutenberg Times sits at #100.
+Subscriber count alone does not raise a score. Five WordPress community channels are always included, whatever their score: WordCampAsia (#13), WordCampEU (#55), WordPress Tavern (#56), the official WordPress channel (#99), and Gutenberg Times (#100). The first three scored high enough to make the list on their own. The official WordPress channel and Gutenberg Times are on the list because of this rule, which is why they sit at #99 and #100.
 
 ## Types of Channels Surveyed
 
