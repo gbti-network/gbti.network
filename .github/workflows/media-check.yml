@@ -21,4 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # The checker measures image dimensions (sharp) and reads the item frontmatter (js-yaml) since 112e76a3, so it
+      # needs the packages. Without this step every run died on ERR_MODULE_NOT_FOUND before checking anything.
+      - run: npm ci
       - run: node scripts/check-media.mjs

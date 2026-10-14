@@ -209,9 +209,13 @@ async function control(page, tag) {
 }
 
 // Signup endpoints a signed-in page legitimately calls that are NOT part of saving (follow pills, the comment echo, a
-// share's attached file). They are aborted and listed, not failed. Any OTHER unstubbed signup request is a finding,
+// share's attached file, and the header bell's reads: its in-app switches and followed news since sow-386, its read
+// state since e058db8e). They are aborted and listed, not failed. Any OTHER unstubbed signup request is a finding,
 // so a stub gap on the save path cannot pass as a clean run.
-const UNRELATED_SIGNUP = new Set(['/membership/follows', '/membership/comment-echo', '/membership/file']);
+const UNRELATED_SIGNUP = new Set([
+  '/membership/follows', '/membership/comment-echo', '/membership/file',
+  '/membership/prefs', '/membership/news-following', '/membership/notifications',
+]);
 
 async function state(page) {
   return page.evaluate((key) => {
