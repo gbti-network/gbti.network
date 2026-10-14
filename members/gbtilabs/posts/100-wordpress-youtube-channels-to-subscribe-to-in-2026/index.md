@@ -52,9 +52,9 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 - **Seller:** 0.75 for channels run by plugin or theme companies, and 1 for every other channel. Those channels often make videos to sell their own products, and we wanted to favor channels that teach and share news.
 
 Focus, Volume, Reach and Engagement are each where the channel sits among all the channels we measured, from 0 (the bottom) to 1 (the top).
-```
 
-Subscriber count alone does not raise a score. Five WordPress community channels are always included, whatever their score: WordCampAsia (#14), WordCampEU (#55), WordPress Tavern (#58), the official WordPress channel (#99), and Gutenberg Times (#100). The first three scored high enough to make the list on their own. The official WordPress channel and Gutenberg Times are on the list because of this rule, which is why they sit at #99 and #100.
+Five WordPress community channels are always included, whatever their score: WordCampAsia (#14), WordCampEU (#55), WordPress Tavern (#58), the official WordPress channel (#99), and Gutenberg Times (#100). The first three scored high enough to make the list on their own. The official WordPress channel and Gutenberg Times are on the list because of this rule, which is why they sit at #99 and #100.
+```
 
 ## Types of Channels Surveyed
 
