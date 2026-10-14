@@ -2,7 +2,7 @@
 id: intro-100-wordpress-youtube-channels-to-subscribe-to-in-2026
 targetType: post
 targetSlug: 100-wordpress-youtube-channels-to-subscribe-to-in-2026
-createdAt: '2026-10-14T13:29:51.365Z'
+createdAt: '2026-10-14T13:34:12.960Z'
 status: published
 visibility: public
 authorNote: true
