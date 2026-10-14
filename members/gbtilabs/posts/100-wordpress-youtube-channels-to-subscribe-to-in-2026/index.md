@@ -45,7 +45,7 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 ---
 **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
 
-- **Focus:** share of 2026 videos about WordPress. To keep a single video from claiming a perfect Focus, we blend each channel's WordPress share with five extra videos at the average rate, which barely shifts a busy channel but reins in a sparse one. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with channel-wide tags and repeated description footers excluded.
+- **Focus:** share of 2026 videos about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video counts as WordPress-related when its title names WordPress or a WordPress product, or when a WordPress tag and the video description both name WordPress, with channel-wide tags and repeated description footers excluded.
 - **Volume:** WordPress videos posted in 2026
 - **Reach:** median views per video
 - **Engagement:** views compared with subscribers
