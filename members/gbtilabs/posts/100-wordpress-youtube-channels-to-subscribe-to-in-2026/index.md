@@ -57,7 +57,7 @@ Five WordPress community channels are always included, whatever their score: Wor
 ```
 
 ```callout warning
-The selection process is not perfect. The automatic rule reads each video's title, tags and description to decide whether the video is about WordPress, but it does not watch the videos, so it will miss some WordPress videos and count some that are not. Our data collection stopped on October 10, 2026, so videos published after that date are not counted.
+Heads up! Our scoring algorithm is not perfect! Over 14,000 videos were analyzed and we're bound to have missed or misinterpreted a video's relevance. Thanks for understanding and we'll do even better in 2027.
 ```
 
 ## Types of Channels Surveyed
