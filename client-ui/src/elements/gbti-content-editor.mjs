@@ -445,7 +445,10 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     this.$('#body')?.addEventListener('block-change', () => this._markDirty()); // body block add/edit/delete/convert/drag
     // rail control mutations that do NOT fire input/change (visibility switch, toggles, chip remove, cover, links).
     // Text fields fire input (caught above); a section collapse (summary) or the cover frame toggle are not edits.
-    this.$('.rail')?.addEventListener('click', (e) => { if (e.target.closest('button:not([data-frame]), [data-rm]') && !e.target.closest('summary')) this._markDirty(); });
+    // The Media section left the rail for its own .media-slot in sow-164 (2026-09-08), and this listener stayed on
+    // .rail alone, so a banner color, Remove or Reuse no longer showed Publish (reported 2026-10-14). Both
+    // containers get it now.
+    this.$$('.rail, .media-slot').forEach((box) => box.addEventListener('click', (e) => { if (e.target.closest('button:not([data-frame]), [data-rm]') && !e.target.closest('summary')) this._markDirty(); }));
     this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
     this._wireLinks(); // SOW-062 P6: the project links[] row editor (serializes into the hidden json input)
@@ -531,6 +534,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
         // sow-326: mirror the choice into the preset, for the reason given on the [data-gscards] handler.
         if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
         if (cover) this.clearCover(cover);
+        this._markDirty();
       }));
     });
 

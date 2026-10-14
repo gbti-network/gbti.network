@@ -8905,6 +8905,7 @@ ${barWidthCss(s)}`;
         const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
         if (presetInput) presetInput.value = "";
       }
+      this._markDirty?.();
     }
     async doImage(file) {
       if (!file) return;
@@ -8970,6 +8971,7 @@ ${barWidthCss(s)}`;
       control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Choose image";
+      this._markDirty?.();
     }
   };
   function fileToBase64(file) {
@@ -9903,9 +9905,9 @@ ${barWidthCss(s)}`;
         this.root.addEventListener("change", () => this._markDirty());
       }
       this.$("#body")?.addEventListener("block-change", () => this._markDirty());
-      this.$(".rail")?.addEventListener("click", (e) => {
+      this.$$(".rail, .media-slot").forEach((box) => box.addEventListener("click", (e) => {
         if (e.target.closest("button:not([data-frame]), [data-rm]") && !e.target.closest("summary")) this._markDirty();
-      });
+      }));
       this._bindHeader();
       this._wireRail();
       this._wireLinks();
@@ -9972,6 +9974,7 @@ ${barWidthCss(s)}`;
           if (hidden) hidden.value = btn.dataset.preset;
           if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
           if (cover) this.clearCover(cover);
+          this._markDirty();
         }));
       });
       this.$$("[data-gscards]").forEach((row) => {

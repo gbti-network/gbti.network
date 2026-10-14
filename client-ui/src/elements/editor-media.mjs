@@ -241,6 +241,8 @@ export const withEditorMedia = (Base) => class extends Base {
       const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
       if (presetInput) presetInput.value = '';
     }
+    // A reuse lands here after an async fetch, outside any click the dirty listeners see.
+    this._markDirty?.();
   }
 
   async doImage(file) {
@@ -323,6 +325,7 @@ export const withEditorMedia = (Base) => class extends Base {
     control.querySelector('[data-cover-clear]')?.setAttribute('hidden', '');
     const pick = control.querySelector('[data-cover-pick]');
     if (pick) pick.textContent = 'Choose image';
+    this._markDirty?.();
   }
 };
 
