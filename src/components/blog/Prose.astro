@@ -179,6 +179,19 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
       -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
     .prose-gbti .sortlist-sub::-webkit-scrollbar { display: none; }
   }
+  /* Owner, 2026-10-13 (option B of the YouTube sort bar round): ```directory youtube. Grey chips with 8px corners and
+     the body face, the chosen sort and category in YouTube red. The red is #e00000, not the brand #ff0000, because white
+     14px text on #ff0000 is 4.0:1 and on #e00000 it is 5.0:1. */
+  .prose-gbti .sortlist-youtube { --yt-chip: #ecebe9; --yt-chip-hover: #dfddda; --yt-chip-fg: #0f0f0f; --yt-label: #606060; --yt-red: #e00000; --yt-red-hover: #c40000; }
+  [data-theme="dark"] .prose-gbti .sortlist-youtube { --yt-chip: #3b3941; --yt-chip-hover: #4a4852; --yt-chip-fg: #f1f1f1; --yt-label: #aaaaaa; }
+  .prose-gbti .sortlist-youtube .sortlist-lab { font-family: var(--f-sans); font-size: 13px; font-weight: 600; color: var(--yt-label); }
+  .prose-gbti .sortlist-youtube .sortlist-btn { min-height: 40px; padding: 0 14px; border: 0; border-radius: 8px; font-family: var(--f-sans); font-size: 14px; font-weight: 600; letter-spacing: 0; color: var(--yt-chip-fg); background: var(--yt-chip); }
+  .prose-gbti .sortlist-youtube .sortlist-subbtn { min-height: 32px; padding: 0 12px; font-size: 13px; }
+  .prose-gbti .sortlist-youtube .sortlist-btn:hover { background: var(--yt-chip-hover); color: var(--yt-chip-fg); }
+  .prose-gbti .sortlist-youtube .sortlist-btn.on, .prose-gbti .sortlist-youtube .sortlist-btn.on:hover { background: var(--yt-red); color: #ffffff; }
+  .prose-gbti .sortlist-youtube .sortlist-btn.on:hover { background: var(--yt-red-hover); }
+  .prose-gbti .sortlist-youtube .sortlist-btn:focus-visible { outline: 2px solid var(--yt-red); outline-offset: 2px; }
+  @media (max-width: 480px) { .prose-gbti .sortlist-youtube .sortlist-btn { min-height: 36px; padding: 0 10px; font-size: 13px; } .prose-gbti .sortlist-youtube .sortlist-subbtn { min-height: 32px; } }
   .prose-gbti .sortlist-group { margin: 2em 0 0.2em; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
   @media (prefers-reduced-motion: reduce) { .prose-gbti .sortlist-btn { transition: none; } }
 </style>

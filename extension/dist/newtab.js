@@ -5525,6 +5525,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
     return css;
   }
+  var DIRECTORY_STYLES = ["youtube"];
+  function sortListPlaceholder(meta = "") {
+    const style = String(meta ?? "").trim();
+    return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
+  }
   var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
   function dataBlocksCss(scope, t) {
     const s = scope;
@@ -5801,7 +5806,7 @@ ${barWidthCss(s)}`;
       const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
       return `<div class="md-callout md-callout-${v2}"><div class="md-callout-body">${html}</div></div>`;
     }
-    if (info[0] === "directory") return '<div class="sortlist"></div>';
+    if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
     if (DATA_BLOCKS.includes(info[0])) {
       const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
       if (html != null) return html;

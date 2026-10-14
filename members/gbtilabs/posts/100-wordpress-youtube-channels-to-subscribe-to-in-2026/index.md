@@ -88,7 +88,7 @@ Long-form video still carries WordPress on YouTube. Most of these channels treat
 
 The list counts down from #100 to #1, where #1 earned the highest overall score, and the buttons above let you sort by category or subscriber count instead.
 
-```directory
+```directory youtube
 
 ```
 

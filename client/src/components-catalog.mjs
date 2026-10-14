@@ -27,8 +27,8 @@ export const COMPONENTS = Object.freeze([
   {
     name: 'directory',
     kind: 'fence',
-    purpose: 'A sortable list. Put it just before a run of entries; each entry is a "### #N. Name" heading and what follows it, up to the next "##" heading. Readers sort by score (the order written), category (the first tag of each entry) or subscribers.',
-    syntax: `${F}directory\n${F}`,
+    purpose: 'A sortable list. Put it just before a run of entries; each entry is a "### #N. Name" heading and what follows it, up to the next "##" heading. Readers sort by score (the order written), category (the first tag of each entry) or subscribers. Add the word youtube for YouTube-style chips, the chosen one in YouTube red.',
+    syntax: `${F}directory [youtube]\n${F}`,
     example: `${F}directory\n${F}\n\n### #2. Second channel\n...\n\n### #1. First channel\n...`,
     renders: 'Site and preview: a sort bar over the entries. Reader and cross-posts: nothing; the entries stay in the order written.',
   },

@@ -246,6 +246,15 @@ export function barWidthCss(scope = '') {
   return css;
 }
 
+/** Looks a ```directory sort bar can take (owner, 2026-10-13: option B of the YouTube sort bar round). */
+export const DIRECTORY_STYLES = ['youtube'];
+
+/** The placeholder a ```directory fence renders to; ```directory youtube adds the YouTube look. */
+export function sortListPlaceholder(meta = '') {
+  const style = String(meta ?? '').trim();
+  return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
+}
+
 /** Fence names the renderers know. The catalogue (components-catalog.mjs) must describe each one. */
 export const KNOWN_FENCES = ['callout', 'embed', 'directory', ...DATA_BLOCKS];
 
@@ -293,6 +302,7 @@ export function checkComponentBlocks(md) {
       for (const l of st.bad) warn(`stats line "${l}" is not "value: label"`);
     }
     if (name === 'button' && meta && meta !== 'primary') warn(`button option "${meta}" is not known; only "primary" is`);
+    if (name === 'directory' && meta && !DIRECTORY_STYLES.includes(meta)) warn(`directory option "${meta}" is not known; only ${DIRECTORY_STYLES.map((x) => `"${x}"`).join(', ')} is`);
     if (name === 'button') {
       const b = parseButton(text);
       if (!b.label) warn('button needs its label on the first line');

@@ -18448,6 +18448,11 @@ function renderDataBlock(name, body, meta3 = "") {
   }
   return null;
 }
+var DIRECTORY_STYLES = ["youtube"];
+function sortListPlaceholder(meta3 = "") {
+  const style = String(meta3 ?? "").trim();
+  return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
+}
 var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
 
 // client/src/member-comment-echo-client.mjs
@@ -20776,7 +20781,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
     const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
     return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
   }
-  if (info[0] === "directory") return '<div class="sortlist"></div>';
+  if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
   if (DATA_BLOCKS.includes(info[0])) {
     const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
     if (html != null) return html;

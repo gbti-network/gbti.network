@@ -11,6 +11,7 @@ import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeStringify from 'rehype-stringify';
+import { checkComponentBlocks } from '../client/src/content-blocks.mjs';
 import { parseRank, parseSubscribers, parseStats, orderItems, filterGroups, SORT_MODES } from '../src/lib/sort-list.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 import { sanitizeSchema } from '../src/lib/markdown-sanitize.mjs';
@@ -98,6 +99,17 @@ test('site: the sanitizer keeps sortlist and still drops look-alike classes', as
   const html = await site('<div class="sortlist-bar evil">x</div>\n\n<div class="sortlist">y</div>\n');
   assert.doesNotMatch(html, /sortlist-bar|evil/);
   assert.match(html, /<div class="sortlist">y<\/div>/);
+});
+
+test('```directory youtube: the YouTube look on every surface, unknown words fall back and warn', async () => {
+  const site1 = await site('```directory youtube\n```\n\n### #2. Two\n');
+  assert.match(site1, /<div class="sortlist sortlist-youtube"><\/div>/);
+  assert.match(renderMarkdown('```directory youtube\n```\n\n### #1. One\n'), /<div class="sortlist sortlist-youtube"><\/div>/);
+  assert.match(await site('```directory sparkly\n```\n'), /<div class="sortlist"><\/div>/);
+  const evil = await site('<div class="sortlist-youtubex">x</div>\n');
+  assert.doesNotMatch(evil, /sortlist-youtubex/);
+  assert.deepEqual(checkComponentBlocks('```directory youtube\n```\n'), []);
+  assert.match(checkComponentBlocks('```directory sparkly\n```\n').map((w) => w.message).join(), /directory option "sparkly" is not known/);
 });
 
 test('extension renderer: the fence renders the empty placeholder', () => {

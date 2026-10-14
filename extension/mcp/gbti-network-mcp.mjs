@@ -18674,6 +18674,7 @@ function parseReveal(body, meta3 = "") {
   }
   return out;
 }
+var DIRECTORY_STYLES = ["youtube"];
 var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
 function checkComponentBlocks(md) {
   const out = [];
@@ -18717,6 +18718,7 @@ function checkComponentBlocks(md) {
       for (const l of st.bad) warn(`stats line "${l}" is not "value: label"`);
     }
     if (name === "button" && meta3 && meta3 !== "primary") warn(`button option "${meta3}" is not known; only "primary" is`);
+    if (name === "directory" && meta3 && !DIRECTORY_STYLES.includes(meta3)) warn(`directory option "${meta3}" is not known; only ${DIRECTORY_STYLES.map((x) => `"${x}"`).join(", ")} is`);
     if (name === "button") {
       const b = parseButton(text);
       if (!b.label) warn("button needs its label on the first line");
@@ -20281,8 +20283,8 @@ ${F}`,
   {
     name: "directory",
     kind: "fence",
-    purpose: 'A sortable list. Put it just before a run of entries; each entry is a "### #N. Name" heading and what follows it, up to the next "##" heading. Readers sort by score (the order written), category (the first tag of each entry) or subscribers.',
-    syntax: `${F}directory
+    purpose: 'A sortable list. Put it just before a run of entries; each entry is a "### #N. Name" heading and what follows it, up to the next "##" heading. Readers sort by score (the order written), category (the first tag of each entry) or subscribers. Add the word youtube for YouTube-style chips, the chosen one in YouTube red.',
+    syntax: `${F}directory [youtube]
 ${F}`,
     example: `${F}directory
 ${F}
