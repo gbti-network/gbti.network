@@ -24,7 +24,7 @@ const related = (await getCollection('post'))
   })
   .filter((x) => x.score > 0)
   .sort((a, b) => b.score - a.score || (b.p.data.publishedAt?.valueOf() ?? 0) - (a.p.data.publishedAt?.valueOf() ?? 0))
-  .slice(0, 3)
+  .slice(0, 9) // owner, 2026-10-14: up to nine (three rows of three) when that many share a category or tag
   .map((x) => x.p);
 ---
 {related.length > 0 && (
@@ -32,18 +32,23 @@ const related = (await getCollection('post'))
     <div class="sec-head center">
       <h2 class="h2">Related posts</h2>
     </div>
-    {/* sow-188: as many columns as there are items, never wider than a three-up card. auto-fit gives the
-        count-aware track list; the cap (n three-up cards plus the gaps, centred) stops one or two items stretching
-        into banners; the 240px floor wraps them on a narrow screen. Owner, 2026-10-14: the section sits full width
-        under the article now, the same width as the extension banner above it, so a three-up card is a third of
-        the container (three fill it exactly) rather than a fixed 340px. */}
-    <div class="rel-grid" style={`--n:${related.length}`}>
+    {/* sow-188: a card is never wider than a three-up card, so one or two never stretch into banners. Owner,
+        2026-10-14: the section sits full width under the article, the same width as the extension banner above it,
+        and shows up to nine. Every card is a third of the section (three fill a row exactly), half on a mid-width
+        screen, the full width on a phone, whatever the count; a short last row is centred under the heading. */}
+    <div class="rel-grid">
       {related.map((p) => <ArticleTeaser post={p} />)}
     </div>
   </section>
 )}
 
 <style>
-  .rel-posts { margin-top: 64px; }
-  .rel-grid { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: calc(var(--n) * (100% - 64px) / 3 + (var(--n) - 1) * 32px); margin: 0 auto; }
+  .rel-posts { margin-top: 64px; container-type: inline-size; }
+  /* Three to a row while each card can be at least 240px wide (a 784px section), two down to 512px, then one. The
+     size comes from the section, not the count, so a row of two is two three-up cards, centred. Container queries
+     last: they add no specificity, so an earlier one would lose to the base rule. */
+  .rel-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; }
+  .rel-grid > :global(*) { flex: 0 0 calc((100% - 64px) / 3); min-width: 0; }
+  @container (max-width: 783px) { .rel-grid > :global(*) { flex-basis: calc((100% - 32px) / 2); } }
+  @container (max-width: 511px) { .rel-grid > :global(*) { flex-basis: 100%; } }
 </style>

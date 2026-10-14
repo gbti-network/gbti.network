@@ -7,17 +7,19 @@ import { readFileSync } from 'node:fs';
 const ROOT = new URL('..', import.meta.url).pathname;
 const src = readFileSync(ROOT + 'src/components/blog/RelatedPosts.astro', 'utf8');
 
-test('the grid auto-fits with a 240px floor, capped to the count, centred', () => {
-  assert.match(src, /\.rel-grid \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(240px, 1fr\)\)/, 'as many columns as fit, each at least 240px');
-  // 2026-10-14: a three-up card is a third of the full-width container (three fill it, the banner's width).
-  assert.match(src, /max-width: calc\(var\(--n\) \* \(100% - 64px\) \/ 3 \+ \(var\(--n\) - 1\) \* 32px\)/, 'n cards at the three-up width plus the gaps');
-  assert.match(src, /\.rel-grid \{[^}]*margin: 0 auto/, 'centred under the heading');
-  assert.match(src, /style=\{`--n:\$\{related\.length\}`\}/, 'the count the component already knows drives the cap');
+test('cards are a third of the section, half on a mid screen, full on a phone, centred, whatever the count', () => {
+  // Owner, 2026-10-14: up to nine related posts, full width under the article (the extension banner's width).
+  assert.match(src, /\.rel-grid \{ display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; \}/, 'a short last row is centred');
+  assert.match(src, /\.rel-grid > :global\(\*\) \{ flex: 0 0 calc\(\(100% - 64px\) \/ 3\); min-width: 0; \}/, 'three to a row, three fill it');
+  const two = src.indexOf('@container (max-width: 783px)'), one = src.indexOf('@container (max-width: 511px)'), base = src.indexOf('.rel-grid > :global(*) { flex: 0 0');
+  assert.ok(base > 0 && two > base && one > two, 'the narrower queries come after the base rule, widest first');
+  assert.match(src, /\.rel-posts \{ margin-top: 64px; container-type: inline-size; \}/, 'the section is the container the queries measure');
+  assert.doesNotMatch(src, /--n:/, 'the size no longer depends on the count');
 });
 
 test('the fixed three-column grid and the dead 1100px section cap are gone; scoring and the item cap are untouched', () => {
   assert.doesNotMatch(src, /lg:grid-cols-3/);
   assert.doesNotMatch(src, /max-width:1100px/);
-  assert.match(src, /\.slice\(0, 3\)/, 'still at most three related items');
+  assert.match(src, /\.slice\(0, 9\)/, 'at most nine related items (owner, 2026-10-14)');
   assert.match(src, /\.filter\(isPublic\)/, 'still public only (sow-189 adds the stale filter separately)');
 });
