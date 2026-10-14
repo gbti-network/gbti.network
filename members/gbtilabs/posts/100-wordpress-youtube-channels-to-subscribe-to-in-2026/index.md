@@ -20,7 +20,7 @@ layout: journal
 coverImage: ./images/wordpress-youtube-channels-2026.webp
 featured: false
 publishedAt: '2026-10-13T00:00:00.000Z'
-updatedAt: '2026-10-14T13:29:50.656Z'
+updatedAt: '2026-10-14T13:34:12.701Z'
 type: post
 author: gbtilabs
 ---
@@ -2192,6 +2192,11 @@ Subscribe to @elliottrichmondwp
 https://www.youtube.com/@elliottrichmondwp?sub_confirmation=1
 ```
 
-## About this snapshot
+## Thanks for reading!
 
-Subscribe to the channels that fit how you work with WordPress. The counts and scores in this list are a snapshot taken on 10 October 2026.
+The GBTI network offers publishing and networking opportunities to content creators and product developers across the internet. We publish a weekly digest of all member submitted content every Tuesday that is free to subscribe to. 
+
+If you are looking for a private community of individuals who enjoy keeping each other informed, please check out our [membership](https://gbti.network/membership) options.   
+  
+  
+We also provide a powerful and informative <a href="https://chromewebstore.google.com/detail/gbti-network-extension/iffjdmifgnjgkdjoodapjciddibmifka" rel="noopener" target="_blank">chrome extension</a> that's worth taking a look at.
