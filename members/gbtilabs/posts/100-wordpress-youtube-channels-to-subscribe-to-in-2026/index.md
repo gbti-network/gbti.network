@@ -55,7 +55,7 @@ Five WordPress community channels are always included, whatever their score: Wor
 ```
 
 ```callout warning
-Heads up! Our scoring algorithm is not perfect! Over 14,000 videos were analyzed and we're bound to have missed or misinterpreted video relevance on several occasions per channel. Thanks for understanding and we'll do even better in 2027.
+Heads up! Our scoring algorithm is not perfect! Over 14,000 videos were analyzed and we're bound to have missed or misinterpreted a video's relevance to WordPress. Thanks for understanding and we'll do even better in 2027.
 ```
 
 ## Types of Channels Surveyed
