@@ -93,6 +93,10 @@ Of the 6,707 titles posted by the 100 channels in 2026, 1,296 use an AI term. Th
 
 Long-form video still carries WordPress on YouTube. Most of these channels treat Shorts as a side dish: only about 6% of the typical channel's uploads are Shorts, and 17 channels have posted none at all.
 
+![Typical views per video posted in 2026, for the 60 channels that posted both formats: long-form videos 357 views, Shorts 223 views. Shorts drew more views than long-form on 19 of those 60 channels.](./images/shorts-vs-long-form-views.svg)
+
+Among the 60 channels that posted both formats in 2026, the typical long-form video drew 357 views and the typical Short drew 223, and Shorts came out ahead on only 19 of those 60 channels. Across all 6,707 videos the 100 channels posted in 2026, 2,369 were Shorts (35%, with ten channels posting nearly two thirds of them), yet Shorts drew under 5% of the views. That is with Shorts counted generously: since March 2025, [YouTube counts a Shorts view every time one starts or replays](https://techcrunch.com/2025/03/26/youtube-is-changing-how-youtube-shorts-views-are-counted), with no minimum watch time, a rule that does not apply to long-form views. Live streams are left out of this comparison.
+
 ## The 100 Channels: Counting Down to #1
 
 ![100 WordPress YouTube channels to subscribe to in 2026, with the WordPress logo and a grid of small play buttons shaped like one large YouTube play button](./images/wordpress-youtube-channels-2026-countdown.webp)
