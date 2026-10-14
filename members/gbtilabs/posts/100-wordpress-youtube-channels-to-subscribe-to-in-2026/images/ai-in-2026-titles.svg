@@ -1,25 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="336" viewBox="0 0 760 336" role="img" aria-label="Share of 2026 video titles that mention AI, by channel type. Overall 18% of 7050 titles; 75 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-<title>Share of 2026 video titles that mention AI, by channel type. Overall 18% of 7050 titles; 75 of the 100 channels used an AI term at least once. Independent creators 20%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="336" viewBox="0 0 760 336" role="img" aria-label="Share of 2026 video titles that mention AI, by channel type. Overall 19% of 7110 titles; 76 of the 100 channels used an AI term at least once. Independent creators 22%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of 2026 video titles that mention AI, by channel type. Overall 19% of 7110 titles; 76 of the 100 channels used an AI term at least once. Independent creators 22%; Plugin and theme companies 12%; Developer educators 42%; News, podcasts and shows 27%; Official and community 14%; Agencies and freelancers 12%.</title>
 <rect x="0.5" y="0.5" width="759" height="335" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">How often 2026 video titles mention AI</text>
-<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">18% of 7,050 titles overall; 75 of the 100 channels used an AI term at least once</text>
-<text x="28.0" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators (13 channels)</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">19% of 7,110 titles overall; 76 of the 100 channels used an AI term at least once</text>
+<text x="28.0" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Developer educators (12 channels)</text>
 <path d="M318.0,98.0 H668.0 Q672.0,98.0 672.0,102.0 V114.0 Q672.0,118.0 668.0,118.0 H318.0 Z" fill="#2a78d6"/>
 <text x="680.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">42%</text>
 <text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">News, podcasts and shows (8 channels)</text>
-<path d="M318.0,132.0 H543.3 Q547.3,132.0 547.3,136.0 V148.0 Q547.3,152.0 543.3,152.0 H318.0 Z" fill="#2a78d6"/>
-<text x="555.3" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">27%</text>
-<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (37 channels)</text>
-<path d="M318.0,166.0 H480.9 Q484.9,166.0 484.9,170.0 V182.0 Q484.9,186.0 480.9,186.0 H318.0 Z" fill="#2a78d6"/>
-<text x="492.9" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">20%</text>
+<path d="M318.0,132.0 H542.7 Q546.7,132.0 546.7,136.0 V148.0 Q546.7,152.0 542.7,152.0 H318.0 Z" fill="#2a78d6"/>
+<text x="554.7" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">27%</text>
+<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Independent creators (38 channels)</text>
+<path d="M318.0,166.0 H499.8 Q503.8,166.0 503.8,170.0 V182.0 Q503.8,186.0 499.8,186.0 H318.0 Z" fill="#2a78d6"/>
+<text x="511.8" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">22%</text>
 <text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Official and community (7 channels)</text>
-<path d="M318.0,200.0 H435.4 Q439.4,200.0 439.4,204.0 V216.0 Q439.4,220.0 435.4,220.0 H318.0 Z" fill="#2a78d6"/>
-<text x="447.4" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">14%</text>
+<path d="M318.0,200.0 H435.1 Q439.1,200.0 439.1,204.0 V216.0 Q439.1,220.0 435.1,220.0 H318.0 Z" fill="#2a78d6"/>
+<text x="447.1" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">14%</text>
 <text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Agencies and freelancers (3 channels)</text>
-<path d="M318.0,234.0 H418.5 Q422.5,234.0 422.5,238.0 V250.0 Q422.5,254.0 418.5,254.0 H318.0 Z" fill="#2a78d6"/>
-<text x="430.5" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
+<path d="M318.0,234.0 H418.3 Q422.3,234.0 422.3,238.0 V250.0 Q422.3,254.0 418.3,254.0 H318.0 Z" fill="#2a78d6"/>
+<text x="430.3" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
 <text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Plugin and theme companies (32 channels)</text>
-<path d="M318.0,268.0 H414.3 Q418.3,268.0 418.3,272.0 V284.0 Q418.3,288.0 414.3,288.0 H318.0 Z" fill="#2a78d6"/>
-<text x="426.3" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
+<path d="M318.0,268.0 H413.2 Q417.2,268.0 417.2,272.0 V284.0 Q417.2,288.0 413.2,288.0 H318.0 Z" fill="#2a78d6"/>
+<text x="425.2" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">12%</text>
 <text x="28.0" y="318.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: GBTI Network research. YouTube data measured 10 October 2026.</text>
 </svg>

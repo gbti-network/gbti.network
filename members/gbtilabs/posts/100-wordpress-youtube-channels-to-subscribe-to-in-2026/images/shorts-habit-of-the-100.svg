@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="392" viewBox="0 0 760 392" role="img" aria-label="How the 100 channels use YouTube Shorts: 18 have posted no Shorts, 76 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-<title>How the 100 channels use YouTube Shorts: 18 have posted no Shorts, 76 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts.</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="392" viewBox="0 0 760 392" role="img" aria-label="How the 100 channels use YouTube Shorts: 17 have posted no Shorts, 77 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>How the 100 channels use YouTube Shorts: 17 have posted no Shorts, 77 post some Shorts (up to half of their uploads), 6 post mostly Shorts. For the typical channel, about 6% of uploads are Shorts.</title>
 <rect x="0.5" y="0.5" width="759" height="391" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">How the 100 channels use Shorts</text>
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Shorts as a share of each channel&#x27;s uploads; for the typical channel it is about 6%</text>
-<path d="M148,218 L148.0,102.0 A116,116 0 0 1 253.0,168.6 Z" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"/>
-<path d="M148,218 L253.0,168.6 A116,116 0 1 1 105.3,110.1 Z" fill="#eb6834" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"/>
+<path d="M148,218 L148.0,102.0 A116,116 0 0 1 249.7,162.1 Z" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"/>
+<path d="M148,218 L249.7,162.1 A116,116 0 1 1 105.3,110.1 Z" fill="#eb6834" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"/>
 <path d="M148,218 L105.3,110.1 A116,116 0 0 1 148.0,102.0 Z" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"/>
 <rect x="320" y="162" width="14" height="14" rx="3" fill="#2a78d6"/>
 <text x="344.0" y="174.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">No Shorts</text>
-<text x="344.0" y="193.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">18 channels (18%)</text>
+<text x="344.0" y="193.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">17 channels (17%)</text>
 <rect x="320" y="206" width="14" height="14" rx="3" fill="#eb6834"/>
 <text x="344.0" y="218.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">Some Shorts (up to half of uploads)</text>
-<text x="344.0" y="237.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">76 channels (76%)</text>
+<text x="344.0" y="237.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">77 channels (77%)</text>
 <rect x="320" y="250" width="14" height="14" rx="3" fill="#1baf7a"/>
 <text x="344.0" y="262.0" font-size="14" font-weight="600" fill="#0b0b0b" text-anchor="start">Mostly Shorts</text>
 <text x="344.0" y="281.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">6 channels (6%)</text>
