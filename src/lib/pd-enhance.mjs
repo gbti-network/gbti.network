@@ -19,31 +19,55 @@
  */
 /**
  * Owner, 2026-10-14: a sticky rail taller than the window could never show its bottom, so an article's Contents list
- * (now the rail's last block) could not be reached. When the rail is taller than the room under the header, its sticky
- * `top` goes negative by the difference: the rail scrolls up with the article until its bottom is in view, then
- * sticks there, so the Contents list stays on screen once the reader has scrolled past everything above it. When the
- * rail fits, the stylesheet's own top applies and the whole rail sticks, as before. Not a scroll box on the rail,
- * which would clip what draws outside it (the share buttons' tooltips, the Save list past its right edge).
- * The rail's stylesheet reads `top: var(--rail-top, <its usual top>)`. Returns a stop function.
+ * (the rail's last block) could not be reached. A rail that fits sticks whole, from the stylesheet's own top. A rail
+ * taller than the room under the header scrolls BOTH ways with the article instead: reading down, it moves up with the
+ * page until its bottom (Contents) is in view and then holds there; scrolling back up, it moves down with the page
+ * until its top is back under the header (owner: "make it so that the part above Digest in the sidebar also shows").
+ * The rail's sticky `top` is the dial: `--rail-top` follows each scroll by the same distance, clamped between "bottom
+ * in view" and the usual top. Not a scroll box on the rail, which would clip what draws outside it (the share
+ * buttons' tooltips, the Save list past its right edge). Returns a stop function.
  */
+export function railTopAfterScroll(cur, delta, min, max) {
+  return Math.min(max, Math.max(min, cur - delta));
+}
+
 export function fitStickyRail(rail, gap = 14) {
   if (!rail || typeof window === 'undefined') return () => {};
+  let bounds = null; // { min, max } while the rail is taller than the window, else null
+  let cur = 0;
+  let lastY = window.scrollY || 0;
   let queued = false;
+  const paint = () => rail.style.setProperty('--rail-top', `${Math.round(cur)}px`);
   const fit = () => {
     queued = false;
+    const wasTall = bounds !== null;
     rail.style.removeProperty('--rail-top');
     const cs = getComputedStyle(rail);
+    bounds = null;
     if (cs.position !== 'sticky') return; // stacked on a phone: the rail scrolls with the page anyway
-    const top = parseFloat(cs.top) || 0;
-    const h = rail.getBoundingClientRect().height;
-    if (top + h + gap > window.innerHeight) rail.style.setProperty('--rail-top', `${Math.round(window.innerHeight - h - gap)}px`);
+    const max = parseFloat(cs.top) || 0;
+    const min = window.innerHeight - rail.getBoundingClientRect().height - gap;
+    if (min >= max) return; // it fits: the stylesheet's top applies
+    bounds = { min, max };
+    // Start where the reader is: at the rail's own top on a fresh page, or held where it was on a resize.
+    cur = railTopAfterScroll(wasTall ? cur : max, 0, min, max);
+    paint();
+  };
+  const onScroll = () => {
+    const y = window.scrollY || 0;
+    const delta = y - lastY;
+    lastY = y;
+    if (!bounds || !delta) return;
+    cur = railTopAfterScroll(cur, delta, bounds.min, bounds.max);
+    paint();
   };
   const queue = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(queue) : null;
   ro?.observe(rail); // the rail grows when its custom elements upgrade or a list loads
   window.addEventListener('resize', queue, { passive: true });
+  window.addEventListener('scroll', onScroll, { passive: true });
   fit();
-  return () => { ro?.disconnect(); window.removeEventListener('resize', queue); };
+  return () => { ro?.disconnect(); window.removeEventListener('resize', queue); window.removeEventListener('scroll', onScroll); };
 }
 
 export function initToc(root = document, prefix = 'pd') {

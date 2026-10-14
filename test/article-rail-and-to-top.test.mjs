@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fitStickyRail } from '../src/lib/pd-enhance.mjs';
+import { fitStickyRail, railTopAfterScroll } from '../src/lib/pd-enhance.mjs';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -14,17 +14,22 @@ function rig({ position = 'sticky', top = 87, height = 1137, innerHeight = 560 }
     style: { setProperty: (k, v) => props.set(k, v), removeProperty: (k) => props.delete(k) },
     getBoundingClientRect: () => ({ height }),
   };
-  globalThis.window = { innerHeight, addEventListener() {}, removeEventListener() {} };
+  globalThis.window = { innerHeight, scrollY: 0, addEventListener() {}, removeEventListener() {} };
   globalThis.getComputedStyle = () => ({ position, top: `${top}px` });
   globalThis.requestAnimationFrame = (f) => f();
   return { rail, props };
 }
 const done = () => { delete globalThis.window; delete globalThis.getComputedStyle; delete globalThis.requestAnimationFrame; };
 
-test('a rail taller than the window sticks by its bottom: its top goes negative by the overflow', () => {
+test('a tall rail starts at its usual top, and its sticky top follows the scroll both ways', () => {
   const { rail, props } = rig();
   fitStickyRail(rail);
-  assert.equal(props.get('--rail-top'), `${560 - 1137 - 14}px`, 'the bottom sits 14px above the window edge');
+  assert.equal(props.get('--rail-top'), '87px', 'on a fresh page it starts where the stylesheet puts it');
+  const min = 560 - 1137 - 14; // the bottom 14px above the window edge
+  assert.equal(railTopAfterScroll(87, 3000, min, 87), min, 'reading down: it holds once its bottom (Contents) is in view');
+  assert.equal(railTopAfterScroll(min, -300, min, 87), min + 300, 'scrolling up: it comes back down by the same distance');
+  assert.equal(railTopAfterScroll(min + 300, -5000, min, 87), 87, 'and stops with its top under the header');
+  assert.equal(railTopAfterScroll(-100, 0, min, 87), -100, 'no scroll, no move');
   done();
 });
 
