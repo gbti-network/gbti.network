@@ -47,7 +47,7 @@ const byRankDesc = (a, b) => (b.rank ?? -1) - (a.rank ?? -1) || a.index - b.inde
  * Order items ({ rank, type, subscribers, index }) for a mode. Always returns groups: [{ label, items }], one
  * unlabelled group except in the category view.
  *   score:       the countdown, highest rank number first, #1 last (the article's own order)
- *   subscribers: largest first; ties keep the countdown
+ *   subscribers: largest first; ties keep the countdown (displayNumbers renumbers this view: largest #1, fewest #N)
  *   category:    one group per type, the biggest group first (ties by name), countdown inside each
  */
 export function orderItems(items, mode) {
@@ -67,6 +67,28 @@ export function orderItems(items, mode) {
       .map(([label, its]) => ({ label, items: its.sort(byRankDesc) }));
   }
   return [{ label: null, items: list.sort(byRankDesc) }];
+}
+
+/**
+ * Owner, 2026-10-14: "Sort by Subscribers should change the numeric rating and the least amount of subscribers should
+ * be #100." The number each entry shows in a view: in the subscribers view its place by subscriber count (the most is
+ * #1, the fewest #N, unknown counts after them); in the score and category views its own rank from the heading.
+ * Returns Map(item -> number).
+ */
+export function displayNumbers(groups, mode) {
+  const out = new Map();
+  if (mode === 'subscribers') groups.flatMap((g) => g.items).forEach((it, i) => out.set(it, i + 1));
+  else for (const g of groups) for (const it of g.items) out.set(it, it.rank);
+  return out;
+}
+
+/** Rewrite the "#N" a heading starts with, leaving the rest of the heading (name, links, ids) as it is. */
+function setHeadingNumber(h, num) {
+  if (num == null) return;
+  const walker = h.ownerDocument.createTreeWalker(h, 4); // NodeFilter.SHOW_TEXT
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    if (/^\s*#\s*\d+/.test(t.nodeValue)) { t.nodeValue = t.nodeValue.replace(/^(\s*#\s*)\d+/, `$1${num}`); return; }
+  }
 }
 
 /**
@@ -187,6 +209,9 @@ export function enhanceSortList(root = document) {
         b.setAttribute('aria-pressed', String(on));
       });
       const groups = orderItems(items, mode);
+      // Every entry, shown or filtered out, carries the number of the current view.
+      const nums = displayNumbers(groups, mode);
+      for (const it of items) setHeadingNumber(it.nodes[0], nums.get(it));
       if (mode !== 'category') sub = null;
       if (sub && !groups.some((g) => g.label === sub)) sub = null;
       subRow.hidden = mode !== 'category';

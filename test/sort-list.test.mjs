@@ -12,7 +12,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeStringify from 'rehype-stringify';
 import { checkComponentBlocks } from '../client/src/content-blocks.mjs';
-import { parseRank, parseSubscribers, parseStats, orderItems, filterGroups, SORT_MODES } from '../src/lib/sort-list.mjs';
+import { parseRank, parseSubscribers, parseStats, orderItems, filterGroups, displayNumbers, SORT_MODES } from '../src/lib/sort-list.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 import { sanitizeSchema } from '../src/lib/markdown-sanitize.mjs';
 import { renderMarkdown } from '../client/src/markdown.mjs';
@@ -72,6 +72,27 @@ test('subscribers is largest first, ties keep the countdown, unknown counts last
 test('category groups by type, biggest group first, countdown inside', () => {
   const g = orderItems(ITEMS, 'category');
   assert.deepEqual(g.map((x) => [x.label, x.items.map((i) => i.rank)]), [['B', [5, 3, 1]], ['A', [4, 2]]]);
+});
+
+test('subscribers view renumbers by subscriber count: the most is #1, the fewest is the last number', () => {
+  // Owner, 2026-10-14: "Sort by Subscribers should change the numeric rating and the least amount of subscribers
+  // should be #100".
+  const items = [
+    { rank: 3, subscribers: 500, index: 0 }, { rank: 2, subscribers: 90000, index: 1 },
+    { rank: 1, subscribers: 4500, index: 2 }, { rank: 4, subscribers: null, index: 3 },
+  ];
+  const groups = orderItems(items, 'subscribers');
+  const n = displayNumbers(groups, 'subscribers');
+  assert.deepEqual(groups[0].items.map((it) => [it.subscribers, n.get(it)]), [[90000, 1], [4500, 2], [500, 3], [null, 4]]);
+  assert.equal(n.get(items[0]), 3, 'the fewest known subscribers takes the last known number');
+});
+
+test('score and category views keep each entry\'s own rank', () => {
+  const items = [{ rank: 2, subscribers: 10, type: 'A', index: 0 }, { rank: 1, subscribers: 99, type: 'B', index: 1 }];
+  for (const mode of ['score', 'category']) {
+    const n = displayNumbers(orderItems(items, mode), mode);
+    assert.deepEqual(items.map((it) => n.get(it)), [2, 1], mode);
+  }
 });
 
 test('category sub-filters keep one group, and no or an unknown sub keeps them all', () => {
