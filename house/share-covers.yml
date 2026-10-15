@@ -233,6 +233,11 @@ covers:
     file: 20261012172602-five-reasons-our-plugin-sales-fell-and-what-we-c-91c44535.webp
     sha256: 91c44535875ab218fc56a10226ee06b9185806a026da6fdd88855b9b0359554f
     copiedAt: '2026-10-12'
+  atwellpub/20261015131247-servers-home-homelab-usage-survey-results:
+    source: https://blog.serversatho.me/content/images/2026/10/hero.png
+    file: 20261015131247-servers-home-homelab-usage-survey-results-f5697423.webp
+    sha256: f569742332a15a0631be1227b09cdef413955ea689715a9a329d8aba1341b6d8
+    copiedAt: '2026-10-15'
   bomsn/20260928191738-chatgpt-no-longer-reads-your-page-before-recomme:
     source: https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
     file: 20260928191738-chatgpt-no-longer-reads-your-page-before-recomme-60d9158d.webp
