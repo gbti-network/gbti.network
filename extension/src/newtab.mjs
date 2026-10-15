@@ -14,6 +14,7 @@ import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (supe
 import { mergeAll, newestFirst } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { sourceNameMap } from '../../membership/news-source-name.mjs'; // a news card names the publication, never its id
+import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../../client-ui/src/topic-labels.mjs'; // a share card names its category, as the website's does
 import { buildForVersion } from './version-build.mjs';
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
@@ -112,6 +113,9 @@ let NEWS_LOADED = false;
 // everyone and holds nothing personal) so a new tab names the publication on its first paint instead of flashing the id.
 const NEWS_NAMES_KEY = 'gbti-news-names';
 let NEWS_NAMES = (() => { try { return sourceNameMap(JSON.parse(localStorage.getItem(NEWS_NAMES_KEY) || 'null')); } catch (e) { return new Map(); } })();
+// A share stores its category as a topic key; the card pill shows the topic's name from the site's /topics.json,
+// remembered the same way so the pill is there on the first paint.
+let TOPIC_LABELS = rememberedTopicLabels();
 // SOW-111 QA follow-up (owner-refined): every view renders in 40-item chunks and AUTO-LOADS the next chunk as
 // the reader nears the bottom (an IntersectionObserver sentinel with a 600px pre-load margin, so scrolling
 // feels continuous; the rows are already in memory, only the DOM grows). The window resets when the
@@ -172,7 +176,7 @@ function renderFeed(filter = '') {
   // A single content-type view renders from its full directory once loaded (the capped river is the fallback
   // until the fetch lands, so the switch is instant and then fills in).
   const directory = narrow ? DIRECTORY[TYPE] : null;
-  let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
+  let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP, topicLabels: TOPIC_LABELS }).map(toCardItem);
   // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
   if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map((n) => newsToItem(n, { names: NEWS_NAMES })).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
@@ -469,6 +473,15 @@ async function loadNewsNames() {
   } catch { /* offline: the remembered names, or the id, stay the label */ }
 }
 
+/** Refresh the share topic names. Re-renders only when a name changed and shares are on screen; a failure keeps
+ *  what is remembered (or no pill, on a first run offline). */
+async function loadShareTopics() {
+  const map = await loadTopicLabels();
+  if (!map || sameTopicLabels(map, TOPIC_LABELS)) return;
+  TOPIC_LABELS = map;
+  if (Array.isArray(SHARES) && SHARES.length) renderFeed($('[data-filter]')?.value || '');
+}
+
 /** If the active filter needs News and it is not loaded yet, fetch it, then re-render the feed. */
 async function ensureNewsForFilter() {
   if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
@@ -600,6 +613,7 @@ function init() {
   initFooterTip();
   initVersionIndicator();
   loadNewsNames();
+  loadShareTopics();
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
   // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
   applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });

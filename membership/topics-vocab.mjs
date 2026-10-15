@@ -9,7 +9,8 @@
 
 const KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/; // kebab-case
 
-const titleCase = (key) => String(key).split('-').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+// Exported so the extension's card pill names an unlisted topic key exactly as the site does.
+export const titleCase = (key) => String(key).split('-').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
 
 /**
  * Parse raw parsed-YAML into a clean { key: { label, group? } } map. Accepts { topics: {...} } or a bare map; each

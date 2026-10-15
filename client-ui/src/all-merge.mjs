@@ -7,6 +7,8 @@
 // open-in-place vs a deep-link href — but NOT in this policy, this share projection, or this sort. Pure +
 // node-testable (no DOM, no client). The body/discussion engine stays in gbti-reader / gbti-shares-feed.
 
+import { topicLabelFor } from './topic-labels.mjs'; // a share's topic key -> the label its card pill shows
+
 // MEMBER-only shares (the default; visibility:'members') are readable only by paid or trialing — the exact
 // effectiveMembership vocabulary from membership.mjs (ban > staff > grandfather > Stripe; a grandfather grant
 // resolves to 'paid'). Every other value (expired/cancelled/none/banned/unknown) is fail-closed to no MEMBER shares.
@@ -45,8 +47,11 @@ export function shareTitle(it) {
 }
 
 /** Project a raw Share (a shareSummary from client.listShares) onto the uniform card-item shape. Carries the full
- *  share through (...it) so the reader can open it (body/encryptedBody/id/author); overrides only the card fields. */
-export function shareToItem(it) {
+ *  share through (...it) so the reader can open it (body/encryptedBody/id/author); overrides only the card fields.
+ *  `topicLabels` (a key -> label Map from topic-labels.mjs) names the share's topic, which the card shows as its
+ *  category pill the way the website's feed card does. Without it the share keeps whatever categoryLabels it had. */
+export function shareToItem(it, { topicLabels } = {}) {
+  const topic = topicLabelFor(it.category, topicLabels);
   return {
     ...it,
     type: 'share',
@@ -54,12 +59,13 @@ export function shareToItem(it) {
     excerpt: it.title ? (it.shortDescription || '') : '',
     thumb: it.image || null, // SOW-057: the featured image drives the unified card thumbnail
     createdAt: it.createdAt,
+    ...(topic ? { categoryLabels: [topic] } : {}),
   };
 }
 
 /** Merge content items + Shares newest-first under the one visitor policy. `shares` may be an array or null.
  *  Returns a fresh array (does not mutate `items`). */
-export function mergeAll({ items = [], shares = null, membership = 'unknown' } = {}) {
+export function mergeAll({ items = [], shares = null, membership = 'unknown', topicLabels } = {}) {
   const out = Array.isArray(items) ? items.slice() : [];
   if (Array.isArray(shares)) {
     // SOW-077: a PUBLIC share (visibility:'public') is visible to any reader (incl. a community-banned account);
@@ -67,7 +73,7 @@ export function mergeAll({ items = [], shares = null, membership = 'unknown' } =
     const memberOk = canSeeShares(membership);
     for (const s of shares) {
       const isPublic = String(s.visibility || 'members').toLowerCase() === 'public';
-      if (isPublic || memberOk) out.push(shareToItem(s));
+      if (isPublic || memberOk) out.push(shareToItem(s, { topicLabels }));
     }
   }
   return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));

@@ -2507,6 +2507,122 @@
   }
   var devlog = createDevlog({ enabled: devlogFlagOn, sink: console });
 
+  // client-ui/src/topic-picker-core.mjs
+  function topicsFromJson(data) {
+    const list = Array.isArray(data && data.topics) ? data.topics : [];
+    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({
+      key: t.key,
+      label: typeof t.label === "string" && t.label ? t.label : t.key,
+      ...typeof t.group === "string" && t.group ? { group: t.group } : {},
+      ...typeof t.groupKey === "string" && t.groupKey ? { groupKey: t.groupKey } : {}
+    }));
+  }
+  function groupOrderFromJson(data) {
+    const list = Array.isArray(data && data.groups) ? data.groups : [];
+    return list.map((g) => g && typeof g.label === "string" ? g.label : "").filter(Boolean);
+  }
+  function filterTopics(list, query) {
+    const q2 = String(query || "").trim().toLowerCase();
+    const arr = Array.isArray(list) ? list : [];
+    if (!q2) return arr;
+    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q2) || String(t && t.key || "").toLowerCase().includes(q2));
+  }
+  function groupTopics(list, order = []) {
+    const arr = Array.isArray(list) ? list : [];
+    const seen = [];
+    const byGroup = /* @__PURE__ */ new Map();
+    for (const t of arr) {
+      const g = t && typeof t.group === "string" && t.group ? t.group : "";
+      if (!byGroup.has(g)) {
+        byGroup.set(g, []);
+        if (g) seen.push(g);
+      }
+      byGroup.get(g).push(t);
+    }
+    const wanted = (Array.isArray(order) ? order : []).filter((g) => byGroup.has(g) && g);
+    const ordered = [.../* @__PURE__ */ new Set([...wanted, ...seen])];
+    const out = ordered.map((g) => ({ group: g, topics: byGroup.get(g) }));
+    if (byGroup.has("")) out.push({ group: "", topics: byGroup.get("") });
+    return out;
+  }
+  function toggleTopic(selection, key) {
+    const cur = (Array.isArray(selection) ? selection : []).filter((k) => typeof k === "string" && k);
+    if (!key || typeof key !== "string") return [...new Set(cur)];
+    const set = new Set(cur);
+    if (set.has(key)) {
+      set.delete(key);
+      return cur.filter((k) => k !== key);
+    }
+    return [.../* @__PURE__ */ new Set([...cur, key])];
+  }
+  function selectedTopics(categories) {
+    return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
+  }
+  var DEFAULT_TOPICS = Object.freeze(["devops", "entertainment", "music", "gaming", "ai"]);
+  function seedDefaultTopics(selected, vocabulary, defaults = DEFAULT_TOPICS) {
+    const cur = selectedTopics(selected);
+    if (cur.length) return cur;
+    const known = new Set((Array.isArray(vocabulary) ? vocabulary : []).map((t) => t && t.key).filter(Boolean));
+    return (Array.isArray(defaults) ? defaults : []).filter((k) => known.has(k));
+  }
+  function selectAllTopics(selection, pool, cap = Infinity) {
+    const cur = selectedTopics(selection);
+    const keys = (Array.isArray(pool) ? pool : []).map((t) => t && t.key).filter((k) => typeof k === "string" && k);
+    const merged = [.../* @__PURE__ */ new Set([...cur, ...keys])];
+    return Number.isFinite(cap) && cap > 0 ? merged.slice(0, cap) : merged;
+  }
+
+  // membership/topics-vocab.mjs
+  var titleCase = (key) => String(key).split("-").map((w2) => w2 ? w2[0].toUpperCase() + w2.slice(1) : w2).join(" ");
+  var MORE_TOPICS = Object.freeze({ key: "more", label: "More topics" });
+
+  // client-ui/src/topic-labels.mjs
+  var TOPICS_URL = "https://gbti.network/topics.json";
+  var TOPIC_LABELS_KEY = "gbti-topic-labels";
+  function topicLabelMap(data) {
+    const map = /* @__PURE__ */ new Map();
+    for (const t of topicsFromJson(data)) map.set(t.key, t.label);
+    return map;
+  }
+  function topicLabelFor(key, labels) {
+    const k = typeof key === "string" ? key.trim() : "";
+    if (!k || !(labels instanceof Map) || !labels.size) return "";
+    return labels.get(k) || titleCase(k);
+  }
+  function sameTopicLabels(a, b) {
+    if (!(a instanceof Map) || !(b instanceof Map) || a.size !== b.size) return false;
+    for (const [k, v2] of a) if (b.get(k) !== v2) return false;
+    return true;
+  }
+  function rememberedTopicLabels() {
+    try {
+      return topicLabelMap(JSON.parse(localStorage.getItem(TOPIC_LABELS_KEY) || "null"));
+    } catch {
+      return /* @__PURE__ */ new Map();
+    }
+  }
+  var LOAD = null;
+  function loadTopicLabels() {
+    if (!LOAD) {
+      LOAD = fetch(TOPICS_URL, { cache: "no-cache" }).then((r) => {
+        if (!r.ok) throw new Error(`http-${r.status}`);
+        return r.json();
+      }).then((data) => {
+        const map = topicLabelMap(data);
+        if (!map.size) throw new Error("empty");
+        try {
+          localStorage.setItem(TOPIC_LABELS_KEY, JSON.stringify({ topics: [...map].map(([key, label]) => ({ key, label })) }));
+        } catch {
+        }
+        return map;
+      }).catch(() => {
+        LOAD = null;
+        return null;
+      });
+    }
+    return LOAD;
+  }
+
   // client-ui/src/all-merge.mjs
   var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
   function canSeeShares2(membership) {
@@ -2531,7 +2647,8 @@
   function shareTitle(it2) {
     return it2.title || it2.shortDescription || (it2.url ? `Link: ${hostOf(it2.url)}` : "Member share");
   }
-  function shareToItem(it2) {
+  function shareToItem(it2, { topicLabels } = {}) {
+    const topic = topicLabelFor(it2.category, topicLabels);
     return {
       ...it2,
       type: "share",
@@ -2539,16 +2656,17 @@
       excerpt: it2.title ? it2.shortDescription || "" : "",
       thumb: it2.image || null,
       // SOW-057: the featured image drives the unified card thumbnail
-      createdAt: it2.createdAt
+      createdAt: it2.createdAt,
+      ...topic ? { categoryLabels: [topic] } : {}
     };
   }
-  function mergeAll({ items = [], shares = null, membership = "unknown" } = {}) {
+  function mergeAll({ items = [], shares = null, membership = "unknown", topicLabels } = {}) {
     const out = Array.isArray(items) ? items.slice() : [];
     if (Array.isArray(shares)) {
       const memberOk = canSeeShares2(membership);
       for (const s of shares) {
         const isPublic = String(s.visibility || "members").toLowerCase() === "public";
-        if (isPublic || memberOk) out.push(shareToItem(s));
+        if (isPublic || memberOk) out.push(shareToItem(s, { topicLabels }));
       }
     }
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
@@ -3792,71 +3910,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const at3 = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
     const start = at3 * size;
     return { page: at3, pages, start, end: Math.min(n, start + size), size };
-  }
-
-  // client-ui/src/topic-picker-core.mjs
-  function topicsFromJson(data) {
-    const list = Array.isArray(data && data.topics) ? data.topics : [];
-    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({
-      key: t.key,
-      label: typeof t.label === "string" && t.label ? t.label : t.key,
-      ...typeof t.group === "string" && t.group ? { group: t.group } : {},
-      ...typeof t.groupKey === "string" && t.groupKey ? { groupKey: t.groupKey } : {}
-    }));
-  }
-  function groupOrderFromJson(data) {
-    const list = Array.isArray(data && data.groups) ? data.groups : [];
-    return list.map((g) => g && typeof g.label === "string" ? g.label : "").filter(Boolean);
-  }
-  function filterTopics(list, query) {
-    const q2 = String(query || "").trim().toLowerCase();
-    const arr = Array.isArray(list) ? list : [];
-    if (!q2) return arr;
-    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q2) || String(t && t.key || "").toLowerCase().includes(q2));
-  }
-  function groupTopics(list, order = []) {
-    const arr = Array.isArray(list) ? list : [];
-    const seen = [];
-    const byGroup = /* @__PURE__ */ new Map();
-    for (const t of arr) {
-      const g = t && typeof t.group === "string" && t.group ? t.group : "";
-      if (!byGroup.has(g)) {
-        byGroup.set(g, []);
-        if (g) seen.push(g);
-      }
-      byGroup.get(g).push(t);
-    }
-    const wanted = (Array.isArray(order) ? order : []).filter((g) => byGroup.has(g) && g);
-    const ordered = [.../* @__PURE__ */ new Set([...wanted, ...seen])];
-    const out = ordered.map((g) => ({ group: g, topics: byGroup.get(g) }));
-    if (byGroup.has("")) out.push({ group: "", topics: byGroup.get("") });
-    return out;
-  }
-  function toggleTopic(selection, key) {
-    const cur = (Array.isArray(selection) ? selection : []).filter((k) => typeof k === "string" && k);
-    if (!key || typeof key !== "string") return [...new Set(cur)];
-    const set = new Set(cur);
-    if (set.has(key)) {
-      set.delete(key);
-      return cur.filter((k) => k !== key);
-    }
-    return [.../* @__PURE__ */ new Set([...cur, key])];
-  }
-  function selectedTopics(categories) {
-    return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
-  }
-  var DEFAULT_TOPICS = Object.freeze(["devops", "entertainment", "music", "gaming", "ai"]);
-  function seedDefaultTopics(selected, vocabulary, defaults = DEFAULT_TOPICS) {
-    const cur = selectedTopics(selected);
-    if (cur.length) return cur;
-    const known = new Set((Array.isArray(vocabulary) ? vocabulary : []).map((t) => t && t.key).filter(Boolean));
-    return (Array.isArray(defaults) ? defaults : []).filter((k) => known.has(k));
-  }
-  function selectAllTopics(selection, pool, cap = Infinity) {
-    const cur = selectedTopics(selection);
-    const keys = (Array.isArray(pool) ? pool : []).map((t) => t && t.key).filter((k) => typeof k === "string" && k);
-    const merged = [.../* @__PURE__ */ new Set([...cur, ...keys])];
-    return Number.isFinite(cap) && cap > 0 ? merged.slice(0, cap) : merged;
   }
 
   // client-ui/src/browse-filter-core.mjs
@@ -26361,6 +26414,12 @@ ${BLOCKED_PILL_CSS}
       this._items = null;
       this._reading = null;
       this._locked = false;
+      this._topicLabels = rememberedTopicLabels();
+      loadTopicLabels().then((map) => {
+        if (!map || sameTopicLabels(map, this._topicLabels)) return;
+        this._topicLabels = map;
+        if (this.isConnected && !this._locked && !this._reading && this._items?.length) this._renderList();
+      });
       this._onPosted = (e) => {
         const item = e?.detail?.item;
         if (item) {
@@ -26479,7 +26538,7 @@ ${BLOCKED_PILL_CSS}
       if (items.length) {
         const list = document.createElement("gbti-card-list");
         list.mode = "detailed";
-        list.items = items.map((it2) => shareToItem(it2));
+        list.items = items.map((it2) => shareToItem(it2, { topicLabels: this._topicLabels }));
         list.addEventListener("card-open", (e) => {
           const it2 = e.detail?.item;
           if (it2) {
@@ -31945,6 +32004,7 @@ ${BLOCKED_PILL_CSS}
       this._cat = [];
       this._shares = null;
       this._membership = null;
+      this._topicLabels = rememberedTopicLabels();
       this._reading = null;
       super.connectedCallback?.();
       this.root?.addEventListener("error", (e) => {
@@ -31972,6 +32032,11 @@ ${BLOCKED_PILL_CSS}
         }
       };
       if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
+      loadTopicLabels().then((map) => {
+        if (!map || sameTopicLabels(map, this._topicLabels)) return;
+        this._topicLabels = map;
+        if (this.isConnected && this._tab === "all" && !this._reading && !this._openPath && this._shares?.length) this.render();
+      });
       this._init();
     }
     disconnectedCallback() {
@@ -32032,7 +32097,7 @@ ${BLOCKED_PILL_CSS}
       const ready = CONTENT_TYPES.every((t) => this._cache[t]);
       if (!ready || this._shares === null) return null;
       const items = CONTENT_TYPES.flatMap((t) => this._cache[t] || []);
-      return mergeAll({ items, shares: this._shares, membership: this._membership });
+      return mergeAll({ items, shares: this._shares, membership: this._membership, topicLabels: this._topicLabels });
     }
     render() {
       if (this._reading) {
@@ -32585,6 +32650,7 @@ ${BLOCKED_PILL_CSS}
       return /* @__PURE__ */ new Map();
     }
   })();
+  var TOPIC_LABELS = rememberedTopicLabels();
   var PAGE_SIZE2 = 40;
   var VISIBLE = PAGE_SIZE2;
   var PAGE_KEY = "";
@@ -32621,7 +32687,7 @@ ${BLOCKED_PILL_CSS}
     }
     const { wantNews, wantShares, narrow, kinds } = feedSources(TYPE);
     const directory = narrow ? DIRECTORY[TYPE] : null;
-    let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
+    let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP, topicLabels: TOPIC_LABELS }).map(toCardItem);
     if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map((n) => newsToItem(n, { names: NEWS_NAMES })).map(({ openHref, ...n }) => n));
     if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
     if (VIEW === "following") {
@@ -32875,6 +32941,12 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
+  async function loadShareTopics() {
+    const map = await loadTopicLabels();
+    if (!map || sameTopicLabels(map, TOPIC_LABELS)) return;
+    TOPIC_LABELS = map;
+    if (Array.isArray(SHARES) && SHARES.length) renderFeed($("[data-filter]")?.value || "");
+  }
   async function ensureNewsForFilter() {
     if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
       await loadNews();
@@ -32996,6 +33068,7 @@ ${BLOCKED_PILL_CSS}
     initFooterTip();
     initVersionIndicator();
     loadNewsNames();
+    loadShareTopics();
     applyMembershipState().then(() => {
       ensureSharesForFilter();
       ensureNewsForFilter();

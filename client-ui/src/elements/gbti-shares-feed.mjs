@@ -15,6 +15,7 @@ import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep
 import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: a video share plays inline
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
+import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../topic-labels.mjs'; // the card's category pill
 import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
 import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
@@ -92,6 +93,14 @@ class GbtiSharesFeed extends GbtiElement {
     this._items = null; // raw shares
     this._reading = null; // the share being read, or null (the list)
     this._locked = false;
+    // The share's topic key becomes its card's category pill. Remembered names paint at once; the live list redraws
+    // the cards only if a name changed, and never while a share is open.
+    this._topicLabels = rememberedTopicLabels();
+    loadTopicLabels().then((map) => {
+      if (!map || sameTopicLabels(map, this._topicLabels)) return;
+      this._topicLabels = map;
+      if (this.isConnected && !this._locked && !this._reading && this._items?.length) this._renderList();
+    });
     // SOW-092: on post, open the member's new share IMMEDIATELY (the optimistic reader-ready item the
     // composer emits; SOW-076 instant-feel) and refetch the stream quietly behind it. Marks the event
     // handled so the shell's no-reader compose fallback never double-fires. A payload without the item
@@ -204,7 +213,7 @@ class GbtiSharesFeed extends GbtiElement {
       const list = document.createElement('gbti-card-list');
       list.mode = 'detailed';
       // Carry the full Share through the shared projection so card-open returns it (the card only reads a few fields).
-      list.items = items.map((it) => shareToItem(it));
+      list.items = items.map((it) => shareToItem(it, { topicLabels: this._topicLabels }));
       list.addEventListener('card-open', (e) => { const it = e.detail?.item; if (it) { this._reading = it; this.render(); } });
       this.$('[data-list]')?.replaceChildren(list);
     }

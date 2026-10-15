@@ -5,6 +5,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBrowseHash, stripDoParam } from '../browse-hash.mjs';
 import { mergeAll, canSeeShares } from '../all-merge.mjs'; // SOW-042: the shared All directory merge + Shares policy
+import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../topic-labels.mjs'; // a share card's category pill
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
 import './gbti-news.mjs'; // SOW-043: the members-only news section (its own self-loading tab)
@@ -79,6 +80,7 @@ class GbtiBrowse extends GbtiElement {
     this._cat = []; // SOW-054: the selected category drill-down path ([] = All; [primary]; [primary, sub])
     this._shares = null; // SOW-042: raw Shares for the All tab, fetched once (member-gated)
     this._membership = null; // SOW-042: effective status for the Shares-omission policy
+    this._topicLabels = rememberedTopicLabels(); // a share's topic key -> its card's category pill
     this._reading = null;
     super.connectedCallback?.(); // base now renders the initial list with fields in place
     // Hide a thumbnail that fails to load (a stale /_astro hash after a site redeploy, or a missing asset) so the
@@ -104,6 +106,11 @@ class GbtiBrowse extends GbtiElement {
       if (t !== this._tab || this._reading) { this._tab = t; this._cat = []; this._reading = null; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
+    loadTopicLabels().then((map) => {
+      if (!map || sameTopicLabels(map, this._topicLabels)) return;
+      this._topicLabels = map;
+      if (this.isConnected && this._tab === 'all' && !this._reading && !this._openPath && this._shares?.length) this.render();
+    });
     this._init();
   }
 
@@ -159,7 +166,7 @@ class GbtiBrowse extends GbtiElement {
     const ready = CONTENT_TYPES.every((t) => this._cache[t]);
     if (!ready || this._shares === null) return null;
     const items = CONTENT_TYPES.flatMap((t) => this._cache[t] || []);
-    return mergeAll({ items, shares: this._shares, membership: this._membership });
+    return mergeAll({ items, shares: this._shares, membership: this._membership, topicLabels: this._topicLabels });
   }
 
   render() {
