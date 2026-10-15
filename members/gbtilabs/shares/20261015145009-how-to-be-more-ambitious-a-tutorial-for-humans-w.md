@@ -14,8 +14,8 @@ tags:
   - frameworks
   - eductation
   - self-improvement
-image: >-
-  https://storage.ghost.io/c/89/e0/89e08557-681a-40be-8264-278bf46d6b25/content/images/size/w1200/2026/10/modo_de_volar_a_way_of_flying_1951.10.55-1.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261015145009-how-to-be-more-ambitious-a-tutorial-for-humans-w-1522d918.webp
+imageSource: https://storage.ghost.io/c/89/e0/89e08557-681a-40be-8264-278bf46d6b25/content/images/size/w1200/2026/10/modo_de_volar_a_way_of_flying_1951.10.55-1.jpg
 sourceName: Felix Rieseberg
 id: 20261015145009-how-to-be-more-ambitious-a-tutorial-for-humans-w
 createdAt: '2026-10-15T14:50:09.054Z'
