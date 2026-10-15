@@ -1,0 +1,106 @@
+---
+// sow-456: THE WORDPRESS YOUTUBE CREATOR INVITE LANDING, for the creators featured in "100 WordPress YouTube
+// Channels to Subscribe to in 2026". Like the other landers since sow-243, this page is campaign data and copy
+// only: the chrome (nav, hero, sticky claim card, coupon chip, Turnstile-gated CTA, FAQ accordion, footer,
+// styles) lives once in src/components/invite/InviteLander.astro.
+//
+// WHY THIS CAMPAIGN HAS A PAGE OF ITS OWN RATHER THAN POINTING AT /member-invite/. The email that carries this
+// link opens by telling someone they were ranked on a list, and the first thing a stranger does with an
+// unexpected offer is check whether it is real. /member-invite/ is audience-neutral by design, so it cannot
+// name the list, cannot link to the recipient's own entry, and cannot say where the invitation came from. This
+// page answers all three above the fold, which is the whole job it has.
+//
+// THIS INVITE CONFERS `member`, the one paid plan. The benefit list is rendered from
+// house/membership-tiers.yml through tierDisplay() and is NOT written here: a hand-written list once carried
+// claims for another tier that no string check could see, because a sentence promising publishing names
+// neither a tier nor a price. If a claim is not a bullet in that file, it cannot reach this page.
+//
+// NO BENEFIT LIST IN THE FAQ, NO REVENUE COPY (banned-patterns.md #2). The answers cover the offer first (what
+// is this, am I being charged, what happens at the end of the year, how do I claim it), then the network.
+//
+// THE CAMPAIGN. The campaign's public identity is ?coupon=YOUTUBE2026, which is the id house/campaigns.yml
+// carries and which the parity test reads from this line to check that the campaign's tier and this page's
+// tier agree. THE LINKS WE ACTUALLY SEND DO NOT CARRY THAT STRING: each creator's email carries a unique
+// single-use invite minted against the campaign (membership/invites.mjs), so a redeemed code names the one
+// person who redeemed it and a leaked link can be revoked on its own. Either way the code arrives as a plain
+// visible ?coupon= parameter that prefills the field (QA 2026-07-18: no secret token links).
+import InviteLander from '../../components/invite/InviteLander.astro';
+import { BILLING_PERIOD } from '../../lib/membership';
+import { tierDisplay } from '../../lib/tiers';
+
+const memberTier = tierDisplay('member');
+const TIER_LABEL = memberTier?.label ?? 'Network Supporter';
+const TIER_PRICE_LABEL = `$${memberTier?.priceAnnual ?? 50}`;
+const memberBenefits = memberTier?.benefits ?? [];
+
+// The article this invitation comes out of. One constant, used by the hero, the story section and the FAQ, so
+// the three cannot end up naming different things.
+const ARTICLE_TITLE = '100 WordPress YouTube Channels to Subscribe to in 2026';
+const ARTICLE_URL = '/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/';
+
+const faqs = [
+  ['What does this invite give me?', `A full year at the ${TIER_LABEL} tier, with everything listed above, at no cost. It is a normal membership for the year, not a limited preview.`],
+  ['Do I need a card to claim it?', 'No. No card is collected at any point during the free year, and nothing bills automatically.'],
+  ['What happens when the free year ends?', `${TIER_LABEL} is ${TIER_PRICE_LABEL} per ${BILLING_PERIOD} if you decide to continue, and you will not be charged unless you choose to.`],
+  ['How do I claim it?', 'Sign in with GitHub from this page. Your coupon is already applied, so there is nothing to enter or remember.'],
+  // The honest answer, and the one a creator who was sent this out of the blue is most likely to want.
+  ['Why am I being offered this?', `Your channel is one of the hundred in our article ${ARTICLE_TITLE}. We read the 2026 videos, scored each channel on how much of it is about WordPress, how often it posts and how many people watch, and published the result. The free year is a thank you for the work that put you on the list, and nothing is expected in return.`],
+  ['Did you ask me before publishing my channel?', 'No. The article is a review of public work, written from what each channel publishes. No channel was asked to take part, and nobody paid to appear or was paid to appear. If your entry has something wrong in it, or you would rather not be listed, reply to the email and it reaches a person.'],
+  ['Can I pass this on to someone else?', 'It is meant for you, but the link works for whoever opens it first, so treat it as personal rather than forwardable.'],
+  ['What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it, publish their own articles, projects and prompts, and take part in a private community.'],
+  ['Can I publish my own work with this invite?', `Yes. A year at ${TIER_LABEL} includes publishing your own articles, projects and prompts. New work goes out to members first, and a superadmin reviews it before it appears on the public website.`],
+  ['Is all content public or private?', 'Both, and members come first. New work goes out to members, and a superadmin reviews it before it appears on the public website. For work that stays members-only, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
+  ['Are comments on public-facing content also public?', 'By default, they are not, and can only be read inside the extension by other members. There is, however, the option to make a comment fully public.'],
+  ['What does GBTI stand for?', 'God Bless The Internet; a phrase that expresses appreciation and goodwill toward the continued growth and enrichment of the internet.'],
+] as const;
+---
+
+<InviteLander
+  title="WordPress YouTube creators: your first year on us"
+  description={`A thank you for the creators featured in ${ARTICLE_TITLE}: a full year at the ${TIER_LABEL} tier, free with your coupon.`}
+  tierLabel={TIER_LABEL}
+  tierPriceLabel={TIER_PRICE_LABEL}
+  benefits={memberBenefits}
+  benefitsHeading={`What ${TIER_LABEL} gives you`}
+  benefitsLayout="grid2"
+  nav={[{ href: '#the-list', label: 'The list' }, { href: '#benefits', label: 'What you get' }, { href: '#faq', label: 'FAQ' }]}
+  navCta={{ href: '#claim', label: 'Claim free year' }}
+  hero={{
+    titleHtml: 'You made the list.<br />Your first year is on us.',
+    // Every clause here is a fact we can point at: the article exists, it ranks a hundred channels, and the
+    // tier comes from the registry. Nothing about how the research was done, because nobody checked that.
+    lead: `We watched WordPress YouTube through 2026 and published the hundred channels worth subscribing to. Yours is one of them. GBTI is a professional publishing network for developers, and this invitation covers a full year at the ${TIER_LABEL} tier.`,
+    ctaLabel: 'Claim your free year',
+    meta: ['no card', 'no auto-bill', 'cancel anytime', 'github sign-in'],
+  }}
+  claimStyle="panel"
+  faqs={faqs}
+>
+  <Fragment slot="before-benefits">
+    <!-- ================= THE LIST ================= -->
+    <!-- The one thing this page exists to say, and it says it before asking for anything. Facts about the
+         article only: no claim about the tier belongs in here. -->
+    <section class="ci-sec" id="the-list">
+      <h2>Where this came from</h2>
+      <p class="sec-lead">{ARTICLE_TITLE} ranks a hundred channels on their 2026 output. We scored every one
+        of them on how much of the channel is about WordPress, how often it posts and how many people watch,
+        then wrote up each entry with the video we would send a newcomer to first. Your entry is in there, and
+        the email that brought you here links straight to it.</p>
+      <a class="btn-ghost" href={ARTICLE_URL}>Read the list</a>
+    </section>
+  </Fragment>
+
+  <Fragment slot="after-faq">
+    <!-- ================= CLOSING CTA ================= -->
+    <section class="ci-sec">
+      <div class="ci-close">
+        <h2>Ready when you are</h2>
+        <!-- A recap of the registry bullets above, never a claim of its own. -->
+        <p>Your coupon covers the first year. Sign in with GitHub and you are in: commenting, Discord,
+          members-only reading, and publishing your own work to the network.</p>
+        <a href="#claim" class="btn-primary">Claim your free year</a>
+        <div class="ci-close-code" data-close-code hidden>coupon <span data-coupon-echo></span></div>
+      </div>
+    </section>
+  </Fragment>
+</InviteLander>

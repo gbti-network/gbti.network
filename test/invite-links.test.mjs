@@ -11,6 +11,10 @@ import { resolveLander, blockedReason, inviteRow } from '../scripts/invite-links
 // sow-231 Phase 3: the mapping moved into membership/invites.mjs so the browser coupon manager and this CLI
 // resolve a lander identically. Importing it from its real home rather than re-exporting keeps one source.
 import { LANDER_BY_TIER, LANDER_BY_CAMPAIGN } from '../membership/invites.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root = path.resolve(new URL('..', import.meta.url).pathname);
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
 const coupon = (over = {}) => ({ code: 'TESTCODE', tier: 'member', freeDays: 365, active: true, maxRedemptions: null, expiresAt: null, note: '', ...over });
@@ -20,11 +24,28 @@ test('a coupon resolves to the lander for ITS tier, not to a default', () => {
   assert.equal(resolveLander(coupon({ tier: 'creator' })), '/curator-invite/');
 });
 
-test('a per-code lander beats the tier map, because the page belongs to the campaign', () => {
-  // CODEABLEYEAR is creator tier, so the tier map alone would send it to the generic curator lander. It has
-  // its own page addressing that audience, and which page a campaign uses is a property of the campaign.
+test('a per-campaign lander beats the tier map, because the page belongs to the campaign', () => {
+  // A campaign with an audience-specific page uses it whatever its tier, which is what makes the override a
+  // property of the CAMPAIGN rather than of the tier. (Corrected 2026-10-15: this comment used to say
+  // CODEABLEYEAR was creator tier. It has named `tier: member` since 2026-08-12, and the same false belief
+  // written one file over is what kept /codeable-invite/ advertising the wrong tier at the wrong price.)
   assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'creator' })), '/codeable-invite/');
+  assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'member' })), '/codeable-invite/');
   assert.equal(LANDER_BY_CAMPAIGN.CODEABLEYEAR, '/codeable-invite/');
+  // sow-456: the 2026 WordPress YouTube list. Member tier, so the tier map alone would reach a correct page;
+  // the override picks the one that names the list the invitation comes out of.
+  assert.equal(resolveLander(coupon({ code: 'YOUTUBE2026', tier: 'member' })), '/youtube-invite/');
+  assert.equal(LANDER_BY_CAMPAIGN.YOUTUBE2026, '/youtube-invite/');
+});
+
+test('every per-campaign lander points at a page that exists', () => {
+  // The direction a unit test CAN check here: a mapping entry naming a route nobody ships would send a
+  // recipient to a 404, and no assertion over the mapping's own values can see that.
+  for (const [campaign, route] of Object.entries(LANDER_BY_CAMPAIGN)) {
+    const dir = route.replace(/^\/|\/$/g, '');
+    assert.ok(fs.existsSync(path.join(root, 'src/pages', dir, 'index.astro')),
+      `${campaign} points at ${route}, which is not a page on disk`);
+  }
 });
 
 test('an unknown tier resolves to NO lander rather than to a plausible one', () => {
