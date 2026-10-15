@@ -9,7 +9,8 @@ shortDescription: >-
   Servers@Home’s first annual survey offers a snapshot of how its homelab community builds,
   connects, and maintains self-hosted infrastructure.
 category: home-network
-image: https://blog.serversatho.me/content/images/2026/10/hero.png
+image: https://gbti.network/media/shares/atwellpub/20261015131247-servers-home-homelab-usage-survey-results-f5697423.webp
+imageSource: https://blog.serversatho.me/content/images/2026/10/hero.png
 sourceName: Servers@Home
 tags:
   - homelab
