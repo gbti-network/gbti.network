@@ -83,7 +83,9 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
       {/* sow-399: superadmin tools (Manually syndicate) head the rail, where the extension reader had them. */}
       <slot name="tools" />
       <div>
-        <div class="mt-12">
+        {/* Owner, 2026-10-14: 12px, so the author box starts level with the article title. It was 48px, left over from
+            when the category label sat above it. */}
+        <div class="mt-3">
           <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} />
         </div>
       </div>

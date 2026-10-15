@@ -160,6 +160,9 @@
    position, left of both the article and the closing sections. */
 .art-j-rail { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: var(--rail-top, calc(var(--art-off) + 14px)); /* --rail-top: pd-enhance fitStickyRail */ align-self: start; display: flex; flex-direction: column; gap: 18px; }
 .art-j-rail > * + * { padding-top: 16px; border-top: 1px solid var(--line); }
+/* The superadmin tools (Manually syndicate) head the rail, hidden for everyone else, so for a reader the author box is
+   the first visible block and gets no divider above it (it drew a line separating nothing). Revealed tools bring it back. */
+.art-j-rail > [hidden] ~ div:first-of-type { padding-top: 0; border-top: 0; }
 
 .art-j-col, .art-j-close { grid-column: 2; min-width: 0; max-width: 660px; }
 /* sow-183: the Edit pill sits in the flow ABOVE the title here (not absolutely positioned like the other
