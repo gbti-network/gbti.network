@@ -14,7 +14,8 @@ tags:
   - dj-mix
   - darkwave
   - live-set
-image: https://i.ytimg.com/vi/ThCbmZ4HCTM/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261015205910-zeu5-explores-008-the-many-faces-of-trentem-ller-b90fa7c6.webp
+imageSource: https://i.ytimg.com/vi/ThCbmZ4HCTM/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@Zeu5_DJ
 creatorName: Zeu5
 sourceName: YouTube
