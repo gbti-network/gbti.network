@@ -15,7 +15,7 @@ const PAGES = [
   'src/pages/codeable-invite/index.astro',
   'src/pages/member-invite/index.astro',
   'src/pages/curator-invite/index.astro',
-  'src/pages/youtube-invite/index.astro', // sow-456
+  'src/pages/youtube-invite/index.astro', // sow-457
 ];
 const COMPONENT = 'src/components/invite/InviteLander.astro';
 const MECHANISM = ['cf-turnstile', 'data-coupon-chip', 'gbtiTurnstileOk', "'/signup/start'", 'data-faq', 'challenges.cloudflare.com/turnstile'];

@@ -32,7 +32,7 @@ test('a per-campaign lander beats the tier map, because the page belongs to the 
   assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'creator' })), '/codeable-invite/');
   assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'member' })), '/codeable-invite/');
   assert.equal(LANDER_BY_CAMPAIGN.CODEABLEYEAR, '/codeable-invite/');
-  // sow-456: the 2026 WordPress YouTube list. Member tier, so the tier map alone would reach a correct page;
+  // sow-457: the 2026 WordPress YouTube list. Member tier, so the tier map alone would reach a correct page;
   // the override picks the one that names the list the invitation comes out of.
   assert.equal(resolveLander(coupon({ code: 'YOUTUBE2026', tier: 'member' })), '/youtube-invite/');
   assert.equal(LANDER_BY_CAMPAIGN.YOUTUBE2026, '/youtube-invite/');
