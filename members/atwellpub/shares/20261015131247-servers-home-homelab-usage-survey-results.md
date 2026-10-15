@@ -1,22 +1,23 @@
 ---
 status: published
-visibility: public
+id: 20261015131247-servers-home-homelab-usage-survey-results
+createdAt: '2026-10-15T13:12:47.518Z'
+updatedAt: '2026-10-15T13:13:49.914Z'
+url: https://blog.serversatho.me/homelab-usage-survey-results/
 title: 'Servers@Home: Homelab Usage Survey Results'
 shortDescription: >-
   Servers@Home’s first annual survey offers a snapshot of how its homelab community builds,
   connects, and maintains self-hosted infrastructure.
-url: https://blog.serversatho.me/homelab-usage-survey-results/
 category: home-network
+image: https://blog.serversatho.me/content/images/2026/10/hero.png
+sourceName: Servers@Home
 tags:
   - homelab
   - self-hosting
   - truenas
   - proxmox
   - openform
-image: https://blog.serversatho.me/content/images/2026/10/hero.png
-sourceName: Servers@Home
-id: 20261015131247-servers-home-homelab-usage-survey-results
-createdAt: '2026-10-15T13:12:47.518Z'
+visibility: public
 type: share
 author: atwellpub
 ---
@@ -30,8 +31,6 @@ The more interesting part, though, may be where people are still struggling. Net
 It is a relatively small, community-specific survey compared with efforts such as selfh.st’s larger annual self-hosting survey, but that also makes it an interesting look at one particular corner of the homelab world.[^2] The questionnaire itself was built using the self-hosted OpnForm project and its MCP integration, adding another small self-hosting story behind the survey.[^3]
 
 There are considerably more numbers, charts, and respondent observations in the full results than are worth reproducing here. If you run a homelab, or are curious what other self-hosters are actually doing with theirs, the original article is worth reading through.
-
-*Footnotes*
 
 [^1]: [Servers@Home, *Homelab Usage Survey Results*, October 15, 2026](https://blog.serversatho.me/homelab-usage-survey-results/)
 [^2]: [Ethan Sholly, *2025 Self-Host User Survey Results*, selfh.st, November 21, 2025](https://selfh.st/survey/2025-results/)
