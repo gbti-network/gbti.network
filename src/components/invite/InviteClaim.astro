@@ -91,8 +91,11 @@ for (const [key, t] of [['member', tierDisplay('member')], ['creator', tierDispl
           <div class="icd-signin">
             <div class="icd-ts" data-invite-ts data-sitekey={TURNSTILE_SITE_KEY}></div>
             <button type="button" class="btn btn-primary icd-go" data-invite-go disabled>{campaign.signinLabel}</button>
-            <p class="icd-note" data-invite-wait>The human verification below has to finish before this button
-              turns on. It usually takes a second.</p>
+            {/* NOT "the check below": the widget renders ABOVE the button and this line sits under it, so the
+                word was wrong the moment the layout was looked at. Position-free wording instead, which stays
+                true if the order ever changes. */}
+            <p class="icd-note" data-invite-wait>The human verification has to finish before this button turns
+              on. It usually takes a second.</p>
             <p class="icd-note" data-invite-blocked hidden>The human verification did not load, so the button
               stays off. If you use a content blocker, allow challenges.cloudflare.com and reload this page.</p>
           </div>
