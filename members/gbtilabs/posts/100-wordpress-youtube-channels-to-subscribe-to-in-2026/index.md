@@ -45,22 +45,13 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 ---
 **Score = 100 × (0.4 × Focus + 0.2 × Volume + 0.2 × Reach + 0.2 × Engagement) × Seller**
 
-- **Focus:** What share of the channel's 2026 videos are about WordPress. The raw score would give a lone WordPress video perfect Focus and push it above channels that live in the space. We pad each channel with five phantom videos at the average WordPress share, so one real video out of one settles near 58% and two hundred real videos stay where they were. A video is credited as WordPress the same way as under Volume, below.
-- **Volume:** How many of a channel's videos posted in 2026 were related to WordPress. The algorithm credits a video if its title names WordPress, or if it has a WordPress tag in addition to the video's own description mentioning WordPress. A title also counts when it names a WordPress product such as WooCommerce, Gutenberg or Elementor.
+- **Focus:** The share of a channel's 2026 videos that are about WordPress. Each channel is padded with five phantom videos at the average WordPress share, so one WordPress video out of one counts as about 58%, not 100%.
+- **Volume:** The number of a channel's 2026 videos that are about WordPress. A video is credited when its title names WordPress or a WordPress product such as WooCommerce, Gutenberg or Elementor, or when it carries a WordPress tag and its description mentions WordPress. Repeated footers, links and hashtag-only lines are removed before a description is read, only its first 300 characters count, and a channel's own brand name never counts in its tags or description.
+- **Reach:** The median views of a channel's videos longer than three minutes, posted in the 12 months before 10 October 2026 (all of its videos from that window when none are longer).
+- **Engagement:** The same median views divided by subscribers, with fewer than 100 subscribers counted as 100.
+- **Seller:** 0.75 for channels run by plugin or theme companies, and 1 for every other channel.
 
-  Before a description is read, we cut:
-
-  - Repeated description footers. A line that appears in three or more of the channel's video descriptions is treated as a footer and cut. Lines are compared loosely (by their letters only), so a footer with a changed number, date or emoji still counts as the same line.
-  - Links. Every web address is cut.
-  - Hashtag lines. A line made only of hashtags is cut.
-  - The channel's own brand name. A channel's own brand (for example "Elementor" on Elementor's own channel) never counts as the WordPress mention in its tags or descriptions. Its titles still count normally. A company that names itself in every tag and description tells us nothing about one video.
-
-  Only the first 300 characters of what is left are read, which is where creators usually say what the video is about.
-- **Reach:** How many views a channel's typical video gets. Typical means the median views per video, counted over every video the channel posted in the 12 months before 10 October 2026, when data collection stopped. Only videos longer than three minutes are used, so Shorts do not decide it. If a channel posted no video longer than three minutes in that window, all of its videos from that window are used instead.
-- **Engagement:** How many views a channel's typical video gets compared with how many subscribers the channel has. This is the same median views used for Reach, divided by the subscriber count. A channel with fewer than 100 subscribers is treated as having 100, so a channel with only a handful of subscribers does not jump to the top.
-- **Seller:** Whether the channel is run by a plugin or theme company. Those channels get 0.75 and every other channel gets 1. They often make videos to sell their own products, and we wanted to favor channels that teach and share news.
-
-Five WordPress community channels are always included, whatever their score: WordCampAsia (#11), WordCampEU (#52), WordPress Tavern (#57), the official WordPress channel (#91), and Gutenberg Times (#100). The first four scored high enough to make the list on their own. Gutenberg Times is on the list because of this rule, which is why it sits at #100.
+Five WordPress community channels are always included, whatever their score: WordCampAsia (#11), WordCampEU (#52), WordPress Tavern (#57), the official WordPress channel (#91), and Gutenberg Times (#100), the only one that needed the rule.
 ```
 
 ```callout warning
