@@ -33,8 +33,8 @@ import { githubIdForFolder } from './member-folder.mjs'; // sow-428: folder -> g
 // sow-159: Mastodon retired (2026-07-28); dropped from the Manually-Syndicate destinations so no manual post can target it either.
 // HAND-MAINTAINED DUPLICATE of CHANNELS (membership/syndication-config-core.mjs); it does not derive from it.
 // SOW-137 added hashnode + dailydev here because they were missing the Manually-Syndicate surface; sow-217
-// removed hashnode again on retirement. Keep in step with CHANNELS and SYNDICATION_CHANNEL_NAMES.
-const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'bluesky', 'devto', 'dailydev'];
+// removed hashnode again on retirement; substack joined 2026-10-16. Keep in step with CHANNELS and SYNDICATION_CHANNEL_NAMES.
+const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'bluesky', 'devto', 'dailydev', 'substack'];
 
 // sow-196: the KEY is the current type name; the VALUE is the Cloudflare-provisioned variable NAME,
 // which deliberately still reads PRODUCTS. Renaming the variable means re-provisioning the Worker

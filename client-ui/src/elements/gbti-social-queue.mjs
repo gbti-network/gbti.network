@@ -13,7 +13,7 @@ import { channelCapability } from '../../../membership/syndication-config-core.m
 import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
 import { mdToPlain, mdToHtml } from '../../../membership/markdown-plain.mjs'; // sow-300
 
-import { composeUrl } from '../social-composer.mjs'; // sow-171: shared with the news share panel
+import { composeUrl, assistCopiesText } from '../social-composer.mjs'; // sow-171: shared with the news share panel
 
 // sow-217 RETAINED these three Hashnode entries deliberately, and this is a DEPARTURE from how sow-159
 // retired Mastodon (which stripped them). The Social Queue is a task LOG, not a routing table: it renders
@@ -22,8 +22,8 @@ import { composeUrl } from '../social-composer.mjs'; // sow-171: shared with the
 // the queue right now. Stripping the label and icon would render those rows as an unlabelled channel with no
 // way to act on them, which is a worse outcome than a dormant entry in a lookup table. Nothing NEW can be
 // enqueued for Hashnode: that is decided upstream by CHANNELS and MANUAL_DESTS, both of which dropped it.
-const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', linkedin: 'LinkedIn', bluesky: 'Bluesky' };
-const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', hashnode: 'hashnode', dailydev: 'dailydev', linkedin: 'linkedin', bluesky: 'bluesky' };
+const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', linkedin: 'LinkedIn', bluesky: 'Bluesky', substack: 'Substack' };
+const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', hashnode: 'hashnode', dailydev: 'dailydev', linkedin: 'linkedin', bluesky: 'bluesky', substack: 'substack' };
 // sow-171: 'news' rows are the posts a superadmin made by hand from the news reader's share panel (Manual done).
 const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', news: 'News' };
 const PAGE_SIZE = 12;
@@ -146,7 +146,7 @@ class GbtiSocialQueue extends GbtiElement {
     const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
     const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? 'on' : ''}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
     const hint = this._tab === 'todo'
-      ? 'Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev and Bluesky), Assist opens the site\'s own composer (or Copy the text), post it there, then mark it Done.'
+      ? 'Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev, Bluesky and Substack), Assist opens the site\'s own composer (or Copy the text), post it there, then mark it Done.'
       : this._tab === 'manual' ? 'Posts completed from this queue (Post now or by hand).' : 'Posts the system sent automatically (the On-Automatic channels).';
 
     const filtered = this._filtered();
@@ -237,17 +237,31 @@ class GbtiSocialQueue extends GbtiElement {
   _assist(id) {
     const t = this._byId(id); if (!t) return;
     const url = composeUrl(t);
+    // daily.dev and Substack cannot be filled in, so the text goes to the clipboard first. Nothing is awaited
+    // before window.open, so the click still counts as the user's own gesture for both.
+    const copyFirst = assistCopiesText(t.channel);
+    const copied = copyFirst ? navigator.clipboard?.writeText?.(this._pasteText(t, 'text')) : null;
     if (url) { try { window.open(url, '_blank', 'noopener'); } catch { /* popup blocked */ } }
     // sow-260: a Reddit task has a body to paste after the prefill lands, so the instruction differs.
     // sow-260: a Reddit task is TWO actions. Assist opens the LINK composer, which is what earns the preview
     // card; the author note cannot ride in a link post, so it is pasted as the first comment afterwards.
     const x = this._extra(t);
-    this._msg = x?.field === 'commentText'
-      ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".'
-      : x
-        ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".'
-        : 'Opened the composer. Post it, then click "Mark done".';
+    const label = CH_LABEL[t.channel] || t.channel;
+    this._msg = copyFirst
+      ? `Copied the post text and opened ${label}. Paste it there, post it, then click "Mark done".`
+      : x?.field === 'commentText'
+        ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".'
+        : x
+          ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".'
+          : 'Opened the composer. Post it, then click "Mark done".';
     this.render();
+    // No clipboard API at all counts as a failed copy, so the message never claims text that is not there.
+    if (copyFirst) {
+      Promise.resolve(copied ?? Promise.reject(new Error('no clipboard'))).catch(() => {
+        this._msg = `Opened ${label}, but the text did not copy. Click "Copy", then paste it there.`;
+        this.render();
+      });
+    }
   }
   // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
   // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here

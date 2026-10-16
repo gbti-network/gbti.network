@@ -21268,7 +21268,7 @@ function readWeights(doc) {
 var LABELS = Object.freeze({ "-2": "Much less", "-1": "Less", 0: "Normal", 1: "More", 2: "Much more" });
 
 // membership/syndication-config-core.mjs
-var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
+var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev", "substack"]);
 var CHANNEL_CAPABILITY = Object.freeze({
   discord: "auto",
   "discord-category": "auto",
@@ -21301,6 +21301,10 @@ var CHANNEL_CAPABILITY = Object.freeze({
   // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
   dailydev: "manual",
   // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
+  // Owner, 2026-10-16: posted by hand as a Substack NOTE on substack.com/@gbti. Substack has no write API and its
+  // composer takes no prefill, so Assist copies the text and opens substack.com/notes. A link pasted into a Note
+  // becomes a preview card, which is why the templates lead with {url}.
+  substack: "manual",
   linkedin: "manual"
   // SOW-127: manual-assist until Community Management API access is granted (business
   // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
@@ -21385,6 +21389,8 @@ var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. 
 var MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
 var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
+var SUBSTACK_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+var SUBSTACK_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
 var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
   "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -21400,6 +21406,7 @@ var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   // SOW-127
   dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
   // SOW-135
+  substack: Object.freeze({ share: SUBSTACK_SHARE_STUB, post: SUBSTACK_STUB, project: SUBSTACK_STUB, prompt: SUBSTACK_STUB }),
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
 });
@@ -21420,7 +21427,7 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false, substack: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
@@ -21444,7 +21451,7 @@ function buildDefaultAutoMatrix() {
 }
 
 // membership/syndication-template-edits.mjs
-var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
+var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev", "substack"]);
 
 // client/src/admin-ops.mjs
 var TAXONOMY_PATH = "house/taxonomy.yml";

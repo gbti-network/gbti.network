@@ -45,6 +45,7 @@ test('GET: readiness (secrets decide for AUTO; manual is always ready), template
   // ready precisely BECAUSE it needs no secrets any more: the OAuth app it used to post with was destroyed
   // when Reddit banned the account on 2026-08-25 and cannot be recreated.
   assert.equal(byId.reddit.ready, true);
+  assert.equal(byId.substack?.ready, true, 'Substack (2026-10-16) is a manual destination like daily.dev');
   // sow-217: Hashnode is RETIRED and out of MANUAL_DESTS, so it is no longer OFFERED as a destination at all.
   // Asserting its ABSENCE rather than deleting the line, because this surface is one of the three
   // hand-maintained channel lists: if MANUAL_DESTS ever drifts back out of step with CHANNELS, this fails.

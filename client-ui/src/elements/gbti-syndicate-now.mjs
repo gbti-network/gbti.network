@@ -16,7 +16,7 @@ import { mdToPlain } from '../../../membership/markdown-plain.mjs'; // sow-300
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 import { orderDiscordChannels, discordChannelOptionsHtml } from '../discord-channel-order.mjs'; // the picker follows Discord's categories
 
-const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn' }; // sow-159: mastodon retired; sow-217: hashnode retired
+const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', substack: 'Substack' }; // sow-159: mastodon retired; sow-217: hashnode retired
 // SOW-137 follow-up: dev.to cross-posts the FULL article body, so the "Message template" field is actually
 // the article TITLE (fed to the adapter as the title; the body is the fetched article + byline + CTA).
 // dev.to is now the ONLY full-body channel: Hashnode was the other one and sow-217 retired it (its whole

@@ -13,7 +13,7 @@
 # other type ON):
 #   on        = On-Automatic: the channel adapter posts after the hold window.
 #   on-manual = On-Manual: delivered as a superadmin SOCIAL QUEUE task for review. The queue's Post now sends
-#               it through the adapter; X, LinkedIn, Reddit, daily.dev and Bluesky are posted by hand (they
+#               it through the adapter; X, LinkedIn, Reddit, daily.dev, Bluesky and Substack are posted by hand (they
 #               cannot auto-post, so this is their only deliverable mode; a legacy `on` coerces here, and the settings UI never offers
 #               them On-Automatic).
 #   off       = never. popular = only when the engagement engine promotes the item (trigger: popular).
@@ -36,6 +36,11 @@
 # Bluesky cell reads on-manual, so each item lands in the Social Queue and Assist opens Bluesky's composer with
 # the text filled in. The Bluesky templates carry {url} because the text is now the whole post (the old adapter
 # attached the link as a card); the code also appends the link to a Bluesky task whose text lacks it.
+#
+# SUBSTACK (owner, 2026-10-16): posted by hand as a Substack Note on substack.com/@gbti. Substack has no write
+# API and no composer prefill, so Assist copies the text and opens substack.com/notes. The owner's example set the
+# shape: "Latest project posted 🎉 <link>" then the short description on its own line. The link leads because a
+# link pasted into a Note becomes its preview card. Notes are plain text, so no hashtags.
 #
 # NOTE: an admin settings save rewrites this file and keeps ONLY this leading comment block, so durable
 # documentation belongs HERE, not beside the keys below.
@@ -60,10 +65,12 @@ syndication:
     reddit: false
     devto: false
     dailydev: true
+    substack: true
   manual_assist_channels:
     - x
     - linkedin
     - dailydev
+    - substack
   auto_matrix:
     share:
       discord: 'on'
@@ -74,6 +81,7 @@ syndication:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
+      substack: on-manual
     post:
       x: on-manual
       linkedin: on-manual
@@ -81,6 +89,7 @@ syndication:
       discord: on-manual
       discord-category: on-manual
       devto: on-manual
+      substack: on-manual
     project:
       x: on-manual
       linkedin: on-manual
@@ -88,6 +97,7 @@ syndication:
       discord: on-manual
       discord-category: on-manual
       devto: on-manual
+      substack: on-manual
     prompt:
       x: on-manual
       linkedin: on-manual
@@ -95,6 +105,7 @@ syndication:
       discord: on-manual
       discord-category: on-manual
       devto: on-manual
+      substack: on-manual
   channel_templates:
     devto:
       devto-footer: >-
@@ -141,3 +152,8 @@ syndication:
       share: '"{title}" {url}'
     dailydev:
       share: '"{title}" {url}'
+    substack:
+      post: 'Latest {content-type} posted 🎉 {url}\n{short-description}'
+      project: 'Latest {content-type} posted 🎉 {url}\n{short-description}'
+      prompt: 'Latest {content-type} posted 🎉 {url}\n{short-description}'
+      share: 'Latest link shared 🎉 {url}\n{title}'

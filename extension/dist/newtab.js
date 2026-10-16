@@ -2706,8 +2706,10 @@
     // the dev.to title cap (the article body is not template-limited)
     hashnode: 250,
     // SOW-134: the Hashnode title cap (the article body is not template-limited)
-    dailydev: 300
+    dailydev: 300,
     // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
+    substack: 3e3
+    // a Substack Note: a link line plus the short description; manual, so no secret keys
   });
   var CHANNEL_SECRET_KEYS = Object.freeze({
     discord: ["DISCORD_BOT_TOKEN"],
@@ -2748,7 +2750,9 @@
     bluesky: false,
     mastodon: false,
     linkedin: false,
-    dailydev: false
+    dailydev: false,
+    substack: false
+    // a Substack Note is plain text
   });
   function rendersMarkdown(name) {
     return CHANNEL_MARKDOWN[name] === true;
@@ -7820,7 +7824,7 @@ ${barWidthCss(s)}`;
   }
 
   // membership/syndication-config-core.mjs
-  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev", "substack"]);
   var CHANNEL_CAPABILITY = Object.freeze({
     discord: "auto",
     "discord-category": "auto",
@@ -7853,6 +7857,10 @@ ${barWidthCss(s)}`;
     // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
     dailydev: "manual",
     // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
+    // Owner, 2026-10-16: posted by hand as a Substack NOTE on substack.com/@gbti. Substack has no write API and its
+    // composer takes no prefill, so Assist copies the text and opens substack.com/notes. A link pasted into a Note
+    // becomes a preview card, which is why the templates lead with {url}.
+    substack: "manual",
     linkedin: "manual"
     // SOW-127: manual-assist until Community Management API access is granted (business
     // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
@@ -7937,6 +7945,8 @@ ${barWidthCss(s)}`;
   var MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
   var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
   var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
+  var SUBSTACK_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var SUBSTACK_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
     discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
     "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -7952,6 +7962,7 @@ ${barWidthCss(s)}`;
     // SOW-127
     dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
     // SOW-135
+    substack: Object.freeze({ share: SUBSTACK_SHARE_STUB, post: SUBSTACK_STUB, project: SUBSTACK_STUB, prompt: SUBSTACK_STUB }),
     bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
     mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
   });
@@ -7972,7 +7983,7 @@ ${barWidthCss(s)}`;
     // SOW-088 Proposal A: per-channel stub overrides
     news_engagement: DEFAULT_NEWS_ENGAGEMENT,
     // SOW-111: engagement-triggered news auto-share
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false, substack: false }),
     // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
     // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
@@ -8201,6 +8212,7 @@ ${barWidthCss(s)}`;
     if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
     if (channel === "bluesky") return `https://bsky.app/intent/compose?text=${t}`;
     if (channel === "dailydev") return "https://app.daily.dev/squads/gbti";
+    if (channel === "substack") return "https://substack.com/notes";
     if (channel === "hashnode") return "https://hashnode.com/draft";
     if (channel === "reddit") {
       const u = String(task?.url || "");
@@ -8208,10 +8220,12 @@ ${barWidthCss(s)}`;
     }
     return null;
   };
+  var COPY_BEFORE_OPEN = /* @__PURE__ */ new Set(["dailydev", "substack"]);
+  var assistCopiesText = (channel) => COPY_BEFORE_OPEN.has(channel);
 
   // client-ui/src/elements/gbti-social-queue.mjs
-  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
-  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky" };
+  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky", substack: "Substack" };
+  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky", substack: "substack" };
   var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", news: "News" };
   var PAGE_SIZE = 12;
   var fmtDate = (ms) => {
@@ -8360,7 +8374,7 @@ ${barWidthCss(s)}`;
       }
       const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
       const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
-      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev and Bluesky), Assist opens the site's own composer (or Copy the text), post it there, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
+      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev, Bluesky and Substack), Assist opens the site's own composer (or Copy the text), post it there, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
       const filtered = this._filtered();
       const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
       if (this._page >= pages) this._page = pages - 1;
@@ -8467,6 +8481,8 @@ ${barWidthCss(s)}`;
       const t = this._byId(id);
       if (!t) return;
       const url = composeUrl(t);
+      const copyFirst = assistCopiesText(t.channel);
+      const copied = copyFirst ? navigator.clipboard?.writeText?.(this._pasteText(t, "text")) : null;
       if (url) {
         try {
           window.open(url, "_blank", "noopener");
@@ -8474,8 +8490,15 @@ ${barWidthCss(s)}`;
         }
       }
       const x = this._extra(t);
-      this._msg = x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
+      const label = CH_LABEL[t.channel] || t.channel;
+      this._msg = copyFirst ? `Copied the post text and opened ${label}. Paste it there, post it, then click "Mark done".` : x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
       this.render();
+      if (copyFirst) {
+        Promise.resolve(copied ?? Promise.reject(new Error("no clipboard"))).catch(() => {
+          this._msg = `Opened ${label}, but the text did not copy. Click "Copy", then paste it there.`;
+          this.render();
+        });
+      }
     }
     // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
     // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
@@ -23947,7 +23970,7 @@ ${SKILL_BOX_CSS}`;
   <g id="cb-hashnode"><path fill="currentColor" d="M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z"/></g>
   <g id="cb-dailydev"><path fill="currentColor" d="M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z"/></g>
 </defs></svg>`;
-  var capOf = (id) => id === "substack" ? "manual" : channelCapability(id);
+  var capOf = (id) => channelCapability(id);
   var isTileActive = (id) => capOf(id) === "auto" || capOf(id) === "manual";
   var TILE_CHANNELS = [
     { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord" },
@@ -23959,17 +23982,10 @@ ${SKILL_BOX_CSS}`;
     { id: "x", name: "X", sub: "Manual", icon: "cb-x", cls: "br-x" },
     { id: "linkedin", name: "LinkedIn", sub: "Manual", icon: "cb-linkedin", cls: "br-li" },
     { id: "bluesky", name: "Bluesky", sub: "", icon: "cb-bsky", cls: "br-bsky" },
-    {
-      id: "substack",
-      name: "Substack",
-      sub: "Manual only",
-      icon: "cb-substack",
-      cls: "br-substack",
-      note: "Substack has no public write API, so posts are cross-posted by hand. This card will never toggle on as built."
-    }
+    { id: "substack", name: "Substack", sub: "Manual", icon: "cb-substack", cls: "br-substack" }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn", substack: "Substack" };
   var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },

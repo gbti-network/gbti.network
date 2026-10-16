@@ -133,9 +133,9 @@ export function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {
 // cannot be edited/created through the admin template surface.
 // HAND-MAINTAINED DUPLICATE of CHANNELS (membership/syndication-config-core.mjs). It does not derive from it,
 // so a channel added or retired there must be edited here too. sow-159 dropped 'mastodon', sow-217 dropped
-// 'hashnode'. If this list and CHANNELS ever disagree, a superadmin can save a template for a channel the
+// 'hashnode', and Substack was added 2026-10-16. If this list and CHANNELS ever disagree, a superadmin can save a template for a channel the
 // drain will never honour, which validates cleanly and then silently does nothing.
-export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'bluesky', 'reddit', 'devto', 'dailydev']);
+export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'bluesky', 'reddit', 'devto', 'dailydev', 'substack']);
 
 export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === 'object' ? doc : {});

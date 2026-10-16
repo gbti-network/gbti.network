@@ -17,6 +17,7 @@ export const composeUrl = (task) => {
   // turns the link, the hashtags and any @handle in that text into a link card, tags and a mention itself.
   if (channel === 'bluesky') return `https://bsky.app/intent/compose?text=${t}`;
   if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
+  if (channel === 'substack') return 'https://substack.com/notes'; // no prefill either: Assist copies the text first (assistCopiesText)
   if (channel === 'hashnode') return 'https://hashnode.com/draft'; // RETAINED for already-queued tasks, see below
   // sow-260: unlike X and LinkedIn, Reddit's submit form takes a REAL prefill, so Assist lands on a form with
   // the title and link already filled and only the body left to paste. `text` is the title here (the drain
@@ -27,3 +28,8 @@ export const composeUrl = (task) => {
   }
   return null;
 };
+
+// The composers above that cannot be filled in. Assist puts the text on the clipboard before opening them, so a
+// single click leaves only paste and post.
+const COPY_BEFORE_OPEN = new Set(['dailydev', 'substack']);
+export const assistCopiesText = (channel) => COPY_BEFORE_OPEN.has(channel);

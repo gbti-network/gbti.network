@@ -36,7 +36,7 @@ test('store: put/get/list/delete round-trips a task', async () => {
 });
 
 test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/', visibility: 'public' }, { kv, now: at(0) });
   // An adapter set that would THROW if X were ever posted (it must not be).
@@ -55,7 +55,7 @@ test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter'
 });
 
 test('drain: does not re-task a channel already queued-manual on a prior tick', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/b', title: 'T', url: 'https://e.com/x', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });
@@ -168,7 +168,7 @@ test('endpoint POST action=post: manual-capability channels, missing secrets, an
 // would send a superadmin to Reddit with nothing to paste and no way to know something was missing.
 test('sow-260: reddit enqueues a manual task carrying the title AND the first comment, and never calls an adapter', async () => {
   const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   const r = await enqueue({ SIGNUP_KV: kv }, {
     source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/',
@@ -210,7 +210,7 @@ test('sow-260: reddit enqueues a manual task carrying the title AND the first co
 // `""` to Reddit. The blurb must stand alone cleanly, with no dangling punctuation and no leading blank line.
 test('sow-260/sow-220: a note-less item yields NO comment at all, with no dangling label or empty quote', async () => {
   const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   await enqueue({ SIGNUP_KV: kv }, {
     source: 'post', targetSlug: 'alice/no-note', title: 'No Note', url: 'https://gbti.network/articles/no-note/',

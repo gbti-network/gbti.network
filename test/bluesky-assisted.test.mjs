@@ -82,5 +82,5 @@ test('the queue row offers "Assist post to Bluesky", which opens Bluesky\'s comp
 
 test('the queue\'s intro names Bluesky among the channels posted by hand', () => {
   const src = readFileSync(new URL('../client-ui/src/elements/gbti-social-queue.mjs', import.meta.url), 'utf8');
-  assert.match(src, /on the channels posted by hand \(X, LinkedIn, Reddit, daily\.dev and Bluesky\), Assist opens/);
+  assert.match(src, /on the channels posted by hand \(X, LinkedIn, Reddit, daily\.dev, Bluesky and Substack\), Assist opens/);
 });

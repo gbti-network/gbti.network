@@ -16,6 +16,7 @@ export const CHANNEL_LIMITS = Object.freeze({
   devto: 128, // the dev.to title cap (the article body is not template-limited)
   hashnode: 250, // SOW-134: the Hashnode title cap (the article body is not template-limited)
   dailydev: 300, // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
+  substack: 3000, // a Substack Note: a link line plus the short description; manual, so no secret keys
 });
 
 // The env var(s) each channel requires to be considered configured. Discord needs the bot token (the per-type
@@ -68,6 +69,7 @@ export const CHANNEL_MARKDOWN = Object.freeze({
   mastodon: false,
   linkedin: false,
   dailydev: false,
+  substack: false,          // a Substack Note is plain text
 });
 
 /** Does this channel's delivery surface render markdown? Unknown channels fail to FALSE (strip it). */

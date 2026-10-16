@@ -192,16 +192,13 @@ const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="
 
 // The template-editing destinations (SOW-088). SOW-125: `active` (editable) + the sub-label are DERIVED from
 // the single capability source, not hardcoded flags, so an `auto` channel (Mastodon, Bluesky) is editable
-// without a stale "building" tag. Substack is MANUAL, not "building" (no public write API and no prefill
-// intent, so no adapter is buildable and none is planned); LinkedIn is still `building`. Honest limits + the
-// manual SOP: .data/ops/channel-ops/substack.md.
-// capOf: Substack has no config flag, so it is a static `manual` tile; every other tile reads the shared map.
-const capOf = (id) => (id === 'substack' ? 'manual' : channelCapability(id));
-// A tile is editable when its adapter posts automatically (`auto`) OR it is X (manual-assist, but its template
-// still renders the Social Queue text). Substack (manual, no adapter/prefill) and LinkedIn (building) stay off.
+// without a stale "building" tag. Substack was a static placeholder tile until 2026-10-16 (it had no config flag,
+// so a template saved on it was refused); it is a real manual channel now and reads the shared map like the rest.
+// Honest limits + the manual SOP: .data/ops/channel-ops/substack.md.
+const capOf = (id) => channelCapability(id);
 // A channel's templates are editable when it actually delivers: any AUTO channel, and any MANUAL-assist channel
-// (x, linkedin, dailydev) whose per-type text drives the Social Queue task. Only 'building' tiles
-// (an unknown/placeholder channel like Substack) stay disabled.
+// (x, linkedin, dailydev, substack) whose per-type text drives the Social Queue task. Only 'building' tiles
+// (an unknown/placeholder channel) stay disabled.
 const isTileActive = (id) => capOf(id) === 'auto' || capOf(id) === 'manual';
 const TILE_CHANNELS = [
   { id: 'discord', name: 'Discord', sub: 'Featured', icon: 'cb-discord', cls: 'br-discord' },
@@ -212,14 +209,13 @@ const TILE_CHANNELS = [
   { id: 'x', name: 'X', sub: 'Manual', icon: 'cb-x', cls: 'br-x' },
   { id: 'linkedin', name: 'LinkedIn', sub: 'Manual', icon: 'cb-linkedin', cls: 'br-li' },
   { id: 'bluesky', name: 'Bluesky', sub: '', icon: 'cb-bsky', cls: 'br-bsky' },
-  { id: 'substack', name: 'Substack', sub: 'Manual only', icon: 'cb-substack', cls: 'br-substack',
-    note: 'Substack has no public write API, so posts are cross-posted by hand. This card will never toggle on as built.' },
+  { id: 'substack', name: 'Substack', sub: 'Manual', icon: 'cb-substack', cls: 'br-substack' },
 ].map((c) => ({ ...c, active: isTileActive(c.id) }));
 
 // SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
 // and the per-channel delay inputs.
 const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
-const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
+const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn', substack: 'Substack' };
 const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual' }; // sow-313 dropped `popular` with its engine
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },

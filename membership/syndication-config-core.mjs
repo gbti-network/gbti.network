@@ -47,7 +47,7 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // (workers/signup/membership-syndicate-now.mjs). A half-applied removal is the specific failure mode: a
 // validation list that still accepts a channel this list rejects produces a config a superadmin can save
 // and the drain will never honour.
-export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'bluesky', 'reddit', 'devto', 'dailydev']);
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'bluesky', 'reddit', 'devto', 'dailydev', 'substack']);
 // SOW-088: the channels a per-channel TEMPLATE override may target (the admin Channels tab tiles). Same set
 // as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
 export const TEMPLATE_CHANNELS = CHANNELS;
@@ -56,8 +56,8 @@ export const TEMPLATE_CHANNELS = CHANNELS;
 // posts to; `manual` = a built rendering but a human posts it by hand (X after its free tier, Social Queue);
 // `building` = no adapter yet. The admin tiles + pipeline chips + the auto-share matrix all derive from THIS,
 // so adding a future channel (or promoting one from building to auto) is a ONE-LINE change here. A channel not
-// listed defaults to `building`. Substack is intentionally absent from CHANNELS (no config flag); the UI adds
-// it as a static manual tile.
+// listed defaults to `building`. Substack was a static placeholder tile until 2026-10-16, when the owner asked
+// for it in the Social Queue; it is a real `manual` channel now.
 export const CHANNEL_CAPABILITY = Object.freeze({
   discord: 'auto',
   'discord-category': 'auto',
@@ -87,6 +87,10 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   bluesky: 'manual',
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
   dailydev: 'manual', // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
+  // Owner, 2026-10-16: posted by hand as a Substack NOTE on substack.com/@gbti. Substack has no write API and its
+  // composer takes no prefill, so Assist copies the text and opens substack.com/notes. A link pasted into a Note
+  // becomes a preview card, which is why the templates lead with {url}.
+  substack: 'manual',
   linkedin: 'manual', // SOW-127: manual-assist until Community Management API access is granted (business
   // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
   // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
@@ -245,6 +249,9 @@ const MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}".
 // SOW-135: daily.dev is a link-share squad, so the members stub is a tight hook plus the link (mirrors X).
 const DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 const DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}'; // sow-180: no member credit
+// Substack Notes are plain text and turn the pasted link into a card, so the stub keeps {url} like daily.dev.
+const SUBSTACK_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+const SUBSTACK_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
   'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -258,6 +265,7 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
   linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
   dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }), // SOW-135
+  substack: Object.freeze({ share: SUBSTACK_SHARE_STUB, post: SUBSTACK_STUB, project: SUBSTACK_STUB, prompt: SUBSTACK_STUB }),
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB }),
 });
@@ -272,7 +280,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   stub_templates: Object.freeze({}), // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false, substack: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in

@@ -239,7 +239,7 @@ test('SOW-125: per-channel delay posts a short-hold channel first and holds a lo
 
 test('SOW-125: a type set off for a manual-assist channel creates no Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -251,7 +251,7 @@ test('SOW-125: a type set off for a manual-assist channel creates no Social Queu
 
 test('SOW-125: a type set on for a manual-assist channel DOES enqueue a Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -300,7 +300,7 @@ test('SOW-125: an approved item staggers an EXPLICIT per-channel override from t
 // 'sent' with the task lost; it retries, and a persistent failure fails out via maxAttempts.
 test('SOW-125: a manual-assist task write failure does not falsely mark the item sent (retries, then fails out)', async () => {
   const base = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const throwing = { store: base.store, get: base.get.bind(base), delete: base.delete.bind(base), list: base.list.bind(base),
     put: async (k, v) => { if (String(k).startsWith('social:task:')) throw new Error('kv down'); return base.put(k, v); } };
   const r = await enqueue({ SIGNUP_KV: throwing }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv: throwing, now: at(0) });
@@ -339,7 +339,7 @@ test('sow-313: a stray trigger:popular item is treated as an ordinary item, not 
 
 test('On-Manual: an AUTO-capability channel set on-manual queues a task, never posts, and settles', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
   const dCalls = [];
   const adapters = {
@@ -360,7 +360,7 @@ test('On-Manual: an AUTO-capability channel set on-manual queues a task, never p
 
 test('On-Manual: a transient task-write failure retries next tick (never stamped auto-off by the adapter loop)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off' } } } }) });
   let failTaskPuts = 1; // the first social:task write throws (a KV blip), then recovers
   const realPut = kv.put.bind(kv);
   kv.put = async (key, value) => {
@@ -389,7 +389,7 @@ test('On-Manual: a transient task-write failure retries next tick (never stamped
 
 test('On-Manual: an AUTO channel with NO secrets still queues its review task (no not-configured stamp)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { devto: 'on-manual', discord: 'off', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { devto: 'on-manual', discord: 'off', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', substack: 'off', hashnode: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
   const out = await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} }); // zero secrets anywhere
   assert.equal(out.drained, 1);
