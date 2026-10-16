@@ -35,7 +35,7 @@ export const INVITE_CLAIM_COPY = Object.freeze({
     tier: 'member',
     freeDays: 365,
     kicker: 'An invitation to GBTI Network',
-    heading: 'You made the list.',
+    heading: 'Congrats on recent placement!',
     message: 'Your channel is one of the hundred in this article. As a thank you, your first year of membership '
       + 'is on us, and no card is collected.',
     // The strip that is left behind when the dialog is dismissed, so the offer is recoverable rather than gone.
