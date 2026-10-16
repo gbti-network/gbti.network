@@ -196,10 +196,12 @@ export function enhanceSortList(root = document) {
         off = Math.max(off, (parseFloat(cs.top) || 0) + el.getBoundingClientRect().height);
       }
       box.style.setProperty('--sortlist-top', `${Math.round(off)}px`);
+      // The bar's own height, so an entry reached by its link stops below the bar too (Prose.astro scroll-margin).
+      box.style.setProperty('--sortlist-bar', `${Math.round(bar.getBoundingClientRect().height)}px`);
     };
     park();
     view?.addEventListener('resize', park);
-    if (view?.ResizeObserver) { const ro = new view.ResizeObserver(park); stack.forEach((el) => ro.observe(el)); } // the strip's note can change its height
+    if (view?.ResizeObserver) { const ro = new view.ResizeObserver(park); [...stack, bar].forEach((el) => ro.observe(el)); } // the strip's note and the bar's category row change heights
 
     function apply(mode, fromClick) {
       STATE.set(doc, mode);
@@ -256,5 +258,11 @@ export function enhanceSortList(root = document) {
       }
     }
     apply(STATE.get(doc) || 'score', false);
+    // A link to one entry (each YouTube creator's invite opens their own) is scrolled by the browser before this
+    // bar exists, so the heading lands under the bar. Scroll once more now that the offsets are set.
+    let id = '';
+    try { id = decodeURIComponent((view?.location?.hash || '').slice(1)); } catch { id = ''; }
+    const target = id ? doc.getElementById(id) : null;
+    if (target && box.contains(target)) target.scrollIntoView({ block: 'start' });
   });
 }
