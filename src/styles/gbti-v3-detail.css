@@ -239,9 +239,7 @@
 .pd-locked-tail { margin-top: 30px; border-color: var(--amber); background: var(--amber-tint); }
 .pd-gate-lab { font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--green-700); }
 .pd-locked-tail .pd-gate-lab { color: var(--amber-text); }
-.pd-gate-title { margin: 9px 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 22px; color: var(--fg); }
-.pd-locked-tail .pd-gate-title { font-size: 19px; margin-bottom: 6px; }
-.pd-gate-sub { margin: 0; font-size: 15px; line-height: 1.65; color: var(--fg-soft); }
+.pd-gate-sub { margin: 12px 0 0; font-size: 15px; line-height: 1.65; color: var(--fg-soft); }
 /* A shape of what is behind the wall, so the panel reads as withheld content rather than an empty box. */
 .pd-skel { display: flex; flex-direction: column; gap: 8px; margin: 18px 0 4px; }
 .pd-skel i { display: block; height: 10px; border-radius: var(--r-pill); background: var(--line-2); }

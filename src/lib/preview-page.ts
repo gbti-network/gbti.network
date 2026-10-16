@@ -404,7 +404,6 @@ export async function initWorkbenchPreview() {
     if (!bodyEl) return;
     if (membersOnly && !asMember) {
       bodyEl.innerHTML = `<div class="pd-teaser"><span class="pd-gate-lab">Members only</span>`
-        + `<h2 class="pd-gate-title">This write-up lives inside the network</h2>`
         + `<p class="pd-gate-sub">${esc(fm.shortDescription || '')}</p>`
         + `<div class="pd-skel" aria-hidden="true"><i></i><i></i><i></i></div>`
         + `<p style="margin-top:16px"><a class="btn btn-primary" href="/membership/">Become a member</a></p></div>`;
