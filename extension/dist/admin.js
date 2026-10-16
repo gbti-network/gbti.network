@@ -7781,6 +7781,7 @@ ${barWidthCss(s)}`;
         .galactions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; position:relative; }
         .galactions .ebtn { font-size:13px; padding:8px 12px; }
         .up-st { font-size:12px; color:var(--s-fg-mute); }
+        .up-st.bad { color:var(--s-danger, #e06c6c); }
         /* sow-165: the reuse grid, anchored under the button that opened it (the .cover control or .galactions). */
         .media-pop { position:absolute; z-index:40; top:calc(100% + 6px); left:0; width:min(420px,92vw); max-height:320px; overflow:auto; padding:10px; border:1.5px solid var(--s-line-2); border-radius:10px; background:var(--s-surface); box-shadow:0 12px 30px -12px rgba(0,0,0,.35); }
         .media-load { padding:14px 6px; font-size:12.5px; color:var(--s-fg-mute); text-align:center; }
@@ -7935,6 +7936,26 @@ ${barWidthCss(s)}`;
   ];
   var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
+  // client-ui/src/editor-image-core.mjs
+  var HELD_NOTE = "Uploads when you save or publish.";
+  function notUploadedNote(reason) {
+    const r = String(reason || "").trim();
+    return r ? `Not uploaded. ${r}` : "Not uploaded. Choose it again.";
+  }
+  var NEEDS_PERMALINK = "Add a permalink first. The images you picked upload once this item has one.";
+  function heldUploadFailed(label, reason) {
+    const what = String(label || "An image").trim();
+    const r = String(reason || "").trim().replace(/[.\s]+$/, "");
+    return `${what} could not be uploaded${r ? `: ${r}` : ""}. Choose it again.`;
+  }
+  function missingImagesMessage(labels) {
+    const list = (Array.isArray(labels) ? labels : []).map((l) => String(l || "").trim()).filter(Boolean);
+    if (!list.length) return "";
+    const quoted = list.map((l) => `"${l}"`);
+    const joined = quoted.length === 1 ? quoted[0] : `${quoted.slice(0, -1).join(", ")} and ${quoted[quoted.length - 1]}`;
+    return `Choose an image for ${joined} before publishing.`;
+  }
+
   // client-ui/src/elements/editor-fields.mjs
   var TYPE_LABEL = { post: "Article", project: "Project", prompt: "Prompt", profile: "Profile" };
   var withEditorFields = (Base2) => class extends Base2 {
@@ -8028,7 +8049,8 @@ ${barWidthCss(s)}`;
         return wrap(`${labelFor}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" id="${fid}" placeholder="${esc2(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc2(arr.join(", "))}" />`);
       }
       if (f.kind === "image") {
-        const url = v2 ? this.resolveCover(v2) : "";
+        const held = this._heldImages?.get(f.key);
+        const url = held ? held.dataUrl : v2 ? this.resolveCover(v2) : "";
         const has = !!url;
         const framed = typeof f.frame === "string" && f.frame.includes("/");
         const frameStyle = framed ? ` style="aspect-ratio:${esc2(f.frame)}${f.previewPx ? `;max-width:${Number(f.previewPx)}px` : ""}"` : "";
@@ -8044,7 +8066,7 @@ ${barWidthCss(s)}`;
           ${picker}
           <div class="coverframe${framed ? "" : " card4"}" data-coverframe${frameStyle}>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st></span></div>
+          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st>${held ? esc2(HELD_NOTE) : ""}</span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ""}
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc2(v2)}" />
         </div></div>`;
@@ -8877,6 +8899,9 @@ ${barWidthCss(s)}`;
     // tail of doCoverImage so reuse and upload leave the control in the same state.
     _setCoverField(control, path, previewUrl) {
       if (!control) return;
+      const key = this._coverKey(control);
+      if (key) this._heldImages?.delete(key);
+      this._coverStatus(control, "");
       const cf = control.querySelector("[data-coverframe]");
       if (cf) {
         cf.innerHTML = '<img data-cimg alt="" />';
@@ -8920,25 +8945,74 @@ ${barWidthCss(s)}`;
     _coverFrameInner(url) {
       return url ? `<img data-cimg src="${esc2(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
     }
-    // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
-    // put the returned repo path into the field's hidden input (gather() picks it up like any field).
+    // SOW-062 P3/P6: stage a picked cover image and put the returned repo path into the field's hidden input (gather()
+    // picks it up like any field).
+    //
+    // An image picked before the item has a permalink is HELD, not uploaded: the website stores an upload under the item
+    // it belongs to, and an item with no permalink has no name yet. It used to be shown as if uploaded while the refusal
+    // went to the bottom of the page, so a project then failed Publish with "icon: Invalid input" and an article published
+    // without its cover. A held picture shows in its field with a note, and _flushHeldImages uploads it at the start of
+    // Publish or Save draft. A failed upload puts the field back the way it was and says why, in the field itself.
     async doCoverImage(file, control) {
       if (!file || !control) return;
       const dataUrl = await fileToDataUrl(file);
+      const key = this._coverKey(control);
+      const before = this._coverSnapshot(control);
+      this._showCoverPreview(control, dataUrl);
+      if (!this.itemToken && key) {
+        (this._heldImages ||= /* @__PURE__ */ new Map()).set(key, { name: file.name, dataUrl, before });
+        this._coverStatus(control, HELD_NOTE);
+        this._markDirty?.();
+        return;
+      }
+      if (key) this._heldImages?.delete(key);
+      await this._stageCover(control, file.name, dataUrl, before);
+    }
+    /** The field key a cover control edits ('icon', 'featuredImage', 'banner', 'coverImage', 'image'). */
+    _coverKey(control) {
+      return control?.querySelector('[data-key][data-kind="image"]')?.dataset?.key || "";
+    }
+    /** What a control shows now, so a failed upload can put it back. */
+    _coverSnapshot(control) {
+      const el = control.querySelector('[data-key][data-kind="image"]');
+      return { value: el?.value || "", frame: control.querySelector("[data-coverframe]")?.innerHTML ?? null };
+    }
+    _showCoverPreview(control, url) {
       const cf = control.querySelector("[data-coverframe]");
       if (cf) {
         cf.innerHTML = '<img data-cimg alt="" />';
         const img = cf.querySelector("[data-cimg]");
-        if (img) img.src = dataUrl;
+        if (img) img.src = url;
       }
       control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Replace image";
+    }
+    _restoreCover(control, before) {
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf && before?.frame != null) cf.innerHTML = before.frame;
+      const has = !!before?.value;
+      control.querySelector("[data-cover-clear]")?.toggleAttribute("hidden", !has);
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = has ? "Replace image" : "Choose image";
+    }
+    /** The line under a cover's buttons. `bad` paints it as an error. */
+    _coverStatus(control, text2, bad = false) {
+      const st2 = control?.querySelector("[data-cover-st]");
+      if (!st2) return;
+      st2.textContent = text2 || "";
+      st2.classList?.toggle("bad", !!(bad && text2));
+    }
+    /** Upload one picture into a cover field. Resolves '' on success; on failure restores the field, says why in it,
+     *  and resolves the reason. */
+    async _stageCover(control, filename, dataUrl, before) {
+      this._coverStatus(control, "Uploading...");
       try {
-        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
+        const res = await this.client.stageImage({ filename, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
         (this._stagedSrc ||= {})[res.path] = dataUrl;
         const el = control.querySelector('[data-key][data-kind="image"]');
         if (el) el.value = res.path;
+        this._coverStatus(control, "");
         this.out(`Cover image staged: <code>${esc2(res.path)}</code>`);
         const swatches = control.querySelector("[data-swatches]");
         if (swatches) {
@@ -8946,13 +9020,46 @@ ${barWidthCss(s)}`;
           const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
           if (presetInput) presetInput.value = "";
         }
+        return "";
       } catch (err) {
         const h = failHint(err);
-        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        const reason = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+        this._restoreCover(control, before);
+        this._coverStatus(control, notUploadedNote(reason), true);
+        this.out(esc2(reason), "danger");
+        return reason || "the upload failed";
       }
+    }
+    /**
+     * Upload every held picture, in form order. Publish and Save draft call this first and stop on a throw, whose
+     * message names the field. A held picture whose field is no longer on the form is dropped.
+     */
+    async _flushHeldImages() {
+      const held = this._heldImages;
+      if (!held || !held.size) return;
+      if (!this.itemToken) throw new Error(NEEDS_PERMALINK);
+      for (const [key, h] of [...held]) {
+        held.delete(key);
+        const control = this.$(`[data-cover] [data-key="${key}"][data-kind="image"]`)?.closest("[data-cover]");
+        if (!control) continue;
+        const failed = await this._stageCover(control, h.name, h.dataUrl, h.before);
+        if (failed) throw new Error(heldUploadFailed(this.fields.find((f) => f.key === key)?.label || key, failed));
+      }
+    }
+    /** The Publish message for required image fields on the form that are still empty, or ''. */
+    _missingImagesMessage() {
+      const labels = this.fields.filter((f) => f.kind === "image" && f.required).filter((f) => {
+        const el = this.$(`[data-key="${f.key}"][data-kind="image"]`);
+        const fld = el?.closest(".fld");
+        return el && !(fld && fld.hidden) && !String(el.value || "").trim();
+      }).map((f) => f.label || f.key);
+      return missingImagesMessage(labels);
     }
     clearCover(control) {
       if (!control) return;
+      const key = this._coverKey(control);
+      if (key) this._heldImages?.delete(key);
+      this._coverStatus(control, "");
       const el = control.querySelector('[data-key][data-kind="image"]');
       if (el) el.value = "";
       const cf = control.querySelector("[data-coverframe]");
@@ -9414,6 +9521,9 @@ ${barWidthCss(s)}`;
       this._setChip("Publishing…", "busy");
       this.out("Publishing…");
       try {
+        await this._flushHeldImages();
+        const missingImages = this._missingImagesMessage();
+        if (missingImages) throw new Error(missingImages);
         const { type, input, body, skillFile } = this.gather();
         const authorNote = this.$("#authornote")?.value?.trim() || void 0;
         if (this.fields.some((f) => f.key === "status")) input.status = "published";
@@ -9547,6 +9657,7 @@ ${barWidthCss(s)}`;
       this._setChip("Saving…", "busy");
       this.out("Saving draft…");
       try {
+        await this._flushHeldImages();
         const { type, input, body, skillFile } = this.gather();
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         if (["post", "project", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -9652,6 +9763,7 @@ ${barWidthCss(s)}`;
       this.itemStore = store2;
       this.staged = Boolean(staged);
       this._slugVal = null;
+      this._heldImages = null;
       this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
       if (this.isConnected) this.render();
     }

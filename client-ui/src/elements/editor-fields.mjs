@@ -11,6 +11,7 @@ import { categoryFieldHtml } from '../category-picker-core.mjs'; // sow-227: tha
 import { skillFileFrom } from '../editor-skill.mjs'; // sow-109: prompt or skill
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
 import { GLOBE, LOCK, INFO, X } from './editor-icons.mjs';
+import { HELD_NOTE } from '../editor-image-core.mjs'; // a picked image waiting for the item's permalink
 
 const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', profile: 'Profile' };
 
@@ -154,7 +155,10 @@ export const withEditorFields = (Base) => class extends Base {
     }
     // image / cover (current control; the reframe is deferred to rail-2)
     if (f.kind === 'image') {
-      const url = v ? this.resolveCover(v) : '';
+      // A picture picked before the item had a permalink is held until Save draft or Publish uploads it
+      // (editor-media.mjs doCoverImage). A re-render keeps showing it, with its note, so it does not look lost.
+      const held = this._heldImages?.get(f.key);
+      const url = held ? held.dataUrl : (v ? this.resolveCover(v) : '');
       const has = !!url;
       // A field that declares its own aspect (project icon 1:1, featured 16:10, banner 3:1) locks the preview
       // to it: the old shared 4:3/Hero toggle matched none of them, so an icon stretched into a 4:3 box and a
@@ -186,7 +190,7 @@ export const withEditorFields = (Base) => class extends Base {
           ${picker}
           <div class="coverframe${framed ? '' : ' card4'}" data-coverframe${frameStyle}>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? 'Replace image' : 'Choose image'}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? '' : ' hidden'}>Remove</button><span class="up-st" data-cover-st></span></div>
+          <div class="coverbtns"><button type="button" class="ebtn" id="${fid}" data-cover-pick>${has ? 'Replace image' : 'Choose image'}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? '' : ' hidden'}>Remove</button><span class="up-st" data-cover-st>${held ? esc(HELD_NOTE) : ''}</span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ''}
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;

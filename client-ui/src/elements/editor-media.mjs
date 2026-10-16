@@ -11,6 +11,7 @@ import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath }
 import { loadStagedImages, referencedDraftImages } from '../../../src/lib/staged-images.mjs'; // a staged (uploaded, unpublished) image reads back from the Worker store, not from the CDN
 import { imageClientFor } from '../prepared-editor.mjs'; // a saved listing reads its staged images from its own store
 import { IMG } from './editor-icons.mjs';
+import { HELD_NOTE, notUploadedNote, NEEDS_PERMALINK, heldUploadFailed, missingImagesMessage } from '../editor-image-core.mjs';
 
 export const withEditorMedia = (Base) => class extends Base {
   // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
@@ -228,6 +229,9 @@ export const withEditorMedia = (Base) => class extends Base {
   // tail of doCoverImage so reuse and upload leave the control in the same state.
   _setCoverField(control, path, previewUrl) {
     if (!control) return;
+    const key = this._coverKey(control);
+    if (key) this._heldImages?.delete(key); // a reused image replaces a picture still waiting to upload
+    this._coverStatus(control, '');
     const cf = control.querySelector('[data-coverframe]');
     if (cf) { cf.innerHTML = '<img data-cimg alt="" />'; const img = cf.querySelector('[data-cimg]'); if (img) img.src = previewUrl || this.resolveCover(path); }
     control.querySelector('[data-cover-clear]')?.removeAttribute('hidden');
@@ -278,20 +282,74 @@ export const withEditorMedia = (Base) => class extends Base {
       : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
   }
 
-  // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
-  // put the returned repo path into the field's hidden input (gather() picks it up like any field).
+  // SOW-062 P3/P6: stage a picked cover image and put the returned repo path into the field's hidden input (gather()
+  // picks it up like any field).
+  //
+  // An image picked before the item has a permalink is HELD, not uploaded: the website stores an upload under the item
+  // it belongs to, and an item with no permalink has no name yet. It used to be shown as if uploaded while the refusal
+  // went to the bottom of the page, so a project then failed Publish with "icon: Invalid input" and an article published
+  // without its cover. A held picture shows in its field with a note, and _flushHeldImages uploads it at the start of
+  // Publish or Save draft. A failed upload puts the field back the way it was and says why, in the field itself.
   async doCoverImage(file, control) {
     if (!file || !control) return;
     const dataUrl = await fileToDataUrl(file);
+    const key = this._coverKey(control);
+    const before = this._coverSnapshot(control);
+    this._showCoverPreview(control, dataUrl);
+    if (!this.itemToken && key) {
+      (this._heldImages ||= new Map()).set(key, { name: file.name, dataUrl, before });
+      this._coverStatus(control, HELD_NOTE);
+      this._markDirty?.();
+      return;
+    }
+    if (key) this._heldImages?.delete(key);
+    await this._stageCover(control, file.name, dataUrl, before);
+  }
+
+  /** The field key a cover control edits ('icon', 'featuredImage', 'banner', 'coverImage', 'image'). */
+  _coverKey(control) {
+    return control?.querySelector('[data-key][data-kind="image"]')?.dataset?.key || '';
+  }
+
+  /** What a control shows now, so a failed upload can put it back. */
+  _coverSnapshot(control) {
+    const el = control.querySelector('[data-key][data-kind="image"]');
+    return { value: el?.value || '', frame: control.querySelector('[data-coverframe]')?.innerHTML ?? null };
+  }
+
+  _showCoverPreview(control, url) {
     const cf = control.querySelector('[data-coverframe]');
-    if (cf) { cf.innerHTML = '<img data-cimg alt="" />'; const img = cf.querySelector('[data-cimg]'); if (img) img.src = dataUrl; }
+    if (cf) { cf.innerHTML = '<img data-cimg alt="" />'; const img = cf.querySelector('[data-cimg]'); if (img) img.src = url; }
     control.querySelector('[data-cover-clear]')?.removeAttribute('hidden');
     const pick = control.querySelector('[data-cover-pick]');
     if (pick) pick.textContent = 'Replace image';
+  }
+
+  _restoreCover(control, before) {
+    const cf = control.querySelector('[data-coverframe]');
+    if (cf && before?.frame != null) cf.innerHTML = before.frame;
+    const has = !!before?.value;
+    control.querySelector('[data-cover-clear]')?.toggleAttribute('hidden', !has);
+    const pick = control.querySelector('[data-cover-pick]');
+    if (pick) pick.textContent = has ? 'Replace image' : 'Choose image';
+  }
+
+  /** The line under a cover's buttons. `bad` paints it as an error. */
+  _coverStatus(control, text, bad = false) {
+    const st = control?.querySelector('[data-cover-st]');
+    if (!st) return;
+    st.textContent = text || '';
+    st.classList?.toggle('bad', !!(bad && text));
+  }
+
+  /** Upload one picture into a cover field. Resolves '' on success; on failure restores the field, says why in it,
+   *  and resolves the reason. */
+  async _stageCover(control, filename, dataUrl, before) {
+    this._coverStatus(control, 'Uploading...');
     try {
       // sow-165: co-locate into the item folder so the cover stores as the canonical ./images/x (the old
       // per-user path could not be resolved by Astro's image() and broke the site build).
-      const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(',')[1] || '', itemPath: this.itemPath, item: this.itemToken });
+      const res = await this.client.stageImage({ filename, dataBase64: dataUrl.split(',')[1] || '', itemPath: this.itemPath, item: this.itemToken });
       // Preview the just-staged cover from the local data URL keyed by the stored path; a full re-render
       // otherwise resolves it to a raw-host URL that 404s until the PR merges.
       (this._stagedSrc ||= {})[res.path] = dataUrl;
@@ -299,6 +357,7 @@ export const withEditorMedia = (Base) => class extends Base {
       // bannerPreset swatch input), and a bare [data-key] would grab whichever comes first in DOM order.
       const el = control.querySelector('[data-key][data-kind="image"]');
       if (el) el.value = res.path;
+      this._coverStatus(control, '');
       this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
       // A picked file supersedes any chosen color preset (resolveHero() prefers an uploaded image either way,
       // but leaving a swatch marked "on" here would misrepresent which one is actually going to render).
@@ -308,14 +367,52 @@ export const withEditorMedia = (Base) => class extends Base {
         const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
         if (presetInput) presetInput.value = '';
       }
+      return '';
     } catch (err) {
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
-      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+      const reason = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+      this._restoreCover(control, before);
+      this._coverStatus(control, notUploadedNote(reason), true);
+      this.out(esc(reason), 'danger');
+      return reason || 'the upload failed';
     }
+  }
+
+  /**
+   * Upload every held picture, in form order. Publish and Save draft call this first and stop on a throw, whose
+   * message names the field. A held picture whose field is no longer on the form is dropped.
+   */
+  async _flushHeldImages() {
+    const held = this._heldImages;
+    if (!held || !held.size) return;
+    if (!this.itemToken) throw new Error(NEEDS_PERMALINK);
+    for (const [key, h] of [...held]) {
+      held.delete(key);
+      const control = this.$(`[data-cover] [data-key="${key}"][data-kind="image"]`)?.closest('[data-cover]');
+      if (!control) continue;
+      const failed = await this._stageCover(control, h.name, h.dataUrl, h.before);
+      if (failed) throw new Error(heldUploadFailed(this.fields.find((f) => f.key === key)?.label || key, failed));
+    }
+  }
+
+  /** The Publish message for required image fields on the form that are still empty, or ''. */
+  _missingImagesMessage() {
+    const labels = this.fields
+      .filter((f) => f.kind === 'image' && f.required)
+      .filter((f) => {
+        const el = this.$(`[data-key="${f.key}"][data-kind="image"]`);
+        const fld = el?.closest('.fld');
+        return el && !(fld && fld.hidden) && !String(el.value || '').trim();
+      })
+      .map((f) => f.label || f.key);
+    return missingImagesMessage(labels);
   }
 
   clearCover(control) {
     if (!control) return;
+    const key = this._coverKey(control);
+    if (key) this._heldImages?.delete(key); // Remove also drops a picture still waiting to upload
+    this._coverStatus(control, '');
     // sow-174: see the matching note in doCoverImage -- scoped so this never touches the sibling bannerPreset
     // hidden input when the banner control also carries the swatch row.
     const el = control.querySelector('[data-key][data-kind="image"]');

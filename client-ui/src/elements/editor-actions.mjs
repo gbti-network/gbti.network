@@ -203,6 +203,11 @@ export const withEditorActions = (Base) => class extends Base {
     this._setChip('Publishing…', 'busy');
     this.out('Publishing…');
     try {
+      // Pictures picked before the item had a permalink upload now (editor-media.mjs), and a required image that is
+      // still empty is named in words rather than reaching the schema as "icon: Invalid input".
+      await this._flushHeldImages();
+      const missingImages = this._missingImagesMessage();
+      if (missingImages) throw new Error(missingImages);
       const { type, input, body, skillFile } = this.gather();
       // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (project/prompt).
       const authorNote = this.$('#authornote')?.value?.trim() || undefined;
@@ -371,6 +376,7 @@ export const withEditorActions = (Base) => class extends Base {
     this._setChip('Saving…', 'busy');
     this.out('Saving draft…');
     try {
+      await this._flushHeldImages(); // a draft keeps the pictures picked before the permalink existed
       const { type, input, body, skillFile } = this.gather();
       if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
       if (['post', 'project', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally

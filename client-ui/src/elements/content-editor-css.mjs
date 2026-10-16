@@ -213,6 +213,7 @@ export const CONTENT_EDITOR_CSS = `
         .galactions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; position:relative; }
         .galactions .ebtn { font-size:13px; padding:8px 12px; }
         .up-st { font-size:12px; color:var(--s-fg-mute); }
+        .up-st.bad { color:var(--s-danger, #e06c6c); }
         /* sow-165: the reuse grid, anchored under the button that opened it (the .cover control or .galactions). */
         .media-pop { position:absolute; z-index:40; top:calc(100% + 6px); left:0; width:min(420px,92vw); max-height:320px; overflow:auto; padding:10px; border:1.5px solid var(--s-line-2); border-radius:10px; background:var(--s-surface); box-shadow:0 12px 30px -12px rgba(0,0,0,.35); }
         .media-load { padding:14px 6px; font-size:12.5px; color:var(--s-fg-mute); text-align:center; }
