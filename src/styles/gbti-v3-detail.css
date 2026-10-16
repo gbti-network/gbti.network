@@ -74,6 +74,23 @@
 }
 .pd-hero-edit:hover { background: rgba(37, 35, 43, .68); border-color: rgba(255, 255, 255, .38); }
 .pd-hero-edit svg { width: 15px; height: 15px; flex: none; }
+
+/* sow-323 follow-up, 2026-10-16: the superadmin tools row on a photographic hero. The Approve pill used to
+   render in the hero's normal flow with no positioning, which dropped it at the hero's bottom-left across the
+   project artwork and over the hero's bottom edge (measured at 1280px: x=69 y=274, 46px off Edit's row). It
+   was never hidden behind the cover image, only misplaced. Edit had escaped the same flow alone with
+   position:absolute. Both now live in this one positioned row, so a third control added later inherits the
+   placement instead of repeating the bug. */
+.pd-hero-tools {
+  position: absolute; top: 16px; right: 16px; z-index: 2;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+  max-width: calc(100% - 32px);
+}
+/* Inside the row the pill is a flex item; the row owns where it sits. Two classes outrank .pd-hero-edit on
+   specificity, and this now follows it in source order too, so neither rule depends on the other's place. */
+.pd-hero-tools .pd-hero-edit { position: static; top: auto; right: auto; }
+@media (max-width: 560px) { .pd-hero-tools { top: 10px; right: 10px; gap: 6px; } }
+
 /* sow-183: the same owner/superadmin Edit affordance, for a header with NO image behind it (article's flat
    header, card, journal, the prompt page) -- .pd-hero-edit's glass/blur/white-text treatment assumes a photo
    behind it, so this uses the ordinary token palette instead (same shape/position/behavior, both themes free
@@ -98,11 +115,27 @@
 .art-c-card { position: relative; max-width: 820px; padding: clamp(28px, 5vw, 56px); }
 .art-c-cover { border-radius: var(--r-lg); }
 .art-c-card .detail-edit { top: clamp(28px, 5vw, 56px); right: clamp(28px, 5vw, 56px); }
+/* sow-323 follow-up: the Card layout's superadmin tools row, holding Edit and Approve. Same arrangement as
+   .pd-hero-tools and .art-j-edit-row: ONE positioned element, children in normal flow, so a third control
+   inherits the placement instead of hard-coding its own inset. The row takes over the inset the Edit pill
+   above used to carry alone.
+   The child override is scoped through .art-c-card deliberately. At .art-c-card .detail-edit's specificity it
+   would be a source-order coin flip, and a positioning rule that silently loses leaves the pill stacked on the
+   row rather than inside it. */
+.art-c-edit-row {
+  position: absolute; top: clamp(28px, 5vw, 56px); right: clamp(28px, 5vw, 56px); z-index: 2;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+  max-width: calc(100% - 2 * clamp(28px, 5vw, 56px));
+}
+.art-c-card .art-c-edit-row .detail-edit { position: static; top: auto; right: auto; }
 /* sow-183: the prompt page's Edit pill sits inline beside the breadcrumb (not absolutely positioned) -- the
    header has no fixed-width constraint on the title, so an overlay risks colliding with a long one, same
    reasoning as the Journal article layout's edit row. */
 .detail-head-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .detail-head-top .detail-edit { position: static; }
+/* sow-323 follow-up: the superadmin controls travel as one group, so space-between sees two children (the
+   breadcrumb and this) rather than three that wrap apart on a narrow screen. */
+.detail-head-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .pd-hero-in { position: relative; width: 100%; display: flex; align-items: flex-end; gap: 16px; padding-bottom: 24px; }
 .pd-mark {
   width: 96px; height: 96px; flex: none; border-radius: 8px;

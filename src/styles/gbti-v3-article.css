@@ -169,7 +169,8 @@
    layouts) -- .art-j-title can wrap to two lines at this column's narrower max-width, and an overlaid pill
    would sit on top of the wrapped text. In normal flow it never collides, at the cost of a little vertical
    space when it shows (superadmin-only; zero space for everyone else, since the pill is hidden by default). */
-.art-j-edit-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+/* sow-323 follow-up: holds Edit AND Approve now, so it needs a gap and a wrap. */
+.art-j-edit-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .art-j-edit-row .detail-edit { position: static; }
 .art-j-title { margin: 0 0 16px; font-family: var(--f-display); font-weight: 600; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.13; letter-spacing: -.02em; color: var(--fg); text-wrap: pretty; }
 .art-j-cover { margin: 0 0 8px; border: 1.5px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }

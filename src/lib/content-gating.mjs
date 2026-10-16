@@ -34,6 +34,21 @@ export function hasPublicPage(entry) {
   return d.status === 'published' && (d.visibility === 'public' || d.publicStub === true);
 }
 
+/**
+ * sow-323 follow-up: is there anything on this item for a superadmin to approve?
+ *
+ * ONE predicate for two decisions that must not disagree: whether ApprovePill renders a button, and whether
+ * the row holding it renders at all. A page that drew the row off its own copy of this test would show an
+ * empty toolbar on every public article, or hide a real Approve behind a missing row, and either way the bug
+ * is invisible to a reader. Takes the raw visibility rather than an entry, because the three detail pages
+ * have the frontmatter field to hand, not a collection entry.
+ *
+ * Silence is public (the schema default), so only an explicitly members-only item has a decision waiting.
+ */
+export function isApprovable(visibility) {
+  return visibility === 'members';
+}
+
 /** SOW-016: a members item that renders a public STUB (header + locked body), i.e. Mode B. */
 export function isStub(entry) {
   const d = entry?.data || {};

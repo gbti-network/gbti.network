@@ -137,9 +137,18 @@ test('the per-tab gate denies anything it does not recognise', async () => {
   assert.equal(shouldGateTab(adm, null), false, 'no floor means the page-wide staff gate, which an admin clears');
 });
 
-test('the item page carries an approval control on all three content types', () => {
+// sow-323 follow-up, 2026-10-16: WHICH surfaces mount the control, and the one predicate that decides
+// whether it has anything to offer, moved to test/approve-pill-surfaces.test.mjs. Two things were wrong and
+// both were invisible from here. This test read ArticleEditorial.astro for the post case, a layout sow-326
+// retired, so the two layouts a post can actually declare were never covered and neither mounted the pill at
+// all. And it pinned the literal `visibility === 'members'` inside the component, which is the sort of
+// assertion that keeps passing while the rule it stands for moves somewhere better.
+//
+// What stays here is what this file uniquely owns: the control is superadmin-only, it is told which item it
+// is looking at, and it does not promise the page will turn public in front of the reader.
+test('the approval control is superadmin-only and honest about the delay', () => {
   for (const [file, type] of [
-    ['src/components/blog/ArticleEditorial.astro', 'post'],
+    ['src/components/blog/ArticleJournal.astro', 'post'],
     ['src/pages/projects/[slug].astro', 'project'],
     ['src/pages/prompts/[slug].astro', 'prompt'],
   ]) {
@@ -149,10 +158,13 @@ test('the item page carries an approval control on all three content types', () 
     assert.match(src, /visibility=\{d\.visibility\}/, `${file}: the control cannot tell a members-only item from a public one`);
   }
   const pill = read('src/components/ApprovePill.astro');
-  assert.match(pill, /visibility === 'members'/, 'an already-public item has nothing left to approve');
   assert.match(pill, /role === 'superadmin'/, 'the control must be superadmin only');
-  assert.match(pill, /gbti_csrf/, 'an extension-only signal carries no web session and cannot make this call');
   assert.match(pill, /within a few minutes/, 'the page is static, so it does not turn public in front of the reader');
+  // The web session still decides what the button DOES. It no longer decides whether the button exists:
+  // hiding it from an extension-stamped superadmin is the bug the owner reported, and approve-pill-surfaces
+  // pins the looser reveal. Both halves have to stay true, so both are named.
+  assert.match(pill, /gbti_csrf/, 'the session is still what the call needs');
+  assert.match(pill, /needsSignin/, 'and a missing session must be stated on the element, not hidden behind it');
 });
 
 // ---- the author side ---------------------------------------------------------------------------------------

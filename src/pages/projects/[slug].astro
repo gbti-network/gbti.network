@@ -182,13 +182,17 @@ const lockedHint = (l: { encrypted?: boolean }) =>
     <section class="pd-hero" data-preset={hero.preset}>
       {hero.image && <Image src={hero.image} alt="" widths={[900, 1600]} sizes="100vw" class="pd-hero-img" />}
       <div class="pd-hero-scrim"></div>
-      {editHref && (
-        <a href={editHref} target="_blank" rel="noopener" class="pd-hero-edit" data-pd-hero-edit data-pd-owner={d.author} hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          Edit
-        </a>
-      )}
-      <ApprovePill type="project" owner={d.author} slug={d.slug} visibility={d.visibility} />
+      {/* sow-323 follow-up: one positioned row for both superadmin controls. Apart, the Approve pill fell into
+          the hero's flow and was painted over by the cover image. */}
+      <div class="pd-hero-tools">
+        {editHref && (
+          <a href={editHref} target="_blank" rel="noopener" class="pd-hero-edit" data-pd-hero-edit data-pd-owner={d.author} hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Edit
+          </a>
+        )}
+        <ApprovePill type="project" owner={d.author} slug={d.slug} visibility={d.visibility} placement="hero" />
+      </div>
       <div class="pd-wrap pd-hero-in">
         <Image src={markImage} alt={`${d.title} icon`} width={124} height={124} class="pd-mark" />
         <div class="pd-hero-txt">

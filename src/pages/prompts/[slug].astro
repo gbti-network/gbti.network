@@ -107,13 +107,18 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
               </>
             ))}
           </nav>
-          {editHref && (
-            <a href={editHref} target="_blank" rel="noopener" class="detail-edit" data-detail-edit data-detail-owner={d.author} hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-              Edit
-            </a>
-          )}
-          <ApprovePill type="prompt" owner={d.author} slug={d.slug} visibility={d.visibility} />
+          {/* sow-323 follow-up: Edit and Approve are ONE group, so the header's space-between puts the
+              breadcrumb left and both controls right. Loose, they were three flex items, and a phone wrapped
+              Approve onto its own line 51px below Edit (measured at 390px). */}
+          <div class="detail-head-tools">
+            {editHref && (
+              <a href={editHref} target="_blank" rel="noopener" class="detail-edit" data-detail-edit data-detail-owner={d.author} hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                Edit
+              </a>
+            )}
+            <ApprovePill type="prompt" owner={d.author} slug={d.slug} visibility={d.visibility} />
+          </div>
         </div>
         <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
         <div class="mt16 flex items-center g12 wrap-w">

@@ -9,22 +9,33 @@
 // renders hidden and is revealed client-side from the member signal, exactly as the Edit pill beside it is
 // (wireEditAffordance), because these pages are static and cached. This is UX, never the boundary: the Worker
 // re-checks superadmin on every call.
-import { contentRepoPath } from '../lib/content';
+import { contentRepoPath, isApprovable } from '../lib/content';
 
 interface Props {
   type: 'post' | 'project' | 'prompt';
   owner: string;
   slug: string;
   visibility?: string;
+  /**
+   * `hero` for a page whose header is a full-bleed image (the project detail, an article with a cover).
+   *
+   * Without positioning the pill is a flex item in the hero's own flow, which drops it at the hero's
+   * bottom-left across the project artwork and straddling the hero's bottom edge: measured at 1280px on
+   * 2026-10-16, x=69 y=274, while Edit sat at x=201 y=225, their centres 46px apart. It is NOT painted under
+   * the cover image, which a first reading of this assumed; a hit test at its centre returns the pill. It is
+   * simply in the wrong place and in the artwork's way. Edit had escaped that alone with position:absolute,
+   * so the two now share one positioned row (.pd-hero-tools) rather than each solving it separately.
+   */
+  placement?: 'hero' | 'flow';
 }
-const { type, owner, slug, visibility } = Astro.props as Props;
+const { type, owner, slug, visibility, placement = 'flow' } = Astro.props as Props;
 // Only a members-only item can be approved. Silence is public (the schema default), so anything that is not
 // explicitly members has nothing waiting on it.
-const path = visibility === 'members' ? contentRepoPath(type, owner, slug) : null;
+const path = isApprovable(visibility) ? contentRepoPath(type, owner, slug) : null;
 ---
 
 {path && (
-  <button type="button" class="detail-approve" data-approve-item data-approve-path={path} hidden>
+  <button type="button" class:list={['detail-approve', placement === 'hero' && 'detail-approve-hero']} data-approve-item data-approve-path={path} hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
     <span data-approve-label>Approve for the public site</span>
   </button>
@@ -41,6 +52,16 @@ const path = visibility === 'members' ? contentRepoPath(type, owner, slug) : nul
   .detail-approve[disabled] { opacity: .55; cursor: default; }
   .detail-approve svg { width: 15px; height: 15px; flex: none; }
   .detail-approve[hidden] { display: none !important; }
+
+  /* On a photographic hero, borrow Edit's glass treatment (gbti-v3-detail.css .pd-hero-edit) rather than
+     inventing a second look: white on blurred ink reads on any cover image, where the green-on-transparent
+     flow variant does not. Positioning is the row's job (.pd-hero-tools), not this button's. */
+  .detail-approve-hero {
+    color: #fff; border-color: rgba(255, 255, 255, .38);
+    background: rgba(37, 35, 43, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    padding: 9px 16px; font-weight: 600;
+  }
+  .detail-approve-hero:hover:not([disabled]) { background: var(--green, #1f9e5f); border-color: var(--green, #1f9e5f); color: #fff; }
   @media (max-width: 480px) { .detail-approve { font-size: 12.5px; padding: 6px 10px; } }
 </style>
 
@@ -54,15 +75,34 @@ const path = visibility === 'members' ? contentRepoPath(type, owner, slug) : nul
     const label = btn.querySelector('[data-approve-label]');
     const readCookie = (name: string) => document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) || '';
 
-    // A superadmin signed in on the WEBSITE. An extension-only signal carries no web session, so it cannot
-    // authenticate the call; the extension has its own admin surface for this.
+    // A SUPERADMIN ALWAYS SEES THIS, website session or not (owner, 2026-10-16: "Superadmin should be able to
+    // approve from the listing page itself"). It used to hide whenever gbti_csrf was absent, which is the case
+    // for an identity stamped by the EXTENSION: that signal proves who you are but carries no web session, so
+    // the call cannot be authenticated. Hiding was the safe answer and the wrong one, because the control then
+    // vanishes with no way to tell a missing session from a missing feature, which is exactly how this was
+    // reported. Now it says what is needed and sends you there. Still UX only: the Worker re-checks superadmin
+    // on every call, so showing the button to the wrong person grants nothing.
+    const signedInHere = () => Boolean(readCookie('gbti_csrf'));
     const apply = (identity: any) => {
-      btn.hidden = !(identity && identity.role === 'superadmin' && readCookie('gbti_csrf'));
+      const superadmin = Boolean(identity && identity.role === 'superadmin');
+      btn.hidden = !superadmin;
+      btn.dataset.needsSignin = superadmin && !signedInHere() ? '1' : '';
+      if (label) label.textContent = superadmin && !signedInHere()
+        ? 'Sign in here to approve'
+        : 'Approve for the public site';
     };
     apply(currentIdentity(readMemberSignal()));
     onMemberSignal(apply);
 
     btn.addEventListener('click', async () => {
+      // No web session: open the site's own sign-in rather than making a call that cannot be authenticated.
+      // /login/ is where the header's Sign in goes, and SigninModal intercepts any [data-signin] click, so this
+      // works whether or not the dialog is on the page.
+      if (btn.dataset.needsSignin === '1') {
+        const opener = document.querySelector<HTMLElement>('[data-signin]');
+        if (opener) opener.click(); else window.location.href = '/login/';
+        return;
+      }
       const title = document.querySelector('h1')?.textContent?.trim() || '';
       if (!confirm(decidePrompt({ title }, 'approve'))) return;
       btn.disabled = true;

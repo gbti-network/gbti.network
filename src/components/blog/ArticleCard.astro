@@ -16,7 +16,8 @@ import { favoriteCount } from '../../lib/favorites';
 import { aliasSlugsOf } from '../../lib/content-index.mjs';
 import { breadcrumb, topKey } from '../../lib/taxonomy';
 import { coverDimensions } from '../../lib/article-page.mjs';
-import { contentRepoPath } from '../../lib/content';
+import { contentRepoPath, isApprovable } from '../../lib/content';
+import ApprovePill from '../ApprovePill.astro';
 
 interface Props {
   d: any; // CollectionEntry<'post'>['data']
@@ -36,16 +37,23 @@ const dims = coverDimensions('card');
 // build-time data; only visibility is a runtime decision (this component's own script block, below).
 const editPath = contentRepoPath('post', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(editPath)}` : null;
+// sow-323 follow-up: see ArticleJournal. One row for both superadmin controls, rendered when either applies.
+const hasTools = Boolean(editHref) || isApprovable(d.visibility);
 ---
 <section class="band art-c-band">
   <div class="wrap">
     <!-- Reading column, surfaced as a V3 paper card -->
     <article class="card mx-auto art-c-card">
-      {editHref && (
-        <a href={editHref} target="_blank" rel="noopener" class="detail-edit" data-detail-edit data-detail-owner={d.author} hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          Edit
-        </a>
+      {hasTools && (
+        <div class="art-c-edit-row">
+          {editHref && (
+            <a href={editHref} target="_blank" rel="noopener" class="detail-edit" data-detail-edit data-detail-owner={d.author} hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              Edit
+            </a>
+          )}
+          <ApprovePill type="post" owner={d.author} slug={d.slug} visibility={d.visibility} />
+        </div>
       )}
       {/* sow-399: superadmin tools (Manually syndicate). This layout has no rail, so they lead the card. */}
       <slot name="tools" />

@@ -16,6 +16,7 @@ import {
   isListed as isListedCore,
   isPubliclyListed as isPubliclyListedCore,
   isMembersOnlyListed as isMembersOnlyListedCore,
+  isApprovable as isApprovableCore,
 } from './content-gating.mjs';
 
 /** Public static build shows only published + public entries (full body readable). */
@@ -30,6 +31,8 @@ export function isListed(entry: Gatable): boolean { return isListedCore(entry); 
 export function isPubliclyListed(entry: Gatable): boolean { return isPubliclyListedCore(entry); }
 /** sow-323 Phase 3: a published members-only item with its own page, listed only for a paying member. */
 export function isMembersOnlyListed(entry: Gatable): boolean { return isMembersOnlyListedCore(entry); }
+/** sow-323 follow-up: is there anything here for a superadmin to approve? Members-only and nothing else. */
+export function isApprovable(visibility?: string): boolean { return isApprovableCore(visibility); }
 
 type Keyed = Gatable & { collection?: string; data: Gatable['data'] & { slug?: string } };
 const FLAG_TYPE: Record<string, 'post' | 'project' | 'prompt'> = { post: 'post', project: 'project', applet: 'project', prompt: 'prompt' };
