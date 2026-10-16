@@ -59,8 +59,6 @@ import {
   getNewsShareOp, newsShareDoneOp, // sow-171
   getCouponUsageOp,
   listInvitesOp,
-  listEditorialOp,
-  decideEditorialOp,
   createInviteOp,
   updateInviteOp,
   refreshCouponUntil, governanceAdminOp } from './operations.mjs';
@@ -210,12 +208,6 @@ export async function handleApi(reqInfo, ctx) {
     if (method === 'GET') return run(() => listInvitesOp(ctx));
     if (method === 'POST') return run(() => createInviteOp(ctx, body ?? {}));
     if (method === 'PATCH') return run(() => updateInviteOp(ctx, body ?? {}));
-  }
-  // sow-293: the creator application review lane. KV-native like the invites above, so it opens no PR and
-  // goes straight to the Worker, which gates both verbs at authorizeSuperadmin.
-  if (pathname === '/api/editorial') {
-    if (method === 'GET') return run(() => listEditorialOp(ctx));
-    if (method === 'POST') return run(() => decideEditorialOp(ctx, body ?? {}));
   }
   if (method === 'GET' && pathname === '/api/coupon-refresh') return run(() => refreshCouponUntil(ctx)); // SOW-119 QA: live-oracle recheck before the expiry popup
 

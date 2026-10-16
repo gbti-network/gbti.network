@@ -33,11 +33,11 @@ const faqs = [
   {
     // sow-323: this used to ask what separated the two paid plans. There is one, so the question described a
     // choice no reader has. The benefit clause stays composed from the registry rather than typed, and the
-    // sentence after it says who reviews and what is exempt, which the bullet cannot carry in a line. It
-    // names no position in that list and repeats none of its wording, so a reordered or reworded yml cannot
-    // make it read wrong.
+    // sentence after it says when published work goes live (editorial review was retired by the owner on
+    // 2026-10-16). It names no position in that list and repeats none of its wording, so a reordered or
+    // reworded yml cannot make it read wrong.
     q: `What do I get as a ${memberTier.label}?`,
-    a: `There is one paid plan, and this is what it carries: ${benefitProse(memberTier)}. Editorial review means a superadmin reads the item before it goes public, and it covers articles, projects, and prompts only: a profile or a comment publishes without one. ${memberTier.label}s also share in the revenue program, which the revenue answer below explains.`,
+    a: `There is one paid plan, and this is what it carries: ${benefitProse(memberTier)}. What you publish is live when you publish it, with nobody approving it first. ${memberTier.label}s also share in the revenue program, which the revenue answer below explains.`,
   },
   {
     q: 'What can I do with a free account?',

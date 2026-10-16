@@ -392,38 +392,31 @@ test('sow-301: a paid NETWORK MEMBER may post a comment', async () => {
   assert.equal(r.status, 200, `a paid member was denied a comment: ${JSON.stringify(r.body)}`);
 });
 
-// sow-323: this asserted a DENIAL until 2026-09-12. Publishing is open to every paid supporter now, and what a
-// superadmin controls is the AUDIENCE: goodBody carries a public item, so the same member is still refused, but
-// for review rather than for tier, and the message no longer names a plan they cannot buy. The other direction
-// (a members-only item from the same member succeeding) lives in test/membership-author-audience.test.mjs, so
-// this pair still discriminates: remove the gate and that suite's refusal cases go green when they should not.
-test('sow-323: the SAME member publishing a PUBLIC item is refused for REVIEW, not for tier', () => {
-  return membershipAuthor(req(goodBody), env, { ...deps([]), authorize: memberOk }).then((r) => {
-    assert.equal(r.status, 403, 'an unreviewed public item was allowed through');
-    assert.equal(r.body?.error, 'review_required');
-    assert.doesNotMatch(String(r.body?.message ?? ''), /Curator/, 'it must not point at a plan that no longer exists');
-  });
+// sow-458 (owner, 2026-10-16): "It is published when the person publishes it." Until then a paid member's PUBLIC item
+// was refused here for review (sow-323), and a comment- itemId or a mixed set could not smuggle an article past that
+// stricter gate. There is no stricter gate any more: an article and a comment publish alike for a paid member, so the
+// escalation these cases guarded no longer exists. What they pin now is the opposite direction, plus the one thing
+// the publish still reports: which items are NEW, for the owner's email.
+test('sow-458: a paid member publishes a PUBLIC item straight away, and it is reported as new', async () => {
+  const rec = [];
+  const r = await membershipAuthor(req(goodBody), env, { ...deps(rec), authorize: memberOk });
+  assert.equal(r.status, 200, `a paid member's public article was refused: ${JSON.stringify(r.body)}`);
+  assert.equal(r.body?.error, undefined);
+  assert.ok(rec.some((c) => c.method === 'POST' && /\/pulls$/.test(c.url)), 'the pull request opened');
+  assert.deepEqual(r.created.map((c) => [c.type, c.slug, c.login]), [['post', 'my-first-post', 'atwellpub']], 'the owner is told about the new article');
 });
 
-test('sow-301 ESCALATION: a comment- itemId carrying an ARTICLE path does NOT get the looser gate', async () => {
-  // The reason the decision is path-based. itemId arrives in the request body, so if it drove the choice,
-  // any paid caller could publish by naming their item `comment-anything`.
-  const sneaky = { ...goodBody, itemId: 'comment-sneaky' };
-  const r = await membershipAuthor(req(sneaky), env, { ...deps([]), authorize: memberOk });
-  assert.equal(r.status, 403, 'a comment- itemId smuggled an article past the creator gate');
-});
-
-test('sow-301: a MIXED file set takes the stricter gate', () => {
+test('sow-458: a mixed set (a comment plus an article) publishes, and only the article is a new item', async () => {
   const mixed = {
     itemId: 'comment-mixed',
     files: [
-      { path: 'members/atwellpub/comments/abc123.md', content: 'x' },
-      { path: 'members/atwellpub/posts/smuggled.md', content: 'y' },
+      { path: 'members/atwellpub/comments/abc123.md', content: '---\nid: abc123\n---\nhi\n' },
+      { path: 'members/atwellpub/posts/smuggled/index.md', content: '---\ntitle: Smuggled\n---\ny' },
     ],
   };
-  return membershipAuthor(req(mixed), env, { ...deps([]), authorize: memberOk }).then((r) => {
-    assert.equal(r.status, 403, 'a mixed set was treated as comment-only');
-  });
+  const r = await membershipAuthor(req(mixed), env, { ...deps([]), authorize: memberOk });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.created.map((c) => c.path), ['members/atwellpub/posts/smuggled/index.md']);
 });
 
 test('sow-301: isCommentOnly fails closed on every degenerate input', () => {

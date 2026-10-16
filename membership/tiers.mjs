@@ -29,8 +29,8 @@ export const TIER_LABEL = Object.freeze({
   [TIER.none]: '',
   // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
   [TIER.member]: 'Network Supporter',
-  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
-  // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it (it
+  // carries the Discord Creator badge; sow-458 retired the editorial review it used to waive), and staff resolve to it.
   // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
   [TIER.creator]: 'Curator',
 });

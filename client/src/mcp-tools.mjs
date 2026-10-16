@@ -160,19 +160,19 @@ export const TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: 'add_prompt',
-    description: 'Author a PROMPT or a SKILL. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: kind ("prompt", the default, or "skill"), targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. For a prompt the markdown `body` is the prompt text. For a skill: pass the whole SKILL.md as `skillFile` (its frontmatter needs a name: line, lowercase letters, digits and dashes), targets[] names the tools it is made for (required), and `body` is the page text shown under the install box (the commands it adds and what each does). A re-publish that sends no kind keeps the item\'s own, and one that sends no skillFile keeps the file it has. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    description: 'Author a PROMPT or a SKILL. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: kind ("prompt", the default, or "skill"), targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. For a prompt the markdown `body` is the prompt text. For a skill: pass the whole SKILL.md as `skillFile` (its frontmatter needs a name: line, lowercase letters, digits and dashes), targets[] names the tools it is made for (required), and `body` is the page text shown under the install box (the commands it adds and what each does). A re-publish that sends no kind keeps the item\'s own, and one that sends no skillFile keeps the file it has. author is forced to you. Optional input.visibility: "public" (the default for a new item) or "members"; an edit that leaves it out keeps the item\'s own audience. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM, skillFile: SKILL_FILE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'prompt' }),
   },
   {
     name: 'add_product',
-    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, links[] (each { type, url, label?, visibility? }, where type is one of ' + CONTENT_LINK_TYPES_SENTENCE + ' and nothing else validates), license (an exact id from house/licenses.yml, call list_vocabulary for the full list; e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, links[] (each { type, url, label?, visibility? }, where type is one of ' + CONTENT_LINK_TYPES_SENTENCE + ' and nothing else validates), license (an exact id from house/licenses.yml, call list_vocabulary for the full list; e.g. MIT, GPL-3.0, Proprietary, Custom) and licenseUrl (required for Custom). The markdown `body` is the project description. author is forced to you. Optional input.visibility: "public" (the default for a new item) or "members"; an edit that leaves it out keeps the item\'s own audience. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'project' }),
   },
   {
     name: 'add_post',
-    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article; call list_components for the blocks it can use (tags, bar, facts, button, callout, embed and more). author is forced to you.',
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article; call list_components for the blocks it can use (tags, bar, facts, button, callout, embed and more). author is forced to you. Optional input.visibility: "public" (the default for a new item) or "members"; an edit that leaves it out keeps the item\'s own audience.',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'post' }),
   },
@@ -245,17 +245,15 @@ export const TOOLS = [
   },
   // sow-181: post a SHARE from an agent. A Share is a link to something worth reading, so the tool takes a url
   // and does the OG extraction ITSELF (ogPreview, the same SSRF-guarded Worker route the extension composer
-  // uses) rather than making the caller pre-fetch metadata. `visibility` is REQUIRED with no default so the
-  // agent has to ask the member public-or-members before anything is written: the schema default is `members`,
-  // and silently defaulting would quietly hide a share the member meant to publish, or publish one they meant
-  // to keep in the members stream.
+  // uses) rather than making the caller pre-fetch metadata. sow-458: `visibility` defaults to "public", the same as
+  // the share composer, and any paid member may pass "members" to keep it in the members stream.
   {
     name: 'add_share',
-    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares go to the members-only stream (body encrypted); only a superadmin can post a public share, by passing `visibility: "public"`. Title, description and image are auto-extracted from the url unless you pass them. A published share needs a `category`: one flat topic key from https://gbti.network/topics.json. Leave it out and the category suggested for the link is used; with neither, the share is refused. Optional: title, shortDescription, image, tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
+    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares are public by default; pass `visibility: "members"` to keep one in the members-only stream (its note is then encrypted). Title, description and image are auto-extracted from the url unless you pass them. A published share needs a `category`: one flat topic key from https://gbti.network/topics.json. Leave it out and the category suggested for the link is used; with neither, the share is refused. Optional: title, shortDescription, image, tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       {
         url: { type: 'string', description: 'The link being shared (absolute http/https URL).' },
-        visibility: { type: 'string', enum: ['public', 'members'], description: 'Optional, defaults to "members". "public" is refused unless the member is a superadmin.' },
+        visibility: { type: 'string', enum: ['public', 'members'], description: 'Optional, defaults to "public". "members" keeps the share for signed-in paying members.' },
         title: { type: 'string' },
         shortDescription: { type: 'string' },
         image: { type: 'string' },
@@ -309,11 +307,11 @@ export const TOOLS = [
   },
 ];
 
-/** sow-323 Phase 3: the audience add_share posts with: members-only unless asked, and only the two real values. */
+/** The audience add_share posts with: public unless asked (sow-458, 2026-10-16), and only the two real values. */
 export function shareVisibilityArg(v) {
-  const visibility = v == null || v === '' ? 'members' : v;
+  const visibility = v == null || v === '' ? 'public' : v;
   if (visibility !== 'public' && visibility !== 'members') {
-    throw new OperationError('bad-request', 'visibility must be "members" (the default) or "public" (superadmins only).');
+    throw new OperationError('bad-request', 'visibility must be "public" (the default) or "members".');
   }
   return visibility;
 }
@@ -329,9 +327,7 @@ export function shareVisibilityArg(v) {
 export async function addShare(ctx, args = {}) {
   const url = String(args.url || '').trim();
   if (!url) throw new OperationError('bad-request', 'url is required');
-  // sow-323 Phase 3 (owner, 2026-09-15): "Only superadmins can make shares public though, so don't even give members
-  // the option on creation." A share is members-only unless asked otherwise, and the Worker refuses a public one
-  // from anyone but a superadmin, so this no longer makes an agent ask the member a question with one real answer.
+  // sow-458 (owner, 2026-10-16): a share is public unless the member asks to keep it for members.
   const visibility = shareVisibilityArg(args.visibility);
   let og = null;
   try { og = await ogPreview(ctx, { url }); } catch { og = null; } // best-effort: never block a share on extraction

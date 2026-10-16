@@ -29,7 +29,7 @@ export const DIGEST_CONFIG_KV_KEY = 'digest:config';
  */
 export const DEFAULT_CTA = Object.freeze({
   enabled: true,
-  body: 'A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review.',
+  body: 'A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts, live on the site when you publish them.',
   linkLabel: 'What membership includes',
   linkUrl: '/membership/',
 });

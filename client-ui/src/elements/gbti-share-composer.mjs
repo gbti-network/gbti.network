@@ -220,7 +220,7 @@ class GbtiShareComposer extends GbtiElement {
       // sow-218: also read the sow-185 paid TIER. `paid` alone is no longer enough to post a Share, and the
       // oracle already returns this, so it costs no extra call.
       this._tier = typeof s?.paidTier === 'string' ? s.paidTier : null;
-      this._role = typeof s?.role === 'string' ? s.role : null; // sow-323 Phase 3: only a superadmin posts a public share
+      this._role = typeof s?.role === 'string' ? s.role : null; // passed to canSharePublicly, which no longer narrows by role (sow-458)
     } catch {
       this._membership = 'unknown';
       this._tier = null;
@@ -253,8 +253,8 @@ class GbtiShareComposer extends GbtiElement {
         return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
       case 'locked': return this._renderLocked();
       case 'trial': return this._renderTrial();
-      // sow-293: 'not-creator' is gone from this switch. sow-323 Phase 3: the audience step offers Public only to a
-      // superadmin (or to keep an already-public share public while it is edited). See _applyPublicLock.
+      // sow-293: 'not-creator' is gone from this switch. sow-458: the audience step offers Public to every member
+      // who may post, and selects it by default.
       default: return this._renderComposer(); // any paid member, or an unresolved tier
     }
   }
@@ -291,7 +291,7 @@ class GbtiShareComposer extends GbtiElement {
     this._edit = null; // sow-304: a fresh render is always the create form
     this._step = 1;
     this._noteTab = 'write';
-    this._visibility = 'members'; // shares stay members-only by default (unchanged project behavior)
+    this._visibility = 'public'; // sow-458: a share is public by default; Members only is the author's choice
     const rail = STEP_LABELS.map((l, i) =>
       `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join('');
     this.set(this.css(CSS) + `
@@ -344,13 +344,13 @@ class GbtiShareComposer extends GbtiElement {
           <h3>Who sees this?</h3>
           <p class="sub">Set the audience for your share.</p>
           <div class="aud">
-            <button class="audcard on" type="button" data-vis="members" aria-pressed="true">
-              <span class="at">${IC.lock} Members only</span>
-              <span class="ad">Signed-in members of the network, nobody else.</span>
-            </button>
-            <button class="audcard" type="button" data-vis="public" aria-pressed="false" data-public>
+            <button class="audcard on" type="button" data-vis="public" aria-pressed="true" data-public>
               <span class="at">${IC.globe} Public</span>
               <span class="ad">Anyone can read it, and it can be indexed.</span>
+            </button>
+            <button class="audcard" type="button" data-vis="members" aria-pressed="false">
+              <span class="at">${IC.lock} Members only</span>
+              <span class="ad">Signed-in members of the network, nobody else.</span>
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
@@ -473,12 +473,8 @@ class GbtiShareComposer extends GbtiElement {
   }
 
   /**
-   * sow-323 Phase 3: the Public audience is a superadmin's (owner, 2026-09-15), so for everyone else the choice is
-   * not shown at all, rather than shown and disabled. Editing a share that is already public keeps the choice, so
-   * the author's edit does not take an approved share down.
-   *
-   * This is an AFFORDANCE, not the boundary: the Worker refuses a public share from anyone but a superadmin
-   * (membership-audience.mjs), so poking the DOM buys nothing.
+   * sow-458: every member who may post a share may make it public (canSharePublicly). The lock below stays for the
+   * accounts that cannot post at all, which never reach the composer anyway.
    */
   _publicAllowed() {
     return canSharePublicly({ membership: this._membership, role: this._role, editingPublic: this._edit?.visibility === 'public' });
@@ -797,7 +793,7 @@ class GbtiShareComposer extends GbtiElement {
     const shortDescription = (this.$('input.desc')?.value || '').trim();
     const body = (this.$('textarea')?.value || '').trim();
     const url = (this.$('input[type=url]')?.value || '').trim();
-    const visibility = this._visibility || 'members'; // sow-192 Phase E: the audience card selection
+    const visibility = this._visibility || 'public'; // sow-192 Phase E: the audience card selection (sow-458: public by default)
     const category = this.$('.cat')?.value || ''; // SOW-087: the topic category, required to publish
     // sow-303: free-form tags, normalized HERE rather than trusted. buildShareFile parses against the share
     // schema but serializes the pre-parse object, so the schema's tag normalization is computed and thrown
@@ -869,7 +865,7 @@ class GbtiShareComposer extends GbtiElement {
       // sow-192 Phase E: return the wizard to a clean first step for the next share (the ack stays visible in
       // the always-on footer).
       this._setNoteTab('write');
-      this._selectAudience('members');
+      this._selectAudience('public');
       this._go(1);
       // SOW-092: emit a READER-READY optimistic item alongside the publish result so the host redirects
       // the member to their share IMMEDIATELY (SOW-076 instant-feel; the emit only fires on success).

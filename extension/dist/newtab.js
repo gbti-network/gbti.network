@@ -3861,24 +3861,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function audienceTag(item) {
     if (!item || item.status !== "published") return null;
     if (item.visibility === "members") {
-      return {
-        label: "members only, in review",
-        title: "Members read this now. A superadmin reviews it for the public site, and you are emailed if it goes public."
-      };
+      return { label: "members only", title: "Only signed-in paying members read this. Switch it to Public in the editor to put it on the public site." };
     }
-    return { label: "public", title: "This is on the public site. Your later edits stay public, and it keeps its original date." };
-  }
-  function curatorBanner(membership, paidTier, authoring) {
-    if (membership !== "paid") return null;
-    if (paidTier === "creator") return null;
-    const headline = "Your work publishes to members first";
-    const body = "Everything you publish goes out to members straight away. A superadmin reviews it for the public site, and you get an email if it goes public. A piece that is not taken stays published for members.";
-    return {
-      headline,
-      body: authoring ? `${body} You can keep writing in the meantime.` : body,
-      ctaLabel: "How publishing works",
-      ctaHref: "https://gbti.network/submit-content/"
-    };
+    return { label: "public", title: "This is on the public site. It keeps its original date when you edit it." };
   }
   function trialBanner(membership, authoring) {
     if (membership !== "trialing") return null;
@@ -4470,10 +4455,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function composerHoldsWork({ editing = false, values = [] } = {}) {
     return editing === true || values.some((v2) => String(v2 ?? "").trim() !== "");
   }
-  function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
-    if (SHARE_LOCKED_STATES.has(membership) || membership === "trialing") return false;
-    if (editingPublic === true) return true;
-    return role === "superadmin";
+  function canSharePublicly({ membership } = {}) {
+    return !(SHARE_LOCKED_STATES.has(membership) || membership === "trialing");
   }
   var SHARE_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
   function editInputFor({ share, fields = {}, now = null, status = null } = {}) {
@@ -6289,8 +6272,8 @@ ${barWidthCss(s)}`;
           return this._renderLocked();
         case "trial":
           return this._renderTrial();
-        // sow-293: 'not-creator' is gone from this switch. sow-323 Phase 3: the audience step offers Public only to a
-        // superadmin (or to keep an already-public share public while it is edited). See _applyPublicLock.
+        // sow-293: 'not-creator' is gone from this switch. sow-458: the audience step offers Public to every member
+        // who may post, and selects it by default.
         default:
           return this._renderComposer();
       }
@@ -6323,7 +6306,7 @@ ${barWidthCss(s)}`;
       this._edit = null;
       this._step = 1;
       this._noteTab = "write";
-      this._visibility = "members";
+      this._visibility = "public";
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
       this.set(this.css(CSS3) + `
       <div class="card wizard">
@@ -6375,13 +6358,13 @@ ${barWidthCss(s)}`;
           <h3>Who sees this?</h3>
           <p class="sub">Set the audience for your share.</p>
           <div class="aud">
-            <button class="audcard on" type="button" data-vis="members" aria-pressed="true">
-              <span class="at">${IC.lock} Members only</span>
-              <span class="ad">Signed-in members of the network, nobody else.</span>
-            </button>
-            <button class="audcard" type="button" data-vis="public" aria-pressed="false" data-public>
+            <button class="audcard on" type="button" data-vis="public" aria-pressed="true" data-public>
               <span class="at">${IC.globe} Public</span>
               <span class="ad">Anyone can read it, and it can be indexed.</span>
+            </button>
+            <button class="audcard" type="button" data-vis="members" aria-pressed="false">
+              <span class="at">${IC.lock} Members only</span>
+              <span class="ad">Signed-in members of the network, nobody else.</span>
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
@@ -6518,12 +6501,8 @@ ${barWidthCss(s)}`;
       }
     }
     /**
-     * sow-323 Phase 3: the Public audience is a superadmin's (owner, 2026-09-15), so for everyone else the choice is
-     * not shown at all, rather than shown and disabled. Editing a share that is already public keeps the choice, so
-     * the author's edit does not take an approved share down.
-     *
-     * This is an AFFORDANCE, not the boundary: the Worker refuses a public share from anyone but a superadmin
-     * (membership-audience.mjs), so poking the DOM buys nothing.
+     * sow-458: every member who may post a share may make it public (canSharePublicly). The lock below stays for the
+     * accounts that cannot post at all, which never reach the composer anyway.
      */
     _publicAllowed() {
       return canSharePublicly({ membership: this._membership, role: this._role, editingPublic: this._edit?.visibility === "public" });
@@ -6886,7 +6865,7 @@ ${barWidthCss(s)}`;
       const shortDescription = (this.$("input.desc")?.value || "").trim();
       const body = (this.$("textarea")?.value || "").trim();
       const url = (this.$("input[type=url]")?.value || "").trim();
-      const visibility = this._visibility || "members";
+      const visibility = this._visibility || "public";
       const category = this.$(".cat")?.value || "";
       const tags = normalizeTagInput(this.$("input.tags")?.value);
       const msg = this.$(".msg");
@@ -6967,7 +6946,7 @@ ${barWidthCss(s)}`;
           ogBox.innerHTML = "";
         }
         this._setNoteTab("write");
-        this._selectAudience("members");
+        this._selectAudience("public");
         this._go(1);
         const item = optimisticShareItem({ res, input: { ...input, image: postedImage }, body });
         this.emit("gbti-share-posted", { ...res, item });
@@ -12250,49 +12229,6 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
-  // client-ui/src/one-click-public-core.mjs
-  var ONE_CLICK_STATES = Object.freeze(["hidden", "available", "already-public"]);
-  function oneClickPublicView({ isSuperadmin = false, visibility = null, itemPath = null } = {}) {
-    if (isSuperadmin !== true) return "hidden";
-    if (typeof itemPath !== "string" || !itemPath.trim()) return "hidden";
-    if (visibility === "public") return "already-public";
-    return "available";
-  }
-  function makePublicRequest(itemPath) {
-    const path = typeof itemPath === "string" ? itemPath.trim() : "";
-    return path ? { path, decision: "approve" } : null;
-  }
-  function makePublicPrompt(title) {
-    const name = typeof title === "string" && title.trim() ? `"${title.trim()}"` : "this item";
-    return `Approve ${name} for the public site? It goes live within a few minutes, and its author is told.`;
-  }
-  var AUDIENCE_MODES = Object.freeze(["switch", "locked-public", "locked-members"]);
-  function audienceControl({ paidTier = null, isSuperadmin = false, currentVisibility = null, existing = false } = {}) {
-    const vis = String(currentVisibility ?? "") === "members" ? "members" : "public";
-    if (isSuperadmin || paidTier === "creator") {
-      return { mode: "switch", value: vis, note: "" };
-    }
-    if (existing && vis === "public") {
-      return {
-        mode: "locked-public",
-        value: "public",
-        note: "This is public, approved by a superadmin. Your edits stay public.",
-        // A public item never carries the locked-page flag: the content check refuses the two together.
-        publicStub: false
-      };
-    }
-    return {
-      mode: "locked-members",
-      value: "members",
-      note: "Members read this as soon as you publish. A superadmin reviews it for the public site, and you are emailed if it goes public.",
-      // sow-323 Phase 3: the item KEEPS ITS OWN PAGE while it waits (owner, 2026-09-12: members read it there, a
-      // signed-out visitor sees the locked card, and the superadmin approves from it). The locked control used to
-      // submit no flag at all, so every member item was saved with no page, and an edit stripped the page from one
-      // that had it.
-      publicStub: true
-    };
-  }
-
   // client-ui/src/editor-core.mjs
   function fmtDate2(value) {
     if (!value) return "";
@@ -14103,8 +14039,8 @@ ${listStyleProseCss(".doc-blocks")}
     [TIER.none]: "",
     // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
     [TIER.member]: "Network Supporter",
-    // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
-    // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+    // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it (it
+    // carries the Discord Creator badge; sow-458 retired the editorial review it used to waive), and staff resolve to it.
     // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
     [TIER.creator]: "Curator"
   });
@@ -14854,11 +14790,6 @@ ${listStyleProseCss(".doc-blocks")}
         .chip-neutral { background:var(--s-surface-3); color:var(--s-fg-soft); border-color:var(--s-line-2); }
         .visfield { padding-bottom:4px; }
         .visswitch { position:relative; display:grid; grid-template-columns:1fr 1fr; padding:4px; border-radius:7px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); margin-top:2px; }
-  /* sow-323: the locked audience state, for an author who does not choose it (most of them). Same box as
-     the switch so the rail does not jump when the control changes shape. */
-  .vislocked { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
-    border-radius:9px; background:var(--surface-2, var(--surface)); font-size:13.5px; }
-  .vislocked svg { width:15px; height:15px; flex:none; color:var(--muted); }
         .visswitch .vs-thumb { position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); border-radius:7px; background:var(--s-surface); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); transition:transform .18s cubic-bezier(.3,.7,.4,1); }
         .visswitch[data-active="members"] .vs-thumb { transform:translateX(calc(100% + 4px)); background:var(--s-tint); border-color:var(--s-tint-2); }
         .visswitch .vs-opt { position:relative; z-index:1; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 6px; border:0; background:transparent; font:inherit; font-size:13.5px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; }
@@ -15023,6 +14954,13 @@ ${listStyleProseCss(".doc-blocks")}
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `;
 
+  // client-ui/src/one-click-public-core.mjs
+  var AUDIENCE_MODES = Object.freeze(["switch"]);
+  function audienceControl({ currentVisibility = null } = {}) {
+    const vis = String(currentVisibility ?? "") === "members" ? "members" : "public";
+    return { mode: "switch", value: vis, note: "" };
+  }
+
   // client-ui/src/form.mjs
   function coerceValue(kind2, raw) {
     switch (kind2) {
@@ -15107,25 +15045,10 @@ ${listStyleProseCss(".doc-blocks")}
       const labelFor = `<label for="${fid}">${labelParts}${hintSpan}</label>`;
       const wrap = (inner, cls = "") => `<div class="fld${cls ? " " + cls : ""}" data-fkey="${f.key}"${visible ? "" : " hidden"}>${inner}</div>`;
       if (f.kind === "enum" && f.key === "visibility") {
-        const aud = audienceControl({
-          paidTier: this._paidTier,
-          isSuperadmin: this._isSuperadmin === true,
-          currentVisibility: v2,
-          existing: !!this.itemPath
-        });
+        const aud = audienceControl({ currentVisibility: v2 });
         const isMembers = aud.value === "members";
         const stubField = this.fields.find((x) => x.key === "publicStub");
         const stubOn = this._presetBool("publicStub");
-        if (aud.mode !== "switch") {
-          const icon3 = isMembers ? LOCK : GLOBE;
-          const word = isMembers ? "Members only, in review" : "Public";
-          return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
-          <div class="vislocked" data-vislocked>${icon3} <b>${word}</b></div>
-          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc2(aud.value)}" />
-          ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ""}
-          <div class="infobox">${INFO}<div>${esc2(aud.note)}</div></div>
-          <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
-        }
         return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Visibility</label>
         <div class="visswitch" data-visswitch data-active="${isMembers ? "members" : "public"}"><span class="vs-thumb"></span>
           <button class="vs-opt ${isMembers ? "" : "on"}" data-vis="public" type="button">${GLOBE} Public</button>
@@ -16563,39 +16486,6 @@ ${listStyleProseCss(".doc-blocks")}
       this.$("#publish")?.removeAttribute("hidden");
     }
     /**
-     * sow-323 Phase 3: approve this item for the public site, in one confirmed action.
-     *
-     * It sends the item's PATH to the approval route and the Worker does the rest. It deliberately does NOT
-     * edit the open document first: the editor holds a members-only item with a teaser body, so submitting what
-     * is on screen with `visibility: public` published the teaser and left the real body encrypted and
-     * unreachable. The Worker decrypts it, reassembles the article and commits the whole thing.
-     */
-    // Reports through the editor's own chip and banner. It called a `setStatus` that was never defined (sow-293,
-    // 2026-09-03), so the button threw before it asked for the approval and did nothing at all (sow-430).
-    async _makePublic() {
-      const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
-      const req = makePublicRequest(this.itemPath);
-      if (!req) {
-        this._banner("Save this item first, then it can be approved.", "warn");
-        return;
-      }
-      if (typeof confirm === "function" && !confirm(makePublicPrompt(title))) return;
-      this._setChip("Approving...", "busy");
-      try {
-        const res = await this.client?.decideEditorial?.(req);
-        if (res?.alreadyPublic) {
-          this._setChip("");
-          this._banner("This item is already public.");
-          return;
-        }
-        this._setChip(`${CHECK3} Approved`, "ok");
-        this._banner("Approved. It is public within a few minutes.");
-      } catch (err) {
-        this._setChip("");
-        this._banner(esc2(err?.message || "The approval did not go through. Try again in a minute."), "danger");
-      }
-    }
-    /**
      * sow-327: show WHICH changes are unpublished, as an ordered list, and jump to the one you click.
      *
      * The comparison is made against the committed file read at click time, not against anything the editor
@@ -16920,7 +16810,6 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         const st2 = await this.client.status();
         membership = st2?.membership ?? "unknown";
-        this._paidTier = st2?.paidTier ?? null;
         canStage = this.itemScope !== "house" && (membership === "unknown" || st2?.canStageDrafts === true);
         authorFolder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase();
         this._statusRole = st2?.role ?? null;
@@ -16938,7 +16827,6 @@ ${listStyleProseCss(".doc-blocks")}
         } catch {
         }
       }
-      this._isSuperadmin = authorMembers != null;
       const ownerSelValue = authorSelectValue({
         itemPath: this.itemPath,
         author: this.presetStr(p.author),
@@ -17008,15 +16896,7 @@ ${listStyleProseCss(".doc-blocks")}
         const known = real.some((o) => o.value === ownerSelValue);
         this._ownerSelInitial = known ? ownerSelValue : "";
         const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
-        const ocp = oneClickPublicView({
-          isSuperadmin: true,
-          // reached only when authorMembers resolved, i.e. the caller is a superadmin
-          visibility: this.presetStr(this.preset?.input?.visibility),
-          itemPath: this.itemPath
-        });
-        const ocpHtml = ocp === "available" ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
-             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>` : ocp === "already-public" ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>` : "";
-        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
+        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
       })() : "";
       const showStats = isPub && slug && ["post", "project", "prompt"].includes(this.type);
       const railFootHtml = showStats ? `
@@ -17135,7 +17015,6 @@ ${listStyleProseCss(".doc-blocks")}
       this.on("#draft", "click", () => this.doDraft());
       this.on("#preview", "click", () => this.doPreview());
       this.on("#publish", "click", () => this.doPublish());
-      this.on("#makepublic", "click", () => this._makePublic());
       this._changesOpen = false;
       this.on("#whatchanged", "click", () => this._toggleChanges());
       this._dirty = false;
@@ -18126,10 +18005,10 @@ ${listStyleProseCss(".doc-blocks")}
 
          ${rank >= RANK5.admin && capOn("membership") ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the internal trust level that exempts a supporter from editorial review. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the Creator badge in Discord. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)} (no editorial review)</option></select>
+           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)}</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>
@@ -20654,170 +20533,8 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-coupon-manager", GbtiCouponManager);
 
-  // membership/editorial-queue.mjs
-  var REVIEWED_DIRS = Object.freeze({ posts: "post", projects: "project", products: "project", prompts: "prompt" });
-  var EDITORIAL_STATE = Object.freeze({
-    pending: "pending",
-    approved: "approved",
-    dismissed: "dismissed",
-    // the superadmin looked and left it members-only. SILENT: the author is not told.
-    unknown: "unknown"
-    // a malformed record: never actionable
-  });
-
-  // client-ui/src/editorial-queue-view.mjs
-  function typeLabel2(type) {
-    return { post: "Article", project: "Project", prompt: "Prompt" }[String(type ?? "")] || "Item";
-  }
-  function rowDecidable(item) {
-    return !!item && item.corrupt !== true && item.state === EDITORIAL_STATE.pending;
-  }
-  function waitedFor(item, now = /* @__PURE__ */ new Date()) {
-    const at3 = Date.parse(String(item?.requestedAt ?? ""));
-    if (!Number.isFinite(at3)) return "";
-    const days = Math.floor((now.getTime() - at3) / 864e5);
-    if (days < 0) return "just now";
-    if (days === 0) return "today";
-    if (days === 1) return "yesterday";
-    return `${days} days ago`;
-  }
-  function rowSummary(item, now = /* @__PURE__ */ new Date()) {
-    const kind2 = typeLabel2(item?.type);
-    const who = item?.login ? `by ${item.login}` : "by an unknown member";
-    const when = waitedFor(item, now);
-    const revised = item?.editedSinceDecision === true ? ", revised since you set it aside" : "";
-    return `${kind2} ${who}${when ? `, published ${when}` : ""}${revised}`;
-  }
-  function decidePrompt(item, decision) {
-    const name = item?.title ? `"${item.title}"` : "this item";
-    return decision === "approve" ? `Approve ${name} for the public site? It goes live within a few minutes, and its author is told.` : `Set ${name} aside? It stays members-only and its author is not told. They can revise it and it comes back here.`;
-  }
-  function decidedMessage(item, decision) {
-    const name = item?.title || "that item";
-    return decision === "approve" ? `${name} is public within a few minutes. Its author has been told.` : `${name} was set aside. It stays members-only.`;
-  }
-  function queueSummary(items) {
-    const list = Array.isArray(items) ? items : [];
-    const waiting = list.filter((i) => rowDecidable(i)).length;
-    const broken = list.filter((i) => i?.corrupt === true || i?.state === EDITORIAL_STATE.unknown).length;
-    if (!list.length) return "Nothing is waiting. Member articles, projects and prompts arrive here when they are published.";
-    const head = waiting === 0 ? "Nothing is waiting for a decision." : waiting === 1 ? "1 item is waiting for a decision." : `${waiting} items are waiting for a decision.`;
-    return broken ? `${head} ${broken === 1 ? "One record is" : `${broken} records are`} malformed and cannot be decided.` : head;
-  }
-
-  // client-ui/src/elements/gbti-editorial-manager.mjs
-  var CSS23 = `
-  :host { display:block; }
-  [hidden] { display:none !important; }
-  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
-  .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
-  .hint { font-size:12.5px; color:var(--muted); }
-  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
-  .muted { color:var(--muted); font-size:13px; }
-  .row { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:0 0 10px; }
-  .row.corrupt { border-color:var(--amber, #a9781c); }
-  .top { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin:0 0 4px; }
-  .top b { font-size:14px; overflow-wrap:anywhere; }
-  .st { font-size:11px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--line); border-radius:999px; padding:1px 8px; color:var(--muted); }
-  .st.pending { color:var(--accent); border-color:var(--accent); }
-  .st.approved { color:var(--green-fg, #1f9e5f); border-color:var(--green, #1f9e5f); }
-  .st.dismissed, .st.unknown { color:var(--amber, #a9781c); border-color:var(--amber, #a9781c); }
-  .sub { font-size:12.5px; color:var(--muted); overflow-wrap:anywhere; }
-  .acts { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; align-items:center; }
-  a.read { font-size:12.5px; color:var(--accent); }
-  button, .lk { font:inherit; font-size:12.5px; font-weight:700; border-radius:7px; padding:5px 12px; cursor:pointer; background:none; border:1.5px solid var(--line); color:var(--fg); }
-  button:hover:not([disabled]) { border-color:var(--accent); color:var(--accent); }
-  button[disabled] { opacity:.45; cursor:default; }
-`;
-  var GbtiEditorialManager = class extends GbtiElement {
-    // The static admin markup upgrades BEFORE setClient injects the client, so the first render has no client.
-    // render() starts the load once the client lands, guarded by _loading so it cannot loop, and a FAILURE sets
-    // _failed rather than clearing _items: clearing them is what turns "it broke" back into "not loaded yet".
-    connectedCallback() {
-      super.connectedCallback?.();
-    }
-    async load() {
-      if (!this.client) {
-        this.render();
-        return;
-      }
-      this._loading = true;
-      this._failed = false;
-      try {
-        const res = await this.client.editorialQueue?.();
-        this._items = Array.isArray(res?.items) ? res.items : [];
-      } catch (err) {
-        this._items = null;
-        this._failed = true;
-        this._msg = `Could not read the review queue (${err?.message || "unknown error"}).`;
-      }
-      this._loading = false;
-      this.render();
-    }
-    render() {
-      if (!this.client) {
-        this.set(this.css(CSS23) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
-        return;
-      }
-      if (this._failed) {
-        this.set(this.css(CSS23) + `<p class="msg">${esc2(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
-        this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
-        return;
-      }
-      if (!this._items) {
-        if (!this._loading) this.load();
-        this.set(this.css(CSS23) + '<p class="muted">Loading the review queue...</p>');
-        return;
-      }
-      const rows = this._items.map((i) => this._rowHtml(i)).join("");
-      this.set(this.css(CSS23) + `
-      <div class="head">
-        <h3>Editorial review</h3>
-        <span class="hint">${esc2(queueSummary(this._items))}</span>
-      </div>
-      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
-      ${rows || '<p class="muted">Nothing has been submitted yet. Member articles, projects and prompts arrive here when their author publishes them.</p>'}
-    `);
-      this.$$("[data-decide]").forEach((b) => b.addEventListener("click", () => this._decide(b.dataset.path, b.dataset.decide)));
-    }
-    _rowHtml(item) {
-      const state = String(item?.state || "unknown");
-      const corrupt = item?.corrupt === true || state === "unknown";
-      const path = String(item?.path || "");
-      const title = item?.title || item?.slug || path || "an unnamed item";
-      const decided = item?.decidedAt ? `<div class="sub">${esc2(state)} by ${esc2(item.decidedByLogin || item.decidedBy || "a superadmin")} on ${esc2(String(item.decidedAt).slice(0, 10))}</div>` : "";
-      const read3 = item?.url ? `<a class="read" href="${esc2(item.url)}" target="_blank" rel="noopener">Read it</a>` : "";
-      const acts = rowDecidable(item) ? `<div class="acts">${read3}
-           <button data-decide="approve" data-path="${esc2(path)}" type="button">Approve for the public site</button>
-           <button data-decide="dismiss" data-path="${esc2(path)}" type="button">Set aside</button>
-         </div>` : corrupt ? '<div class="acts"><button type="button" disabled>Cannot be decided: this record is malformed</button></div>' : read3 ? `<div class="acts">${read3}</div>` : "";
-      return `<div class="row${corrupt ? " corrupt" : ""}">
-      <div class="top"><b>${esc2(title)}</b><span class="st ${esc2(state)}">${esc2(corrupt ? "malformed" : state)}</span></div>
-      <div class="sub">${esc2(corrupt ? `${typeLabel2(item?.type)} at ${path}` : rowSummary(item))}</div>
-      ${decided}${acts}
-    </div>`;
-    }
-    async _decide(path, decision) {
-      const item = (this._items || []).find((i) => String(i?.path) === String(path));
-      if (typeof confirm === "function" && !confirm(decidePrompt(item, decision))) return;
-      this.$$("[data-decide]").forEach((b) => {
-        b.disabled = true;
-      });
-      this._msg = decision === "approve" ? "Approving..." : "Setting aside...";
-      try {
-        await this.client.decideEditorial({ path: String(path), decision });
-        this._msg = decidedMessage(item, decision);
-      } catch (err) {
-        this._msg = err?.message || "The decision could not be recorded.";
-      }
-      this._items = null;
-      this.render();
-    }
-  };
-  define("gbti-editorial-manager", GbtiEditorialManager);
-
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS24 = `
+  var CSS23 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -20862,7 +20579,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -20870,14 +20587,14 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS24) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc2(t.label || t.key)}</span><span class="desc">${esc2(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc2(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -20906,7 +20623,7 @@ ${listStyleProseCss(".doc-blocks")}
   // membership/digest-config.mjs
   var DEFAULT_CTA = Object.freeze({
     enabled: true,
-    body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review.",
+    body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts, live on the site when you publish them.",
     linkLabel: "What membership includes",
     linkUrl: "/membership/"
   });
@@ -21021,7 +20738,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-digest-manager.mjs
-  var CSS25 = `
+  var CSS24 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .busy { opacity:.55; pointer-events:none; }
@@ -21135,27 +20852,27 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS25) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS25) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS25) + `<p class="msg">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS24) + `<p class="msg">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
         });
         return;
       }
-      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
@@ -21669,7 +21386,7 @@ ${SKILL_BOX_CSS}`;
   var PREVIEW_NAME = "farley";
   var NEW = "__new__";
   var blank = () => ({ label: "", folder: "", run: "", local: "" });
-  var CSS26 = `
+  var CSS25 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .msg.err { color:var(--danger); }
@@ -21764,20 +21481,20 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS26) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
+        this.set(this.css(CSS25) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS26) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS25) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS26) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS25) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS26) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS25) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -21789,7 +21506,7 @@ ${SKILL_BOX_CSS}`;
         <span class="tl"><span class="tn">${esc2(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
       const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
       const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
-      this.set(this.css(SKILL_READER_CSS + CSS26) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(SKILL_READER_CSS + CSS25) + `<div class="${this._busy ? "busy" : ""}">
       <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
       ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc2(this._msg)}</p>` : ""}
       <div class="grid">
@@ -22756,7 +22473,7 @@ ${SKILL_BOX_CSS}`;
     const taken = new Set(items.map((it2) => `${it2.type}:${it2.ref}`));
     return (Array.isArray(pages) ? pages : []).filter((p) => !taken.has(`${p.type}:${p.ref}`) && (p.title.toLowerCase().includes(q2) || p.ref.toLowerCase().includes(q2))).slice(0, limit);
   }
-  function rowSummary2(c) {
+  function rowSummary(c) {
     if (c?.layout === "html") {
       const hosts = Array.isArray(c.hosts) ? c.hosts : [];
       return `Partner code${hosts.length ? `, loads from ${hosts.map((h) => h.replace(/^https:\/\//, "")).join(", ")}` : ""}`;
@@ -22802,7 +22519,7 @@ ${SKILL_BOX_CSS}`;
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
         <div class="top"><span class="label">${esc10(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc10(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc10(rowSummary2(c))}</p>
+        <p class="line">${esc10(rowSummary(c))}</p>
         <p class="sub mono">${esc10(c.partner || "no partner")} · on ${plural(n)}</p>
         ${clicks ? `<p class="sub mono tracked">${esc10(clicks)}</p>` : ""}
       </div>
@@ -23830,7 +23547,7 @@ ${SKILL_BOX_CSS}`;
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS27 = `
+  var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -23936,11 +23653,11 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS27) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS26) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -23949,7 +23666,7 @@ ${SKILL_BOX_CSS}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS27) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS26) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -23959,7 +23676,7 @@ ${SKILL_BOX_CSS}`;
       const rows = this._rows();
       const opt = (v2, label, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(label)}</option>`;
       const body = rows.map((it2) => this._row(it2)).join("");
-      this.set(this.css(CSS27) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS26) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc2(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -24056,7 +23773,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS28 = `
+  var CSS27 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -24555,7 +24272,7 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -24564,7 +24281,7 @@ ${SKILL_BOX_CSS}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS28) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS27) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -24577,7 +24294,7 @@ ${SKILL_BOX_CSS}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS28) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS27) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -24590,7 +24307,7 @@ ${SKILL_BOX_CSS}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS28) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS27) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
@@ -25257,7 +24974,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS29 = `
+  var CSS28 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -25296,7 +25013,7 @@ ${SKILL_BOX_CSS}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS29) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS28) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -25333,7 +25050,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS30 = `
+  var CSS29 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -25377,7 +25094,7 @@ ${SKILL_BOX_CSS}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS30) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS29) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -25610,7 +25327,7 @@ ${SKILL_BOX_CSS}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS31 = `
+  var CSS30 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -25674,7 +25391,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS31));
+      this.set(this.css(CSS30));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -25747,12 +25464,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS31));
+        this.set(this.css(CSS30));
         return;
       }
       const u = esc2(this._username || "");
       if (!this._loaded) {
-        this.set(this.css(CSS31) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS30) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -25764,7 +25481,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS31) + `
+      this.set(this.css(CSS30) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -25851,7 +25568,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS32 = `
+  var CSS31 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -25913,7 +25630,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS32) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS31) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -26109,7 +25826,7 @@ ${BLOCKED_PILL_CSS}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS33 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -26350,11 +26067,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS33) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS32) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS33) + body);
+      this.set(this.css(CSS32) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -26465,7 +26182,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS34 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -26596,10 +26313,10 @@ ${BLOCKED_PILL_CSS}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st2 = await this.client.status();
@@ -26616,7 +26333,7 @@ ${BLOCKED_PILL_CSS}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -26642,12 +26359,12 @@ ${BLOCKED_PILL_CSS}
       const pending = dropPublished(items.map((it2) => `${it2.author}/${it2.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS34) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS33) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS34) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS33) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -26709,7 +26426,7 @@ ${BLOCKED_PILL_CSS}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc2(share.author)}" data-gbti-id="${esc2(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS34) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS33) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc2(authorName3(share.author))}</span><span class="when">${esc2(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -26752,21 +26469,21 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _splash() {
-      this.set(this.css(CSS34) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS33) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS35 = `
+  var CSS34 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS35) + `<div class="stack">
+      this.set(this.css(CSS34) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -26776,7 +26493,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS36 = `
+  var CSS35 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -26794,7 +26511,7 @@ ${BLOCKED_PILL_CSS}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS36) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS35) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -26803,7 +26520,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS36) + `<div class="splash">
+        this.set(this.css(CSS35) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc2(c.heading)}</h2>
         <p>${esc2(c.body)}</p>
@@ -26811,7 +26528,7 @@ ${BLOCKED_PILL_CSS}
       </div>`);
         return;
       }
-      this.set(this.css(CSS36) + `<slot></slot>`);
+      this.set(this.css(CSS35) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -26819,7 +26536,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS37 = `
+  var CSS36 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -26893,7 +26610,7 @@ ${BLOCKED_PILL_CSS}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS37) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS36) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       wireTweets(this.root);
       this._syncPage(this._rows.length);
@@ -27092,7 +26809,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE17 = "https://gbti.network";
-  var CSS38 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -27176,15 +26893,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS38) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -27200,7 +26917,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc2(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc2(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it2) => this._itemRow(resolveItem(idx, it2.type, it2.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
@@ -27273,7 +26990,7 @@ ${BLOCKED_PILL_CSS}
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK4 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS39 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -27363,14 +27080,14 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS39) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS39) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS39) + `
+      this.set(this.css(CSS38) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -27435,7 +27152,7 @@ ${BLOCKED_PILL_CSS}
   var SITE19 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS40 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -27518,11 +27235,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS40) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS40) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -27531,7 +27248,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS40) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS39) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -27788,7 +27505,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS41 = `
+  var CSS40 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -27829,7 +27546,7 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS41) + html : "");
+      this.set(html ? this.css(CSS40) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
@@ -27882,7 +27599,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
-  var CSS42 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -28066,19 +27783,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE20}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE20}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS42) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -28088,7 +27805,7 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS42) + sections);
+      this.set(this.css(CSS41) + sections);
       this._wire();
     }
     _identity(m) {
@@ -29167,7 +28884,7 @@ ${BLOCKED_PILL_CSS}
       ];
       const tileHtml = visibleTiles(tiles, TABS, this._authoring(), this._role()).map((t) => `<a class="ov-tile" href="${esc2(t.href)}"><span class="ov-n">${t.n == null ? "" : esc2(t.n)}</span><span class="ov-nm">${esc2(t.nm)}</span></a>`).join("");
       const draft = c.drafts ? `<span class="ov-draft">${esc2(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
-      const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring());
+      const tb = trialBanner(ov.membership, this._authoring());
       const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc2(tb.headline)}</b><br/><span>${esc2(tb.body)}</span></div><a class="ov-up" href="${esc2(tb.ctaHref)}" target="_blank" rel="noopener">${esc2(tb.ctaLabel)}</a></div>`;
       const att = this._role() !== "superadmin" ? "" : '<h3 class="ov-h3">Pull requests</h3>' + (ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc2(a.tone)}">${esc2(a.label)}</span> <a href="${esc2(a.url || "#")}" target="_blank" rel="noopener">${esc2(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`);
       return `<div class="ov">
@@ -29381,7 +29098,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS43 = `
+  var CSS42 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -29565,7 +29282,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS43) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS42) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -29620,7 +29337,7 @@ ${BLOCKED_PILL_CSS}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS44 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -29725,11 +29442,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS44) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE22}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS43) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE22}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS44) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS43) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -29752,7 +29469,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE22}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS44) + `
+      this.set(this.css(CSS43) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -29834,7 +29551,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS45 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -29996,12 +29713,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS45) + head + `<div data-body></div>`);
+      this.set(this.css(CSS44) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -30135,7 +29852,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS46 = `
+  var CSS45 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -30261,7 +29978,7 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS46) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS45) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
@@ -30338,7 +30055,7 @@ ${BLOCKED_PILL_CSS}
   var discordPreviewHtml = (msg) => String(msg || "").split("\n").map((line) => esc2(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^_(.+)_$/, "<em>$1</em>")).join("<br>");
   var listOr = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} or ${a[a.length - 1]}`;
   var listAnd = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
-  var CSS47 = `
+  var CSS46 = `
   :host { display:block; margin:16px 0 0; }
   :host([hidden]) { display:none !important; } /* the host's own display would otherwise beat the hidden attribute */
   .ns { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; display:flex; flex-direction:column; gap:14px;
@@ -30536,13 +30253,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._story) {
-        this.set(this.css(CSS47));
+        this.set(this.css(CSS46));
         return;
       }
       const ch = this._target;
       const cov = this._statusErr ? `<p class="cov msg err" role="status">${esc2(this._statusErr)} <button type="button" class="link" data-retry>Try again</button></p>` : `<p class="cov">${esc2(this._coverage())}</p>`;
       const body = ch ? '<div class="sep"></div>' + (ch === "discord" ? "" : this._linkChoice()) + this._composer(ch) + `<p class="note">${esc2(NOTES[ch] || "")}</p>` + (this._msg?.text === DONE_MSG ? "" : this._postedLine(ch)) + this._actions(ch) + (this._msg ? `<p class="msg${this._msg.err ? " err" : ""}" role="status">${esc2(this._msg.text)}</p>` : "") : '<p class="hint">Pick a channel to write its post.</p>';
-      this.set(this.css(CSS47) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
+      this.set(this.css(CSS46) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
       this._wire();
     }
     _wire() {
@@ -30683,7 +30400,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS48 = `
+  var CSS47 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -30871,12 +30588,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS48) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS47) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS48) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS47) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -30895,7 +30612,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.sourceName || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
-      this.set(this.css(CSS48) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS47) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (this._share) this.$("[data-share-slot]")?.replaceWith(this._share);
       if (!this._wiredErr) {
@@ -31281,7 +30998,7 @@ ${BLOCKED_PILL_CSS}
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS49 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS48 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc8(a);
@@ -31340,7 +31057,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS49 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -31901,7 +31618,7 @@ ${BLOCKED_PILL_CSS}
   var lc10 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS50 = `
+  var CSS49 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -32025,7 +31742,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS50) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS49) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -32033,7 +31750,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS50) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS49) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -32077,7 +31794,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS51 = `
+  var CSS50 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -32217,7 +31934,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS51) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS50) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -32230,7 +31947,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS51) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS50) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -32549,9 +32266,6 @@ ${BLOCKED_PILL_CSS}
       // so it takes effect at once. The host forwards these to /membership/admin/invites.
       inviteList: () => request("GET", "/api/invites"),
       inviteCreate: ({ campaign, note, expiresAt }) => request("POST", "/api/invites", { campaign, note, expiresAt }),
-      // sow-323: the editorial review queue (superadmin at the Worker). Approving PUBLISHES the item.
-      editorialQueue: () => request("GET", "/api/editorial"),
-      decideEditorial: ({ path, decision }) => request("POST", "/api/editorial", { path, decision }),
       inviteUpdate: ({ code, action, note }) => request("PATCH", "/api/invites", { code, action, note }),
       quotePool: () => request("GET", "/api/quote-pool"),
       // SOW-063 P3: the splash quote pool { quotes } for the manager

@@ -294,17 +294,17 @@ test('members-only: a trial member is a member but cannot publish (rejected-not-
 // sow-185: the TIER gate. Public presence (post/product/prompt/profile) needs Content Creator; comments need
 // only Network Member. A paid member below the required tier is rejected-not-creator (auto-closed with a nudge).
 // sow-323: these four cases asserted the OPPOSITE until 2026-09-12. The owner collapsed the two paid plans into
-// one, so every paid supporter authors every content type and the merge gate no longer decides audience at all:
-// an item lands members-only and a superadmin approves what goes public (enforced in membership-author.mjs,
-// which can read the frontmatter this gate deliberately cannot). What survives here is the fail-closed behaviour
-// on SHAPE: an unclassifiable own-folder path still needs the higher tier.
+// one, so every paid supporter authors every content type and the merge gate no longer decides audience at all
+// (and since 2026-10-16 nobody reviews it either: a paid member's content is live when they publish it). What
+// survives here is the fail-closed behaviour on SHAPE: an unclassifiable own-folder path still needs the higher tier.
 test('sow-323: a paid supporter publishes own-folder content of every type => pass', () => {
-  // workerOpened: the Worker's publish routes opened these, which is how a supporter publishes. A hand-opened PR of
-  // the same content is HELD for a superadmin instead (test/editorial-gate.test.mjs).
+  // Editorial review was retired on 2026-10-16: who opened the PR no longer matters, so a hand-opened PR of the
+  // same content merges exactly as one GBTI's publishing app opened (test/editorial-gate.test.mjs).
   for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md']) {
-    const d = decide({ paths: [p], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member, workerOpened: true });
+    const d = decide({ paths: [p], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
     assert.equal(d.check, 'pass', p);
     assert.equal(d.label, 'paid', p);
+    assert.equal(d.autoMerge, true, p);
   }
   // the shape guard still discriminates: a path this gate cannot classify is NOT on the member floor
   const odd = decide({ paths: ['members/octocat/mystery/x.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
@@ -579,7 +579,7 @@ test('contentTypesTouched reports published types', () => {
 // The relaxation is OPT-IN (`{ ownFolder: true }`), so contributing a share into SOMEBODY ELSE'S folder still
 // demands creator. That was not part of the ruling and gets the strict default; the test below pins it.
 test('sow-293: a Network Member posting an OWN-FOLDER share => pass (reverses sow-218)', () => {
-  const d = decide({ paths: ['members/octocat/shares/2026-08-11-hello.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member, workerOpened: true });
+  const d = decide({ paths: ['members/octocat/shares/2026-08-11-hello.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
   assert.equal(d.check, 'pass', 'sharing opened to every paid member on 2026-09-03');
   assert.equal(d.autoMerge, true);
 });

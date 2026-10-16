@@ -85,6 +85,29 @@ export function splitMemberMarkdown(body) {
 // SOW-145: `scope` places the ciphertext beside its item — 'member' -> members/<username>/_enc/, 'house' ->
 // house/_enc/ (a house members-only body; the decrypt allowlist ENC_PATH_RE already permits house/_enc/). The
 // assetId stays scope-free: it is embedded in the envelope, so decrypt round-trips regardless of the folder.
+/**
+ * sow-458: the old encrypted body a publish leaves behind. With editorial review retired an author switches their own
+ * members-only item to Public, and before this the ciphertext of the old body stayed in `_enc/` with nothing pointing at
+ * it. It is deleted in the same pull request ONLY when the file this publish writes no longer names it: `plan.encPath`
+ * when the publish encrypts, else whatever `encryptedBody` the built frontmatter still carries (an agent round-trips
+ * the raw frontmatter, pointer included, without the members section; deleting there destroyed a live article's
+ * members section, found in review). And only inside the item's own folder, so a pointer someone aimed at another
+ * member's ciphertext can never delete it. A rename deletes the old file through its own move cleanup, so the caller
+ * does not ask this for a moved item.
+ * @param priorEnc the `encryptedBody` committed at the SAME path before this publish
+ * @param plan     planMemberFiles' result, or null
+ * @param built    buildContentFile's result (its path and frontmatter)
+ * @returns [] or [{ path, content: null }]
+ */
+export function staleEncDeletes(priorEnc, plan, built) {
+  const old = typeof priorEnc === 'string' ? priorEnc.trim() : '';
+  if (!old || old.includes('..') || !/\.enc$/.test(old)) return [];
+  const folder = /^(members\/[a-z0-9][a-z0-9-]*|house)\//.exec(String(built?.path ?? ''))?.[1];
+  if (!folder || !old.startsWith(`${folder}/_enc/`)) return [];
+  const still = plan?.encPath ?? built?.frontmatter?.encryptedBody;
+  return still === old ? [] : [{ path: old, content: null }];
+}
+
 export function encAssetFor(type, username, slug, scope = 'member') {
   const assetId = `${type}:${slug}:body`;
   const folder = scope === 'house' ? 'house' : `members/${username}`;

@@ -16,7 +16,6 @@ import { publish, renameContent, getContentItem } from '../client/src/operations
 import { parseContentFile } from '../client/src/content-ops.mjs';
 import { contentTypesTouched, requiredTierFor, TYPE_OTHER } from '../membership/classify-pr.mjs';
 import { TIER } from '../membership/tiers.mjs';
-import { buildApproval } from '../workers/signup/membership-editorial.mjs';
 import { encryptAsset } from '../client/src/crypto-assets.mjs';
 import { checkBuildSecrets } from '../scripts/check-build-secrets.mjs';
 import { lockedTargets } from '../client-ui/src/elements/gbti-locked-content.mjs';
@@ -147,22 +146,9 @@ test('the gate reads the encrypted skill file as part of a prompt, so an ordinar
 });
 
 const KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='; // 32 zero bytes: a test key, never a real one
-test('approving a members-only skill publishes its file as plain SKILL.md and deletes the ciphertext', async () => {
-  const item = { path: IDX, type: 'prompt', login: 'alice', slug: 'farley' };
-  const skillEnvelope = await encryptAsset({ plaintext: FILE, key: KEY, assetId: 'prompt:farley:skillfile', kid: '1' });
-  const bodyEnvelope = await encryptAsset({ plaintext: 'The commands.', key: KEY, assetId: 'prompt:farley:body', kid: '1' });
-  const indexText = MEMBERS_MD(`encryptedBody: members/alice/_enc/prompt-farley-body.enc\nencryptedSkill: ${ENC}\n`);
-  const built = await buildApproval({ MEMBER_CONTENT_KEY: KEY, MEMBER_CONTENT_KID: '1' }, { item, indexText, encText: JSON.stringify(bodyEnvelope), skillEncText: JSON.stringify(skillEnvelope) });
-  const byPath = Object.fromEntries(built.files.map((f) => [f.path, f.content]));
-  assert.equal(byPath[SK], FILE);
-  assert.equal(byPath[ENC], null);
-  const fm = parseContentFile(byPath[IDX]).frontmatter;
-  assert.equal(fm.visibility, 'public');
-  assert.equal(fm.encryptedSkill, undefined);
-  const missing = await buildApproval({ MEMBER_CONTENT_KEY: KEY }, { item, indexText, encText: JSON.stringify(bodyEnvelope) });
-  assert.match(missing.error, /skill file could not be read/, 'never approved without its file');
-  assert.match(src('workers/signup/membership-editorial.mjs'), /const built = await buildApproval\(env, \{ item, indexText, encText, skillEncText \}\);/);
-});
+// sow-458: 'approving a members-only skill publishes its file as plain SKILL.md' tested the superadmin approval route,
+// retired with editorial review. An author switching their own skill to public is the case above ('the rule, leaving
+// members-only'), which runs through the same skill-file plan every publish uses.
 
 // The content check, run for real on a throwaway tree: the scripts copied, the rest linked, one member's folder copied.
 function fixture() {

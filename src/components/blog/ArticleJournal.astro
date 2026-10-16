@@ -19,8 +19,7 @@ import { favoriteCount } from '../../lib/favorites';
 import { aliasSlugsOf } from '../../lib/content-index.mjs';
 import { breadcrumb, leafKey, leafLabel } from '../../lib/taxonomy';
 import { ART_OVERVIEW_ID, coverDimensions } from '../../lib/article-page.mjs';
-import { contentRepoPath, isApprovable } from '../../lib/content';
-import ApprovePill from '../ApprovePill.astro';
+import { contentRepoPath } from '../../lib/content';
 
 interface Props {
   d: any; // CollectionEntry<'post'>['data']
@@ -37,9 +36,8 @@ const dims = coverDimensions('journal');
 // build-time data; only visibility is a runtime decision (this component's own script block, below).
 const editPath = contentRepoPath('post', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(editPath)}` : null;
-// sow-323 follow-up: the row carries BOTH superadmin controls, so it has to render when either one might. Off
-// isApprovable, never a second copy of the members-only test, or a public article grows an empty toolbar.
-const hasTools = Boolean(editHref) || isApprovable(d.visibility);
+// sow-458: the row holds the Edit control only (the sow-323 Approve button retired with editorial review).
+const hasTools = Boolean(editHref);
 ---
 <section class="art-shell band">
   <div class="art-j-grid art-wrap">
@@ -52,7 +50,6 @@ const hasTools = Boolean(editHref) || isApprovable(d.visibility);
               Edit
             </a>
           )}
-          <ApprovePill type="post" owner={d.author} slug={d.slug} visibility={d.visibility} />
         </div>
       )}
       <h1 data-gbti-region="title" class="art-j-title">{d.title}</h1>

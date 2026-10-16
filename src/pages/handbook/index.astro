@@ -76,8 +76,8 @@ const sections = [
             perks: follow the news feed, save favorites, build collections, follow members and topics.
             <strong>{tierDisplay('member')?.label ?? 'Network Supporter'}</strong> adds commenting across the
             network, the full Discord community, member-only content, the member Shares stream, and
-            publishing your own articles, projects, and prompts. Published work goes out to members first,
-            and a superadmin reviews it before it appears on the public site. The
+            publishing your own articles, projects, and prompts. Published work is live when you publish it,
+            public by default or for members only if you choose. The
             <a href="/membership/">membership page</a> has pricing and the complete comparison.</p></div>
           <div class="blk" data-blk><p>The <a href="/extension/">browser extension</a> is optional. It
             adds a new tab feed, a reader that keeps you inside the extension while you browse, and a quick way
@@ -157,14 +157,14 @@ const sections = [
             the canonical repository through GBTI's own GitHub App. The website, the extension and the agent
             server all publish this way.</p></div>
           {/* sow-323: publishing is no longer a tier above the membership. Every paid member publishes, and
-              what gates the PUBLIC site is editorial review by a superadmin, not a plan. */}
+              editorial review is retired (owner, 2026-10-16): what a member publishes is live when they publish it. */}
           <div class="blk" data-blk><p>Publishing is included in the paid membership. On a free account you can
             write and keep drafts, and nothing you stage reaches the public repository until you join. When
             you do, your staged drafts are there waiting to publish.</p></div>
-          <div class="blk" data-blk><p>What you publish goes out to members first. A superadmin then reviews
-            it, and it appears on the public site once that review passes. Profiles and comments are exempt
-            from that review. The full explanation of how the content platform works, the revenue program
-            included, is at <a href="/submit-content/">/submit-content/</a>.</p></div>
+          <div class="blk" data-blk><p>What you publish goes live once the site rebuilds, about 2 to 3 minutes
+            after you publish. Public is the default, and you can keep any piece for members only instead.
+            The full explanation of how the content platform works, the revenue program included, is at
+            <a href="/submit-content/">/submit-content/</a>.</p></div>
           <div class="blk" data-blk><p>Each member edits only their own work. A change to someone else's
             folder is held, and a superadmin decides whether it goes live.</p></div>
           <div class="blk" data-blk><p>Content can be public or members-only. Members-only supports a
@@ -280,8 +280,8 @@ const sections = [
             page, which opens that tab. Your <a href="/account/">account page</a> reaches the WorkBench through
             My Workbench, and in the extension Edit profile opens the same tab on the website. It
             publishes through the same pull request flow, and publishing a profile is included in the paid
-            membership; during a trial your changes are saved privately until you upgrade. A profile is exempt
-            from editorial review, so it is public as soon as the pull request merges.</p></div>
+            membership; during a trial your changes are saved privately until you upgrade. A profile is public
+            as soon as the pull request merges.</p></div>
           <div class="blk" data-blk><p>Fields you control: display name, headline, avatar (defaults to
             your GitHub avatar), a bio, specialties and skills, social links, a for-hire flag, and
             <code>directory: true</code> to opt in to the <a href="/members/">member directory</a>.

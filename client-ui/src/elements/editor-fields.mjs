@@ -47,34 +47,12 @@ export const withEditorFields = (Base) => class extends Base {
 
     // SOW-062 P6: visibility -> segmented switch + optional public-stub sub-block (publicStub is folded in here).
     if (f.kind === 'enum' && f.key === 'visibility') {
-      // sow-323: the audience is a superadmin's decision now, so most authors do not get a free switch. The
-      // decision is a pure function (audienceControl) because it has a case that loses an author their live
-      // page if it is wrong: an ALREADY public item must keep submitting `visibility: public`, or the author's
-      // own edit takes it down. The Worker agrees with this; see pathsNeedingApproval and approvedOnMain.
-      const aud = audienceControl({
-        paidTier: this._paidTier,
-        isSuperadmin: this._isSuperadmin === true,
-        currentVisibility: v,
-        existing: !!this.itemPath,
-      });
+      // sow-458: the audience is the author's own choice (editorial review retired 2026-10-16). A new item starts
+      // Public; Members only stays available. audienceControl is the one place that says so.
+      const aud = audienceControl({ currentVisibility: v });
       const isMembers = aud.value === 'members';
       const stubField = this.fields.find((x) => x.key === 'publicStub');
       const stubOn = this._presetBool('publicStub');
-      if (aud.mode !== 'switch') {
-        const icon = isMembers ? LOCK : GLOBE;
-        // sow-454 (reported by a member 2026-10-13): this read as a permanent state while the note right
-        // underneath said a superadmin reviews it for the public site, so he took the two as contradicting
-        // each other. The default itself is correct and deliberate (the one-plan model: items start
-        // members-only and a superadmin decides what goes public), so only the words changed. They now match
-        // audienceTag's label in workspace-core.mjs, which the WorkBench row has always used for the same item.
-        const word = isMembers ? 'Members only, in review' : 'Public';
-        return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Audience</label>
-          <div class="vislocked" data-vislocked>${icon} <b>${word}</b></div>
-          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
-          ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ''}
-          <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
-          <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
-      }
       return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Visibility</label>
         <div class="visswitch" data-visswitch data-active="${isMembers ? 'members' : 'public'}"><span class="vs-thumb"></span>
           <button class="vs-opt ${isMembers ? '' : 'on'}" data-vis="public" type="button">${GLOBE} Public</button>

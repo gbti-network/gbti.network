@@ -7,7 +7,6 @@
 import { esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { publishChanges, changeLabel, formatValue, snippet } from '../publish-diff.mjs'; // sow-327: what exactly is unpublished
-import { makePublicRequest, makePublicPrompt } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
 import { INFO, CHECK } from './editor-icons.mjs';
 
@@ -92,33 +91,6 @@ export const withEditorActions = (Base) => class extends Base {
     this.$('#publish')?.removeAttribute('hidden');
   }
 
-  /**
-   * sow-323 Phase 3: approve this item for the public site, in one confirmed action.
-   *
-   * It sends the item's PATH to the approval route and the Worker does the rest. It deliberately does NOT
-   * edit the open document first: the editor holds a members-only item with a teaser body, so submitting what
-   * is on screen with `visibility: public` published the teaser and left the real body encrypted and
-   * unreachable. The Worker decrypts it, reassembles the article and commits the whole thing.
-   */
-  // Reports through the editor's own chip and banner. It called a `setStatus` that was never defined (sow-293,
-  // 2026-09-03), so the button threw before it asked for the approval and did nothing at all (sow-430).
-  async _makePublic() {
-    const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
-    const req = makePublicRequest(this.itemPath);
-    if (!req) { this._banner('Save this item first, then it can be approved.', 'warn'); return; }
-    // eslint-disable-next-line no-alert
-    if (typeof confirm === 'function' && !confirm(makePublicPrompt(title))) return;
-    this._setChip('Approving...', 'busy');
-    try {
-      const res = await this.client?.decideEditorial?.(req);
-      if (res?.alreadyPublic) { this._setChip(''); this._banner('This item is already public.'); return; }
-      this._setChip(`${CHECK} Approved`, 'ok');
-      this._banner('Approved. It is public within a few minutes.');
-    } catch (err) {
-      this._setChip('');
-      this._banner(esc(err?.message || 'The approval did not go through. Try again in a minute.'), 'danger');
-    }
-  }
 
   /**
    * sow-327: show WHICH changes are unpublished, as an ordered list, and jump to the one you click.

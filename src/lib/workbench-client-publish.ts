@@ -10,6 +10,7 @@ import { buildContentFile, buildCommentFile, parseContentFile } from '../../clie
 import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
 import { planMemberFiles, AUTHOR_NOTE_TYPES, planPublishImageFiles, resolvePublishedAt, referencedImages, planImageRefs, normalizeImageFields, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, isForeignMemberPath } from './workbench-client-core.mjs';
 import { WorkbenchClientError, err } from './workbench-client-transport';
+import { staleEncDeletes } from '../../client/src/member-content.mjs'; // sow-458: members-only to public drops the old .enc
 
 const TYPE_LABEL: Record<string, string> = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
 
@@ -165,6 +166,9 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
     // overwrites the same .enc (no orphan). On a move it writes the NEW-location .enc; the OLD one is deleted below.
     const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
     const files: Array<{ path: string; content?: string | null; contentBase64?: string }> = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+    // sow-458: an item that stops being members-only drops its old encrypted body in the same pull request (a move
+    // deletes it in the move cleanup below instead).
+    if (!moved) files.push(...staleEncDeletes(oldFm?.encryptedBody, plan, built));
     const intro = buildIntroFile(target, user, built, authorNote);
     if (intro) files.push(intro);
     files.push(...skillPlan.files);

@@ -13,7 +13,7 @@ import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: a
 import { skillFilesForPublish, skillPathFor } from './skill-file.mjs'; // sow-109: a skill's SKILL.md travels with it
 import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
-import { splitMemberMarkdown, encAssetFor, encSkillAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
+import { splitMemberMarkdown, encAssetFor, encSkillAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER, staleEncDeletes } from './member-content.mjs';
 import { stripTrackingParamsInText } from './url-normalize.mjs'; // sow-364: the members path cleans its own body
 import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
 import { SIGNUP_BASE } from './signup-base.mjs';
@@ -264,6 +264,13 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     }
     // sow-109: a republish that sends no kind keeps the item's own (an existing skill stays a skill).
     if (type === 'prompt') { const k = kindForPublish(effInput.kind, priorFm?.kind); if (k) effInput.kind = k; }
+    // sow-458: a republish that does not say who reads it keeps the item's own audience. The add_* tools do not ask
+    // for `visibility`, and the schema default is public, so an agent rewriting a members-only item published it in
+    // the clear (found in review); the retired audience rule used to refuse that.
+    if (effInput.visibility === undefined && priorFm && (priorFm.visibility === 'members' || priorFm.visibility === 'public')) {
+      effInput.visibility = priorFm.visibility;
+      if (effInput.publicStub === undefined && typeof priorFm.publicStub === 'boolean') effInput.publicStub = priorFm.publicStub;
+    }
   }
   // sow-109 Phase 7: the encrypted skill-file pointer is the publish's to decide, never the caller's (a round-tripped
   // frontmatter could carry a stale one); the skill-file plan below writes it back when there is a file to point at.
@@ -343,7 +350,9 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
       if ((await ctx.reader?.readFile?.(oldIntro)) != null) renameFiles.push({ path: oldIntro, content: null });
     }
   }
-  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(skillPlan.files).concat(renameFiles);
+  // sow-458: an item that stops being members-only drops its old encrypted body in the same pull request.
+  const staleEnc = renaming ? [] : staleEncDeletes(priorFm?.encryptedBody, plan, built);
+  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(skillPlan.files).concat(renameFiles).concat(staleEnc);
   const r = await hostedAuthor({
     token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
     files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,

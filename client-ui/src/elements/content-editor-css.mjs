@@ -147,11 +147,6 @@ export const CONTENT_EDITOR_CSS = `
         .chip-neutral { background:var(--s-surface-3); color:var(--s-fg-soft); border-color:var(--s-line-2); }
         .visfield { padding-bottom:4px; }
         .visswitch { position:relative; display:grid; grid-template-columns:1fr 1fr; padding:4px; border-radius:7px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); margin-top:2px; }
-  /* sow-323: the locked audience state, for an author who does not choose it (most of them). Same box as
-     the switch so the rail does not jump when the control changes shape. */
-  .vislocked { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
-    border-radius:9px; background:var(--surface-2, var(--surface)); font-size:13.5px; }
-  .vislocked svg { width:15px; height:15px; flex:none; color:var(--muted); }
         .visswitch .vs-thumb { position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); border-radius:7px; background:var(--s-surface); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); transition:transform .18s cubic-bezier(.3,.7,.4,1); }
         .visswitch[data-active="members"] .vs-thumb { transform:translateX(calc(100% + 4px)); background:var(--s-tint); border-color:var(--s-tint-2); }
         .visswitch .vs-opt { position:relative; z-index:1; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 6px; border:0; background:transparent; font:inherit; font-size:13.5px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; }

@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
+import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { readStored } from '../storage.mjs'; // sow-347: a stored-setting read that cannot throw
 
@@ -453,9 +453,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
   _contentRow(it, i) {
     const g = glyphFor(null, it.type);
     const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
-    // sow-323 Phase 4: where this stands with the editorial review, told from the item itself. An approved
-    // item reads as public here, which is how the author is told in the WorkBench; a set-aside one is
-    // indistinguishable from one nobody has read yet, which is the owner's rule that a dismissal is silent.
+    // Who can read this item, told from the item itself (sow-458: the editorial review it used to report is retired).
     const aud = audienceTag(it);
     const vis = aud ? `<span class="tag" title="${esc(aud.title)}">${esc(aud.label)}</span>` : '';
     const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '', bt = buildingTag(it); // sow-454: bt = published but not rebuilt yet, so no public page and no View link
@@ -515,7 +513,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
     // SOW-075 / sow-316: the banner slot. A trial member (drafts only; publishing is paid) or a paid member below Curator
     // gets ONE banner, never both. sow-343: the onboarding card sits under it and hides itself once setup is done.
-    const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring()); // the copy decisions live in workspace-core
+    const tb = trialBanner(ov.membership, this._authoring()); // the copy decisions live in workspace-core
     const trialHtml = !tb ? ''
       : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div>`
         + `<a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;

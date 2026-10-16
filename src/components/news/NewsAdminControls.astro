@@ -9,7 +9,7 @@
 // it lands within the feed's five-minute cache. A weight is a pull request against a superadmin-pinned file, so
 // it lands with the next deploy. Presenting them as one instant action would be a lie about the second.
 //
-// The card is static, hidden, and revealed client-side from the member signal, exactly as ApprovePill.astro is:
+// The card is static, hidden, and revealed client-side from the member signal, exactly as ApprovePill.astro was (retired with editorial review, sow-458):
 // these pages are cached, so nothing about the viewer can be baked in at build. This is presentation only. The
 // Worker re-checks superadmin on every call, and an admin, a news editor or a forged signal gets a 403 and
 // changes nothing.

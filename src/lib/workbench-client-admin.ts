@@ -143,13 +143,5 @@ export function adminMethods({ workerGet, workerPost, workerPatch, isSuperadmin 
     inviteList() { return workerGet('/membership/admin/invites'); }, // { ok, invites }
     inviteCreate(args: any = {}) { return workerPost('/membership/admin/invites', args); }, // { campaign, note?, expiresAt? }
     inviteUpdate(args: any = {}) { return workerPatch('/membership/admin/invites', args); }, // { code, action: 'revoke'|'note', note? }
-
-    // sow-323: the EDITORIAL REVIEW QUEUE. Same disposition as the invites above and for the same reason: a
-    // queue record is per-person state about work in progress, so it is KV per the storage boundary. The
-    // decision opens no pull request from HERE either: the Worker does the commit, because only the Worker
-    // holds the key that can read an encrypted members-only body. Both gate at authorizeSuperadmin, because
-    // approving publishes a member's work to the open web.
-    editorialQueue() { return workerGet('/membership/admin/editorial'); }, // sow-323 { ok, items }
-    decideEditorial(args: any = {}) { return workerPost('/membership/admin/editorial', args); }, // { path, decision }
   };
 }

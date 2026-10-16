@@ -17,7 +17,7 @@ const paidLabel = tierDisplay('member')?.label ?? 'paid member'; // the fallback
     <div class="wrap mcp-wrap">
       <p class="eyebrow">WorkBench</p>
       <h1 class="h1 mt12">MCP Server</h1>
-      <p class="lead">Let an AI agent such as Claude Code draft, validate and publish your GBTI content through the same review flow as the WorkBench. The server ships inside the extension package; nothing else to install beyond Node.</p>
+      <p class="lead">Let an AI agent such as Claude Code draft, validate and publish your GBTI content through the same publishing flow as the WorkBench. The server ships inside the extension package; nothing else to install beyond Node.</p>
       <p class="mcp-back"><a class="link" href="/workbench/">Back to the WorkBench</a></p>
 
       <div class="mcp-gate" data-mcp-gate>
@@ -61,7 +61,7 @@ const paidLabel = tierDisplay('member')?.label ?? 'paid member'; // the fallback
 
       <div class="mcp-tools mt40" data-mcp-steps hidden>
         <h2 class="h2">What the server can do</h2>
-        <p class="body-sm muted">{toolCount} tools, read from the server's own definitions when this page is built. Publishing goes through the same gate as the WorkBench: an active paid membership. What you publish reaches members first, and becomes public after <a class="link" href="/submit-content/">editorial review</a>.</p>
+        <p class="body-sm muted">{toolCount} tools, read from the server's own definitions when this page is built. Publishing goes through the same gate as the WorkBench: an active paid membership. What you publish goes live once the pull request merges and the site rebuilds, which takes about 2 to 3 minutes. See <a class="link" href="/submit-content/">how publishing works</a>.</p>
         <div class="mcp-groups">
           {groups.map((g) => (
             <div class="mcp-group">

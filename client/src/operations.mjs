@@ -97,8 +97,6 @@ export {
   listAuthorTargets, // sow-403
   getCouponUsageOp,
   listInvitesOp,
-  listEditorialOp,
-  decideEditorialOp,
   createInviteOp,
   updateInviteOp,
   prepareListingOp, // sow-427: a prepared project listing and its invitation link (superadmin)

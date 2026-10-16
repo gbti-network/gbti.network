@@ -85,16 +85,15 @@ export function optimisticShareItem({ res, input = {}, body = '', now = null } =
 // element's own branch names across test/ returned zero files, with a positive control confirming the search
 // reached them, so the tier gate the owner just tightened was resting on nothing.
 //
-// THE AFFORDANCE IS NOT THE BOUNDARY, and that is deliberate rather than an oversight. The server decides: the
-// Worker's audience rule (workers/signup/membership-audience.mjs) refuses a public share from anyone but a
-// superadmin, on both publish routes. This function exists so a member does not compose an entire Share and meet
-// the wall AFTER submitting. Removing it would degrade the experience; it would not open a hole.
+// THE AFFORDANCE IS NOT THE BOUNDARY, and that is deliberate rather than an oversight. The server decides who may
+// post at all (paid, own folder). This function exists so a member does not compose an entire Share and meet the
+// wall AFTER submitting. Removing it would degrade the experience; it would not open a hole.
 export const SHARE_LOCKED_STATES = new Set(['expired', 'cancelled', 'none', 'banned']);
 
 /**
  * sow-293 INVERTED this gate, by owner ruling of 2026-09-03. It used to withhold the WHOLE composer from a
- * paid member below Content Creator (the sow-218 `not-creator` splash). Sharing is now open to every paid
- * member; only the Public audience is restricted, to superadmins (sow-323, see canSharePublicly below).
+ * paid member below Content Creator (the sow-218 `not-creator` splash). Sharing is open to every paid member, and
+ * since sow-458 (2026-10-16) so is the Public audience (see canSharePublicly below).
  *
  * @returns {'no-client'|'loading'|'locked'|'trial'|'composer'}
  */
@@ -117,23 +116,15 @@ export function composerHoldsWork({ editing = false, values = [] } = {}) {
 }
 
 /**
- * sow-323 Phase 3: may this viewer choose PUBLIC for a share?
+ * May this viewer choose PUBLIC for a share?
  *
- * Owner, 2026-09-15: "Only superadmins can make shares public though, so don't even give members the option on
- * creation." So the Public choice is offered to a SUPERADMIN, and otherwise only to keep a share that is ALREADY
- * public public while its author edits it (an approved share must not be taken down by its author's typo fix, and
- * the Worker admits that edit through approvedOnMain). A trusted author does not get it: that tier waives review
- * for articles, projects and prompts, not for shares.
- *
- * FAILS CLOSED on an absent role now. It used to fail open on an absent tier so a down status oracle could not
- * strip public posting from a trusted author, but the only people who may post a public share are superadmins,
- * and the Worker refuses everyone else (membership-audience.mjs), so offering the option on an unknown role would
- * only offer something the server then refuses.
+ * sow-458 (owner, 2026-10-16): "It is published when the person publishes it." Any member who may post a share may
+ * post it public, and Public is the composer's default. It used to be a superadmin's choice alone (sow-323, owner
+ * 2026-09-15), with the Worker refusing everyone else; that rule is retired. `role` and `editingPublic` are still
+ * accepted so existing callers do not change, and no longer narrow anything.
  */
-export function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
-  if (SHARE_LOCKED_STATES.has(membership) || membership === 'trialing') return false;
-  if (editingPublic === true) return true;
-  return role === 'superadmin';
+export function canSharePublicly({ membership } = {}) {
+  return !(SHARE_LOCKED_STATES.has(membership) || membership === 'trialing');
 }
 
 // ---- sow-304: editing a published share ----------------------------------------------------------------------

@@ -118,6 +118,10 @@ export function buildContentFile({ type, username, input, body = '', scope = 'me
 
   const schema = schemaFor(type);
   const cleaned = sanitizeInput(type, input, username, { author: target.author });
+  // sow-458: the locked-page flag means nothing on a public item, and validate-content refuses the pair (remediation
+  // then drafts the item). Every author has the Public / Members switch now, so "turn on the stub, switch back to
+  // Public" is reachable by anyone; drop the flag here, once, for every host.
+  if (cleaned.visibility !== 'members' && 'publicStub' in cleaned && type !== 'share' && type !== 'comment') delete cleaned.publicStub;
 
   const result = schema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError(type, result.error.issues);

@@ -80,7 +80,7 @@ cta:
   enabled: false
   body: >-
     A {plan} membership adds comments on any item, the members Discord, and publishing your own articles,
-    projects and prompts: members first, public after editorial review.
+    projects and prompts, live on the site when you publish them.
   link_label: What membership includes
   link_url: /membership/
 sponsor:

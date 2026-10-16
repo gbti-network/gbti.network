@@ -180,27 +180,6 @@ export async function inviteAdminRequest({ token, signupBase, method = 'GET', bo
   return data;
 }
 
-/**
- * sow-323: the editorial review queue, over the bearer token (the extension and npm hosts). The website uses
- * the cookie session against the same routes; the Worker accepts both (`allowCookie`).
- *
- * One function for both verbs, matching inviteAdminRequest above and for the same reason: they share a URL,
- * a gate and an error shape, and splitting them means two copies of the same six lines drifting apart.
- *
- * The Worker gates BOTH at authorizeSuperadmin, because approving an item PUBLISHES it to the open web.
- */
-export async function editorialAdminRequest({ token, signupBase, method = 'GET', body = null, fetch = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError('not signed in');
-  const res = await fetch(trimBase(signupBase) + '/membership/admin/editorial', {
-    method,
-    headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  let data = null;
-  try { data = await res.json(); } catch { /* ignore */ }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
-  return data;
-}
 
 /**
  * sow-427: a refusal from the prepared-listing routes. Unlike the AdminClientError the transports above throw, it

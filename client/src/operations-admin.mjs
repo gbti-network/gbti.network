@@ -9,7 +9,7 @@ import { fetchStripeStatus } from './membership.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance, preparedAdminRequest, stagePreparedImage } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, postAdminGovernance, preparedAdminRequest, stagePreparedImage } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 import { SITE_BASE } from './account-ops.mjs';
 import { claimLink, isListingId, isListingImageName, validateSuggestedNote, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
@@ -118,33 +118,6 @@ export async function getCouponUsageOp(ctx) {
  * requireAdmin runs HERE as well as at the Worker on purpose: the local gate gives a useful error to a
  * non-admin instead of a 403 from a network call, and the Worker remains the real boundary.
  */
-/**
- * sow-323: the editorial review queue. requireAdmin here is the CLIENT-SIDE affordance; the Worker gates at
- * authorizeSuperadmin, which is stricter and is the real boundary. Keeping the local check at admin rather
- * than duplicating a superadmin test avoids a second role rule that could drift from the Worker's.
- */
-export async function listEditorialOp(ctx) {
-  await requireAdmin(ctx);
-  const token = ctx.store?.get?.('githubToken');
-  if (!token) throw new OperationError('not-authenticated', 'sign in first');
-  try {
-    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'GET', fetch: ctx.fetch ?? globalThis.fetch });
-  } catch (err) {
-    throw new OperationError('admin-op-failed', err?.message || 'could not read the review queue');
-  }
-}
-
-/** sow-323: decide one item. Approving COMMITS the item as public; the Worker does that before it records. */
-export async function decideEditorialOp(ctx, body = {}) {
-  await requireAdmin(ctx);
-  const token = ctx.store?.get?.('githubToken');
-  if (!token) throw new OperationError('not-authenticated', 'sign in first');
-  try {
-    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'POST', body, fetch: ctx.fetch ?? globalThis.fetch });
-  } catch (err) {
-    throw new OperationError('admin-op-failed', err?.message || 'could not record the decision');
-  }
-}
 
 export async function listInvitesOp(ctx) {
   await requireAdmin(ctx);

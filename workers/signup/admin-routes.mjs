@@ -9,9 +9,7 @@ import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-1
 import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } from './membership-invites-admin.mjs'; // sow-231
 import { membershipPreparedGet, membershipPreparedPost } from './membership-prepared-admin.mjs'; // sow-427: prepared project listings (superadmin)
 import { preparedFinalizeHook } from './membership-claim.mjs'; // sow-427: finalize claims as the manager loads
-import { editorialList, editorialDecide } from './membership-editorial.mjs'; // sow-323: the editorial review queue
 import { newsItemDecide, newsRemovedList } from './membership-admin-news.mjs'; // sow-338: superadmin news removal
-import { sendEditorialApprovedEmail } from './editorial-alert.mjs'; // sow-323
 import { membershipMemberLookup } from './membership-member-lookup.mjs'; // sow-331: the superadmin member lookup
 import { membershipAdminCtaPool } from './membership-admin-ctas.mjs'; // sow-281: the CTA registry pool read (superadmin)
 import { membershipAdminSkillInstallPool } from './membership-admin-skills.mjs'; // sow-109: Skill install, every tool and its steps (superadmin)
@@ -108,9 +106,6 @@ export async function handleAdminRoutes(request, env, ctx, { pathname, method })
     }
   }
 
-  // sow-323: the superadmin EDITORIAL REVIEW QUEUE. Every member article, project and prompt starts
-  // members-only and a superadmin decides what becomes public (owner, 2026-09-12), so listing shows work
-  // waiting and deciding PUBLISHES it. Both sit at the superadmin bar. Never cached.
   // sow-338: a superadmin removes one news story from the index, or puts it back. KV, not a pull request,
   // so it lives in its own module beside the news store rather than with the file-editing actions.
   if (pathname === '/membership/admin/news-item') {
@@ -126,27 +121,8 @@ export async function handleAdminRoutes(request, env, ctx, { pathname, method })
     }
   }
 
-  if (pathname === '/membership/admin/editorial') {
-    const cors = corsHeaders(request, env, { credentials: true });
-    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (method === 'GET') {
-      const r = await editorialList(request, env, { allowCookie: true });
-      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-    }
-    if (method === 'POST') {
-      // The author notice is injected rather than fired here, because it must go AFTER the record is
-      // stored and only on an approval; the route holds that order and this only supplies the send.
-      const r = await editorialDecide(request, env, {
-        allowCookie: true,
-        notifyAuthor: (record) => {
-          const send = sendEditorialApprovedEmail(env, record);
-          if (ctx?.waitUntil) { ctx.waitUntil(send); return undefined; }
-          return send;
-        },
-      });
-      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-    }
-  }
+  // sow-458: /membership/admin/editorial (the sow-323 editorial review queue and its approve action) is retired with
+  // editorial review (owner, 2026-10-16). A member's work is public when they publish it.
 
   // sow-231: admin-gated ISSUED INVITES. A campaign (house/coupons.yml) says what an invite is worth; an
   // invite (KV) says who we handed one to. Same credentialed-CORS + allowCookie treatment as coupon-usage

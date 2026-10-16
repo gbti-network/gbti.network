@@ -14,7 +14,7 @@ import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 1b: bearer-or-cookie identity choke point
 import { deriveMembership } from '../../membership/derive-status.mjs';
 import { effectiveStatus, bansFromParsed, rolesFromParsed, grandfathersFromParsed } from '../../membership/overrides-core.mjs';
-import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-185: the paid tier axis
+import { TIER } from '../../membership/tiers.mjs'; // sow-185: the paid tier axis
 import { buildEnvPriceTierMap, resolveEffectiveTier, grantTier } from '../../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { decryptAssetText, encryptAsset } from '../../client/src/crypto-assets.mjs';
@@ -122,33 +122,8 @@ export async function authorizePaid(request, env, deps = {}) {
   return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status, tier: r.tier, via: r.via }; // SOW-061 tier; sow-158 P3a via
 }
 
-/**
- * sow-185: authorize a CONTENT CREATOR caller (the WRITE / publish routes: encrypt, open-pull, hosted author).
- * Effective-paid AND effective TIER >= creator.
- *
- * sow-301 CORRECTION, 2026-09-01. This docstring used to say "A grandfathered / staff account resolves to
- * creator ... so it is admitted" and "INERT until the owner maps the $5 price". BOTH WENT FALSE and the
- * comment is why nobody noticed: a STAFF account still resolves to creator, but every one of the 22 entries
- * in house/grandfathered.yml now carries an explicit `tier: member` after the Q15 stamping pass, so
- * grandfathered accounts are DENIED here. This gate has not been inert since that stamp landed.
- *
- * A $5 Network Member is denied with an upgrade message; a non-paid caller gets the paid-required message.
- * Defense-in-depth OPEN-time gate; classify-pr is the merge boundary.
- */
-export async function authorizeCreator(request, env, deps = {}) {
-  const r = await resolveEffective(request, env, deps);
-  if (!r.ok) return r;
-  if (r.status === 'banned') return deny('this account is not permitted');
-  if (!meetsTier(r.tier, TIER.creator)) {
-    return deny(r.status !== 'paid'
-      ? 'an active paid membership is required'
-      // sow-323: the Curator tier is no longer applied for. It is granted silently by a superadmin, so there is
-      // nowhere to send someone and nothing for them to fill in; what they CAN do is publish to members and let
-      // the editorial review queue carry it forward.
-      : `publishing straight to the public site is reserved for trusted authors. Publish this to members only and a superadmin reviews it: https://gbti.network/submit-content/`);
-  }
-  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status, tier: r.tier, via: r.via };
-}
+// sow-458: authorizeCreator (the trusted-author publish gate, sow-185/sow-323) is retired with editorial review. It had
+// no callers since sow-323; a paid member publishes public directly now.
 
 /**
  * SOW-060: authorize any SIGNED-IN, non-banned caller (the FREE / member tier). Thin wrapper over resolveEffective:

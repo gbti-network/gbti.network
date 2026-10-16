@@ -29,7 +29,7 @@ test('granting the trusted-author tier requires superadmin', () => {
   assert.ok(guard, 'the superadmin check on the trusted-author grant is missing');
   const after = SRC.slice(guard.index, guard.index + 320);
   assert.match(after, /403/, 'it must refuse, not warn');
-  assert.match(after, /only a superadmin can make a member a trusted author/,
+  assert.match(after, /only a superadmin can grant the Curator level/,
     'the refusal must say who may do this, or an admin reads it as a bug');
 });
 

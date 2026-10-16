@@ -4,7 +4,7 @@
 // the decrypt/encrypt round-trip. Injected fetchUser + Stripe + KV: no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeCreator, authorizeMember, authorizeMemberCheap, authorizeSignedIn, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
+import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, authorizeMemberCheap, authorizeSignedIn, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
 import { encryptAsset, generateEpochKey } from '../client/src/crypto-assets.mjs';
 import { signSession } from '../workers/signup/session.mjs'; // sow-158 Phase 3b: sign a website session for the cookie-encrypt tests
 import { CSRF_COOKIE, CSRF_HEADER } from '../workers/signup/csrf.mjs';
@@ -290,110 +290,52 @@ test('authorizeSignedIn: a free (none) member is admitted; no token -> 401; a st
   assert.equal((await authorizeSignedIn(POST('news', 'Bearer g'), ENV({}, null), deps('9', () => null))).status, 403);
 });
 
-// sow-185: authorizeCreator gates the WRITE routes (encrypt / open-pull / hosted-author) to the Curator tier.
-// The tier resolves override-aware from resolveEffective; INERT until the owner maps the $5 price (with no
-// price env every paid sub is creator via the legacy single-price mode).
+// sow-185: the paid TIER resolves override-aware from resolveEffective, and authorizePaid reports it. These cases used to
+// run through authorizeCreator, the trusted-author publish gate; sow-458 retired that gate with editorial review
+// (2026-10-16), but the tier still decides the Curator badge (the Discord Creator role), so how it resolves is pinned
+// here through the check that reports it.
 const PRICE_ENV = { STRIPE_PRICE_MEMBER_MONTHLY: 'price_m', STRIPE_PRICE_CREATOR_MONTHLY: 'price_c' };
 const paidAt = (priceId) => ({ id: 'c', metadata: { github_id: '1' }, subscriptions: { data: [{ status: 'active', created: 1, items: { data: [{ price: { id: priceId } }] } }] } });
+const tierOf = async (env, d) => { const r = await authorizePaid(POST('encrypt', 'Bearer g'), env, d); assert.equal(r.ok, true, JSON.stringify(r.body)); return r.tier; };
 
-// Rewritten 2026-08-11. This asserted that with NO price env a paid member resolves to creator and is
-// admitted, calling it "no regression". That was the sow-185 fail-open: an unconfigured env granted the
-// HIGHEST tier. It has been removed from tierForPrice, so an empty price map now grants nothing.
-//
-// This is not a production behaviour change: `[env.production.vars]` in wrangler.toml carries all four tier
-// price ids plus the legacy STRIPE_PRICE_ID, so the Worker's map has never been empty. The env this test
-// described was the TEST's env, not production's.
-test('authorizeCreator: with NO price env, a paid member is DENIED rather than granted creator', async () => {
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(), deps('1', () => paid));
-  assert.equal(r.ok, false, 'an unconfigured price map must not confer the top tier');
-  assert.equal(r.status, 403);
+test('tier: with NO price env, a paid member is never granted creator (the sow-185 fail-open stays closed)', async () => {
+  assert.notEqual(await tierOf(ENV(), deps('1', () => paid)), 'creator');
 });
 
-test('authorizeCreator: with the legacy price mapped, a legacy paid member is now DENIED (owner ruling 2026-09-02)', async () => {
-  // BEHAVIOUR CHANGE, and this test's whole PREMISE changed rather than its wording. It previously read "a
-  // legacy paid member is still admitted" and called that "the real no-regression case ... everyone on the
-  // original $150 price keeps creator". The owner ruled on 2026-09-02 (sow-185) that the legacy $150 annual
-  // maps to MEMBER, so a legacy subscriber is no longer a Content Creator and the creator-gated routes
-  // (encrypt, publish) refuse them. That is the ruling's intended consequence, not a regression.
-  //
-  // Measured before the change: ZERO Stripe subscriptions sit on the legacy price, so no live member is
-  // affected. If one ever appears and should keep creator, an explicit priceTiers entry overrides the seed.
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ STRIPE_PRICE_ID: 'price_legacy' }), deps('1', () => paidAt('price_legacy')));
-  assert.equal(r.ok, false, 'the legacy price now confers member, and member is below creator');
-  assert.equal(r.status, 403);
+test('tier: the legacy price resolves to member (owner ruling 2026-09-02)', async () => {
+  assert.equal(await tierOf(ENV({ STRIPE_PRICE_ID: 'price_legacy' }), deps('1', () => paidAt('price_legacy'))), 'member');
 });
 
-test('authorizeCreator: a $5 Network Member (member price) is DENIED, and told about review', async () => {
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('1', () => paidAt('price_m')));
-  assert.equal(r.ok, false);
-  assert.equal(r.status, 403);
-  assert.match(r.body.message, /reserved for trusted authors/);
+test('tier: the member price is member, the creator price is creator', async () => {
+  assert.equal(await tierOf(ENV(PRICE_ENV), deps('1', () => paidAt('price_m'))), 'member');
+  assert.equal(await tierOf(ENV(PRICE_ENV), deps('1', () => paidAt('price_c'))), 'creator');
 });
 
-test('authorizeCreator: a Curator (creator price) is admitted', async () => {
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('1', () => paidAt('price_c')));
-  assert.equal(r.ok, true);
-  assert.equal(r.tier, 'creator');
-});
-
-test('authorizeCreator: a TIERLESS grandfather now resolves to member and is DENIED creator (owner Q15); an explicit tier:creator is admitted', async () => {
-  // owner Q15 2026-08-18: a tierless grandfather grant defaults to member, so the 15 co-op comps lose the
-  // creator-gated write path. authorizeCreator denies them.
+test('tier: a TIERLESS grandfather is member (owner Q15); an explicit tier is honored either way', async () => {
   const tierless = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3' }] } });
-  const denied = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, tierless), deps('3', () => null));
-  assert.equal(denied.ok, false);
-  assert.equal(denied.status, 403);
-  assert.match(denied.body.message, /reserved for trusted authors/);
-  // the escape hatch: an explicit tier:creator grandfather still resolves creator and is admitted (override wins)
+  assert.equal(await tierOf(ENV(PRICE_ENV, tierless), deps('3', () => null)), 'member');
   const creator = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3', tier: 'creator' }] } });
-  const ok = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, creator), deps('3', () => null));
-  assert.equal(ok.ok, true);
-  assert.equal(ok.tier, 'creator');
+  assert.equal(await tierOf(ENV(PRICE_ENV, creator), deps('3', () => null)), 'creator');
+  const member = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3', tier: 'member' }] } });
+  assert.equal(await tierOf(ENV(PRICE_ENV, member), deps('3', () => null)), 'member');
 });
 
-test('authorizeCreator: a grandfathered member pinned to tier:member is DENIED (settable tier honored)', async () => {
-  const mirror = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3', tier: 'member' }] } });
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, mirror), deps('3', () => null));
-  assert.equal(r.ok, false);
-  assert.equal(r.status, 403);
-  assert.match(r.body.message, /reserved for trusted authors/);
+// sow-142: the coupon fast-path honors the campaign tier, and a legacy tierless grant is member (ruling 2026-08-24).
+test('tier: a member-tier coupon and a legacy tierless coupon both resolve to member', async () => {
+  for (const coupon of [{ tier: 'member' }, {}]) {
+    const mirror = freshMirror(); // create once, so generatedAt precedes resolveEffective's captured now
+    const grant = { until: new Date(Date.now() + 86_400_000).toISOString(), ...coupon };
+    const kv = { get: async (k) => (k === OVERRIDES_KV_KEY ? mirror : grant) };
+    assert.equal(await tierOf(ENV({ ...PRICE_ENV, SIGNUP_KV: kv }), deps('7', () => null)), 'member', JSON.stringify(coupon));
+  }
 });
 
-// sow-142: the coupon fast-path must honor the campaign tier, not assume creator. A member-tier campaign
-// (LINKEDINCONNECT) redeemer is a Network Member, so the write gate must DENY creator; a legacy tierless
-// grant still falls back to creator.
-test('authorizeCreator: a MEMBER-tier coupon redeemer is DENIED creator (sow-142; the fast-path honors grant.tier)', async () => {
-  const mirror = freshMirror(); // create once, so generatedAt precedes resolveEffective's captured now (avoids the ageMs<0 fail-closed guard)
-  const coupon = { until: new Date(Date.now() + 86_400_000).toISOString(), tier: 'member' };
-  const kv = { get: async (k) => (k === OVERRIDES_KV_KEY ? mirror : coupon) };
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ ...PRICE_ENV, SIGNUP_KV: kv }), deps('7', () => null));
-  assert.equal(r.ok, false, 'a member-tier coupon must not confer creator on the write gate');
-  assert.equal(r.status, 403);
-  assert.match(r.body.message, /reserved for trusted authors/, 'denied for TIER (creator-gated), not a fail-closed mirror error');
-});
-test('authorizeCreator: a legacy TIERLESS coupon redeemer is DENIED the creator gate (ruling 2026-08-24)', async () => {
-  // This test asserted the opposite until the owner ruled that "coupons ... should only offer membership
-  // rather than creator". A tierless grant now resolves to member, so the WRITE gate must refuse it.
-  //
-  // The direction matters more than the value. This is the gate that decides whether a caller may encrypt
-  // member-only content, so a wrong answer here is not a cosmetic badge: it is a non-creator being handed a
-  // creator-only capability. That is why the rewrite asserts the denial AND its reason, rather than just
-  // flipping `creator` to `member` and checking the tier field.
-  const mirror = freshMirror(); // create once, so generatedAt precedes resolveEffective's captured now (avoids the ageMs<0 fail-closed guard)
-  const coupon = { until: new Date(Date.now() + 86_400_000).toISOString() }; // no tier field
-  const kv = { get: async (k) => (k === OVERRIDES_KV_KEY ? mirror : coupon) };
-  const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ ...PRICE_ENV, SIGNUP_KV: kv }), deps('7', () => null));
-  assert.equal(r.ok, false, 'a tierless coupon confers member, which does not meet the creator gate');
-  assert.equal(r.status, 403);
-  assert.match(r.body.message, /reserved for trusted authors/, 'denied for TIER, not fail-closed on a mirror error');
-});
-
-test('authorizeCreator: a non-paid caller gets the paid-required message; a banned caller is not permitted', async () => {
-  const none = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('9', () => null));
+test('authorizePaid: a non-paid caller gets the paid-required message; a banned caller is not permitted', async () => {
+  const none = await authorizePaid(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('9', () => null));
   assert.equal(none.status, 403);
   assert.match(none.body.message, /paid membership/);
   const mirror = freshMirror({ bans: { bans: [{ github_id: '1' }] } });
-  const banned = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, mirror), deps('1', () => paidAt('price_c')));
+  const banned = await authorizePaid(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, mirror), deps('1', () => paidAt('price_c')));
   assert.equal(banned.status, 403);
   assert.match(banned.body.message, /not permitted/);
 });

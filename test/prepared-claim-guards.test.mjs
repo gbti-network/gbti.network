@@ -99,7 +99,8 @@ test('the claim POST reads `code` and `note` from its body and NOTHING else, and
 
 test('C1: the move left membership-author.mjs exporting exactly what it did, with one copy of the commit path', async () => {
   const m = await import('../workers/signup/membership-author.mjs');
-  assert.deepEqual(Object.keys(m).sort(), ['approvedOnMain', 'audienceRefusal', 'isCommentOnly', 'membershipAuthor', 'membershipAuthorTargets']);
+  // sow-458: audienceRefusal and approvedOnMain went with editorial review (2026-10-16); nothing else changed.
+  assert.deepEqual(Object.keys(m).sort(), ['isCommentOnly', 'membershipAuthor', 'membershipAuthorTargets']);
   const src = read('workers/signup/membership-author.mjs');
   assert.match(src, /import \{ readMembersIndex, commitHostedFiles \} from '\.\/hosted-commit\.mjs';/);
   assert.doesNotMatch(src, /function applyFile|function ghJson|function b64utf8|\/git\/refs/, 'no second copy left behind');

@@ -13,7 +13,6 @@
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { authorSelectValue } from '../workspace-core.mjs';
-import { oneClickPublicView } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { editorStatus, mediaSummary } from '../editor-core.mjs';
 import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
@@ -155,9 +154,6 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     try {
       const st = await this.client.status();
       membership = st?.membership ?? 'unknown';
-      // sow-323: the audience control needs the paid tier. Absent means "not a trusted author", which lands on
-      // the locked states rather than unlocking the switch (see audienceControl).
-      this._paidTier = st?.paidTier ?? null;
       // SOW-145: house content publishes directly (fork-staged house drafts are deferred), so Save-draft is
       // hidden in house scope; a superadmin editing a house item Publishes (which auto-merges via SOW-108).
       canStage = this.itemScope !== 'house' && (membership === 'unknown' || st?.canStageDrafts === true);
@@ -181,12 +177,6 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
         if (t && Array.isArray(t.members)) authorMembers = t.members;
       } catch { /* not superadmin, or unsupported on this host -- no Author section */ }
     }
-    // sow-323: the audience control needs the same superadmin signal the Author section uses, and it renders in
-    // a different method, so it is persisted rather than recomputed from a second, weaker role test. Note this
-    // is only attempted for an EXISTING item (authorTargets needs one), which is why the audience decision also
-    // accepts the paid tier: a superadmin resolves to the trusted-author tier through their role
-    // (membership/tier-gate.mjs), so they keep the free switch on a brand new item too.
-    this._isSuperadmin = authorMembers != null;
     // The item's own path is where it actually IS, and it is persisted with a draft; the frontmatter author is
     // not (it is not a form field, so gather() drops it on every save). Deriving from the path is what stops an
     // untouched picker from reading as "House / GBTI Network". See authorSelectValue.
@@ -283,21 +273,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
       this._ownerSelInitial = known ? ownerSelValue : '';
       const options = (known ? '' : opt('', 'Keep the current author', true))
         + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join('');
-      // sow-293: the one-click "make public" control lives in this SAME superadmin-gated section, because
-      // `authorMembers !== null` IS the superadmin signal (client.authorTargets only ever succeeds for one).
-      // Reusing that signal means there is no second, weaker role test to drift from this one.
-      const ocp = oneClickPublicView({
-        isSuperadmin: true, // reached only when authorMembers resolved, i.e. the caller is a superadmin
-        visibility: this.presetStr(this.preset?.input?.visibility),
-        itemPath: this.itemPath,
-      });
-      const ocpHtml = ocp === 'available'
-        ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
-             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>`
-        : ocp === 'already-public'
-          ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>`
-          : '';
-      return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
+      return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
     })() : '';
     // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
     const showStats = isPub && slug && ['post', 'project', 'prompt'].includes(this.type);
@@ -425,10 +401,6 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     this.on('#draft', 'click', () => this.doDraft());
     this.on('#preview', 'click', () => this.doPreview());
     this.on('#publish', 'click', () => this.doPublish());
-    // sow-323 Phase 3: one-click public is an EDITORIAL APPROVAL now, not a publish. It calls the approval
-    // route and the Worker rebuilds the item, because only the Worker holds the content key and only it can
-    // restore an encrypted members-only body. The Worker re-verifies superadmin; this control is the affordance.
-    this.on('#makepublic', 'click', () => this._makePublic());
     // sow-327: compare against the live file on demand. Never on render: it is a network read, and the
     // answer is only interesting when the author asks for it.
     this._changesOpen = false;

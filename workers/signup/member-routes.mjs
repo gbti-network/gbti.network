@@ -11,7 +11,7 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { inviteListingRead, inviteListingImage, inviteTitleRead } from './prepared-claim-read.mjs'; // sow-427: the signed-out read of a prepared listing by its code
 import { membershipClaimStatus, membershipClaimPost } from './membership-claim.mjs'; // sow-427: claiming a prepared listing
 import { sendListingClaimedAlert } from './listing-claimed-alert.mjs'; // sow-427: the owner notice when a claim merges
-import { sendEditorialQueueAlert } from './editorial-alert.mjs'; // sow-323
+import { sendNewItemsAlert } from './new-item-alert.mjs'; // sow-458: the owner is told when a member creates something
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
 import { handleOgPreview } from './membership-og.mjs';
@@ -62,16 +62,12 @@ function shoptalkCalendar(env) {
 }
 
 /**
- * sow-323: tell the owner that a publish put work into the editorial review queue.
- *
- * FIRED ONLY ON RECORDS ALREADY STORED. Both publish routes write the queue record before they open the pull
- * request and hand back exactly what they stored as `queued`, so a notice that fails costs the owner's
- * awareness of work waiting and never the work itself. Through waitUntil, so it never delays the response the
- * member is waiting on.
+ * sow-458: tell the owner that a member created an article, project, prompt or share. Through waitUntil, so it never
+ * delays the response the member is waiting on, and fail-soft (new-item-alert.mjs), so it never undoes the publish.
  */
-function queueAlert(env, ctx, queued) {
-  if (!Array.isArray(queued) || !queued.length) return;
-  const send = sendEditorialQueueAlert(env, queued);
+function newItemsAlert(env, ctx, created) {
+  if (!Array.isArray(created) || !created.length) return;
+  const send = sendNewItemsAlert(env, created);
   if (ctx?.waitUntil) ctx.waitUntil(send);
 }
 
@@ -410,7 +406,7 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (method === 'POST') {
       const r = await membershipAuthor(request, env, { allowCookie: true });
-      queueAlert(env, ctx, r.queued); // sow-323: fail-soft, and only on records already stored
+      newItemsAlert(env, ctx, r.created); // sow-458: fail-soft, after the publish
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
     }
   }

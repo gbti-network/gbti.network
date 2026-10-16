@@ -196,7 +196,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       sitemapFiles += 1;
       const xml = fs.readFileSync(f, 'utf8');
       for (const p of membersPaths) {
-        if (xml.includes(`${SITE_ORIGIN}${p}`)) errors.push(`members-only page in the sitemap: ${p} (${path.relative(root, f)}). It must not be advertised until a superadmin approves it. See sow-323.`);
+        if (xml.includes(`${SITE_ORIGIN}${p}`)) errors.push(`members-only page in the sitemap: ${p} (${path.relative(root, f)}). A members-only page is never advertised (sow-323); its author switches it to Public to list it (sow-458).`);
       }
     }
     notes.push(`sow-323: ${membersPaths.length} members-only page(s), checked against ${sitemapFiles} sitemap file(s) and every built page's links`);

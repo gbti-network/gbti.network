@@ -121,33 +121,21 @@ test('tierCta has no apply-only branch left, and still answers for every offered
   assert.equal(trusted.disabled, true);
 });
 
-test('the audience control: a trusted author chooses, a supporter does not, and an approved item STAYS public', () => {
-  assert.equal(audienceControl({ paidTier: 'creator' }).mode, 'switch');
-  assert.equal(audienceControl({ isSuperadmin: true }).mode, 'switch');
-  const supporter = audienceControl({ paidTier: 'member' });
-  assert.equal(supporter.mode, 'locked-members');
-  assert.equal(supporter.value, 'members');
-  assert.equal(supporter.publicStub, true, 'sow-323 Phase 3: a waiting item keeps its own locked page, the page it is approved from');
-  assert.equal(audienceControl({ paidTier: 'member', currentVisibility: 'members', existing: true }).publicStub, true,
-    'and an edit keeps it, where it used to strip it');
-  assert.equal(audienceControl({ paidTier: 'creator' }).publicStub, undefined, 'the switch leaves the flag to the author\'s own toggle');
-  // The editor must actually SUBMIT it: the locked branch renders the flag as a hidden, checked [data-key] input,
-  // which is what gather() reads. A source pin, because the element cannot be rendered under node --test.
-  assert.match(contentEditorSource(),
-    /aud\.publicStub === true \? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden \/>'/);
-  // THE CASE THAT LOSES A PAGE IF IT IS WRONG. The editor submits the whole frontmatter on every save, so an
-  // already-public item must keep submitting public or its author's typo fix takes the live page down.
-  const approved = audienceControl({ paidTier: 'member', currentVisibility: 'public', existing: true });
-  assert.equal(approved.mode, 'locked-public');
-  assert.equal(approved.value, 'public');
-  assert.equal(approved.publicStub, false, 'never the locked-page flag beside public, which the content check refuses');
-  // a NEW item claiming public is not grandfathered by claiming it
-  assert.equal(audienceControl({ paidTier: 'member', currentVisibility: 'public', existing: false }).value, 'members');
-  // an absent or unresolvable tier locks rather than unlocking: the safe direction for an affordance
-  for (const tier of [null, undefined, '', 'none', 'nonsense']) {
-    assert.equal(audienceControl({ paidTier: tier }).mode, 'locked-members', JSON.stringify(tier));
+// sow-458 (owner, 2026-10-16): editorial review is retired, so the audience is the author's choice again and the
+// locked states (sow-323) are gone. The case that loses a page if it is wrong still holds: the editor submits the whole
+// frontmatter on every save, so an item that is public must render the switch on Public or its author's own edit would
+// take the live page down.
+test('the audience control: every author chooses, a new item starts Public, and a public item STAYS public', () => {
+  for (const args of [{}, { currentVisibility: null }, { currentVisibility: '' }]) {
+    assert.deepEqual(audienceControl(args), { mode: 'switch', value: 'public', note: '' }, JSON.stringify(args));
   }
-  assert.deepEqual(AUDIENCE_MODES, ['switch', 'locked-public', 'locked-members']);
+  assert.equal(audienceControl({ currentVisibility: 'public' }).value, 'public');
+  assert.equal(audienceControl({ currentVisibility: 'members' }).value, 'members', 'a members-only item stays members-only until its author switches it');
+  // The retired arguments no longer change anything: a plain supporter gets the same switch a superadmin does.
+  assert.deepEqual(audienceControl({ paidTier: 'member', currentVisibility: 'members', existing: true }), audienceControl({ currentVisibility: 'members' }));
+  assert.deepEqual(AUDIENCE_MODES, ['switch']);
+  // The switch keeps the public-stub toggle beside Members only, so an author still chooses whether a locked page shows.
+  assert.match(contentEditorSource(), /<div class="tt">Leave a public stub<\/div>/);
 });
 
 test('the Submit content page exists, is linked from the footer, and binds its numbers', () => {

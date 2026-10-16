@@ -4,8 +4,11 @@
 // The owner asked for it in the same breath as collapsing the two paid plans (2026-09-12): a footer link to
 // "Submit content" that takes the reader to a page explaining how our content platform works, including the
 // revenue program. It is the honest front door to publishing, and it replaces the Curator application page,
-// which is retired: publishing is included in the paid membership now, and what a superadmin decides is which
-// work becomes PUBLIC.
+// which is retired: publishing is included in the paid membership now.
+//
+// EDITORIAL REVIEW IS RETIRED (owner, 2026-10-16): "It is published when the person publishes it." Work a paid
+// member publishes is live when they publish it, public by default, members only if the author chooses. This
+// page used to explain a members-first, superadmin-approved flow; do not reintroduce any sentence about review.
 //
 // EVERY NUMBER AND NAME ON THIS PAGE IS BOUND, NOT WRITTEN. The plan name comes from the tier registry
 // (house/membership-tiers.yml, superadmin-CODEOWNED) and the revenue splits from src/lib/membership.ts, which
@@ -14,8 +17,9 @@
 // The member dashboard already states these same numbers; disagreeing with it in public would be worse than
 // saying nothing.
 //
-// The editorial criteria are the OWNER'S, taken verbatim from their answer of 2026-09-12. Nothing here invents
-// a standard, a turnaround time, or a promise about what gets approved.
+// The five qualities below are the OWNER'S, taken verbatim from their answer of 2026-09-12, when they were the
+// approval criteria. With review retired they stay as guidance on what good work here looks like, not as a
+// gate. Nothing here invents a standard, a turnaround time, or a promise.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { tierDisplay } from '../../lib/tiers';
 import {
@@ -27,7 +31,7 @@ if (!paid) throw new Error('submit-content: house/membership-tiers.yml is missin
 const PLAN = paid.label;
 const PRICE = `$${paid.priceAnnual}/yr`;
 
-// The owner's approval criteria, 2026-09-12, in their terms. Do not add to this list without asking them.
+// The owner's words, 2026-09-12. Once approval criteria, now guidance only. Do not add to this list without asking them.
 const criteria = [
   ['Original work', 'Something you made, ran, or worked through yourself.'],
   ['Useful to a builder', 'Someone building the same kind of thing should come away able to act on it.'],
@@ -42,32 +46,32 @@ const steps = [
     p: 'The WorkBench on this site holds your articles, projects and prompts, and the editor you write them in. In the browser extension you can post a share directly, and its Submit content button opens the WorkBench editor here for an article, project or prompt. If you work with an AI agent, the MCP server lets it author through the same flow you do.',
   },
   {
-    h: 'Publishing sends it to members first',
-    p: 'When you publish, your work goes out to the members of the network straight away. Signed-in members read it in full. It is not listed on the public site, not in the public feeds, and not syndicated anywhere yet.',
+    h: 'Publish it and it is live',
+    p: 'When you publish, your work goes live on the network. There is no approval step in between. The site rebuilds in about 2 to 3 minutes, so give it a moment before you look for it.',
   },
   {
-    h: 'A superadmin reviews it for the public site',
-    p: 'One of the network superadmins reads it and decides whether it goes public. If it goes public, you get an email saying so. Nothing you wrote is deleted or altered by the review, and a piece that is not taken stays exactly where it is, readable by members.',
+    h: 'You choose who reads it',
+    p: 'Public is the default. A public piece can be read by anyone and appears in the public feeds. Choose Members only instead and the full piece is kept for members of the network. The choice is yours, piece by piece.',
   },
   {
-    h: 'Once it is public it stays yours',
-    p: 'You edit a published piece whenever you like and it stays public. It keeps the date you wrote it, so review time does not cost you your place in the feed.',
+    h: 'It stays yours',
+    p: 'You edit a published piece whenever you like, and it keeps the date you wrote it.',
   },
 ];
 ---
 
 <BaseLayout
   title="Submit content"
-  description={`How publishing works on the GBTI Network: write in the WorkBench, publish to members, and a superadmin reviews it for the public site. ${PLAN} membership includes publishing and a share of the revenue.`}
+  description={`How publishing works on the GBTI Network: write in the WorkBench, publish, and your work is live, public by default or for members only. ${PLAN} membership includes publishing and a share of the revenue.`}
 >
   <main class="sc-wrap">
     <header class="sc-head">
       <p class="sc-eyebrow">Submit content</p>
       <h1 class="h1">Publish your work on the network</h1>
       <p class="lead">
-        This is a developer co-op, and the content is the members. Anything you publish reaches the members of
-        the network immediately, and a superadmin reviews it before it appears on the public site. Reading is
-        free for everyone. Publishing is part of {PLAN} membership, at {PRICE}.
+        This is a developer co-op, and the content is the members. Anything you publish is live when you
+        publish it, public by default or for members only if you choose. Reading is free for everyone.
+        Publishing is part of {PLAN} membership, at {PRICE}.
       </p>
       {/* sow-394 (owner, 2026-09-24): the buttons follow who is reading. "Open the WorkBench" sent a signed-out
           reader to a sign-in wall, and a free account still cannot publish once there, so both see the plans
@@ -100,7 +104,7 @@ const steps = [
       <h2 class="h2" id="sc-what">What you can submit</h2>
       <p class="body">
         Articles, projects and prompts, plus shares, which are links worth reading with a note on why. Your
-        member profile is yours and needs no review. Comments are yours too, and go out as you write them.
+        member profile is yours, and so are your comments, which go out as you write them.
       </p>
       <p class="body">
         Your work lives in your own folder in a public git repository, as plain markdown with its images beside
@@ -110,8 +114,8 @@ const steps = [
     </section>
 
     <section class="sc-sec" aria-labelledby="sc-criteria">
-      <h2 class="h2" id="sc-criteria">What gets approved</h2>
-      <p class="body">A superadmin is looking for five things.</p>
+      <h2 class="h2" id="sc-criteria">What good work here looks like</h2>
+      <p class="body">These five things are what make a piece worth reading here.</p>
       <dl class="sc-crit">
         {criteria.map(([term, def]) => (
           <div class="sc-crit-row">
@@ -121,9 +125,7 @@ const steps = [
         ))}
       </dl>
       <p class="body sc-quiet">
-        A piece that is not taken for the public site is not a judgement on your writing, and it is not final.
-        It stays published for members, and you can rework it and publish again; a reworked piece comes back
-        for another read.
+        This is guidance, not a gate. You can rework a piece and publish it again whenever you like.
       </p>
     </section>
 
@@ -142,8 +144,8 @@ const steps = [
         rather than both.
       </p>
       <p class="body">
-        Earning starts when a piece is public, because the split follows visits to a public page. Payouts settle
-        after a {HOLD_DAYS} day hold and arrive through Stripe Connect.
+        The split follows visits to a public page, so a public piece can earn from the moment it goes live.
+        Payouts settle after a {HOLD_DAYS} day hold and arrive through Stripe Connect.
       </p>
       <p class="body">
         <a href="/revenue-model/">Read the full breakdown</a> for the worked example, every rule, and the
@@ -155,12 +157,12 @@ const steps = [
       <h2 class="h2" id="sc-faq">Questions</h2>
       <div class="sc-faq">
         <details>
-          <summary>How long does a review take?</summary>
-          <p class="body">There is no promised turnaround. The network is small and a superadmin reads every piece, so it depends on what else is in the queue. Your work is live for members the whole time.</p>
+          <summary>How soon is my piece live?</summary>
+          <p class="body">As soon as the site rebuilds, which takes about 2 to 3 minutes after you publish. There is no review step in between.</p>
         </details>
         <details>
-          <summary>Can I see my piece before it is public?</summary>
-          <p class="body">Yes. It has its own page from the moment you publish, and any signed-in member can read it in full. You can send another member the link.</p>
+          <summary>Can I keep a piece for members only?</summary>
+          <p class="body">Yes. Public is the default, and you can choose Members only for any piece you publish. The full piece is then kept for members of the network.</p>
         </details>
         <details>
           <summary>Do I have to publish to be a member?</summary>

@@ -260,29 +260,19 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
   return { ok: true, paths };
 }
 
-// ---- sow-323: which submitted content needs a superadmin's approval before it may be PUBLIC ----------------
+// ---- sow-458: the content items a publish writes ----------------------------------------------------------
 //
-// THE RULE THE OWNER ASKED FOR (2026-09-12): every member item starts members-only, and a superadmin decides
-// what becomes public. Publishing itself is open to any paid supporter now, so this is the only remaining
-// tier gate, and it is a gate on the AUDIENCE rather than on the act of publishing.
+// Until 2026-10-16 this section decided which items needed a superadmin's approval before they could be public
+// (sow-323). The owner retired that rule: "It is published when the person publishes it." What the Worker still
+// needs from a publish is which content ITEMS it writes, so it can tell a NEW item (the owner is emailed about it)
+// from an edit. It stays here, node-free and pure, so `node --test` exercises it; the Worker does the one thing a
+// pure function cannot, which is ask main whether an item's paths already exist.
 //
-// It lives here, node-free and pure, for the reason the share and image rules already live here: a boundary
-// buried in a Worker handler cannot be exercised by `node --test`, and this project has paid for that four
-// times. The Worker calls it and then does the one thing a pure function cannot, which is read main.
-//
-// FAIL CLOSED, and the direction matters. Anything this cannot positively confirm is members-only counts as
-// needing approval, including an UNREADABLE file and an ABSENT visibility field. The absent case is not a
-// detail: `src/content.config.ts` defaults visibility to `public` for post, project and prompt, so silence
-// means public, and a rule that admitted silence would admit everything.
-//
-// Comments and profiles are exempt BY CONSTRUCTION rather than by a carve-out: they do not live under any of
-// these four directories, so they never reach this function. That is the owner's decision of 2026-09-12 (a
-// profile is a supporter's presence, and paid access is what unlocks it; moderation flags stay the backstop).
+// Comments and profiles are not content items here: they do not live under these directories.
 
-/** The member-folder directories that hold reviewable content, and the content type each one carries. */
-// sow-323 Phase 3: products/ is the retired name of projects/ and still builds as a project (src/content.config.ts),
-// so leaving it out let a public project skip review by sitting in the old folder.
-export const REVIEWABLE_DIRS = Object.freeze({ posts: 'post', projects: 'project', products: 'project', prompts: 'prompt', shares: 'share' });
+/** The member-folder directories that hold content items, and the content type each one carries. products/ is the
+ *  retired name of projects/ and still builds as a project (src/content.config.ts). */
+export const CONTENT_ITEM_DIRS = Object.freeze({ posts: 'post', projects: 'project', products: 'project', prompts: 'prompt', shares: 'share' });
 
 /** The URL base a rename records in `redirectFrom`, per type, so an old slug can be recovered from it. */
 const RENAME_URL_DIR = Object.freeze({ post: 'articles', project: 'projects', prompt: 'prompts', share: 'shares' });
@@ -320,14 +310,30 @@ function redirectFromUrls(content) {
   }).filter(Boolean);
 }
 
+/** One frontmatter scalar, unquoted, bounded, control characters stripped. '' when absent. Titles are member text. */
+function frontmatterText(content, key, max = 200) {
+  const fm = typeof content === 'string' ? /^---\r?\n([\s\S]*?)\r?\n---/.exec(content) : null;
+  if (!fm) return '';
+  const m = new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(fm[1]);
+  if (!m) return '';
+  let v = m[1].trim();
+  if (/^[>|][-+]?$/.test(v)) { // a folded or literal block: the indented lines that follow
+    const after = fm[1].slice(m.index + m[0].length).split(/\r?\n/);
+    const lines = [];
+    for (const line of after.slice(1)) { if (/^\s+\S/.test(line)) lines.push(line.trim()); else if (line.trim()) break; }
+    v = lines.join(' ');
+  }
+  v = v.replace(/^(["'])(.*)\1$/, '$2').replace(/''/g, "'");
+  return v.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, max);
+}
+
 /**
- * The reviewable content files in this request that are NOT positively members-only, each with the repository
- * path it would have had before a rename (from `redirectFrom`), so the Worker can ask whether the item was
- * ALREADY public and therefore already approved.
- *
- * @returns Array<{ path, type, priorPaths: string[] }>  empty means nothing in this request needs approval.
+ * Every content item this request WRITES in `folder`, whatever its audience: `{ path, type, slug, visibility, title,
+ * priorPaths }`. `priorPaths` are the repository paths the item had before a rename (from `redirectFrom`), so the
+ * Worker can tell a renamed item from a new one. A delete writes nothing and is not listed. A skill's SKILL.md is
+ * listed as its item (the sibling index.md), once.
  */
-export function pathsNeedingApproval(files, folder) {
+export function contentItemsIn(files, folder) {
   if (!Array.isArray(files) || files.length === 0) return [];
   if (typeof folder !== 'string' || !folder) return [];
   const itemRe = new RegExp(`^members/${folder}/(posts|projects|products|prompts|shares)/(.+)$`);
@@ -335,33 +341,34 @@ export function pathsNeedingApproval(files, folder) {
   const isDelete = (f) => typeof f === 'object' && f !== null && f.content === null && f.contentBase64 == null;
   const out = [];
   const skillItems = [];
+  // An item is `<dir>/<slug>/index.md` or a flat `<dir>/<slug>.md` (the site's globs build both); a share is `shares/<id>.md`.
+  const itemTail = /^([a-z0-9][a-z0-9-]*)(?:\/index)?\.mdx?$/;
+  const slugOf = (dir, tail) => (itemTail.exec(tail) || [])[1] || tail.split('/')[0];
   for (const f of files) {
     const path = typeof f === 'string' ? f : f?.path;
     if (typeof path !== 'string' || path.includes('..')) continue;
     const m = itemRe.exec(path);
-    if (!m) continue;                                   // comments, profile.md, images, _enc: not reviewable
-    if (!/\.(md|mdx)$/.test(path)) continue;             // only the frontmatter-bearing file states an audience
-    // sow-323 Phase 3: a DELETE publishes nothing, so it never needs approval. It used to read as unreadable and be
-    // refused, which refused every rename or author move of a members-only item (the old path is deleted).
+    if (!m) continue;                                   // comments, profile.md, images, _enc: not content items
+    if (!/\.(md|mdx)$/.test(path)) continue;
     if (isDelete(f)) continue;
-    // sow-109: a skill's SKILL.md states no audience of its own. It is always public text, so it is judged by its
-    // item: the sibling index.md. Its own frontmatter is never read here, so a `visibility: members` line in it
-    // cannot wave a public file through, and a rename of an approved skill is judged by the approved item.
     const sk = skillRe.exec(path);
     if (sk) { skillItems.push(`${sk[1]}index.md`); continue; }
-    const type = REVIEWABLE_DIRS[m[1]];
+    if (!itemTail.exec(m[2])) continue; // an item's own file only (not a nested page or a note beside it)
+    const type = CONTENT_ITEM_DIRS[m[1]];
     const content = typeof f === 'string' ? null : f?.content;
-    if (statedVisibility(content) === 'members') continue;
-    out.push({ path, type, priorPaths: priorPathsOf(content, type, m[1], m[2], folder) });
+    out.push({
+      path, type, slug: slugOf(m[1], m[2]),
+      // A share's schema default is members (an article's is public), so an unstated share is members-only.
+      visibility: ['members', 'public'].includes(frontmatterText(content, 'visibility')) ? frontmatterText(content, 'visibility') : (type === 'share' ? 'members' : 'public'),
+      publicStub: frontmatterText(content, 'publicStub') === 'true',
+      title: frontmatterText(content, 'title') || frontmatterText(content, 'shortDescription') || frontmatterText(content, 'url'),
+      priorPaths: priorPathsOf(content, type, m[1], m[2], folder),
+    });
   }
-  // Each SKILL.md adds its item, with the prior paths the item's own index.md in this request records (a rename),
-  // unless that item is already on the list. A members-only index.md in the request does not waive it: the file is
-  // public either way, so the item must be approved on main.
   for (const indexPath of new Set(skillItems)) {
     if (out.some((o) => o.path === indexPath)) continue;
-    const sibling = files.find((f) => f && typeof f === 'object' && f.path === indexPath && typeof f.content === 'string');
     const m = itemRe.exec(indexPath);
-    out.push({ path: indexPath, type: 'prompt', priorPaths: sibling ? priorPathsOf(sibling.content, 'prompt', m[1], m[2], folder) : [] });
+    out.push({ path: indexPath, type: 'prompt', slug: slugOf(m[1], m[2]), visibility: 'public', publicStub: false, title: '', priorPaths: [] });
   }
   return out;
 }

@@ -1,6 +1,6 @@
 ---
 // sow-158 Part 3: the /account member hub. Signed-out visitors get the sign-in prompt; a signed-in member gets a
-// grid of membership surfaces, a Share composer (members-only by default), and the tier-gated community Shares
+// grid of membership surfaces, a Share composer (public by default since sow-458), and the tier-gated community Shares
 // stream. The composer + feed are the SAME client-ui components the extension uses, wired to the cookie-session
 // adapter (src/lib/workbench-client) -- no GitHub token in the page. noindex: a private, per-member surface.
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -99,7 +99,7 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
           </div>
           <div class="hub-card" data-share-card hidden>
             <h2 class="hub-h">Share with the community</h2>
-            <p class="hub-sub">Post a note or a link to the members stream. Members-only is the default; switch to public to share it on the site feed.</p>
+            <p class="hub-sub">Post a note or a link to the network. It is public on the site feed by default, or you can keep it for members only.</p>
             {/* Owner request: match the homepage share UX. The account page had the full four-step composer INLINE
                 (sow-218); the homepage uses a collapsed bar that opens the wizard in a modal. Reuse that exact bar +
                 the shared HomeShareModal (which holds the one <gbti-share-composer>). mountHub already injects the

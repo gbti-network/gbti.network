@@ -16,8 +16,7 @@ import { favoriteCount } from '../../lib/favorites';
 import { aliasSlugsOf } from '../../lib/content-index.mjs';
 import { breadcrumb, topKey } from '../../lib/taxonomy';
 import { coverDimensions } from '../../lib/article-page.mjs';
-import { contentRepoPath, isApprovable } from '../../lib/content';
-import ApprovePill from '../ApprovePill.astro';
+import { contentRepoPath } from '../../lib/content';
 
 interface Props {
   d: any; // CollectionEntry<'post'>['data']
@@ -37,8 +36,8 @@ const dims = coverDimensions('card');
 // build-time data; only visibility is a runtime decision (this component's own script block, below).
 const editPath = contentRepoPath('post', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(editPath)}` : null;
-// sow-323 follow-up: see ArticleJournal. One row for both superadmin controls, rendered when either applies.
-const hasTools = Boolean(editHref) || isApprovable(d.visibility);
+// sow-458: the row holds the Edit control only (the sow-323 Approve button retired with editorial review).
+const hasTools = Boolean(editHref);
 ---
 <section class="band art-c-band">
   <div class="wrap">
@@ -52,7 +51,6 @@ const hasTools = Boolean(editHref) || isApprovable(d.visibility);
               Edit
             </a>
           )}
-          <ApprovePill type="post" owner={d.author} slug={d.slug} visibility={d.visibility} />
         </div>
       )}
       {/* sow-399: superadmin tools (Manually syndicate). This layout has no rail, so they lead the card. */}

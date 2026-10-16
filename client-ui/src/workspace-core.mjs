@@ -626,69 +626,20 @@ export function visibleTiles(tiles, tabs, authoring, role) {
  * @returns {{headline: string, body: string, ctaLabel: string, ctaHref: string}|null} null = render nothing
  */
 /**
- * sow-316 Phase 2: a PAID member below the Curator tier is told, on the Overview and before they write, that
- * publishing needs Curator status and where to apply. Same shape and placement as trialBanner.
+ * The audience tag on one of the author's own published items.
  *
- * WHY THIS EXISTS. The WorkBench lock only catches lapsed accounts, so a basic paid member walks straight in,
- * writes, and is refused at the Worker with a message that until 2026-09-08 said "upgrade" although the tier
- * is granted by APPLICATION (sow-293), not purchase. Nothing told them before the refusal. A new member hit
- * exactly this in his first hour and reported it as "it asks me to log in again".
- *
- * sow-323 REPLACED WHAT THIS SAYS, and it is worth reading the two versions together, because the old copy is
- * how a wrong message survives: it told a paying supporter that publishing "needs Curator status, granted by
- * application", which was true when written and became false when the owner collapsed the two paid plans on
- * 2026-09-12. Publishing is included in the membership now. What a supporter needs to know before they write is
- * a different and smaller thing: their work goes out to members first, and a superadmin reviews it before it
- * appears on the public site. Nothing here asks them to buy or apply for anything.
- *
- * sow-323 Phase 4 corrected it once more. It promised the author would be "told either way", and there is no
- * decline email: a superadmin can set something aside silently and it simply stays members-only (owner,
- * 2026-09-15). Promising a message nobody sends leaves an author waiting for one, and reading its absence as
- * the review never having happened.
- *
- * Only for `paid` + a tier below the trusted-author level. A trial member gets trialBanner instead; a trusted
- * author gets nothing, because for them nothing waits.
- */
-/**
- * sow-323 Phase 4: where one of the author's own items stands with the editorial review.
- *
- * THE AUTHOR IS TOLD ABOUT APPROVALS, AND ONLY ABOUT APPROVALS (owner, 2026-09-15). This is the WorkBench half
- * of that: an approved item reads as public here, which is the whole message, and one still waiting says so
- * rather than showing a bare "members" tag that could mean anything.
- *
- * Derived entirely from the item itself, with no per-person state behind it. That is deliberate: a record of
- * what each author has already seen would be one more store to keep, and it would let a notice be "used up"
- * and vanish. The state of their work is the notice.
- *
- * A DISMISSAL IS INVISIBLE HERE, which is the point. A set-aside item is a published members-only item, the
- * same as one nobody has read yet, so this says the same thing about both. Anything else would be a decline
- * notice by implication, and the owner ruled there is none.
+ * sow-458 (owner, 2026-10-16): editorial review is retired, so the tag only says who can read the item. It used to
+ * say "members only, in review" (sow-323) and the WorkBench Overview carried a "Your work publishes to members first"
+ * banner (curatorBanner); both went with the review.
  *
  * @returns `{ label, title }`, or null when there is nothing worth saying (a draft, or an unpublished item).
  */
 export function audienceTag(item) {
   if (!item || item.status !== 'published') return null;
   if (item.visibility === 'members') {
-    return {
-      label: 'members only, in review',
-      title: 'Members read this now. A superadmin reviews it for the public site, and you are emailed if it goes public.',
-    };
+    return { label: 'members only', title: 'Only signed-in paying members read this. Switch it to Public in the editor to put it on the public site.' };
   }
-  return { label: 'public', title: 'This is on the public site. Your later edits stay public, and it keeps its original date.' };
-}
-
-export function curatorBanner(membership, paidTier, authoring) {
-  if (membership !== 'paid') return null;
-  if (paidTier === 'creator') return null; // the internal trust level: their work publishes without review
-  const headline = 'Your work publishes to members first';
-  const body = 'Everything you publish goes out to members straight away. A superadmin reviews it for the '
-    + 'public site, and you get an email if it goes public. A piece that is not taken stays published for members.';
-  return {
-    headline,
-    body: authoring ? `${body} You can keep writing in the meantime.` : body,
-    ctaLabel: 'How publishing works',
-    ctaHref: 'https://gbti.network/submit-content/',
-  };
+  return { label: 'public', title: 'This is on the public site. It keeps its original date when you edit it.' };
 }
 
 export function trialBanner(membership, authoring) {

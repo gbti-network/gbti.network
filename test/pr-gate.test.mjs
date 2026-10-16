@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluatePR, STATUS_CONTEXT, shouldAutoClose, shouldAutoMerge, CLOSE_LABELS, CLOSE_NUDGE } from '../scripts/pr-gate.mjs';
+import { evaluatePR, parseEvent, STATUS_CONTEXT, shouldAutoClose, shouldAutoMerge, CLOSE_LABELS, CLOSE_NUDGE } from '../scripts/pr-gate.mjs';
 import { buildPriceTierMap } from '../membership/tiers.mjs';
 
 // ---- fixtures --------------------------------------------------------------
@@ -75,6 +75,32 @@ test('paid member editing only their own folder -> success + paid (auto-merge)',
   assert.equal(d.label, 'paid');
   assert.equal(d.autoMerge, true);
   assert.equal(d.status, 'paid');
+});
+
+// 2026-10-16: editorial review is retired. The fixture above is a CREATOR price, which the old `held-for-review`
+// branch never touched, so it could not see the hold. This one is the supporter the hold was aimed at: a MEMBER-tier
+// author whose PR the publishing app did NOT open (the opener is the member, not the bot), read through the same
+// parseEvent the gate runs. Every reviewed content type must pass and auto-merge.
+test('member-tier supporter, own-folder content PR opened by hand (not the app) -> success + paid + auto-merge', async () => {
+  const MEMBER_PRICE = 'price_supporter';
+  const priceTierMap = buildPriceTierMap({ priceTiers: { [MEMBER_PRICE]: 'member' } });
+  const supporter = { id: 'cus_sup', metadata: { github_id: '100' }, subscriptions: { data: [{ status: 'active', created: 1, items: { data: [{ price: { id: MEMBER_PRICE } }] } }] } };
+  const handOpened = { number: 9, pull_request: { number: 9, user: { id: 100 }, head: { sha: 'h9', ref: 'my-post', repo: { id: 2, owner: { id: 100 } } }, base: { repo: { id: 1 } } } };
+  const ev = parseEvent(handOpened, '999');
+  assert.equal(ev.botOpened, false);
+  for (const paths of [
+    ['members/octocat/posts/hello/index.md', 'members/octocat/_enc/post-hello-body.enc'],
+    ['members/octocat/projects/tool/index.md'],
+    ['members/octocat/prompts/ask/index.md'],
+    ['members/octocat/shares/20261016120000-x.md'],
+  ]) {
+    const d = await evaluatePR({ author: ev.author, paths, overrides: overrides(), priceTierMap, stripe: fakeStripe({ 100: supporter }), now: NOW });
+    assert.equal(d.tier, 'member', paths[0]);
+    assert.equal(d.check, 'pass', paths[0]);
+    assert.equal(d.label, 'paid', `${paths[0]}: never held-for-review`);
+    assert.equal(d.autoMerge, true, paths[0]);
+    assert.equal(shouldAutoMerge(d, paths), true, paths[0]);
+  }
 });
 
 test('trial member content PR -> failure + rejected-not-paid (publishing is paid-only)', async () => {

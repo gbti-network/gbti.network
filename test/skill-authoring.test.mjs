@@ -9,8 +9,7 @@ import { planSkillFile, needsOldSkillFile, skillPathFor, skillFilesForPublish, s
 import { publish, saveDraft, readDraft, publishDraft, getContentItem, renameContent, authorContent } from '../client/src/operations.mjs';
 import { parseContentFile } from '../client/src/content-ops.mjs';
 import { applyDraftPut } from '../membership/member-drafts.mjs';
-import { pathsNeedingApproval } from '../membership/hosted-author.mjs';
-import { audienceRefusal } from '../workers/signup/membership-audience.mjs';
+import { contentItemsIn } from '../membership/hosted-author.mjs';
 import { draftRecordForEditor } from '../src/lib/workbench-client-core.mjs';
 import { madeForRows, toggleTarget, mainHeading, mainHeadingHtml, kindSectionHtml, skillSectionsHtml, skillFileFrom, siteFor, normalizeKind, SKILL_EDITOR_CSS } from '../client-ui/src/editor-skill.mjs';
 import { FIELDS } from '../client/src/form-fields.mjs';
@@ -165,29 +164,21 @@ test('the draft store keeps a skill file on the author-note terms, for prompts o
   assert.equal(draftRecordForEditor({}, 'alice').skillFile, null);
 });
 
-// ---- the Worker's audience rule ----------------------------------------------------------------------------------
+// ---- the Worker's view of a skill publish -------------------------------------------------------------------------
+// sow-458 retired the audience rule this section pinned (sow-323): nothing judges a skill's audience any more. What the
+// Worker still reads from a publish is WHICH ITEMS it writes, for the owner's "new item" email, and a SKILL.md must
+// count as its item (once), never as an item of its own, or a skill would be mailed twice or under the wrong path.
 
-test('the Worker judges SKILL.md by its item, never by its own frontmatter', async () => {
+test('the Worker counts a SKILL.md as its item, once, and follows a renamed skill to its old path', () => {
   const idx = (vis, extra = '') => `---\ntype: prompt\nkind: skill\nvisibility: ${vis}\n${extra}---\nbody\n`;
   const spoof = '---\nname: farley\nvisibility: members\n---\n# x\n';
   const P = 'members/alice/prompts/';
-  assert.deepEqual(pathsNeedingApproval([{ path: SK, content: spoof }], 'alice'), [{ path: IDX, type: 'prompt', priorPaths: [] }], 'a members line in SKILL.md waves nothing through');
-  assert.deepEqual(pathsNeedingApproval([{ path: IDX, content: idx('public') }, { path: SK, content: spoof }], 'alice'), [{ path: IDX, type: 'prompt', priorPaths: [] }], 'one entry per item');
-  assert.deepEqual(pathsNeedingApproval([{ path: IDX, content: idx('members') }, { path: SK, content: FILE }], 'alice'), [{ path: IDX, type: 'prompt', priorPaths: [] }], 'a plain file beside a members-only index still needs the item approved');
+  const pick = (files) => contentItemsIn(files, 'alice').map((i) => ({ path: i.path, type: i.type, priorPaths: i.priorPaths }));
+  assert.deepEqual(pick([{ path: SK, content: spoof }]), [{ path: IDX, type: 'prompt', priorPaths: [] }], 'a file alone stands for its item');
+  assert.deepEqual(pick([{ path: IDX, content: idx('public') }, { path: SK, content: spoof }]), [{ path: IDX, type: 'prompt', priorPaths: [] }], 'one entry per item');
   const rename = [{ path: `${P}farley-file/index.md`, content: idx('public', 'redirectFrom:\n  - /prompts/farley/\n') }, { path: `${P}farley-file/SKILL.md`, content: FILE }, { path: SK, content: null }];
-  assert.deepEqual(pathsNeedingApproval(rename, 'alice'), [{ path: `${P}farley-file/index.md`, type: 'prompt', priorPaths: [IDX] }]);
-  assert.deepEqual(pathsNeedingApproval([{ path: SK, content: null }], 'alice'), [], 'a delete publishes nothing');
-  const membersRename = [{ path: `${P}farley-file/index.md`, content: idx('members', 'redirectFrom:\n  - /prompts/farley/\n') }, { path: `${P}farley-file/SKILL.md`, content: FILE }];
-  assert.deepEqual(pathsNeedingApproval(membersRename, 'alice'), [{ path: `${P}farley-file/index.md`, type: 'prompt', priorPaths: [IDX] }], 'the item\'s own rename history counts for its file');
-
-  const approved = new Set([IDX]);
-  const check = async ({ paths }) => paths.every((p) => approved.has(p));
-  const run = (files) => audienceRefusal({ files, folders: ['alice'], tier: 'member', approvedCheck: check });
-  assert.equal(await run(rename), null, 'renaming an approved skill is allowed');
-  assert.equal(await run([{ path: SK, content: spoof }]), null, 'editing the file of an approved skill is allowed');
-  const fresh = [{ path: `${P}new/index.md`, content: idx('members') }, { path: `${P}new/SKILL.md`, content: spoof }];
-  assert.equal((await run(fresh))?.status, 403, 'a new skill cannot publish its file without approval');
-  assert.equal(await audienceRefusal({ files: fresh, folders: ['alice'], tier: 'creator', approvedCheck: check }), null, 'a trusted author can');
+  assert.deepEqual(pick(rename), [{ path: `${P}farley-file/index.md`, type: 'prompt', priorPaths: [IDX] }]);
+  assert.deepEqual(pick([{ path: SK, content: null }]), [], 'a delete writes nothing');
 });
 
 // ---- the website client ------------------------------------------------------------------------------------------

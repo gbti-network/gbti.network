@@ -62,19 +62,13 @@ test('shareComposerView: every membership and tier lands on the state the member
   assert.equal(v({ hasClient: true, membership: 'unknown', tier: null }), 'composer');
 });
 
-test('sow-323 canSharePublicly: only a SUPERADMIN chooses Public, and an already-public share keeps it while edited', () => {
+test('sow-458 canSharePublicly: every member who may post a share may post it public', () => {
   const p = (o) => canSharePublicly(o);
-  // Owner, 2026-09-15: "Only superadmins can make shares public though, so don't even give members the option on
-  // creation." The trusted tier waives review for articles, projects and prompts, NOT for shares.
-  assert.equal(p({ membership: 'paid', role: 'superadmin' }), true);
-  for (const role of ['member', 'moderator', 'admin']) {
-    assert.equal(p({ membership: 'paid', role }), false, `${role} gets no Public option`);
+  // Owner, 2026-10-16: "It is published when the person publishes it." Public was a superadmin's choice alone
+  // (sow-323, 2026-09-15); now the role does not narrow it, and an unknown role does not either.
+  for (const role of ['member', 'moderator', 'admin', 'superadmin', null, undefined, '']) {
+    assert.equal(p({ membership: 'paid', role }), true, JSON.stringify(role));
   }
-  assert.equal(p({ membership: 'paid', role: 'member', tier: 'creator' }), false, 'a trusted author gets no Public option for a share');
-  // FAILS CLOSED on an unknown role now: the Worker refuses everyone but a superadmin, so offering it on a guess
-  // only offers something the server then refuses.
-  for (const role of [null, undefined, '']) assert.equal(p({ membership: 'paid', role }), false, JSON.stringify(role));
-  // an approved share must not be taken down by its author's edit
   assert.equal(p({ membership: 'paid', role: 'member', editingPublic: true }), true);
   // anyone who cannot reach the composer cannot post publicly, superadmin role or not
   for (const m of ['expired', 'cancelled', 'none', 'banned', 'trialing']) {

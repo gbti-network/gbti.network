@@ -559,13 +559,13 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     if (tier !== undefined && !PAID_GRANT_TIERS.includes(tier)) {
       return { status: 400, body: { error: 'bad_request', message: 'an invalid grant tier was requested' } };
     }
-    // sow-323: ELEVATION TO TRUSTED AUTHOR IS A SUPERADMIN ACT. The tier lets its holder publish straight to
-    // the public site with no editorial review, so granting it hands out the very authority the review queue
-    // exists to hold. The grandfather action's own floor is admin, which is right for the rest of what it does
+    // sow-323: GRANTING CURATOR IS A SUPERADMIN ACT. It used to waive editorial review; sow-458 retired the review,
+    // and it still carries the Discord Creator badge, so who may hand it out is unchanged. The grandfather action's
+    // own floor is admin, which is right for the rest of what it does
     // (a comped year is not a publishing permission), so the tier is checked separately rather than by raising
     // the whole action. Every other grant keeps its current rank.
     if (tier === TIER.creator && (ROLE_RANK[staff.role] ?? 0) < ROLE_RANK.superadmin) {
-      return { status: 403, body: { error: 'forbidden', message: 'only a superadmin can make a member a trusted author' } };
+      return { status: 403, body: { error: 'forbidden', message: 'only a superadmin can grant the Curator level' } };
     }
     const op = GOV_OP[action];
     const kvSection = GOV_KV_SECTION[action]; // 'bans' | 'grandfathered' | null (role is git-native)

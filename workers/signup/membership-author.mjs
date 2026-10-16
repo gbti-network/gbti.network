@@ -13,21 +13,17 @@
 // fakes: no network, no secrets.
 
 import { githubFetchUser } from './oauth.mjs';
-import { authorizeCreator, authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route, creator gates PUBLISHING
+import { authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
 import { kickDispatch } from './checkout.mjs';
-import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: the audience rule (its own module since the fork route that shared it was retired, sow-274)
-export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
-import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
-import { validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';
+import { newItemsOnMain } from './new-item-alert.mjs'; // sow-458: which items of a publish are new (the owner is emailed)
+import { validateHostedRequest, hostedBranchFor, contentItemsIn } from '../../membership/hosted-author.mjs';
 // sow-427 C1: the members-index read and the branch + commit + pull request tail live in hosted-commit.mjs, moved
 // there unchanged so the prepared-listing claim commits through the same path.
 import { readMembersIndex, commitHostedFiles } from './hosted-commit.mjs';
 import { readTopicsVocab } from './topic-suggest.mjs'; // the share category must be a real topic
-import { queueableItems } from '../../membership/editorial-queue.mjs';
-import { TIER, meetsTier } from '../../membership/tiers.mjs';
 
 /**
  * sow-301: is this file set ENTIRELY comments in the caller's own folder?
@@ -60,11 +56,9 @@ export async function membershipAuthor(request, env, deps = {}) {
     return { status: 403, body: { error: 'author_disabled', message: 'hosted authoring is not enabled' } };
   }
 
-  // sow-301: the ROUTE requires effective-paid; PUBLISHING additionally requires Content Creator. The split
-  // exists because commenting rides this same route (workbench-client posts `comment-<id>` here), and gating
-  // both on creator silently blocked every paid Network Member from commenting. The creator rule is applied
-  // BELOW, once the real file paths are known, because those are the only trustworthy signal of what the
-  // request actually writes.
+  // sow-301: the ROUTE requires effective-paid. sow-458 (2026-10-16): that is now the whole publishing rule; the
+  // creator gate (sow-301) and then the audience rule (sow-323) that once applied below are both retired, so a comment
+  // and an article publish alike for a paid member.
   const paid = await authorize(request, env, deps); // fail-closed: only paid members reach this route (SOW-011)
   if (!paid.ok) return { status: paid.status, body: paid.body };
 
@@ -129,46 +123,16 @@ export async function membershipAuthor(request, env, deps = {}) {
   const topicKeys = hasShare && kv ? Object.keys(await readTopicsVocab(kv)) : null;
   const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder, topicKeys });
   if (!check.ok) return { status: check.status ?? 400, body: { error: 'bad_request', message: check.error } };
-  // sow-323: PUBLISHING is open to any paid supporter. What is gated is the AUDIENCE: every member item
-  // starts members-only and a superadmin decides what becomes public (owner, 2026-09-12). Decided from the
-  // resolved FILE PATHS and the frontmatter of the files the caller sent, never from `itemId`, which arrives
-  // in the request body: gating on a `comment-` prefix would let any paid caller publish an article by naming
-  // it `comment-anything`. validateHostedRequest has already confirmed these paths sit in the caller's own
-  // folder (or that a re-verified superadmin may target another), so by here the paths are trustworthy.
-  //
-  // THE WAIVERS (membership-audience.mjs audienceRefusal), each a positive confirmation rather than an absence:
-  //   1. A trusted author (the creator tier, granted silently by a superadmin and never sold) publishes an article,
-  //      project or prompt public directly. A SHARE is public only from a superadmin (owner, 2026-09-15).
-  //   2. An item ALREADY public on main stays publishable by its author, so a typo fix does not take their
-  //      approved page down, and a rename carries its old URL in redirectFrom so that path is checked instead.
-  // Everything else is refused, including an absent `visibility` (the schema default is public, so silence
-  // means public) and an unreadable file. A delete publishes nothing and is not checked. Comments and profiles
-  // never reach the rule: it only looks under posts/, projects/, products/, prompts/ and shares/.
-  const refusal = await audienceRefusal({
-    files: payload?.files, folders: [folder], tier: paid.tier, isSuperadmin: allowAnyFolder,
-    approvedCheck: deps.approvedCheck, fetchImpl, instToken, upstream,
-  });
-  if (refusal) return refusal;
-
-  // sow-323: THE REVIEW QUEUE RECORD, WRITTEN BEFORE THE PULL REQUEST OPENS, and a failed write refuses the
-  // publish. The other order loses items: a publish that merges with no record is an item waiting for review
-  // that nothing lists, so nobody would ever know it was waiting. A record whose publish then fails is the
-  // harmless direction, because approving it answers "not on the site yet" and it can be set aside.
-  //
-  // Only a member's OWN members-only article, project or prompt enters. A trusted author and a superadmin
-  // publish public directly, so nothing of theirs waits for anyone; a share never enters at all (only a
-  // superadmin can make one public, so there is no decision to hold).
-  const queueable = queueableItems(payload?.files, {
-    folder, trusted: meetsTier(paid.tier, TIER.creator), isSuperadmin: allowAnyFolder, statedVisibility,
-  });
-  const recorded = await recordEditorialItems(kv, queueable, { githubId });
-  if (!recorded.ok) {
-    return { status: 503, body: { error: 'unavailable', message: 'your work could not be entered into the review queue; please try publishing again' } };
-  }
-  // A delete (a removal, or the old half of a rename) retires its record once the publish is actually open.
-  const deleted = (Array.isArray(payload?.files) ? payload.files : [])
-    .filter((f) => f && typeof f === 'object' && f.content === null && f.contentBase64 == null)
-    .map((f) => String(f.path ?? ''));
+  // sow-458 (owner, 2026-10-16): "It is published when the person publishes it." Editorial review is retired: no
+  // audience rule refuses a public item and no review record is written. Who may publish at all is unchanged (paid,
+  // own folder, checked above and again by the gate). What remains is telling the owner when a member CREATES an
+  // article, project, prompt or share, which is asked of main while the files are committed: an item whose path,
+  // and every path it had before a rename, is absent from main is new. A superadmin's own items are not mailed
+  // (owner's answer, same day).
+  const createdCheck = allowAnyFolder ? Promise.resolve([]) : newItemsOnMain({
+    fetchImpl, instToken, upstream,
+    items: contentItemsIn(payload?.files, folder).map((item) => ({ ...item, login: folder })),
+  }).catch(() => []);
 
   const branch = hostedBranchFor(githubId, itemId);
   if (!branch) return { status: 400, body: { error: 'bad_request', message: 'invalid itemId' } };
@@ -183,13 +147,14 @@ export async function membershipAuthor(request, env, deps = {}) {
   const body = `Hosted authoring: published on behalf of ${folder} (github_id ${githubId}) via the GBTI publishing app.`;
   const committed = await commitHostedFiles({ fetchImpl, instToken, upstream, branch, files: payload.files, title, body });
   if (!committed.ok) return { status: committed.status, body: { error: committed.error, message: committed.message } };
-  await removeEditorialItems(kv, deleted);
+  const created = await createdCheck;
   if (committed.already) {
-    return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true }, queued: recorded.fresh };
+    // An identical publish of an open item: the first one was mailed, so this one is not.
+    return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true }, created: [] };
   }
-  // `queued` is returned alongside the body, never inside it: the caller fires the owner notice on exactly what
-  // was STORED, through ctx.waitUntil, so a fail-soft email never delays the response the member is waiting on.
-  return { status: 200, body: { ok: true, branch, number: committed.number, html_url: committed.html_url }, queued: recorded.fresh };
+  // `created` is returned alongside the body, never inside it: the caller sends the owner notice through
+  // ctx.waitUntil, so a fail-soft email never delays the response the member is waiting on.
+  return { status: 200, body: { ok: true, branch, number: committed.number, html_url: committed.html_url }, created };
 }
 
 // sow-183: GET /membership/author/targets — superadmin-only, the picker source for the shared editor's Author

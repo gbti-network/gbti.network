@@ -66,8 +66,8 @@ class GbtiAdmin extends GbtiElement {
     const caps = this.hasAttribute('caps') ? this.getAttribute('caps').split(',').map((s) => s.trim()).filter(Boolean) : null;
     const capOn = (g) => !caps || caps.includes(g);
     // sow-323: the two paid plans collapsed into one, so the grant control below no longer offers a CHOICE OF
-    // PLAN. Curator survives as an INTERNAL trust level (a superadmin grants it to a supporter who no longer
-    // needs editorial review), so the wording moved off "tier" and onto what the grant does. The submitted
+    // PLAN. Curator survives as an INTERNAL level (sow-458: since editorial review retired, what it adds is the
+    // Discord Creator badge), so the wording moved off "tier" and onto what the grant does. The submitted
     // values ('member', 'creator') are unchanged, because the axis and every server-side gate still use them.
     this.set(
       this.css(CSS) +
@@ -86,10 +86,10 @@ class GbtiAdmin extends GbtiElement {
 
          ${rank >= RANK.admin && capOn('membership') ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the internal trust level that exempts a supporter from editorial review. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the Creator badge in Discord. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)} (no editorial review)</option></select>
+           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)}</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>

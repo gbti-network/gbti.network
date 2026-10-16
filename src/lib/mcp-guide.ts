@@ -27,9 +27,10 @@ export const mcpPrompt = [
   '',
   // sow-323: this used to say publishing was a Curator feature requiring the Curator role. The two paid plans
   // collapsed into one on 2026-09-12, so the rule an agent needs is the membership, plus what happens after it
-  // publishes: every member item starts members-only and a superadmin approves what becomes public.
+  // publishes. Editorial review was retired on 2026-10-16: an item is live once its pull request merges and
+  // the site rebuilds, so the agent is told to wait for both rather than to wait for an approval.
   'Important: publishing needs an active paid GBTI membership. publish_content only works when my GitHub account holds one, and without it the gate declines the pull request, so check whoami first.',
-  'What I publish reaches members first. It becomes public after editorial review, so do not tell me an item is live on the public site the moment the pull request merges.',
+  'What I publish goes live once the pull request merges and the site rebuilds, which takes about 2 to 3 minutes. Check pr_status before you tell me an item is live.',
 ].join('\n');
 
 /**

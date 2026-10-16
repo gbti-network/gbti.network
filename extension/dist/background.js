@@ -17419,6 +17419,7 @@ function buildContentFile({ type, username, input, body = "", scope = "member" }
   if (scope !== "house" && !username) throw new Error("buildContentFile: username is required");
   const schema = schemaFor(type);
   const cleaned = sanitizeInput(type, input, username, { author: target.author });
+  if (cleaned.visibility !== "members" && "publicStub" in cleaned && type !== "share" && type !== "comment") delete cleaned.publicStub;
   const result = schema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError(type, result.error.issues);
   const bodyStr = String(body ?? "").trim();
@@ -19586,21 +19587,6 @@ async function inviteAdminRequest({ token, signupBase, method = "GET", body = nu
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `invite request failed (${res.status})`);
   return data;
 }
-async function editorialAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/editorial", {
-    method,
-    headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
-    ...body ? { body: JSON.stringify(body) } : {}
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
-  return data;
-}
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
@@ -19968,8 +19954,8 @@ var TIER_LABEL = Object.freeze({
   [TIER.none]: "",
   // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
   [TIER.member]: "Network Supporter",
-  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
-  // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it (it
+  // carries the Discord Creator badge; sow-458 retired the editorial review it used to waive), and staff resolve to it.
   // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
   [TIER.creator]: "Curator"
 });
@@ -20204,26 +20190,6 @@ async function getCouponUsageOp(ctx) {
     return await getCouponUsage({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     throw new OperationError("admin-op-failed", err?.message || "could not read coupon usage");
-  }
-}
-async function listEditorialOp(ctx) {
-  await requireAdmin(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  if (!token) throw new OperationError("not-authenticated", "sign in first");
-  try {
-    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: "GET", fetch: ctx.fetch ?? globalThis.fetch });
-  } catch (err) {
-    throw new OperationError("admin-op-failed", err?.message || "could not read the review queue");
-  }
-}
-async function decideEditorialOp(ctx, body = {}) {
-  await requireAdmin(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  if (!token) throw new OperationError("not-authenticated", "sign in first");
-  try {
-    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: "POST", body, fetch: ctx.fetch ?? globalThis.fetch });
-  } catch (err) {
-    throw new OperationError("admin-op-failed", err?.message || "could not record the decision");
   }
 }
 async function listInvitesOp(ctx) {
@@ -21178,7 +21144,7 @@ function readDigestConfig(doc) {
 // membership/digest-config.mjs
 var DEFAULT_CTA = Object.freeze({
   enabled: true,
-  body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review.",
+  body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts, live on the site when you publish them.",
   linkLabel: "What membership includes",
   linkUrl: "/membership/"
 });
@@ -21754,12 +21720,6 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         if (method === "POST") return ok(await createInviteOp(ctx, body ?? {}));
         if (method === "PATCH") return ok(await updateInviteOp(ctx, body ?? {}));
         return ok(await listInvitesOp(ctx));
-      }
-      // sow-293: the creator application review lane. Same one-route, verb-from-the-request shape as the
-      // invites above, and for the same reason: it keeps this host in step with the npm host and the Worker.
-      case "/api/editorial": {
-        if (method === "POST") return ok(await decideEditorialOp(ctx, body ?? {}));
-        return ok(await listEditorialOp(ctx));
       }
       case "/api/coupon-refresh":
         return ok(await refreshCouponUntil(ctx));
