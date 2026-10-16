@@ -259,10 +259,17 @@ export function enhanceSortList(root = document) {
     }
     apply(STATE.get(doc) || 'score', false);
     // A link to one entry (each YouTube creator's invite opens their own) is scrolled by the browser before this
-    // bar exists, so the heading lands under the bar. Scroll once more now that the offsets are set.
+    // bar exists, so the heading lands under the bar. Scroll once more now that the offsets are set, as a jump:
+    // the site scrolls smoothly, and from the top of a long list that is a glide of a second or more.
     let id = '';
     try { id = decodeURIComponent((view?.location?.hash || '').slice(1)); } catch { id = ''; }
     const target = id ? doc.getElementById(id) : null;
-    if (target && box.contains(target)) target.scrollIntoView({ block: 'start' });
+    if (target && box.contains(target)) {
+      const root = doc.documentElement;
+      const was = root.style.scrollBehavior;
+      root.style.scrollBehavior = 'auto';
+      target.scrollIntoView({ block: 'start' });
+      root.style.scrollBehavior = was;
+    }
   });
 }
