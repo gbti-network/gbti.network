@@ -165,10 +165,33 @@ async function commitApproval(fetchImpl, instToken, upstream, { githubId, slug, 
       body: `Approved for the public site by github_id ${githubId} through the editorial review queue (sow-323).`,
     }),
   });
-  if (pr.status === 422) return { ok: true, number: null, html_url: null, already: true };
   const prData = await pr.json().catch(() => ({}));
-  if (!pr.ok) return { ok: false, status: 502, message: `GitHub returned ${pr.status}` };
-  return { ok: true, number: prData.number, html_url: prData.html_url };
+  if (pr.ok) return { ok: true, number: prData.number, html_url: prData.html_url };
+  // A 422 IS NOT PROOF THAT A PULL REQUEST EXISTS. GitHub returns it for "a pull request already exists for
+  // this head", which is the harmless re-press this branch was written for, AND for "no commits between main
+  // and the branch" and other validation failures, which are not harmless at all. Treating every 422 as
+  // success reports an approval that never opened anything, and the record is then written as approved with
+  // nothing on its way to main. So ask: is there actually an open pull request for this head? Only that
+  // answer makes it a re-press.
+  //
+  // This matters more now than when it was written. On 2026-10-16 an approval of a project failed after its
+  // branch was created, which is survivable by design (the record stays pending and a second press redoes the
+  // commit), but it leaves the branch behind. The retry force-resets that branch and re-applies the files, and
+  // a reset that GitHub has not caught up with is exactly what produces a "no commits between" 422.
+  if (pr.status === 422) {
+    const head = `${upstream.split('/')[0]}:${branch}`;
+    const open = await fetchImpl(`${GH}/repos/${upstream}/pulls?state=open&head=${encodeURIComponent(head)}`, {
+      headers: GH_HEADERS(instToken),
+    });
+    const list = open.ok ? await open.json().catch(() => null) : null;
+    const found = Array.isArray(list) && list.length ? list[0] : null;
+    if (found) return { ok: true, number: found.number ?? null, html_url: found.html_url ?? null, already: true };
+    // Carry GitHub's own words out: "no commits between" and "already exists" need different responses from
+    // whoever is looking at the button, and a bare 422 tells them nothing.
+    const why = prData?.errors?.[0]?.message || prData?.message || 'the pull request was refused';
+    return { ok: false, status: 502, message: `GitHub refused the approval pull request: ${why}` };
+  }
+  return { ok: false, status: 502, message: `GitHub returned ${pr.status}` };
 }
 
 /**

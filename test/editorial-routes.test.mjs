@@ -281,3 +281,86 @@ test('deleting an item retires its record, and a non-item path is ignored', asyn
   assert.equal(r.removed, 1);
   assert.equal(kv.store.has(editorialKey(PATH)), false);
 });
+
+// ---- a 422 from the pull request, which is three different things -------------------------------------------
+//
+// 2026-10-16: a superadmin approved a project from its own page, the approval failed after its branch was
+// created, and the queue record correctly stayed pending (the commit-before-record order doing its job). What
+// it left behind was the branch. The retry force-resets that branch and re-applies the files, and a reset
+// GitHub has not caught up with is exactly what produces a "no commits between" 422.
+//
+// The old code read EVERY 422 as "a pull request already exists" and returned ok. On that retry it would have
+// reported an approval that opened nothing and written the record as approved, so the item would read as
+// published, be gone from the queue, and never reach main. Nothing downstream could notice: the author email
+// says it was approved, and the only contradicting evidence is a branch nobody looks at.
+//
+// So a 422 now has to PROVE a pull request exists before it counts as success.
+
+/** The approval harness, with the pull request POST and the open-PR lookup under the test's control. */
+async function approveWith({ onCreatePull, openPulls }) {
+  const kv = fakeKv({ [editorialKey(PATH)]: JSON.stringify(newEntry({
+    path: PATH, type: 'post', slug: 'hello', login: 'ada', githubId: '4', title: 'Hello', now: NOW,
+  })) });
+  const envelope = await encryptAsset({ plaintext: 'The whole article.', key: KEY, assetId: 'post:hello:body', kid: '1' });
+  const index = `---\ntitle: Hello\nvisibility: members\npublicStub: true\nencryptedBody: ${ENC}\npublishedAt: 2026-01-01\n---\n\n`;
+  let listed = 0;
+  const fetchImpl = async (url, init = {}) => {
+    const method = init.method || 'GET';
+    if (url.includes(`contents/${PATH}?ref=main`)) return { ok: true, status: 200, text: async () => index };
+    if (url.includes(`contents/${ENC}?ref=main`)) return { ok: true, status: 200, text: async () => JSON.stringify(envelope) };
+    if (url.endsWith('git/ref/heads/main')) return { ok: true, status: 200, json: async () => ({ object: { sha: 'deadbeef' } }) };
+    if (url.endsWith('git/refs') && method === 'POST') return { ok: true, status: 201, json: async () => ({}) };
+    if (url.includes('/pulls?state=open')) { listed += 1; return openPulls(url); }
+    if (url.includes('/contents/') && method === 'GET') return { ok: true, status: 200, json: async () => ({ sha: 'filesha' }) };
+    if (url.includes('/contents/')) return { ok: true, status: 200, json: async () => ({}) };
+    if (url.endsWith('/pulls')) return onCreatePull();
+    throw new Error(`unexpected call: ${method} ${url}`);
+  };
+  const r = await editorialDecide(req({ path: PATH, decision: 'approve' }), { SIGNUP_KV: kv, MEMBER_CONTENT_KEY: KEY }, {
+    authorize: superadmin, now: NOW, fetchImpl, getToken: async () => 't',
+  });
+  const stored = JSON.parse(kv.store.get(editorialKey(PATH)));
+  return { r, stored, listed };
+}
+
+const REFUSED = () => ({
+  ok: false, status: 422,
+  json: async () => ({ message: 'Validation Failed', errors: [{ message: 'No commits between main and the branch' }] }),
+});
+
+test('a 422 with no open pull request fails the approval and leaves the item waiting', async () => {
+  const { r, stored, listed } = await approveWith({
+    onCreatePull: REFUSED,
+    openPulls: async () => ({ ok: true, status: 200, json: async () => [] }),
+  });
+  assert.notEqual(r.status, 200, 'nothing opened, so this is not an approval');
+  assert.equal(stored.state, EDITORIAL_STATE.pending,
+    'the item must stay in the queue: marked approved it would vanish from the queue and never reach main');
+  assert.equal(listed, 1, 'the 422 must be checked against the real pull requests, not assumed');
+  // GitHub's own words reach the caller, because "no commits between" and "already exists" need different
+  // responses from whoever is looking at the button.
+  assert.match(JSON.stringify(r.body), /No commits between/);
+});
+
+test('a 422 WITH an open pull request is the harmless re-press, and still approves', async () => {
+  const { r, stored } = await approveWith({
+    onCreatePull: REFUSED,
+    openPulls: async () => ({ ok: true, status: 200, json: async () => [{ number: 51, html_url: 'https://x/51' }] }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.number, 51, 'the existing pull request is the one reported, not a null');
+  assert.equal(stored.state, EDITORIAL_STATE.approved);
+});
+
+test('a 422 whose lookup FAILED is a failure, even when the failing response carries a body', async () => {
+  // The body of a non-2xx response is not evidence of anything: an error page, a stale proxy or a cached
+  // response can carry a plausible-looking list. The status is what says whether the lookup happened, so this
+  // stub answers 503 AND hands back a pull request. Reading the body without checking the status would call
+  // that an approval, which is the same guess the 422 branch itself used to make, one layer down.
+  const { r, stored } = await approveWith({
+    onCreatePull: REFUSED,
+    openPulls: async () => ({ ok: false, status: 503, json: async () => [{ number: 99, html_url: 'https://x/99' }] }),
+  });
+  assert.notEqual(r.status, 200, 'a failed lookup proves nothing, so the approval must not claim success');
+  assert.equal(stored.state, EDITORIAL_STATE.pending);
+});
