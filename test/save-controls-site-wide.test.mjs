@@ -136,7 +136,7 @@ test('coverage: every page that could render a save control goes through BaseLay
   const outside = pages.filter((p) => !/BaseLayout/.test(readFileSync(p, 'utf8')) && !layoutBearingImport(p)).map((p) => p.replace(ROOT, ''));
   assert.deepEqual(outside, ['src/pages/embed.astro'], 'the iframe embed is the only page outside the layout');
   const viaComponent = pages.filter((p) => !/BaseLayout/.test(readFileSync(p, 'utf8')) && layoutBearingImport(p)).map((p) => p.replace(ROOT, '')).sort();
-  assert.deepEqual(viaComponent, ['src/pages/codeable-invite/index.astro', 'src/pages/curator-invite/index.astro', 'src/pages/member-invite/index.astro', 'src/pages/youtube-invite/index.astro'], 'the pages that reach the layout through a component are exactly the invite landers');
+  assert.deepEqual(viaComponent, ['src/pages/codeable-invite/index.astro', 'src/pages/curator-invite/index.astro', 'src/pages/member-invite/index.astro'], 'the pages that reach the layout through a component are exactly the invite landers');
   const embed = readFileSync(join(ROOT, 'src/pages/embed.astro'), 'utf8');
   assert.doesNotMatch(embed, /FavoriteButton|CollectionButton|gbti-favorite|gbti-collection/, 'and it renders no save control');
 });

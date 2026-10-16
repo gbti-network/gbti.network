@@ -394,11 +394,28 @@ export const LANDER_BY_TIER = Object.freeze({
 // $150 for a $50 member grant.
 export const LANDER_BY_CAMPAIGN = Object.freeze({
   CODEABLEYEAR: '/codeable-invite/',
-  // sow-457: the 100 WordPress YouTube Channels campaign. Its page opens with the list the recipient is on and
-  // links to their own entry, which no audience-neutral lander can do, so the page is a property of the
-  // campaign exactly as /codeable-invite/ is. Member tier, so the tier map alone would already reach a correct
-  // page; this override picks the one that explains WHY the year is being offered.
-  YOUTUBE2026: '/youtube-invite/',
+});
+
+/**
+ * sow-457: WHERE A CAMPAIGN'S LINKS ACTUALLY LAND, which is a different question from which page describes what
+ * the campaign grants.
+ *
+ * The owner's ruling on 2026-10-15, on the YouTube creator invitations: a creator told they were ranked on a
+ * list should land on the list, not on a page about membership. So that campaign's links open the article with a
+ * claim dialog over it, exactly as a prepared project listing opens at /claim/, and the page that describes the
+ * tier stays /member-invite/ (LANDER_BY_TIER) for anyone who needs it.
+ *
+ * KEPT SEPARATE FROM LANDER_BY_CAMPAIGN ON PURPOSE. A lander is held to a contract by
+ * test/invite-lander-parity.test.mjs: it binds one tier, renders its benefits from the registry, and advertises
+ * exactly what its campaign grants. An article cannot satisfy that and should not try, because it is not selling
+ * anything. Folding a destination into the lander map would either break that guard or quietly weaken it, so the
+ * destination is its own fact, and the thing that states the terms is the dialog, which reads them from
+ * house/membership-tiers.yml (src/lib/invite-claim-core.mjs).
+ *
+ * The copy for each destination lives in src/lib/invite-claim-core.mjs, keyed by the same campaign id.
+ */
+export const DESTINATION_BY_CAMPAIGN = Object.freeze({
+  YOUTUBE2026: '/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/',
 });
 
 /**
@@ -414,6 +431,18 @@ export function landerFor({ code, id, tier } = {}) {
   // defaults to `code` throughout the coupon core, so every existing caller passing only `code` is unchanged.
   const c = normalizeCouponCode(id || code);
   return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
+}
+
+/**
+ * sow-457: the page a campaign's own links should open, falling back to the page that describes what it grants.
+ *
+ * Every surface that hands out a link for a campaign resolves it HERE, so there is one answer to "where does
+ * this go". `landerFor` stays the answer to the different question of which page describes the tier, and the
+ * manifest keeps reporting that, because that is what the parity guard checks.
+ */
+export function destinationFor({ code, id, tier } = {}) {
+  const c = normalizeCouponCode(id || code);
+  return DESTINATION_BY_CAMPAIGN[c] || landerFor({ code, id, tier });
 }
 
 /**

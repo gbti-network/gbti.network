@@ -7,7 +7,7 @@
 // two other guards in this repo untrustworthy this week.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveLander, blockedReason, inviteRow } from '../scripts/invite-links.mjs';
+import { resolveLander, resolveDestination, blockedReason, inviteRow } from '../scripts/invite-links.mjs';
 // sow-231 Phase 3: the mapping moved into membership/invites.mjs so the browser coupon manager and this CLI
 // resolve a lander identically. Importing it from its real home rather than re-exporting keeps one source.
 import { LANDER_BY_TIER, LANDER_BY_CAMPAIGN } from '../membership/invites.mjs';
@@ -32,10 +32,12 @@ test('a per-campaign lander beats the tier map, because the page belongs to the 
   assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'creator' })), '/codeable-invite/');
   assert.equal(resolveLander(coupon({ code: 'CODEABLEYEAR', tier: 'member' })), '/codeable-invite/');
   assert.equal(LANDER_BY_CAMPAIGN.CODEABLEYEAR, '/codeable-invite/');
-  // sow-457: the 2026 WordPress YouTube list. Member tier, so the tier map alone would reach a correct page;
-  // the override picks the one that names the list the invitation comes out of.
-  assert.equal(resolveLander(coupon({ code: 'YOUTUBE2026', tier: 'member' })), '/youtube-invite/');
-  assert.equal(LANDER_BY_CAMPAIGN.YOUTUBE2026, '/youtube-invite/');
+  // sow-457: YOUTUBE2026 is deliberately NOT here. The owner ruled on 2026-10-15 that its links open the
+  // article the creator was featured in, with a claim dialog over it, so the thing it needs is a DESTINATION
+  // (membership/invites.mjs DESTINATION_BY_CAMPAIGN), not a lander. It still resolves /member-invite/ by tier,
+  // which truthfully describes what it grants, and test/invite-claim.test.mjs holds the two apart.
+  assert.equal(LANDER_BY_CAMPAIGN.YOUTUBE2026, undefined);
+  assert.equal(resolveLander(coupon({ code: 'YOUTUBE2026', tier: 'member' })), '/member-invite/');
 });
 
 test('every per-campaign lander points at a page that exists', () => {
@@ -84,6 +86,23 @@ test('the built URL carries the code and points at the tier-matched lander', () 
   const row = inviteRow(coupon({ code: 'HUDSINVITE', tier: 'member' }), NOW);
   assert.equal(row.sendable, true);
   assert.equal(row.url, 'https://gbti.network/member-invite/?coupon=HUDSINVITE');
+});
+
+test('sow-457: the printed link is the campaign DESTINATION, not the page describing the tier', () => {
+  // What somebody running this CLI does with the output is paste it into a message. For a campaign whose links
+  // open its own destination (the YouTube creators land on the article they were featured in), printing the
+  // lander would hand out a link nobody is being sent, and the mistake would only surface in someone's inbox.
+  const yt = coupon({ code: 'YOUTUBE2026', id: 'YOUTUBE2026', tier: 'member' });
+  assert.equal(resolveDestination(yt), '/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/');
+  const row = inviteRow(yt, NOW);
+  assert.equal(row.url, 'https://gbti.network/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/?coupon=YOUTUBE2026');
+  assert.equal(row.lander, '/member-invite/', 'and the row still reports which page describes the tier');
+  // Every OTHER campaign is unchanged: no destination means the lander IS the link.
+  const plain = coupon({ code: 'HUDSINVITE', tier: 'member' });
+  assert.equal(resolveDestination(plain), '/member-invite/');
+  assert.equal(inviteRow(plain, NOW).url, 'https://gbti.network/member-invite/?coupon=HUDSINVITE');
+  assert.equal(inviteRow(plain, NOW).lander, null, 'nothing to report when the two agree');
+  assert.equal(resolveDestination(null), null);
 });
 
 test('every tier in the map has a distinct lander, so two tiers cannot share one page', () => {

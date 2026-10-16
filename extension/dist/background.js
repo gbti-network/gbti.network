@@ -20115,12 +20115,10 @@ var LANDER_BY_TIER = Object.freeze({
   creator: "/curator-invite/"
 });
 var LANDER_BY_CAMPAIGN = Object.freeze({
-  CODEABLEYEAR: "/codeable-invite/",
-  // sow-457: the 100 WordPress YouTube Channels campaign. Its page opens with the list the recipient is on and
-  // links to their own entry, which no audience-neutral lander can do, so the page is a property of the
-  // campaign exactly as /codeable-invite/ is. Member tier, so the tier map alone would already reach a correct
-  // page; this override picks the one that explains WHY the year is being offered.
-  YOUTUBE2026: "/youtube-invite/"
+  CODEABLEYEAR: "/codeable-invite/"
+});
+var DESTINATION_BY_CAMPAIGN = Object.freeze({
+  YOUTUBE2026: "/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/"
 });
 
 // membership/prepared-listings-shared.mjs

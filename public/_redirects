@@ -69,3 +69,9 @@
 # The two SOW-022 applet URLs keep their existing /products/ lines above; these are their /projects/ twins.
 /projects/js-animate-hue/ /utilities/js-animate-hue/ 301
 /projects/email-signature-generator/ /utilities/email-signature-generator/ 301
+
+# sow-457: /youtube-invite/ was live for about an hour on 2026-10-15 before the owner ruled that the YouTube
+# creator invitations should open the ARTICLE with a claim dialog over it rather than a landing page of their
+# own. The page is deleted; this keeps the URL working for the handful of people who saw it, and the coupon
+# rides along because Cloudflare Pages carries the query string onto a redirect whose destination has none.
+/youtube-invite/ /articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/ 301

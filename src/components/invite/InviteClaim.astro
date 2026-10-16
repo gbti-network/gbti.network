@@ -1,0 +1,182 @@
+---
+// sow-457: THE ON-PAGE INVITATION, a strip and a dialog that open over a campaign's destination page.
+//
+// Owner, 2026-10-15, on the YouTube creator invitations: the link should open the article the creator was
+// featured in, with a claim popup over it, the way a prepared project listing opens at /claim/. So this is
+// deliberately the SAME OBJECT as src/components/claim/ClaimDialog.astro rather than a new design: a native
+// <dialog> opened with showModal() (focus trap, inert page behind it, Escape), a square panel, one close
+// control, and a footer button that leaves the page readable. BaseLayout mounts it only on a page that is a
+// campaign destination, so it renders on one page and nowhere else.
+//
+// IT STAYS SHUT WITHOUT A COUPON. The script (src/lib/invite-claim.ts) opens nothing, reveals nothing and
+// fetches nothing unless the visitor arrived with a usable ?coupon=. The destination is a published article with
+// ordinary readers, and they must not meet a popup, or pay for a third-party script, because an invitation
+// mechanism lives on their page.
+//
+// THE TERMS LINE COMES FROM THE TIER REGISTRY, NEVER FROM THIS FILE (sow-243, and the same arrangement
+// ClaimDialog uses). tierDisplay() is read at build for both paid tiers and serialized into data-tiers; the
+// script renders the campaign's own tier through tierLine() in claim-core. So the label and the price cannot
+// drift from house/membership-tiers.yml, and no sentence here can promise a benefit the tier does not carry.
+//
+// THE COPY IS TEXT, not markup: the script writes it with textContent, so a stray angle bracket in campaign copy
+// is shown as the character it is.
+import { tierDisplay } from '../../lib/tiers';
+import { TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../../lib/membership';
+import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
+import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../../lib/touch.mjs';
+
+export interface Props {
+  campaign: {
+    id: string;
+    tier: string;
+    freeDays: number;
+    kicker: string;
+    heading: string;
+    message: string;
+    stripNote: string;
+    openLabel: string;
+    signinLabel: string;
+    laterLabel: string;
+  };
+}
+const { campaign } = Astro.props;
+
+// Only what the terms line needs: the label and the annual price, per tier key. Same shape ClaimDialog ships.
+const tierData: Record<string, { label: string; priceAnnual: number }> = {};
+for (const [key, t] of [['member', tierDisplay('member')], ['creator', tierDisplay('creator')]] as const) {
+  if (t) tierData[key] = { label: t.label, priceAnnual: t.priceAnnual };
+}
+---
+
+<div
+  class="ic"
+  data-invite-claim
+  data-campaign={campaign.id}
+  data-tier={campaign.tier}
+  data-free-days={String(campaign.freeDays)}
+  data-tiers={JSON.stringify(tierData)}
+  data-signup-base={SIGNUP_BASE}
+  data-ref-cookie={REF_COOKIE}
+  data-via-cookie={REF_VIA_COOKIE}
+  data-sid-cookie={TOUCH_CAPTURE_ENABLED ? TOUCH_SID_COOKIE : ''}
+>
+  {/* The strip the dismissed dialog leaves behind, so the offer is recoverable rather than gone. Hidden until
+      the dialog has been opened and closed, and never shown to a reader without a coupon. */}
+  <div class="ic-strip" data-invite-strip hidden>
+    <div class="pd-wrap ic-strip-in">
+      <span class="ic-tag">Invitation</span>
+      <span class="ic-strip-note">{campaign.stripNote}</span>
+      <button type="button" class="btn btn-primary ic-open" data-invite-open>{campaign.openLabel}</button>
+    </div>
+  </div>
+
+  <dialog class="icd" data-invite-dialog aria-labelledby="icd-heading">
+    {/* Initial focus goes to the panel, not the first control, so the close button does not open wearing a
+        focus ring. Same choice as the project claim dialog. */}
+    <div class="icd-panel" tabindex="-1" autofocus>
+      <button type="button" class="icd-x" data-invite-close aria-label="Close">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+        </svg>
+      </button>
+      <div class="icd-scroll">
+        <p class="icd-kicker">{campaign.kicker}</p>
+        <h2 class="icd-heading" id="icd-heading">{campaign.heading}</h2>
+        <p class="icd-message">{campaign.message}</p>
+
+        <section class="icd-step">
+          {/* Filled from the tier registry by the script; empty, and so invisible, if the tier cannot be resolved. */}
+          <p class="icd-tier" data-invite-tier hidden></p>
+
+          <div class="icd-signin">
+            <div class="icd-ts" data-invite-ts data-sitekey={TURNSTILE_SITE_KEY}></div>
+            <button type="button" class="btn btn-primary icd-go" data-invite-go disabled>{campaign.signinLabel}</button>
+            <p class="icd-note" data-invite-wait>The human verification below has to finish before this button
+              turns on. It usually takes a second.</p>
+            <p class="icd-note" data-invite-blocked hidden>The human verification did not load, so the button
+              stays off. If you use a content blocker, allow challenges.cloudflare.com and reload this page.</p>
+          </div>
+          <noscript>
+            <p class="icd-note">Claiming needs JavaScript. Turn it on for this site, then reload the page.</p>
+          </noscript>
+        </section>
+
+        <div class="icd-foot">
+          <button type="button" class="icd-later" data-invite-close>{campaign.laterLabel}</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+</div>
+
+<script>
+  import { startInviteClaim } from '../../lib/invite-claim';
+  startInviteClaim(document);
+</script>
+
+<style is:global>
+  /* GLOBAL AND PREFIXED (`.ic` for the strip, `.icd` for the dialog), for the reason ClaimDialog's styles are
+     global: the script toggles and fills nodes at runtime, and a scoped style would not reach what Astro did not
+     render itself. Every rule starts with one of the two prefixes, so nothing leaks onto the article under it.
+     Light is the default; dark follows html[data-theme] through the V3 tokens. */
+
+  /* The strip pins under the site header, as the claim page's does. */
+  .ic { --ic-strip-h: 46px; }
+  .ic-strip { position: sticky; top: var(--head-h); z-index: 41; height: var(--ic-strip-h); background: var(--ink); border-bottom: 1.5px solid var(--ink-3); }
+  .ic-strip[hidden] { display: none; }
+  .ic-strip-in { height: 100%; display: flex; align-items: center; gap: 12px; }
+  .ic-tag { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; font-weight: 700; text-transform: uppercase;
+    color: var(--ink); background: var(--green-mint); padding: 3px 9px; border-radius: 999px; flex: none; }
+  .ic-strip-note { color: #b8b4c2; font-size: 13px; flex: 1; min-width: 0; }
+  .ic-open { padding: 7px 14px; font-size: 13px; white-space: nowrap; }
+  @media (max-width: 640px) {
+    .ic { --ic-strip-h: 72px; }
+    .ic-strip-in { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tag open" "note note"; align-content: center; gap: 6px 10px; }
+    .ic-tag { grid-area: tag; }
+    .ic-open { grid-area: open; justify-self: end; }
+    .ic-strip-note { grid-area: note; font-size: 12.5px; }
+  }
+
+  .icd {
+    border: 0; padding: 0; margin: auto; width: calc(100% - 32px); max-width: 540px;
+    /* margin:auto + fit-content height re-centre the modal: Tailwind preflight resets the UA dialog centring. */
+    height: fit-content; max-height: calc(100dvh - 32px);
+    background: var(--paper); color: var(--fg); border-radius: 0; box-shadow: var(--sh-lg); overflow: hidden;
+  }
+  .icd[open] { display: flex; }
+  .icd::backdrop { background: rgba(32, 30, 38, .62); backdrop-filter: blur(2px); }
+  [data-theme="dark"] .icd { background: var(--ink-2); border: 1px solid var(--line-dark); }
+  .icd-panel { position: relative; display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
+  .icd-panel:focus { outline: none; }
+  .icd-scroll { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 34px 34px 22px; }
+  @media (max-width: 480px) { .icd-scroll { padding: 28px 20px 18px; } }
+  .icd-x {
+    position: absolute; top: 10px; right: 10px; z-index: 1; display: inline-flex; padding: 7px; border: 0;
+    background: transparent; color: var(--fg-mute); cursor: pointer; border-radius: var(--r);
+  }
+  .icd-x:hover { background: var(--tint); color: var(--fg); }
+  .icd-x:focus-visible, .icd-later:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .icd-kicker { margin: 0 0 10px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--green-700); }
+  .icd-heading { margin: 0 0 12px; font-family: var(--f-display); font-weight: 600; font-size: 26px; line-height: 1.2; color: var(--fg); }
+  .icd-message { margin: 0; font-size: 15.5px; line-height: 1.65; color: var(--fg-soft); }
+
+  .icd-step { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+  [data-theme="dark"] .icd-step { border-top-color: var(--line-dark); }
+  .icd-tier { margin: 0 0 16px; padding: 10px 12px; font-size: 13.5px; line-height: 1.55; color: var(--fg);
+    background: var(--green-tint); border-radius: var(--r-sm); }
+  .icd-tier[hidden] { display: none !important; }
+
+  .icd-signin { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .icd-signin .icd-go { width: 100%; white-space: normal; text-align: center; line-height: 1.3; }
+  .icd-signin .icd-go[disabled] { opacity: .6; cursor: not-allowed; box-shadow: none; transform: none; }
+  .icd-go.is-pending { cursor: progress; }
+  .icd-ts:empty { display: none; }
+  .icd-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--fg-mute); }
+  .icd-note[hidden] { display: none !important; }
+
+  .icd-foot { margin-top: 18px; text-align: center; }
+  .icd-later { border: 0; background: none; padding: 6px 8px; font: inherit; font-size: 13.5px; color: var(--fg-mute); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 3px; }
+  .icd-later:hover { color: var(--fg); }
+</style>

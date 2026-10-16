@@ -15,7 +15,6 @@ const PAGES = [
   'src/pages/codeable-invite/index.astro',
   'src/pages/member-invite/index.astro',
   'src/pages/curator-invite/index.astro',
-  'src/pages/youtube-invite/index.astro', // sow-457
 ];
 const COMPONENT = 'src/components/invite/InviteLander.astro';
 const MECHANISM = ['cf-turnstile', 'data-coupon-chip', 'gbtiTurnstileOk', "'/signup/start'", 'data-faq', 'challenges.cloudflare.com/turnstile'];
@@ -29,7 +28,7 @@ test('PAGES covers every lander on disk, so a new one cannot escape the rules be
     .filter((e) => e.isDirectory() && e.name.endsWith('-invite'))
     .map((e) => `src/pages/${e.name}/index.astro`)
     .filter((p) => fs.existsSync(path.join(root, p)));
-  assert.ok(dirs.length >= 4, `expected at least four lander directories, found ${dirs.length}`);
+  assert.ok(dirs.length >= 3, `expected at least three lander directories, found ${dirs.length}`);
   assert.deepEqual([...PAGES].sort(), dirs.sort(),
     'every *-invite/index.astro must be listed in PAGES; add the new lander rather than loosening this');
 });
@@ -69,7 +68,7 @@ test('the archived v1 page and the retired linkedin route are untouched by the c
 test('every lander is noindex through the component and excluded from the sitemap', () => {
   assert.match(read(COMPONENT), /<BaseLayout [^>]*\bnoindex\b/, 'the component sets noindex for every page it renders');
   const cfg = read('astro.config.mjs');
-  for (const route of ['codeable-invite', 'member-invite', 'curator-invite', 'youtube-invite']) {
+  for (const route of ['codeable-invite', 'member-invite', 'curator-invite']) {
     assert.ok(cfg.includes(route), `astro.config.mjs must still name ${route} in the sitemap exclusion`);
   }
 });

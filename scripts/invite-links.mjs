@@ -20,7 +20,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { couponsFromParsed } from '../membership/coupons.mjs';
-import { landerFor, LANDER_BY_TIER, LANDER_BY_CAMPAIGN } from '../membership/invites.mjs'; // sow-231 P3: ONE mapping
+import { landerFor, destinationFor, LANDER_BY_TIER, LANDER_BY_CAMPAIGN } from '../membership/invites.mjs'; // sow-231 P3: ONE mapping
 import { readCouponsConfigRest } from './lib/kv-mirror.mjs'; // sow-291 Phase 2: the registry is KV-native now
 
 const SITE = process.env.SITE_BASE_URL || 'https://gbti.network';
@@ -51,7 +51,21 @@ async function readRegistry() {
 /** The lander that describes what `coupon` grants, or null when nothing does. Pure. */
 export function resolveLander(coupon) {
   if (!coupon || !coupon.code) return null;
-  return landerFor({ code: coupon.code, tier: coupon.tier });
+  // `id` as well as `code`, because a per-campaign lander is a property of the CAMPAIGN and must survive a code
+  // rotation. They are the same string on every campaign today, so this changes nothing yet and stops being a
+  // latent miss the day one diverges.
+  return landerFor({ id: coupon.id, code: coupon.code, tier: coupon.tier });
+}
+
+/**
+ * sow-457: WHERE THIS CAMPAIGN'S LINK ACTUALLY GOES, which is what somebody running this CLI is about to paste
+ * into a message. For a campaign with a destination (the YouTube creators land on the article they were
+ * featured in, with a claim dialog over it) that is not the lander, and printing the lander here would hand out
+ * a link nobody is being sent. Falls back to the lander, so every other campaign prints exactly as before.
+ */
+export function resolveDestination(coupon) {
+  if (!coupon || !coupon.code) return null;
+  return destinationFor({ id: coupon.id, code: coupon.code, tier: coupon.tier });
 }
 
 /** Why a coupon is not sendable right now, or null when it is. Mirrors couponIsRedeemable plus the cap. */
@@ -69,6 +83,7 @@ export function blockedReason(c, now = new Date()) {
 export function inviteRow(c, now = new Date()) {
   const blocked = blockedReason(c, now);
   const lander = resolveLander(c);
+  const destination = resolveDestination(c);
   const warnings = [];
   // The pairing check. A coupon with no tier cannot be matched to a lander at all, and validateCoupons
   // already rejects that for an ACTIVE coupon, so reaching it here means an inactive one or a registry
@@ -83,7 +98,10 @@ export function inviteRow(c, now = new Date()) {
     note: c.note ?? '',
     sendable: !blocked && Boolean(lander),
     blocked,
-    url: lander ? `${SITE}${lander}?coupon=${c.code}` : null,
+    url: destination ? `${SITE}${destination}?coupon=${c.code}` : null,
+    // Reported when the two differ, so the operator can see that the link does NOT go to the page describing
+    // the tier, rather than wondering later why it did not.
+    lander: destination && lander && destination !== lander ? lander : null,
     warnings,
   };
 }
@@ -113,6 +131,7 @@ if (asJson) {
     console.log(`  ${r.code}  [tier: ${r.tier ?? 'NONE'} · ${years}${r.maxRedemptions === null ? ' · uncapped' : ` · max ${r.maxRedemptions}`}]`);
     if (r.note) console.log(`    ${r.note}`);
     console.log(`    ${r.url ?? '(no lander: not sendable)'}`);
+    if (r.lander) console.log(`    (the page describing this tier is ${r.lander}; the link above opens the campaign's own destination)`);
     if (r.blocked) console.log(`    NOT SENDABLE: ${r.blocked}`);
     for (const w of r.warnings) console.log(`    WARNING: ${w}`);
     console.log('');

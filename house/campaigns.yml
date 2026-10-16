@@ -34,4 +34,4 @@ campaigns:
   - id: YOUTUBE2026
     tier: member
     active: true
-    lander: /youtube-invite/
+    lander: /member-invite/

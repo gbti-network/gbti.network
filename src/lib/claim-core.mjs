@@ -113,17 +113,24 @@ export function claimReturnPath(code) {
  * Returns null when there is no token or no valid code, so a button can never send a half-built request.
  */
 /**
- * @param {{ signupBase?: string, token?: string, code?: string|null, ref?: string, via?: string, sid?: string }} [opts]
+ * sow-457: `returnTo` is where the member lands after the OAuth hops. It DEFAULTS to the claim page for this
+ * invitation, which is what every existing caller wants and gets without passing anything. Pass null to omit it,
+ * which is what the on-page invitation dialog does (src/lib/invite-claim.ts): there is nothing to come back to,
+ * so a new member should land on the welcome exactly as they do from the invite landers, which send no return_to
+ * either. One builder, so the single-use-token handling and the cookie forwarding below cannot diverge into two.
+ *
+ * @param {{ signupBase?: string, token?: string, code?: string|null, ref?: string, via?: string, sid?: string, returnTo?: string|null }} [opts]
  * @returns {string|null}
  */
-export function buildClaimSigninUrl({ signupBase, token, code, ref = '', via = '', sid = '' } = {}) {
+export function buildClaimSigninUrl({ signupBase, token, code, ref = '', via = '', sid = '', returnTo = undefined } = {}) {
   const c = normalizeClaimCode(code);
   if (!c || typeof token !== 'string' || !token || typeof signupBase !== 'string' || !/^https?:\/\//.test(signupBase)) return null;
   let u;
   try { u = new URL(`${signupBase.replace(/\/+$/, '')}/signup/start`); } catch { return null; }
   u.searchParams.set('cf-turnstile-response', token);
   u.searchParams.set('coupon', c);
-  u.searchParams.set('return_to', claimReturnPath(c));
+  const back = returnTo === undefined ? claimReturnPath(c) : returnTo;
+  if (back) u.searchParams.set('return_to', back);
   if (ref) u.searchParams.set('ref', String(ref));
   if (via) u.searchParams.set('via', String(via));
   if (sid) u.searchParams.set('sid', String(sid));
