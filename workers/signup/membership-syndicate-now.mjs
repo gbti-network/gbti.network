@@ -158,7 +158,9 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   // SOW-138: the PUBLIC body template travels RAW to the adapter ({body} resolves there, where the fetched
   // article is available); it is NOT server-rendered here like the byline/footer/stub.
   const devtoBodyTemplate = String(payload?.devtoBodyTemplate || '').trim();
-  const devtoDraft = payload?.devtoDraft === true;
+  // Owner, 2026-10-17: dev.to saves a DRAFT unless the popup's "Publish on dev.to right away" box is ticked. An
+  // older client still sends `devtoDraft: true` when it wants a draft; that keeps meaning draft.
+  const devtoPublish = payload?.devtoPublish === true && payload?.devtoDraft !== true;
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
   // guard (a body/encryptedBody never reaches the queue or a channel).
@@ -225,7 +227,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
         }
       : destination === 'devto'
         ? {
-            devtoDraft,
+            devtoPublish,
             // The byline + the CTA footer: the popup's edits, else the stored templates
             // (channel override -> shared -> built-in).
             devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto', { stub: item.membersOnly === true }) || '', item, { limit: 800 }),

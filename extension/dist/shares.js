@@ -30488,7 +30488,8 @@ ${BLOCKED_PILL_CSS}
       const label = CH_LABEL[t.channel] || t.channel;
       const url = composeUrl(t);
       const x = this._extra(t);
-      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc2(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc2(label)}</button>` : `<button class="btn copy" data-copy="${esc2(t.id)}" type="button">Copy text</button>`;
+      const postLabel = t.channel === "devto" ? "Save to dev.to as a draft" : `Post now to ${esc2(label)}`;
+      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} ${postLabel}</button>` : url ? `<button class="btn assist" data-assist="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc2(label)}</button>` : `<button class="btn copy" data-copy="${esc2(t.id)}" type="button">Copy text</button>`;
       return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
       <div class="top"><span class="src">${esc2(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc2(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc2(fmtDate2(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc2(this._pasteText(t, "text"))}</div>
@@ -30497,7 +30498,7 @@ ${BLOCKED_PILL_CSS}
     </div>`;
     }
     _doneRow(t) {
-      return `<div class="row"><span class="src">${esc2(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "sent")}<span class="ti">${esc2(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc2(fmtDate2(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>`;
+      return `<div class="row"><span class="src">${esc2(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, t.postedDraft ? "draft" : "sent")}<span class="ti">${esc2(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc2(fmtDate2(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>`;
     }
     _autoRow(it2) {
       const chans = Object.entries(it2.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
@@ -30583,7 +30584,8 @@ ${BLOCKED_PILL_CSS}
       if (action === "post") {
         const t = this._byId(id);
         const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
-        if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+        const ask = t?.channel === "devto" ? "Save this to dev.to as a draft? It stays private until you publish it on dev.to." : `Post this to ${label} now? The reviewed text above is exactly what goes out.`;
+        if (typeof confirm === "function" && !confirm(ask)) return;
       }
       const opt = applyQueueAction(this._data, action, id);
       if (opt) {
@@ -30602,8 +30604,8 @@ ${BLOCKED_PILL_CSS}
       this._rowBusy = id;
       this.render();
       try {
-        await this.client.socialQueueAction({ action, id });
-        this._msg = action === "post" ? "Posted." : "Done.";
+        const res = await this.client.socialQueueAction({ action, id });
+        this._msg = action !== "post" ? "Done." : res?.draft ? "Saved as a draft on dev.to. Review and publish it from your dev.to dashboard (dev.to/dashboard)." : "Posted.";
         await this.load();
       } catch (e) {
         this._msg = e?.message || "Action failed.";

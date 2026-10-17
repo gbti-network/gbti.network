@@ -7,7 +7,7 @@
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
 import { isSyndicationEnabled, requiresApproval, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs, MATRIX_CHANNELS, channelCapability } from '../../membership/syndication-config-core.mjs';
-import { renderChannelText, renderRedditTitle, renderRedditComment } from '../../membership/syndication-render.mjs'; // SOW-121
+import { renderChannelText, renderRedditTitle, renderRedditComment, renderDevtoTitle } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
 import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
@@ -111,9 +111,12 @@ export async function drainSyndication(env, {
         // one) and the author note is a second template posted as the first comment. Every other channel is
         // unchanged: one template, one block of text, one action.
         const isReddit = ch === 'reddit';
+        // dev.to's text is the article TITLE, so it takes the channel-only title chain too (2026-10-17).
         const text = isReddit
           ? renderRedditTitle(cfg, item)
-          : renderChannelText(cfg, item, ch, { channelOnly: channelCapability(ch) === 'manual' });
+          : ch === 'devto'
+            ? renderDevtoTitle(cfg, item)
+            : renderChannelText(cfg, item, ch, { channelOnly: channelCapability(ch) === 'manual' });
         // The author note rides as the FIRST COMMENT, not a body: a manual Reddit submission is a link post
         // (that is what earns the preview card) and a link post has no body. Empty for an item with no note,
         // which is every share, and the queue row then shows no comment block at all.

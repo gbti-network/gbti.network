@@ -89,9 +89,11 @@ export async function handleSocialQueueAction(request, env, deps = {}) {
       return { status: 502, body: { error: 'post_failed', message: result?.error || 'post failed' } };
     }
     const { task: posted } = applyTaskAction(task, 'done', { githubId: auth.githubId, login: auth.login }, Number(now()));
-    const next = { ...posted, postedId: result.id ?? null, postedUrl: result.url ?? null, postedVia: 'adapter' };
+    // A dev.to post is a draft (owner, 2026-10-17), so the task records that and the reply says so: nothing is
+    // public until a superadmin publishes it on dev.to.
+    const next = { ...posted, postedId: result.id ?? null, postedUrl: result.url ?? null, postedVia: 'adapter', postedDraft: result.draft === true };
     await putTask(kv, next);
-    return { status: 200, body: { ok: true, id, status: 'done', posted: true, postedUrl: next.postedUrl } };
+    return { status: 200, body: { ok: true, id, status: 'done', posted: true, postedUrl: next.postedUrl, draft: next.postedDraft } };
   }
 
   const { task: next, remove, ok } = applyTaskAction(task, action, { githubId: auth.githubId, login: auth.login }, Number(now()));

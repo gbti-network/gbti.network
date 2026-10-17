@@ -278,14 +278,20 @@ test('POST devto: the byline + draft flag reach the adapter; a skip is a 409', a
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
   const envDevto = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466', SIGNUP_KV: kv };
   let seen = null;
-  const adapters = { devto: { name: 'devto', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: '7', url: 'https://dev.to/x', draft: it.devtoDraft === true }; } } };
+  const adapters = { devto: { name: 'devto', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: '7', url: 'https://dev.to/x', draft: it.devtoPublish !== true }; } } };
   const r = await handleSyndicateNow(
     req({ destination: 'devto', item: ITEM, template: '{title}', devtoIntroTemplate: 'By {fullName}.', devtoDraft: true }),
     envDevto, { kv, authorize: superadmin, adapters });
   assert.equal(r.status, 200);
   assert.equal(r.body.draft, true);
-  assert.equal(seen.devtoDraft, true);
+  assert.equal(seen.devtoPublish, false, 'an old client asking for a draft still gets one');
   assert.match(seen.devtoIntro, /^By @?.?atwellpub\.|^By /);
+  // No flag at all is a draft too (owner, 2026-10-17); only the "Publish on dev.to right away" box publishes.
+  await handleSyndicateNow(req({ destination: 'devto', item: ITEM, template: '{title}' }), envDevto, { kv, authorize: superadmin, adapters });
+  assert.equal(seen.devtoPublish, false);
+  const pub = await handleSyndicateNow(req({ destination: 'devto', item: ITEM, template: '{title}', devtoPublish: true }), envDevto, { kv, authorize: superadmin, adapters });
+  assert.equal(seen.devtoPublish, true);
+  assert.equal(pub.body.draft, false);
   // A skip surfaces as a refusal, never a sent record.
   const skipping = { devto: { name: 'devto', enabled: () => true, post: async () => ({ ok: true, skipped: true, reason: 'members-only items never crosspost' }) } };
   const sk = await handleSyndicateNow(req({ destination: 'devto', item: ITEM, template: '{title}' }), envDevto, { kv, authorize: superadmin, adapters: skipping });

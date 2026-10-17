@@ -33,6 +33,28 @@ const DEFAULT_INTRO = '**By {member-devto-handle}, [GBTI Network Supporter]({mem
 // The stub middle is now the devto-stub TEMPLATE (admin-editable; the old hardcoded read-more line
 // lives on inside DEFAULT_STUB_TEMPLATES['devto-stub']).
 
+// The public per-type indexes the site publishes, each listing every item's slug, author and repository path.
+const INDEX_FOR = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
+
+/**
+ * Where an item lives NOW. A queued item records the folder it was published from, and an item can move between
+ * folders afterwards (Jockey Radio moved from atwellpub to gbtilabs on 2026-10-14; its dev.to task then failed
+ * with "could not read the canonical file (404)"). The public URL keys on the slug alone, so the site's index for
+ * the type finds the current file. Returns { path, author } or null. Never throws.
+ */
+export async function currentLocationFor(item, fetchImpl) {
+  const index = INDEX_FOR[item?.source];
+  const slug = String(item?.targetSlug || '').split('/').filter(Boolean).pop() || '';
+  if (!index || !slug) return null;
+  try {
+    const res = await fetchImpl(`${SITE}/${index}`, { headers: { 'User-Agent': USER_AGENT } });
+    if (!res?.ok) return null;
+    const data = await res.json();
+    const hit = (Array.isArray(data?.items) ? data.items : []).find((it) => it?.slug === slug && /^(members|house)\/[a-z0-9._\/-]+\/index\.md$/i.test(String(it?.path || '')) && !String(it.path).includes('..'));
+    return hit ? { path: String(hit.path), author: String(hit.author || '') } : null;
+  } catch { return null; }
+}
+
 function absoluteImage(image) {
   const v = String(image || '').trim();
   if (!v) return undefined;
@@ -53,14 +75,36 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
       const path = contentPathFor(item);
       if (!path) return { ok: true, skipped: true, reason: 'no canonical path for the item' };
 
-      let raw;
-      try {
-        const res = await fetchImpl(`${RAW_BASE}/${path}`, { headers: { 'User-Agent': USER_AGENT } });
-        if (!res?.ok) return { ok: false, error: `devto: could not read the canonical file (${res?.status ?? 'no response'})` };
-        raw = await res.text();
-      } catch (err) {
-        return { ok: false, error: `devto: canonical read failed (${err?.message || 'fetch error'})`.slice(0, 160) };
+      const readRaw = async (p) => {
+        try {
+          const res = await fetchImpl(`${RAW_BASE}/${p}`, { headers: { 'User-Agent': USER_AGENT } });
+          return res?.ok ? { text: await res.text() } : { status: res?.status ?? 'no response' };
+        } catch (err) {
+          return { error: `devto: canonical read failed (${err?.message || 'fetch error'})`.slice(0, 160) };
+        }
+      };
+      let read = await readRaw(path);
+      if (read.status === 404) {
+        // The item moved folders after it was queued: read it where it lives now, and credit its current author.
+        const now = await currentLocationFor(item, fetchImpl);
+        if (now && now.path !== path) {
+          const moved = await readRaw(now.path);
+          if (typeof moved.text === 'string') {
+            read = moved;
+            const authorChanged = now.author && now.author !== item.author;
+            item = {
+              ...item,
+              targetSlug: now.path.replace(/\/index\.md$/, ''),
+              ...(authorChanged
+                ? { author: now.author, authorName: null, authorDevto: null, authorX: null, authorBluesky: null, authorReddit: null, authorMastodon: null, mention: null }
+                : {}),
+            };
+          }
+        }
       }
+      if (read.error) return { ok: false, error: read.error };
+      if (typeof read.text !== 'string') return { ok: false, error: `devto: could not read the canonical file (${read.status})` };
+      const raw = read.text;
 
       // The byline + the CTA footer: the manual rail pre-renders them (item.devtoIntro/devtoFooter);
       // the AUTO rail falls back to the admin-stored channel templates via cfg, then the built-ins.
@@ -94,7 +138,11 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
         body_markdown: prepared.body,
         canonical_url: String(item.url || '') || undefined,
         tags: prepared.tags,
-        published: item.devtoDraft ? false : true,
+        // Owner, 2026-10-17: every dev.to post is a DRAFT in the GBTI organization unless the request explicitly
+        // asks to publish. A superadmin reviews it on dev.to and presses Publish there. The default lives here, in
+        // the one place every path converges (Social Queue Post now, Syndicate now, any automatic cell), so an older
+        // client that sends no flag gets a draft too. A legacy `devtoDraft: true` still wins over a publish request.
+        published: item.devtoPublish === true && item.devtoDraft !== true,
         ...(Number(env.DEVTO_ORG_ID) ? { organization_id: Number(env.DEVTO_ORG_ID) } : {}),
         // SOW-139: a custom cover wins, else the branded per-type feature card (never no cover), mirroring the
         // website's defaultFeatureImage fallback so an uncovered crosspost still reads as GBTI.

@@ -403,7 +403,7 @@ class GbtiSyndicateNow extends GbtiElement {
         <label>CTA preview</label>
         <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
         ${stubRows}
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? ' checked' : ''} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-publish style="width:auto"${this._devtoPublish ? ' checked' : ''} /> Publish on dev.to right away (otherwise it is saved as a draft to review and publish on dev.to)</label>`;
     }
     const liNote = dest === 'linkedin'
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
@@ -496,8 +496,8 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-devto-stub-preview]');
       if (pv) pv.textContent = ds.value ? renderTemplate(ds.value, this._item(), { limit: 1200 }) : '';
     });
-    const dd = this.$('[data-devto-draft]');
-    if (dd) dd.addEventListener('change', () => { this._devtoDraft = dd.checked; });
+    const dd = this.$('[data-devto-publish]');
+    if (dd) dd.addEventListener('change', () => { this._devtoPublish = dd.checked; });
     const rc = this.$('[data-reddit-comment]');
     if (rc) rc.addEventListener('input', () => {
       this._commentTemplate = rc.value;
@@ -508,7 +508,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoBodyTemplate = null; this._devtoFooterTemplate = null; this._devtoStubTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoBodyTemplate = null; this._devtoFooterTemplate = null; this._devtoStubTemplate = null; this._devtoPublish = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -559,7 +559,7 @@ class GbtiSyndicateNow extends GbtiElement {
         // SOW-138: the public body template (RAW; {body} resolves in the adapter). Members items post the stub.
         const bodyT = this._isStub() ? '' : this._effectiveDevtoBody().trim();
         if (bodyT) payload.devtoBodyTemplate = bodyT;
-        if (this._devtoDraft) payload.devtoDraft = true;
+        if (this._devtoPublish) payload.devtoPublish = true; // owner, 2026-10-17: otherwise the Worker saves a draft
       }
       if (this._dest === 'discord') {
         payload.channelId = this._channelId;

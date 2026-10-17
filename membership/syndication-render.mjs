@@ -48,6 +48,19 @@ export const REDDIT_BODY_LIMIT = 9500;
  * template fields became textareas an admin can type one in, so the strip happens here rather than by
  * special-casing the shared admin UI.
  */
+// A dev.to Social Queue task's text is the ARTICLE TITLE (the adapter posts it as `title`), so it takes the same
+// channel-only chain as the Reddit title above and falls back to '{title}'. Until 2026-10-17 the drain rendered it
+// through renderChannelText without channelOnly (dev.to is an AUTO channel routed On-Manual), which fell through to
+// the shared per-type map: the Discord announcement. Five live dev.to articles went out titled "New project
+// published by @<member>: ..." and one carried a raw Discord id. The Syndicate now popup already resolved dev.to
+// titles channel-only; only the queue path was wrong.
+export function renderDevtoTitle(cfg, item = {}) {
+  const limit = channelLimit('devto');
+  const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+  const tpl = (cfg && templateFor(cfg, item.source, 'devto', { stub: stubish, channelOnly: true })) || '{title}';
+  return mdToPlain(renderTemplate(tpl, item, { limit })).replace(/\s*\n+\s*/g, ' ').trim().slice(0, limit);
+}
+
 export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
   const limit = channelLimit('reddit');
   // sow-300: mdToPlain first, then the newline strip. A Reddit title is pasted into the composer's title

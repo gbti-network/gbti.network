@@ -140,7 +140,7 @@ test('devto adapter: the full article payload (org, canonical, cover, draft flag
   const a = JSON.parse(calls[1].opts.body).article;
   assert.equal(a.title, 'My Article');
   assert.equal(a.canonical_url, ITEM.url);
-  assert.equal(a.published, true);
+  assert.equal(a.published, false, 'a dev.to post is a draft unless the request asks to publish (owner, 2026-10-17)');
   assert.equal(a.organization_id, 10466);
   assert.equal(a.main_image, 'https://gbti.network/_astro/cover.webp');
   assert.ok(a.body_markdown.startsWith('**By Hudson Atwell.**'));
@@ -198,6 +198,12 @@ test('devto adapter: draft flag, skips (share/members/draft file), and readable 
   const draft = await ad.post({ ...ITEM, devtoDraft: true });
   assert.equal(lastBody.article.published, false);
   assert.equal(draft.draft, true);
+  // Publishing right away is an explicit request, and a legacy draft flag still wins over it.
+  const live = await ad.post({ ...ITEM, devtoPublish: true });
+  assert.equal(lastBody.article.published, true);
+  assert.equal(live.draft, false);
+  await ad.post({ ...ITEM, devtoPublish: true, devtoDraft: true });
+  assert.equal(lastBody.article.published, false);
   assert.equal((await ad.post({ ...ITEM, source: 'share' })).skipped, true);
   // A members-only FILE now posts a STUB (description + link + CTA), not a skip; the queue item's own
   // visibility copy is ignored (the canonical file is the authority).

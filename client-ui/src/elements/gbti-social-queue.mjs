@@ -213,8 +213,10 @@ class GbtiSocialQueue extends GbtiElement {
     const label = CH_LABEL[t.channel] || t.channel;
     const url = composeUrl(t);
     const x = this._extra(t);
+    // dev.to posts land as a draft in the GBTI organization (owner, 2026-10-17), so its button says so.
+    const postLabel = t.channel === 'devto' ? 'Save to dev.to as a draft' : `Post now to ${esc(label)}`;
     const primary = channelCapability(t.channel) === 'auto'
-      ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>`
+      ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} ${postLabel}</button>`
       : url
         ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>`
         : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
@@ -226,7 +228,7 @@ class GbtiSocialQueue extends GbtiElement {
     </div>`;
   }
   _doneRow(t) {
-    return `<div class="row"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, 'sent')}<span class="ti">${esc(t.title || '(untitled)')}</span><span class="when">${t.doneAt ? esc(fmtDate(t.doneAt)) : ''}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
+    return `<div class="row"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, t.postedDraft ? 'draft' : 'sent')}<span class="ti">${esc(t.title || '(untitled)')}</span><span class="when">${t.doneAt ? esc(fmtDate(t.doneAt)) : ''}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
   }
   _autoRow(it) {
     const chans = Object.entries(it.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || 'sent')).join('');
@@ -317,7 +319,10 @@ class GbtiSocialQueue extends GbtiElement {
     if (action === 'post') {
       const t = this._byId(id);
       const label = t ? (CH_LABEL[t.channel] || t.channel) : 'the channel';
-      if (typeof confirm === 'function' && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+      const ask = t?.channel === 'devto'
+        ? 'Save this to dev.to as a draft? It stays private until you publish it on dev.to.'
+        : `Post this to ${label} now? The reviewed text above is exactly what goes out.`;
+      if (typeof confirm === 'function' && !confirm(ask)) return;
     }
     // sow-282: `done` and `delete` are exactly the transformation the server performs (the same branches in
     // membership/social-queue.mjs `applyTaskAction`), so apply them locally NOW and let the Worker settle
@@ -339,7 +344,14 @@ class GbtiSocialQueue extends GbtiElement {
     // locally computable and must not be emulated: a green result could report a post that never went out.
     // It keeps waiting and keeps refetching, but the wait is now scoped to its own row.
     this._rowBusy = id; this.render();
-    try { await this.client.socialQueueAction({ action, id }); this._msg = action === 'post' ? 'Posted.' : 'Done.'; await this.load(); }
+    try {
+      const res = await this.client.socialQueueAction({ action, id });
+      // A dev.to draft has no public address until it is published (its own URL 404s), so point at the dashboard.
+      this._msg = action !== 'post' ? 'Done.'
+        : res?.draft ? 'Saved as a draft on dev.to. Review and publish it from your dev.to dashboard (dev.to/dashboard).'
+          : 'Posted.';
+      await this.load();
+    }
     catch (e) { this._msg = e?.message || 'Action failed.'; }
     finally { this._rowBusy = null; this.render(); }
   }
