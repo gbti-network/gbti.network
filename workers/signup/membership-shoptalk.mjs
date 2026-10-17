@@ -107,16 +107,23 @@ export async function handleShoptalk(request, env, {
     let nextCall = null;
     let declined = false; // on the list, and answered No on the calendar
     let dropped = false;  // invited once, no longer on the list: the sweep will not re-invite (rule 5)
+    // sow-466: THE CALENDAR CALL IS WRAPPED, and the paragraph above is why. "Optional on a READ" was the
+    // stated contract and not the behaviour: `nextOccurrences` REJECTS on an expired token, a quota error or
+    // any network fault, nothing caught it, and the Worker's catch-all turned the member's page into a 500.
+    // Every answer this route gives is already designed to carry "unknown" (`enrolled: null`), so an
+    // unreachable calendar now produces that instead of an error page.
     if (calendar) {
-      const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
-      if (!isSeriesProblem(s)) {
-        nextCall = s.startsAt;
-        const read = await readGuests(calendar, s.seriesId);
-        if (read) {
-          enrolled = address ? read.guests.includes(address) : false;
-          declined = enrolled && read.declined.has(address);
+      try {
+        const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
+        if (!isSeriesProblem(s)) {
+          nextCall = s.startsAt;
+          const read = await readGuests(calendar, s.seriesId);
+          if (read) {
+            enrolled = address ? read.guests.includes(address) : false;
+            declined = enrolled && read.declined.has(address);
+          }
         }
-      }
+      } catch { /* enrolled stays null: we could not look, which is not the same as "not on the list" */ }
     }
     if (enrolled === false && !optedOut) dropped = await everInvited(kv, address);
     return { status: 200, body: { ok: true, eligible, status: auth.status, enrolled, declined, dropped, address: address || null, addressSource: address ? source : null, optedOut, nextCall } };
@@ -187,9 +194,17 @@ export async function handleShoptalk(request, env, {
     message: 'recorded; the change reaches the calendar on the next sweep' } };
   if (!calendar) return action === 'leave' ? recorded : unavailable;
 
-  const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
-  if (isSeriesProblem(s)) return action === 'leave' ? recorded : unavailable;
-  const read = (await readGuests(calendar, s.seriesId)) || { guests: [], declined: new Set() };
+  // Same guard on the WRITE path, answered through the two responses above rather than an error page: a leave
+  // is recorded for the sweep to finish, and a rejoin says to try again, which is what those exist for.
+  let s;
+  let read;
+  try {
+    s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
+    if (isSeriesProblem(s)) return action === 'leave' ? recorded : unavailable;
+    read = (await readGuests(calendar, s.seriesId)) || { guests: [], declined: new Set() };
+  } catch {
+    return action === 'leave' ? recorded : unavailable;
+  }
   // sow-466: a member who moved their seat has their OLD address taken off in the same request. Leaving it
   // holds two seats on one person, and the stale one keeps receiving the Meet link at the address they just
   // told us they do not read. The removal is silent: a cancellation notice for a seat they never saw is mail

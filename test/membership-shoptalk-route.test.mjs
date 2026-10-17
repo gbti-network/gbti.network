@@ -372,3 +372,42 @@ test('the key the Worker WRITES is the key the sweep READS', async () => {
   const { ADDR_PREFIX } = await import('../scripts/lib/shoptalk-state.mjs');
   assert.equal(SHOPTALK_ADDRESS_KEY('42'), `${ADDR_PREFIX}42`);
 });
+
+// ---- sow-466: a calendar that THROWS, which is what a stale token or a quota error looks like -------------
+
+const throwingCal = () => ({
+  writes: [],
+  async nextOccurrences() { throw new Error('invalid_grant'); },
+  async listAttendees() { throw new Error('invalid_grant'); },
+  async setAttendees() { throw new Error('invalid_grant'); },
+});
+
+test('an unreachable calendar answers "unknown", never an error page', async () => {
+  // The route documented this as optional on a read and did not implement it: the rejection went straight to
+  // the Worker's catch-all and the member got a 500 with no idea why.
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.enrolled, null, 'unknown, which is not the same as "not on the list"');
+  assert.equal(r.body.eligible, true, 'what we DO know is still reported');
+  assert.equal(r.body.address, 'm@x.com');
+});
+
+test('a LEAVE against an unreachable calendar is recorded for the sweep to finish', async () => {
+  const kv = fakeKv();
+  const r = await handleShoptalk(req('POST', { action: 'leave' }), {}, {
+    kv, authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.applied, false);
+  assert.ok(kv.map.has(SHOPTALK_OPTOUT_KEY('1')), 'the marker is set, so the sweep completes the removal');
+});
+
+test('a REJOIN against an unreachable calendar says try again, and promises nothing', async () => {
+  const r = await handleShoptalk(req('POST', { action: 'rejoin' }), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 503);
+  assert.equal(r.body.error, 'calendar_unavailable');
+});
