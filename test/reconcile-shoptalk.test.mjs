@@ -20,13 +20,32 @@ function fakeCal(guests = []) {
   };
   return cal;
 }
-/** KV over REST: key list for the opt-out prefix, value read for the placed doc, PUT for the write-back. */
-function kvFetch({ optoutKeys = [], placed = null, puts = [] } = {}) {
+/**
+ * KV over REST: key lists by prefix, value read for the placed doc, PUT for the write-back.
+ *
+ * sow-466: THE FAKE IS PREFIX-AWARE, and it has to be. It used to answer every key listing with the opt-out
+ * keys whatever prefix was asked for, which was harmless while one prefix was listed and became a false red
+ * the moment a second one was: readPreferred listed `shoptalk:addr:`, was handed `shoptalk:optout:42`, could
+ * not read it as an address record and correctly refused. The fault was the fake modelling an API that
+ * ignores its own query parameter.
+ */
+function kvFetch({ optoutKeys = [], addrs = {}, placed = null, puts = [] } = {}) {
   return async (url, init = {}) => {
     const u = String(url);
     if (init.method === 'PUT') { puts.push(init.body); return { ok: true, status: 200 }; }
-    if (u.includes('/keys?')) return { ok: true, status: 200, json: async () => ({ result: optoutKeys.map((k) => ({ name: k })), result_info: {} }) };
+    if (u.includes('/keys?')) {
+      const prefix = new URL(u).searchParams.get('prefix') || '';
+      const names = prefix.startsWith('shoptalk:addr') ? Object.keys(addrs) : optoutKeys;
+      return { ok: true, status: 200, json: async () => ({ result: names.map((k) => ({ name: k })), result_info: {} }) };
+    }
     if (u.includes('/values/')) {
+      const key = decodeURIComponent(u.slice(u.indexOf('/values/') + '/values/'.length));
+      if (key.startsWith('shoptalk:addr:')) {
+        const v = addrs[key];
+        return v === undefined
+          ? { ok: false, status: 404 }
+          : { ok: true, status: 200, json: async () => v, text: async () => JSON.stringify(v) };
+      }
       if (placed === null) return { ok: false, status: 404 };
       return { ok: true, status: 200, text: async () => JSON.stringify(placed) };
     }
@@ -110,4 +129,57 @@ test('the summary line distinguishes applied from planned', async () => {
   assert.match(dry.summary, /planned/);
   const wet = await enactShoptalk([member('1', 'paid', 'a@x.com')], { env: CREDS, apply: true, calendar: fakeCal([]), fetchImpl: kvFetch({}) });
   assert.match(wet.summary, /applied/);
+});
+
+// ---- sow-466: the address a member chose for themselves ---------------------------------------------------
+
+test('a CHOSEN address is what gets enrolled, not the billing address on file', async () => {
+  const cal = fakeCal([]);
+  const r = await enactShoptalk([member('7', 'paid', 'billing@x.com')], {
+    env: CREDS,
+    apply: true,
+    calendar: cal,
+    fetchImpl: kvFetch({ addrs: { 'shoptalk:addr:7': { address: 'calendar@x.com', at: '2026-10-17T00:00:00Z' } } }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(cal.writes[0].list, ['calendar@x.com'], 'the sweep invites the address the member chose');
+});
+
+test('a member who already sits under their CHOSEN address is not given a second seat', async () => {
+  // The regression this exists for: without the override the sweep resolves the billing address, does not
+  // find it on the guest list, and adds it. The member then holds two seats and gets an invitation at the
+  // address they told us not to use, every night, which is the original complaint on a timer.
+  const cal = fakeCal(['calendar@x.com']);
+  const r = await enactShoptalk([member('7', 'paid', 'billing@x.com')], {
+    env: CREDS,
+    apply: true,
+    calendar: cal,
+    fetchImpl: kvFetch({ addrs: { 'shoptalk:addr:7': { address: 'calendar@x.com', at: '2026-10-17T00:00:00Z' } } }),
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.counts.add, 0, 'nothing to add: their seat is already the one they asked for');
+  assert.equal(cal.writes.length, 0, 'and the calendar is not touched at all');
+});
+
+test('an UNREADABLE chosen address refuses the sweep rather than falling back to billing', async () => {
+  // A dropped override does not read as "no override", it reads as "use the billing address", which is how
+  // the duplicate seat above gets created. So it aborts, like every other unreadable record here.
+  const cal = fakeCal([]);
+  const unreadable = async (url, init = {}) => {
+    const u = String(url);
+    if (init.method === 'PUT') return { ok: true, status: 200 };
+    if (u.includes('/keys?')) {
+      const prefix = new URL(u).searchParams.get('prefix') || '';
+      const names = prefix.startsWith('shoptalk:addr') ? ['shoptalk:addr:7'] : [];
+      return { ok: true, status: 200, json: async () => ({ result: names.map((k) => ({ name: k })), result_info: {} }) };
+    }
+    if (u.includes('/values/')) return { ok: false, status: 500 }; // the read itself fails
+    return { ok: false, status: 404 };
+  };
+  const r = await enactShoptalk([member('7', 'paid', 'billing@x.com')], {
+    env: CREDS, apply: true, calendar: cal, fetchImpl: unreadable,
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /chosen calendar address/);
+  assert.equal(cal.writes.length, 0, 'a refusal must not touch the calendar');
 });

@@ -27,7 +27,7 @@ import { redemptionKey, redemptionCountKey } from '../../membership/coupons.mjs'
 import { listCouponRedemptions } from './coupon-grants.mjs';
 import { couponLockKey, COUPON_LOCK_VALUE } from '../../membership/coupon-lock.mjs'; // sow-212: the minimized lock
 import { FOLLOWERS_KEY, normalizeFollowers, applyFollower } from '../../membership/member-followers.mjs'; // SOW-186 phase 3
-import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, readSeen as readShoptalkSeen, writeSeen as writeShoptalkSeen, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX } from './shoptalk-state.mjs'; // sow-314
+import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, readSeen as readShoptalkSeen, writeSeen as writeShoptalkSeen, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX, ADDR_PREFIX as SHOPTALK_ADDR_PREFIX } from './shoptalk-state.mjs'; // sow-314, sow-466
 import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs'; // sow-314
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
@@ -70,7 +70,8 @@ export async function eraseFollows({ githubId, env = process.env, fetchImpl = gl
  * reaches a system this project does not own (the owner's Google Calendar guest list), so it is the step that
  * makes the feature lawful to run at all: enrollment put an address there, erasure must take it away.
  *
- * Three things, in this order: (1) delete the opt-out marker shoptalk:optout:<id>; (2) find every address the
+ * Three things, in this order: (1) delete the opt-out marker shoptalk:optout:<id> and the chosen-address
+ * marker shoptalk:addr:<id> (sow-466), both keyed by account number and both personal data; (2) find every address the
  * placed record attributes to this github_id; (3) if any, remove them from the series' guest list (Google mails
  * the un-invite), then drop them from shoptalk:placed so the sweep never re-adds or "removes" them again.
  *
@@ -81,21 +82,28 @@ export async function eraseFollows({ githubId, env = process.env, fetchImpl = gl
 export async function eraseShoptalk({ githubId, env = process.env, fetchImpl = globalThis.fetch, calendar = null } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   const id = String(githubId);
+  // deleteKvKey answers `{ deleted, key }`. Both fields below read `deleted` and not `ok`, which is a
+  // correction: `optOutDeleted` tested `opt?.ok` and so reported FALSE on every successful erasure since
+  // sow-314. Nothing asserted it and nothing printed it, so an audit field that always said "the marker was
+  // not deleted" went unnoticed. Both are asserted now.
   const opt = await deleteKvKey({ key: `${SHOPTALK_OPTOUT_PREFIX}${id}`, env, fetchImpl });
+  // sow-466: the address the member chose is an email address attached to their account number, so it is
+  // erased here with the opt-out marker. It is per-member for exactly this reason.
+  const addr = await deleteKvKey({ key: `${SHOPTALK_ADDR_PREFIX}${id}`, env, fetchImpl });
   // The seen record (rule 5) holds the member's address keyed to their id: personal data, scrubbed here. Read
   // fail-closed like the placed record; an unreadable record is reported, never overwritten.
   const seenRead = await readShoptalkSeen({ env, fetchImpl });
-  if (!seenRead.ok) return { ok: false, reason: `shoptalk: ${seenRead.reason}`, optOutDeleted: opt?.ok === true };
+  if (!seenRead.ok) return { ok: false, reason: `shoptalk: ${seenRead.reason}`, optOutDeleted: opt?.deleted === true, addressDeleted: addr?.deleted === true };
   const mineSeen = [...seenRead.seen.entries()].filter(([, who]) => who === id).map(([address]) => address);
   if (mineSeen.length) {
     for (const address of mineSeen) seenRead.seen.delete(address);
     const wroteSeen = await writeShoptalkSeen(seenRead.seen, { env, fetchImpl });
-    if (wroteSeen && wroteSeen.ok === false) return { ok: false, reason: 'shoptalk: the seen record could not be rewritten', optOutDeleted: opt?.ok === true };
+    if (wroteSeen && wroteSeen.ok === false) return { ok: false, reason: 'shoptalk: the seen record could not be rewritten', optOutDeleted: opt?.deleted === true, addressDeleted: addr?.deleted === true };
   }
   const placedRead = await readShoptalkPlaced({ env, fetchImpl });
-  if (!placedRead.ok) return { ok: false, reason: `shoptalk: ${placedRead.reason}`, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
+  if (!placedRead.ok) return { ok: false, reason: `shoptalk: ${placedRead.reason}`, optOutDeleted: opt?.deleted === true, addressDeleted: addr?.deleted === true, seenScrubbed: mineSeen.length };
   const mine = [...placedRead.placed.entries()].filter(([, who]) => who === id).map(([address]) => address);
-  if (!mine.length) return { ok: true, skipped: true, reason: 'not on the Shop Talk placed record', matched: 0, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
+  if (!mine.length) return { ok: true, skipped: true, reason: 'not on the Shop Talk placed record', matched: 0, optOutDeleted: opt?.deleted === true, addressDeleted: addr?.deleted === true, seenScrubbed: mineSeen.length };
   const cal = calendar ?? (
     env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN
       ? createGoogleCalendarClient({
@@ -113,7 +121,7 @@ export async function eraseShoptalk({ githubId, env = process.env, fetchImpl = g
   for (const address of mine) placedRead.placed.delete(address);
   const wrote = await writeShoptalkPlaced(placedRead.placed, { env, fetchImpl });
   if (wrote && wrote.ok === false) return { ok: false, reason: 'shoptalk: the address left the event but the placed record could not be rewritten; the next sweep will report it', matched: mine.length, removedFromEvent: next.length !== guests.length };
-  return { ok: true, matched: mine.length, removedFromEvent: next.length !== guests.length, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
+  return { ok: true, matched: mine.length, removedFromEvent: next.length !== guests.length, optOutDeleted: opt?.deleted === true, addressDeleted: addr?.deleted === true, seenScrubbed: mineSeen.length };
 }
 
 export async function erasePrefs({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
@@ -461,7 +469,7 @@ export function planErasure({ githubId, username } = {}) {
     // lockstep, because the same drift is otherwise invisible: nothing fails when the plan falls behind.
     { step: 'follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-023: hard-delete the OUTBOUND follow graph (follows:${githubId}). Inbound follows self-heal, since the feed drops a followed username with no published profile.` },
     { step: 'prefs', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-046: hard-delete the member's prefs (prefs:${githubId}: category interests + followed news channels).` },
-    { step: 'shoptalk', auto: true, tool: 'erase-member.mjs --apply', action: `sow-314: remove the member's address from the Saturday Shop Talk event (a Google Calendar guest list this project does not own; Google mails the un-invite), drop it from shoptalk:placed, and delete shoptalk:optout:${githubId}. Fails closed without calendar credentials.` },
+    { step: 'shoptalk', auto: true, tool: 'erase-member.mjs --apply', action: `sow-314: remove the member's address from the Saturday Shop Talk event (a Google Calendar guest list this project does not own; Google mails the un-invite), drop it from shoptalk:placed, and delete shoptalk:optout:${githubId} plus shoptalk:addr:${githubId} (sow-466: the address they chose for the invitation). Fails closed without calendar credentials.` },
     { step: 'drafts', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-157: hard-delete the hosted draft store (drafts:${githubId}), which may contain unpublished text.` },
     { step: 'prepared-listings', auto: true, tool: 'erase-member.mjs --apply', action: `sow-427: sweep invite-listing:* and invite:*. A prepared listing tied to github_id ${githubId}, redeemed by them or pending their claim, and never claimed, is DELETED with its images (invite-listing-img:<id>:*), and its invitation is revoked before its tie is removed. A listing they claimed keeps only the fact of the claim (the greeting name, title, slug, claimant fields and tie are nulled). Invites naming them as claimant, pending claimant or tied account have those fields nulled. Runs before redeemed-invites, which it reads.` },
     { step: 'redeemed-invites', auto: true, tool: 'erase-member.mjs --apply', action: `Minimize every invite this member redeemed (invite:*): null redeemedBy + redeemedByLogin, KEEP redeemedAt (a date with nobody attached identifies nobody). The superadmin administration note is deliberately left alone; redacting an admin's own outreach text is the owner's call, not a cleanup step's.` },

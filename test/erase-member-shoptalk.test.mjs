@@ -49,6 +49,7 @@ test('the member comes off the event, off the placed record, and their opt-out m
   assert.equal(cal.written[0].opts.sendUpdates, 'all', 'Google mails the un-invite');
   assert.deepEqual(JSON.parse(kv.store.get('shoptalk:placed')), { 'other@example.com': '12' }, 'the placed record no longer names the address');
   assert.ok(!kv.store.has('shoptalk:optout:77'), 'the opt-out marker is gone');
+  assert.equal(r.optOutDeleted, true, 'and the audit says so: this field read false on every success until sow-466');
 });
 
 test('a member who was never placed: nothing touches the calendar, the marker still goes', async () => {
@@ -117,4 +118,19 @@ test('erasure with NO seen record yet is a cold start, not a failure', async () 
   assert.equal(r.ok, true);
   assert.equal(r.seenScrubbed, 0);
   assert.ok(!kv.writes.some(([m, k]) => m === 'PUT' && k === 'shoptalk:seen'), 'nothing to scrub means nothing written');
+});
+
+// ---- sow-466: the address the member chose is personal data and is erased with the rest ------------------
+
+test('the chosen calendar address is deleted', async () => {
+  const kv = fakeKv({ 'shoptalk:placed': PLACED, 'shoptalk:addr:77': '{"address":"calendar@x.com"}' });
+  const cal = fakeCalendar(['owner@example.com', 'stef@example.com']);
+  const r = await eraseShoptalk({ githubId: '77', env: CF, fetchImpl: kv.fetchImpl, calendar: cal });
+  assert.equal(r.addressDeleted, true, 'the erasure reports it, so a failure to delete cannot read as a success');
+  assert.ok(!kv.store.has('shoptalk:addr:77'), 'the chosen address is gone from KV');
+});
+
+test('the plan names the chosen-address key too', () => {
+  const step = planErasure({ githubId: '77', username: 'stef' }).find((s) => s.step === 'shoptalk');
+  assert.match(step.action, /shoptalk:addr:77/);
 });

@@ -1,13 +1,23 @@
 // sow-314: the member-facing Shop Talk endpoint.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleShoptalk, eraseMemberShoptalk, SHOPTALK_OPTOUT_KEY } from '../workers/signup/membership-shoptalk.mjs';
+import { handleShoptalk, eraseMemberShoptalk, SHOPTALK_OPTOUT_KEY, SHOPTALK_ADDRESS_KEY } from '../workers/signup/membership-shoptalk.mjs';
 
 function fakeKv(seed = {}) {
   const map = new Map(Object.entries(seed));
   return {
     map,
-    async get(k) { return map.has(k) ? map.get(k) : null; },
+    // sow-466: `{ type: 'json' }` is honoured, because the real binding parses and this double did not. The
+    // address record and the rate limiter both read that way, and a double that hands back a raw string makes
+    // a chosen address look absent and a rate limiter look like a fresh window on every call.
+    async get(k, opts) {
+      if (!map.has(k)) return null;
+      const raw = map.get(k);
+      if (opts && opts.type === 'json') {
+        try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+      }
+      return raw;
+    },
     async put(k, v) { map.set(k, v); },
     async delete(k) { map.delete(k); },
   };
@@ -250,4 +260,115 @@ test('LEAVE with no reachable calendar is still recorded (the sweep completes it
   assert.equal(r.status, 200);
   assert.equal(r.body.optedOut, true);
   assert.ok(kv.map.has(SHOPTALK_OPTOUT_KEY('1')), 'the marker is what the sweep reads');
+});
+
+// ---- sow-466: the member chooses which address the invitation goes to ------------------------------------
+
+const chosen = (address, githubId = '1') => ({ [SHOPTALK_ADDRESS_KEY(githubId)]: JSON.stringify({ address, at: '2026-10-17T00:00:00Z' }) });
+
+test('a CHOSEN address wins over the billing address, and the answer says which it is', async () => {
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv: fakeKv(chosen('calendar@x.com')), authorize: authAs('paid'),
+    calendar: fakeCal({ guests: ['calendar@x.com'] }), lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.body.address, 'calendar@x.com');
+  assert.equal(r.body.addressSource, 'member');
+  assert.equal(r.body.enrolled, true, 'enrollment is judged against the address they actually use');
+});
+
+test('with no chosen address the billing one is used, and is named as such', async () => {
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: fakeCal({ guests: [] }), lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.body.address, 'billing@x.com');
+  assert.equal(r.body.addressSource, 'billing');
+});
+
+test('joining with an address stores it and sends exactly one invitation there', async () => {
+  const kv = fakeKv();
+  const cal = fakeCal({ guests: ['someone@else.com'] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'Calendar@X.com ' }), {}, {
+    kv, authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.address, 'calendar@x.com', 'the address is normalized before anything is stored');
+  assert.equal(r.body.applied, true);
+  assert.equal(JSON.parse(kv.map.get(SHOPTALK_ADDRESS_KEY('1'))).address, 'calendar@x.com');
+  assert.equal(cal.writes.length, 1, 'one write, so one invitation');
+  assert.deepEqual(cal.writes[0].list, ['someone@else.com', 'calendar@x.com']);
+  assert.equal(cal.writes[0].opts.sendUpdates, 'all');
+});
+
+test('MOVING a seat takes the old address off and leaves the member with exactly one', async () => {
+  // The duplicate-seat case. Without the removal they hold two seats and the address they stopped reading
+  // keeps receiving the Meet link.
+  const kv = fakeKv(chosen('old@x.com'));
+  const cal = fakeCal({ guests: ['hand@owner.com', 'old@x.com'] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'new@x.com' }), {}, {
+    kv, authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.moved, true);
+  assert.deepEqual(cal.guests, ['hand@owner.com', 'new@x.com'], 'one seat, under the new address');
+  assert.equal(cal.writes.length, 2);
+  assert.equal(cal.writes[0].opts.sendUpdates, 'none', 'the old seat goes quietly: no cancellation for mail they never read');
+  assert.equal(cal.writes[1].opts.sendUpdates, 'all', 'the new seat is the one message they asked for');
+  assert.ok(!cal.guests.includes('old@x.com'));
+  assert.ok(cal.guests.includes('hand@owner.com'), 'a guest the owner added by hand is never disturbed');
+});
+
+test('a MALFORMED address changes nothing at all', async () => {
+  const kv = fakeKv();
+  const cal = fakeCal({ guests: [] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'not an address' }), {}, {
+    kv, authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error, 'invalid_address');
+  assert.equal(kv.map.has(SHOPTALK_ADDRESS_KEY('1')), false, 'nothing is stored');
+  assert.equal(cal.writes.length, 0, 'and the calendar is not touched');
+});
+
+test('an address cannot ride along with LEAVE', async () => {
+  const kv = fakeKv();
+  const cal = fakeCal({ guests: ['m@x.com'] });
+  const r = await handleShoptalk(req('POST', { action: 'leave', address: 'new@x.com' }), {}, {
+    kv, authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 400);
+  assert.equal(kv.map.has(SHOPTALK_ADDRESS_KEY('1')), false);
+  assert.equal(cal.writes.length, 0, 'the leave must not half-happen either');
+});
+
+test('a FREE member cannot set an address', async () => {
+  const kv = fakeKv();
+  const cal = fakeCal({ guests: [] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'new@x.com' }), {}, {
+    kv, authorize: authAs('none'), calendar: cal, lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 403);
+  assert.equal(kv.map.has(SHOPTALK_ADDRESS_KEY('1')), false);
+});
+
+test('address changes are RATE LIMITED, because each one makes Google send mail', async () => {
+  const kv = fakeKv();
+  const cal = fakeCal({ guests: [] });
+  const run = (address) => handleShoptalk(req('POST', { action: 'rejoin', address }), {}, {
+    kv, authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'billing@x.com',
+  });
+  for (let i = 1; i <= 5; i++) {
+    const ok = await run(`a${i}@x.com`);
+    assert.equal(ok.status, 200, `change ${i} is within the limit`);
+  }
+  const blocked = await run('a6@x.com');
+  assert.equal(blocked.status, 429);
+  assert.equal(JSON.parse(kv.map.get(SHOPTALK_ADDRESS_KEY('1'))).address, 'a5@x.com', 'the refused change is not stored');
+});
+
+test('the key the Worker WRITES is the key the sweep READS', async () => {
+  // Two modules, one key. A divergence here is silent in the worst way: the member sets an address, the page
+  // reports it back correctly from the Worker's own key, and the nightly sweep never sees it, so the billing
+  // address is enrolled anyway and the member watches the same thing go wrong again.
+  const { ADDR_PREFIX } = await import('../scripts/lib/shoptalk-state.mjs');
+  assert.equal(SHOPTALK_ADDRESS_KEY('42'), `${ADDR_PREFIX}42`);
 });

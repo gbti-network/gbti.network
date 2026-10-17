@@ -91,6 +91,18 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
           <div class="hub-card" data-shoptalk-card hidden>
             <h2 class="hub-h" data-shoptalk-headline>Saturday Shop Talk</h2>
             <p class="hub-sub" data-shoptalk-body></p>
+            {/* sow-466: the address the invitation goes to. It defaults to the billing address on the Stripe
+                customer, which is where the card lives and not necessarily where the calendar does, so a
+                member whose invitation lands in an inbox they never open can now say so themselves. */}
+            <form class="acct-addr" data-shoptalk-addr hidden>
+              <label class="acct-addr-l" for="acct-shoptalk-addr" data-shoptalk-addr-label></label>
+              <div class="acct-addr-row">
+                <input class="acct-addr-i" id="acct-shoptalk-addr" type="email" inputmode="email"
+                       autocomplete="email" spellcheck="false" placeholder="you@example.com" data-shoptalk-addr-input />
+                <button class="btn btn-ghost" type="submit" data-shoptalk-addr-go></button>
+              </div>
+              <p class="hub-sub acct-addr-hint" data-shoptalk-addr-hint></p>
+            </form>
             <p class="hub-sub" data-shoptalk-note hidden></p>
             <div class="acct-actions">
               <button type="button" class="btn btn-ghost" data-shoptalk-action hidden></button>
@@ -144,7 +156,7 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
 
   <script>
     import { onMemberSignal, currentIdentity, readMemberSignal, signOutWeb } from '../lib/member-signal';
-    import { shoptalkCardState, shoptalkAfterAction } from '../lib/shoptalk-card-core.mjs'; // sow-314
+    import { shoptalkCardState, shoptalkAfterAction, shoptalkAddressLine } from '../lib/shoptalk-card-core.mjs'; // sow-314, sow-466
     import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-323: the tier axis, bound not spelled
 
     const out = document.querySelector('[data-account-signedout]');
@@ -209,6 +221,20 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
       if (btn) { btn.hidden = !st.action; btn.textContent = st.actionLabel || ''; btn.dataset.action = st.action || ''; btn.disabled = false; }
       const a = stCard.querySelector('[data-shoptalk-href]') as HTMLAnchorElement | null;
       if (a) { a.hidden = !st.href; if (st.href) { a.href = st.href; a.textContent = st.hrefLabel || ''; } }
+      // sow-466: the address form, from the same answer. The input is SEEDED and never overwritten while it
+      // has focus, so a repaint cannot wipe what the member is in the middle of typing.
+      const line = shoptalkAddressLine(res);
+      const form = stCard.querySelector('[data-shoptalk-addr]') as HTMLFormElement | null;
+      const input = stCard.querySelector('[data-shoptalk-addr-input]') as HTMLInputElement | null;
+      const go = stCard.querySelector('[data-shoptalk-addr-go]') as HTMLButtonElement | null;
+      if (form) form.hidden = !line;
+      if (line && input && go) {
+        const l = stCard.querySelector('[data-shoptalk-addr-label]'); if (l) l.textContent = line.label;
+        const hint = stCard.querySelector('[data-shoptalk-addr-hint]'); if (hint) hint.textContent = line.hint;
+        if (document.activeElement !== input) input.value = line.value;
+        go.textContent = line.cta;
+        go.disabled = false;
+      }
       stCard.hidden = false;
     }
     async function mountShoptalk(s: any) {
@@ -219,6 +245,23 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
         const c = await websiteClient(s);
         if (!c) { stLoaded = false; return; }
         paintShoptalk(await c.getShoptalk());
+        stCard.querySelector('[data-shoptalk-addr]')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const input = stCard.querySelector('[data-shoptalk-addr-input]') as HTMLInputElement | null;
+          const go = stCard.querySelector('[data-shoptalk-addr-go]') as HTMLButtonElement | null;
+          const address = input?.value.trim();
+          if (!address) return;
+          if (go) go.disabled = true;
+          const note = stCard.querySelector('[data-shoptalk-note]') as HTMLElement | null;
+          try {
+            const res = await c.setShoptalk('rejoin', address);
+            if (note) { note.textContent = shoptalkAfterAction(res, 'rejoin').note; note.hidden = false; }
+            paintShoptalk(await c.getShoptalk());
+          } catch (err: any) {
+            if (note) { note.textContent = err?.message || 'That did not go through. Try again in a moment.'; note.hidden = false; }
+            if (go) go.disabled = false;
+          }
+        });
         stCard.querySelector('[data-shoptalk-action]')?.addEventListener('click', async (e) => {
           const btn = e.currentTarget as HTMLButtonElement;
           const action = btn.dataset.action as 'leave' | 'rejoin';
@@ -270,6 +313,14 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
     .acct-wrap { max-width: 1040px; }
     .acct-av { border-radius: 50%; border: 2px solid var(--line-2); margin: 0 auto; }
     .acct-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    /* sow-466: the Shop Talk address form. [hidden] is restated because the explicit display below outranks
+       the user-agent rule, the way it does in every shadow-DOM component here. */
+    .acct-addr[hidden] { display: none; }
+    .acct-addr { display: block; margin-top: 12px; text-align: left; }
+    .acct-addr-l { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
+    .acct-addr-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+    .acct-addr-i { flex: 1 1 12rem; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--fg); font: inherit; font-size: 14px; }
+    .acct-addr-hint { margin-top: 6px; font-size: 13px; }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 32px; }
     .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 12px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--fg); text-decoration: none; text-align: center; transition: border-color .12s, transform .12s; }

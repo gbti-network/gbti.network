@@ -35,7 +35,34 @@ const outlook = outlookCalendarUrl(event);
       </button>
     </header>
 
-    <p class="sc-when">{event.cardTitle} runs every Saturday. Pick where you keep your calendar.</p>
+    <p class="sc-when">{event.cardTitle} runs every Saturday.</p>
+
+    {/* sow-466: the SEAT block. Everything below it copies the event onto the member's own calendar, which is
+        useful and is not the same thing as being on the call: a copy carries no Google Meet link and nobody
+        on it is a guest of the real event. A signed-in member clicking "Add to calendar" means "put me on the
+        call", so that is what this offers first, and the copy rows keep their place underneath.
+
+        Inert until the dialog opens for a member. A signed-out visitor, and anyone with JavaScript off, sees
+        exactly the three rows this dialog has always had. */}
+    <section class="sc-seat" data-sc-seat hidden>
+      <h3 class="sc-seat-h" data-sc-headline></h3>
+      <p class="sc-seat-b" data-sc-body></p>
+      <form class="sc-addr" data-sc-addr hidden>
+        <label class="sc-addr-l" for="sc-addr-input" data-sc-addr-label></label>
+        <div class="sc-addr-row">
+          <input class="sc-addr-i" id="sc-addr-input" type="email" inputmode="email" autocomplete="email"
+                 spellcheck="false" placeholder="you@example.com" data-sc-addr-input />
+          <button class="sc-addr-go" type="submit" data-sc-addr-go></button>
+        </div>
+        <p class="sc-note" data-sc-addr-hint></p>
+      </form>
+      <p class="sc-note sc-seat-note" data-sc-note hidden></p>
+      <button class="sc-seat-act" type="button" data-sc-action hidden></button>
+      <a class="sc-seat-link" data-sc-href hidden></a>
+    </section>
+
+    <p class="sc-sub" data-sc-copy-head hidden>Or keep a copy on your own calendar. A copy is not a seat on the
+      call: it carries no Meet link and does not put you on the guest list.</p>
 
     <ul class="sc-list">
       <li>
@@ -73,7 +100,9 @@ const outlook = outlookCalendarUrl(event);
      both themes while --fg, which is a real token, flipped to near-white in dark: white on white, and the
      chooser was unreadable (owner screenshot, 2026-09-19). The real surface tokens are --paper (a card) and
      --tint (its hover), and both flip. A fallback on a token that does not exist is what hid this in light. */
-  .sc-card { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  /* sow-466: the seat block made this dialog tall enough to run off a laptop screen, so the card scrolls
+     rather than overflowing the viewport with its own close button out of reach. */
+  .sc-card { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; max-height: 86vh; overflow-y: auto; }
   .sc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .sc-eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); }
   .sc-title { margin: 2px 0 0; font-size: 20px; }
@@ -85,6 +114,21 @@ const outlook = outlookCalendarUrl(event);
   .sc-row:hover, .sc-row:focus-visible { border-color: var(--green); background: var(--tint); }
   .sc-name { display: block; font-weight: 600; }
   .sc-note { display: block; margin-top: 2px; font-size: 13px; color: var(--fg-mute); }
+  /* sow-466: the seat block. [hidden] is restated against the explicit displays below, which otherwise win. */
+  .sc-seat[hidden], .sc-addr[hidden], .sc-note[hidden], .sc-seat-act[hidden], .sc-seat-link[hidden], .sc-sub[hidden] { display: none; }
+  .sc-seat { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; background: var(--tint); }
+  .sc-seat-h { margin: 0; font-size: 15px; font-weight: 600; }
+  .sc-seat-b { margin: 4px 0 0; font-size: 13px; color: var(--fg-mute); }
+  .sc-addr { display: block; margin-top: 10px; }
+  .sc-addr-l { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
+  .sc-addr-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .sc-addr-i { flex: 1 1 11rem; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--fg); font: inherit; font-size: 14px; }
+  .sc-addr-go { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--green); border-radius: 8px; background: var(--green); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .sc-addr-go:disabled { opacity: .6; cursor: default; }
+  .sc-seat-act { margin-top: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--fg-mute); font: inherit; font-size: 13px; cursor: pointer; }
+  .sc-seat-act:hover:not(:disabled) { color: var(--fg); border-color: var(--green); }
+  .sc-seat-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--green); }
+  .sc-sub { margin: 0 0 10px; font-size: 13px; color: var(--fg-mute); }
 </style>
 
 <script is:inline>
@@ -102,4 +146,100 @@ const outlook = outlookCalendarUrl(event);
       if (cta && typeof cta.focus === 'function') cta.focus();
     });
   })();
+</script>
+
+<script>
+  // sow-466: the seat block. The member asked to be on the call, so this talks to the real event rather than
+  // composing a copy. It is a MODULE script, not the inline one above, because it imports the same pure card
+  // helpers and the same website client the account page uses: one state machine, two surfaces.
+  //
+  // Nothing here runs until the dialog is opened BY A MEMBER (index.astro dispatches gbti:shoptalk-open after
+  // showModal, and only on the member path). A visitor never triggers a Worker read, and the three copy rows
+  // below are untouched either way.
+  import { shoptalkCardState, shoptalkAfterAction, shoptalkAddressLine } from '../../lib/shoptalk-card-core.mjs';
+  import { readMemberSignal, currentIdentity } from '../../lib/member-signal';
+
+  const dialog = document.querySelector('[data-shoptalk-cal]') as HTMLDialogElement | null;
+  const seat = document.querySelector('[data-sc-seat]') as HTMLElement | null;
+  if (dialog && seat) {
+    const form = seat.querySelector('[data-sc-addr]') as HTMLFormElement | null;
+    const input = seat.querySelector('[data-sc-addr-input]') as HTMLInputElement | null;
+    const go = seat.querySelector('[data-sc-addr-go]') as HTMLButtonElement | null;
+    const note = seat.querySelector('[data-sc-note]') as HTMLElement | null;
+    const act = seat.querySelector('[data-sc-action]') as HTMLButtonElement | null;
+    const copyHead = document.querySelector('[data-sc-copy-head]') as HTMLElement | null;
+    let client: any = null;
+    let loaded = false;
+
+    function paint(res: any) {
+      const st = shoptalkCardState(res);
+      const h = seat!.querySelector('[data-sc-headline]'); if (h) h.textContent = st.headline;
+      const b = seat!.querySelector('[data-sc-body]'); if (b) b.textContent = st.body;
+      if (act) { act.hidden = !st.action; act.textContent = st.actionLabel || ''; act.dataset.action = st.action || ''; act.disabled = false; }
+      const a = seat!.querySelector('[data-sc-href]') as HTMLAnchorElement | null;
+      if (a) { a.hidden = !st.href; if (st.href) { a.href = st.href; a.textContent = st.hrefLabel || ''; } }
+      const line = shoptalkAddressLine(res);
+      if (form && input && go) {
+        form.hidden = !line;
+        if (line) {
+          const l = seat!.querySelector('[data-sc-addr-label]'); if (l) l.textContent = line.label;
+          const hint = seat!.querySelector('[data-sc-addr-hint]'); if (hint) hint.textContent = line.hint;
+          // Only ever seeded, never overwritten mid-edit: a repaint after a save must not wipe what they typed.
+          if (document.activeElement !== input) input.value = line.value;
+          go.textContent = line.cta;
+          go.disabled = false;
+        }
+      }
+      seat!.hidden = false;
+      if (copyHead) copyHead.hidden = false;
+    }
+
+    function say(text: string) { if (note) { note.textContent = text; note.hidden = false; } }
+
+    async function load() {
+      if (loaded) return;
+      loaded = true;
+      try {
+        const signal = currentIdentity(readMemberSignal());
+        const { websiteClient } = await import('../../lib/save-controls');
+        client = await websiteClient(signal);
+        // A failed load must not look like "not tried": reset the latch so opening the dialog again retries,
+        // rather than leaving the member staring at a block that never fills in.
+        if (!client) { loaded = false; return; }
+        paint(await client.getShoptalk());
+      } catch { loaded = false; }
+    }
+
+    dialog.addEventListener('gbti:shoptalk-open', load);
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!client || !input) return;
+      const address = input.value.trim();
+      if (!address) return;
+      if (go) go.disabled = true;
+      try {
+        const res = await client.setShoptalk('rejoin', address);
+        say(shoptalkAfterAction(res, 'rejoin').note);
+        paint(await client.getShoptalk());
+      } catch (err: any) {
+        say(err?.message || 'That did not go through. Try again in a moment.');
+        if (go) go.disabled = false;
+      }
+    });
+
+    act?.addEventListener('click', async () => {
+      const action = act.dataset.action as 'leave' | 'rejoin';
+      if (!client || !action) return;
+      act.disabled = true;
+      try {
+        const res = await client.setShoptalk(action);
+        say(shoptalkAfterAction(res, action).note);
+        paint(await client.getShoptalk());
+      } catch (err: any) {
+        say(err?.message || 'That did not go through. Try again in a moment.');
+        act.disabled = false;
+      }
+    });
+  }
 </script>

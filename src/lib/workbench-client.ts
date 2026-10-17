@@ -613,7 +613,11 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     // sow-314: the Saturday Shop Talk seat. GET answers { eligible, enrolled, address, optedOut, nextCall };
     // POST { action: 'leave' | 'rejoin' } records the choice and, when the calendar is reachable, applies it at once.
     async getShoptalk() { return workerGet('/membership/shoptalk'); },
-    async setShoptalk(action: 'leave' | 'rejoin') { return workerPost('/membership/shoptalk', { action }); },
+    // sow-466: `address` rides with a rejoin and means "put me on the call at THIS address". Omitted, the
+    // Worker keeps whatever address it already resolves for the member, so existing callers are unchanged.
+    async setShoptalk(action: 'leave' | 'rejoin', address?: string) {
+      return workerPost('/membership/shoptalk', address ? { action, address } : { action });
+    },
     // sow-202: the weekly digest switch on /account/notifications/. GET answers { on, address, reason? } about this
     // account's own record only; POST { on } turns the digest on (lifting an earlier unsubscribe) or off (digest only).
     async getDigest() { return workerGet('/membership/digest'); },

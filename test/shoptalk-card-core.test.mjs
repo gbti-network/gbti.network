@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shoptalkCardState, shoptalkAfterAction } from '../src/lib/shoptalk-card-core.mjs';
+import { shoptalkCardState, shoptalkAfterAction, shoptalkAddressLine } from '../src/lib/shoptalk-card-core.mjs';
 
 const NEXT = '2026-09-12T16:00:00Z';
 
@@ -83,4 +83,43 @@ test('control: not on the list and never invited still reads as "being added"', 
   const st = shoptalkCardState({ eligible: true, status: 'paid', enrolled: false, dropped: false, address: 'm@x.com', optedOut: false });
   assert.match(st.headline, /being added/);
   assert.equal(st.action, 'leave');
+});
+
+// ---- sow-466: the address line --------------------------------------------------------------------------
+
+test('a member who has NOT chosen is told the address is a guess from billing', () => {
+  const line = shoptalkAddressLine({ eligible: true, address: 'billing@x.com', addressSource: 'billing' });
+  assert.equal(line.value, 'billing@x.com');
+  assert.match(line.hint, /billing record/);
+  assert.match(line.hint, /Change it/, 'the hint has to say it can be changed, or it is just a fact they cannot act on');
+});
+
+test('a member who HAS chosen is told so, not told we guessed', () => {
+  const line = shoptalkAddressLine({ eligible: true, address: 'calendar@x.com', addressSource: 'member' });
+  assert.match(line.hint, /You chose this address/);
+  assert.ok(!/billing/.test(line.hint));
+});
+
+test('with no address at all the form asks for one instead of pointing at Discord', () => {
+  const line = shoptalkAddressLine({ eligible: true, address: null });
+  assert.equal(line.value, '');
+  assert.match(line.cta, /Send my invitation/);
+  const st = shoptalkCardState({ eligible: true, address: null });
+  assert.ok(!/Discord/.test(st.body), 'a member can fill this in themselves now');
+});
+
+test('a member who is not eligible gets no address form at all', () => {
+  assert.equal(shoptalkAddressLine({ eligible: false }), null);
+});
+
+test('after a MOVE the note says the old address came off, not just "invitation sent"', () => {
+  const { note } = shoptalkAfterAction({ applied: true, moved: true, address: 'new@x.com' }, 'rejoin');
+  assert.match(note, /new@x\.com/);
+  assert.match(note, /old address is off the list/);
+});
+
+test('a first invitation still reads as a first invitation', () => {
+  const { note } = shoptalkAfterAction({ applied: true, address: 'a@x.com' }, 'rejoin');
+  assert.match(note, /Invitation sent/);
+  assert.ok(!/moved/.test(note));
 });

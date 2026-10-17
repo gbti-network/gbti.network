@@ -471,6 +471,9 @@ const SHOPTALK = {
         if (cta.getAttribute('href') !== calUrl) return;
         e.preventDefault();
         dialog.showModal();
+        // sow-466: only now, and only on the member path above, does the chooser load the member's real seat
+        // on the Saturday event. A visitor never reaches here, so no Worker call rides on a homepage view.
+        try { dialog.dispatchEvent(new CustomEvent('gbti:shoptalk-open')); } catch (err) { /* the copy rows still work */ }
       });
     }
   })();

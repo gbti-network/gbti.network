@@ -10,6 +10,9 @@
 //   shoptalk:optout:<id>     one marker per member who asked to come off. Written by the Worker route,
 //                            read here. Per-member rather than one document so it is erasable on its own and
 //                            so two members opting out at once cannot clobber each other.
+//   shoptalk:addr:<id>       sow-466: the address a member chose for their invitation, which wins over the
+//                            billing address on their Stripe customer. Written by the Worker route, read here
+//                            into the `preferred` map the enrollment planner has always accepted.
 //
 // EVERY READER RETURNS AN EXPLICIT ok FLAG, AND THAT IS THE WHOLE DESIGN OF THIS FILE.
 //
@@ -36,6 +39,9 @@ import { putKvJson } from './kv-mirror.mjs';
 export const PLACED_KEY = 'shoptalk:placed';
 export const SEEN_KEY = 'shoptalk:seen';
 export const OPTOUT_PREFIX = 'shoptalk:optout:';
+/** sow-466: one marker per member who chose which address their invitation goes to. Per-member for the same
+ *  two reasons as the opt-out above: it is erasable on its own, and two members cannot clobber each other. */
+export const ADDR_PREFIX = 'shoptalk:addr:';
 
 const hasCreds = (env) => !!(env?.CF_ACCOUNT_ID && env?.CF_KV_NAMESPACE_ID && env?.CF_API_TOKEN);
 const NO_CREDS = 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN are not set';
@@ -108,4 +114,39 @@ export async function readOptedOut({ env = process.env, fetchImpl = globalThis.f
     if (id) out.add(id);
   }
   return { ok: true, optedOut: out };
+}
+
+/**
+ * Every member-chosen calendar address (sow-466), as `githubId -> address`. This is what fills the `preferred`
+ * map `planShoptalkEnrollment` has always accepted and nothing ever populated.
+ *
+ * WHY IT IS AS FAIL-CLOSED AS ITS NEIGHBOURS, which is not obvious: an override that fails to load does not
+ * read as "no override", it reads as "use the billing address". The member already holds a seat under the
+ * address they chose, so the sweep would add a SECOND seat under the billing one and Google would mail them an
+ * invitation they did not ask for, at the address they told us not to use. That is the exact complaint this
+ * work exists to fix, arriving nightly. An unreadable key is therefore an aborted sweep, not a partial map.
+ *
+ * The value is an object (`{ address, at }`) rather than a bare string on purpose: listKvByPrefix counts a
+ * non-object value as `unparsed` and drops it, so a string would be silently invisible here.
+ *
+ * @returns {{ ok: true, preferred: Map }} or {{ ok: false, reason: string }}
+ */
+export async function readPreferred({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!hasCreds(env)) return { ok: false, reason: NO_CREDS };
+  const listed = await listKvByPrefix({ prefix: ADDR_PREFIX, env, fetchImpl });
+  if (!listed || listed.available === false) {
+    return { ok: false, reason: listed?.reason || 'the chosen-address list could not be read' };
+  }
+  if (listed.unreadable > 0) {
+    return { ok: false, reason: `${listed.unreadable} chosen calendar address(es) could not be read; refusing to fall back to billing addresses` };
+  }
+  const out = new Map();
+  for (const entry of listed.entries ?? []) {
+    const key = entry?.key;
+    if (typeof key !== 'string' || !key.startsWith(ADDR_PREFIX)) continue;
+    const id = key.slice(ADDR_PREFIX.length).trim();
+    const address = typeof entry?.value?.address === 'string' ? entry.value.address.trim().toLowerCase() : '';
+    if (id && address) out.set(id, address);
+  }
+  return { ok: true, preferred: out };
 }

@@ -20,10 +20,18 @@
 // 403 that reads as breakage.
 
 import { authorizeMember } from './membership-content.mjs';
+import { rateLimit } from './abuse.mjs';
 import { ELIGIBLE_STATUSES, normalizeAddress } from '../../scripts/lib/shoptalk-enroll.mjs';
 import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs';
+import { isEmailShape } from '../../membership/sponsor-inquiry.mjs';
 
 export const SHOPTALK_OPTOUT_KEY = (githubId) => `shoptalk:optout:${githubId}`;
+/** sow-466: the address this member chose for their invitation. Mirrors shoptalk-state.mjs ADDR_PREFIX, and a
+ *  test pins the two spellings together, because the Worker writes this key and the sweep reads it. */
+export const SHOPTALK_ADDRESS_KEY = (githubId) => `shoptalk:addr:${githubId}`;
+/** A few changes a day, per member. A typed address makes Google send an invitation from our calendar, so the
+ *  limit is what stops the field being used as a mail relay. */
+export const SHOPTALK_ADDRESS_LIMIT = Object.freeze({ limit: 5, windowSeconds: 86400, prefix: 'rl:shoptalk-addr:' });
 export const SHOPTALK_QUERY = 'Shop TALK';
 /** The sweep's seen record (scripts/lib/shoptalk-state.mjs SEEN_KEY): every member address ever invited. Read
  *  here so a member whose seat was removed is told so and offered Rejoin, rather than "your seat is being
@@ -54,12 +62,27 @@ async function readGuests(calendar, seriesId) {
   return guests === null ? null : { guests, declined: new Set() };
 }
 
-/** Resolve the member's calendar address. Same Stripe lookup the mail drain uses; no second source of truth. */
-async function addressFor(env, githubId, { stripe, lookupEmail } = {}) {
-  if (lookupEmail) return normalizeAddress(await lookupEmail(githubId));
-  if (!stripe) return '';
+/**
+ * Resolve the member's calendar address, and say where it came from.
+ *
+ * sow-466: the address the MEMBER chose wins over the billing address on their Stripe customer. The billing
+ * address is a fine default and a poor assumption: it is where their card lives, not necessarily where their
+ * calendar lives, and a member whose invitation goes to an address they never open cannot tell the difference
+ * between that and the call ignoring them.
+ *
+ * Still one resolver, so the GET, the POST and the sweep cannot drift apart about which address is theirs.
+ */
+async function addressFor(env, githubId, { kv, stripe, lookupEmail } = {}) {
+  if (kv) {
+    let chosen = null;
+    try { chosen = await kv.get(SHOPTALK_ADDRESS_KEY(githubId), { type: 'json' }); } catch { chosen = null; }
+    const address = normalizeAddress(chosen?.address || '');
+    if (address) return { address, source: 'member' };
+  }
+  if (lookupEmail) return { address: normalizeAddress(await lookupEmail(githubId)), source: 'billing' };
+  if (!stripe) return { address: '', source: null };
   const customer = await stripe.searchCustomerByGithubId(githubId);
-  return normalizeAddress(customer?.email || '');
+  return { address: normalizeAddress(customer?.email || ''), source: 'billing' };
 }
 
 export async function handleShoptalk(request, env, {
@@ -75,7 +98,7 @@ export async function handleShoptalk(request, env, {
   const optedOut = (await kv.get(optKey)) !== null;
 
   if (request.method === 'GET') {
-    const address = await addressFor(env, auth.githubId, { stripe, lookupEmail });
+    const { address, source } = await addressFor(env, auth.githubId, { kv, stripe, lookupEmail });
     // The calendar is optional on a READ. If it is unreachable the member still gets their eligibility and
     // opt-out state rather than an error page, and `enrolled` is reported as unknown rather than as false.
     // Reporting "not on the list" when we simply could not look would invite them to press a button they do
@@ -96,15 +119,45 @@ export async function handleShoptalk(request, env, {
       }
     }
     if (enrolled === false && !optedOut) dropped = await everInvited(kv, address);
-    return { status: 200, body: { ok: true, eligible, status: auth.status, enrolled, declined, dropped, address: address || null, optedOut, nextCall } };
+    return { status: 200, body: { ok: true, eligible, status: auth.status, enrolled, declined, dropped, address: address || null, addressSource: address ? source : null, optedOut, nextCall } };
   }
 
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
 
   let action;
-  try { action = (await request.json())?.action; } catch { return { status: 400, body: { error: 'bad_request', message: 'a JSON body is required' } }; }
+  let wanted;
+  try {
+    const payload = await request.json();
+    action = payload?.action;
+    wanted = payload?.address;
+  } catch { return { status: 400, body: { error: 'bad_request', message: 'a JSON body is required' } }; }
   if (action !== 'leave' && action !== 'rejoin') {
     return { status: 400, body: { error: 'invalid', message: 'action must be "leave" or "rejoin"' } };
+  }
+
+  // sow-466: an address sent with a rejoin means "put me on the call at THIS address". It is stored before
+  // the calendar is touched, for the same reason the opt-out marker is: if the calendar call fails, the next
+  // sweep must already know which address is theirs, or it enrolls the billing one and the member is back
+  // where they started.
+  let movedFrom = '';
+  if (wanted !== undefined && wanted !== null && wanted !== '') {
+    if (action !== 'rejoin') {
+      return { status: 400, body: { error: 'invalid', message: 'an address can only be set when joining the call list' } };
+    }
+    if (!eligible) {
+      return { status: 403, body: { error: 'not_eligible', message: 'the Saturday call is for paid and trial members' } };
+    }
+    const next = normalizeAddress(wanted);
+    if (!isEmailShape(next)) {
+      return { status: 400, body: { error: 'invalid_address', message: 'That does not look like an email address.' } };
+    }
+    const rl = await rateLimit({ kv, id: auth.githubId, ...SHOPTALK_ADDRESS_LIMIT });
+    if (!rl.allowed) {
+      return { status: 429, body: { error: 'rate_limited', message: 'That is a lot of address changes. Try again tomorrow.' } };
+    }
+    const current = await addressFor(env, auth.githubId, { kv, stripe, lookupEmail });
+    movedFrom = current.address && current.address !== next ? current.address : '';
+    await kv.put(SHOPTALK_ADDRESS_KEY(auth.githubId), JSON.stringify({ address: next, at: new Date().toISOString() }));
   }
 
   // THE MARKER IS WRITTEN BEFORE THE CALENDAR IS TOUCHED, and the order is load-bearing. If the calendar call
@@ -120,7 +173,7 @@ export async function handleShoptalk(request, env, {
     await kv.delete(optKey);
   }
 
-  const address = await addressFor(env, auth.githubId, { stripe, lookupEmail });
+  const { address } = await addressFor(env, auth.githubId, { kv, stripe, lookupEmail });
   if (!address) {
     return { status: 200, body: { ok: true, optedOut: action === 'leave', enrolled: null, address: null, applied: false,
       message: 'we have no email address for this account, so the guest list could not be changed' } };
@@ -137,7 +190,15 @@ export async function handleShoptalk(request, env, {
   const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
   if (isSeriesProblem(s)) return action === 'leave' ? recorded : unavailable;
   const read = (await readGuests(calendar, s.seriesId)) || { guests: [], declined: new Set() };
-  const guests = read.guests;
+  // sow-466: a member who moved their seat has their OLD address taken off in the same request. Leaving it
+  // holds two seats on one person, and the stale one keeps receiving the Meet link at the address they just
+  // told us they do not read. The removal is silent: a cancellation notice for a seat they never saw is mail
+  // about nothing, and `sendUpdates: 'all'` on the add below is the one message they asked for.
+  const moved = movedFrom && read.guests.includes(movedFrom);
+  if (moved) {
+    await calendar.setAttendees(s.seriesId, read.guests.filter((g) => g !== movedFrom), { sendUpdates: 'none' });
+  }
+  const guests = moved ? read.guests.filter((g) => g !== movedFrom) : read.guests;
   const has = guests.includes(address);
 
   if (action === 'leave') {
@@ -151,19 +212,22 @@ export async function handleShoptalk(request, env, {
   //   on the list, not declined -> nothing to do, and the page says so
   if (!has) {
     await calendar.setAttendees(s.seriesId, [...guests, address], { sendUpdates: 'all' });
-    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true } };
+    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true, moved: !!moved } };
   }
   if (read.declined.has(address)) {
     await calendar.setAttendees(s.seriesId, guests.filter((g) => g !== address), { sendUpdates: 'none' });
     await calendar.setAttendees(s.seriesId, [...guests.filter((g) => g !== address), address], { sendUpdates: 'all' });
-    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true, resent: true } };
+    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true, resent: true, moved: !!moved } };
   }
-  return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: false, message: 'You are already on the guest list.' } };
+  return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: false, moved: !!moved,
+    message: moved ? 'Your seat moved to this address.' : 'You are already on the guest list.' } };
 }
 
-/** SOW-024 right-to-erasure: drop the member's opt-out marker. The calendar seat is removed separately. */
+/** SOW-024 right-to-erasure: drop the member's opt-out marker and the address they chose (sow-466). Both are
+ *  per-person records keyed by account number. The calendar seat is removed separately. */
 export async function eraseMemberShoptalk(env, githubId, { kv = env?.SIGNUP_KV } = {}) {
   if (!kv || githubId == null) return { ok: false };
   await kv.delete(SHOPTALK_OPTOUT_KEY(String(githubId)));
+  await kv.delete(SHOPTALK_ADDRESS_KEY(String(githubId)));
   return { ok: true };
 }

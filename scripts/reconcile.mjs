@@ -27,7 +27,7 @@ import { createDiscordClient } from '../clients/discord.mjs';
 import { createGoogleCalendarClient } from '../clients/google-calendar.mjs';           // sow-314
 import { stripeModeNote } from '../membership/stripe-mode.mjs';                       // sow-314 follow-up
 import { runShoptalkSweep, describeSweep } from './lib/shoptalk-sweep.mjs';            // sow-314
-import { readPlaced, writePlaced, readOptedOut, readSeen, writeSeen } from './lib/shoptalk-state.mjs'; // sow-314
+import { readPlaced, writePlaced, readOptedOut, readSeen, writeSeen, readPreferred } from './lib/shoptalk-state.mjs'; // sow-314, sow-466
 import { createResendClient } from '../clients/resend.mjs';
 import { STATUS } from '../membership/derive-status.mjs';
 import { loadOverrides, loadOverridesRaw, ROLE } from '../membership/overrides.mjs';
@@ -708,9 +708,13 @@ export async function enactShoptalk(members, { env = process.env, fetchImpl = gl
   if (!optRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${optRead.reason}` };
   const seenRead = await readSeen({ env, fetchImpl });
   if (!seenRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${seenRead.reason}` };
+  // sow-466: the addresses members chose for themselves. Without this the sweep resolves every member from
+  // their Stripe billing address, so a member who moved their seat gets a second one added back every night.
+  const prefRead = await readPreferred({ env, fetchImpl });
+  if (!prefRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${prefRead.reason}` };
 
   const result = await runShoptalkSweep({
-    members, cal, placed: placedRead.placed, optedOut: optRead.optedOut, seen: seenRead.seen, apply,
+    members, cal, placed: placedRead.placed, optedOut: optRead.optedOut, preferred: prefRead.preferred, seen: seenRead.seen, apply,
   });
   if (!result.ok) return { ok: false, reason: result.message };
 
