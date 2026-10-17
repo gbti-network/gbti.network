@@ -59,3 +59,7 @@ export function membersOnlyPagePaths(root = '.') {
   for (const u of users) scan(path.join(members, u));
   return out;
 }
+
+// sow-462: the sitemap's last-edited dates (content-lastmod.mjs) read the same files the same way, so it reuses these
+// rather than carrying a second frontmatter reader that could disagree with this one about where a page lives.
+export { field as frontmatterField, frontmatter as frontmatterBlock, SEG as CONTENT_URL_SEGMENTS };

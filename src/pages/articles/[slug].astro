@@ -26,6 +26,9 @@ import { buildArticleToc } from '../../lib/article-page.mjs';
 import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
 import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
 import ExtensionBanner from '../../components/home/ExtensionBanner.astro'; // owner 2026-10-01: under every article
+import { articleJsonLd, breadcrumbJsonLd, authorNode } from '../../lib/json-ld.mjs'; // sow-462: what search engines read
+import { authorDisplay, isNetworkAuthor } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages';
 
 export async function getStaticPaths() {
   const posts = (await getCollection('post')).filter(hasPublicPage);
@@ -66,8 +69,35 @@ const Layout = LAYOUTS[d.layout] ?? ArticleJournal;
 const isJournal = Layout === ArticleJournal;
 // sow-189: an unindexed article asks search engines to forget it while the network still points at it.
 const unindexed = contentFlagsOf('post', d.slug).unindexed;
+
+// sow-462: the article record and breadcrumb trail search engines read. Left off a page that asks not to be indexed
+// (an unindexed article, a members-only stub), since there is nothing there for a search result to describe. The
+// image and author use the same rules as the head's og:image and the visible byline.
+const site = Astro.site ?? new URL('https://gbti.network');
+const ogImage = d.coverImage?.src ?? defaultFeatureImage('post');
+const authorPage = profileHref(d.author);
+const jsonLd = unindexed || stub ? undefined : [
+  articleJsonLd({
+    url: postUrl,
+    headline: d.title,
+    description: d.excerpt,
+    image: new URL(ogImage, site).href,
+    publishedAt: d.publishedAt,
+    updatedAt: d.updatedAt,
+    author: authorNode({
+      network: isNetworkAuthor(d.author),
+      name: authorProfile?.displayName ?? authorDisplay(d.author),
+      url: authorPage && authorPage !== '/' ? new URL(authorPage, site).href : undefined,
+    }),
+  }),
+  breadcrumbJsonLd([
+    { name: 'GBTI Network', url: new URL('/', site).href },
+    { name: 'Articles', url: new URL('/articles/', site).href },
+    { name: d.title },
+  ]),
+];
 ---
-<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : stub ? 'noindex' : false}>
+<BaseLayout title={d.title} description={d.excerpt} ogImage={ogImage} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : stub ? 'noindex' : false} jsonLd={jsonLd}>
   <DeployStatusNotice type="post" slug={d.slug} updatedAt={d.updatedAt} />
   <Layout d={d} isStub={stub} postId={post.id} postUrl={postUrl} stack={stack} toc={toc}>
     <Content slot="body" />

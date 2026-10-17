@@ -5,7 +5,7 @@
 /ai/chicago-style-footnoting-in-ai-generated-content/ /articles/chicago-style-footnoting-in-ai-generated-content/ 301
 /ai/how-to-create-professional-linkedin-headshots-using-ai/ /articles/how-to-create-professional-linkedin-headshots-using-ai/ 301
 /ai/introducing-our-new-wordpress-perplexity-ai-plugin/ /articles/introducing-our-new-wordpress-perplexity-ai-plugin/ 301
-/ai/llms/is-our-future-full-of-mcp-servers/ /membership/ 301
+/ai/llms/is-our-future-full-of-mcp-servers/ /articles/is-our-future-full-of-mcp-servers/ 301
 /ai/mcp/new-england-clam-chowder-the-red-or-the-white/ /articles/new-england-clam-chowder-the-red-or-the-white/ 301
 /author/gbti/ / 301
 /author/hudson/ /members/atwellpub/ 301
@@ -40,7 +40,7 @@
 /entertainment/have-spacesuit-will-travel/ /articles/have-spacesuit-will-travel/ 301
 /entertainment/the-moon-is-a-harsh-mistress-revisiting-a-scifi-masterpiece-in-the-age-of-emergent-ai/ /articles/the-moon-is-a-harsh-mistress-revisiting-a-scifi-masterpiece-in-the-age-of-emergent-ai/ 301
 /entertainment/the-story-behind-chrono-triggers-soundtrack/ /articles/the-story-behind-chrono-triggers-soundtrack/ 301
-/entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/ /membership/ 301
+/entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/ /articles/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/ 301
 /entertainment/what-does-pass-the-buck-mean/ /articles/what-does-pass-the-buck-mean/ 301
 /gbti/products/andshare/how-to-get-a-telegram-bot-token/ /articles/how-to-get-a-telegram-bot-token/ 301
 /gbti/products/andshare/how-to-get-a-telegram-channel-id/ /articles/how-to-get-a-telegram-channel-id/ 301
@@ -58,6 +58,18 @@
 /shares/atwellpub/20260910215127-google-deepmind-releases-predictions-for-9-billi/ /shares/gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi/ 301
 /join /membership/ 301
 /join/ /membership/ 301
+/hire/ /contact/ 301
+/hire/wordpress-developers/ /contact/ 301
+/hire/minecraft-developers/ /contact/ 301
+/hire/mcp-server-developers/ /contact/ 301
+/ai/15-nano-bana-prompts-for-generating-linkedin-headshots/ /articles/15-nano-banana-prompts-for-generating-linkedin-headshots/ 301
+/co-op/terms-of-operation/ /revenue-model/ 301
+/co-op/guides/gbti-network-product-submission-process-guide/ /submit-content/ 301
+/co-op/submit/ /submit-content/ 301
+/minecraft/how-to-edit-flan-text-messages-in-minecraft /articles/how-to-edit-flan-text-messages-in-minecraft/ 301
+/frameworks/what-is-markdown/ /articles/what-is-markdown/ 301
+/sitemap_index.xml /sitemap-index.xml 301
+/youtube-invite/ /articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/ 301
 /blog/* /articles/:splat 301
 
 # sow-196 (2026-09-02): the `product` content type became `project`. Per-item /products/<slug>/ 301s are
@@ -69,9 +81,3 @@
 # The two SOW-022 applet URLs keep their existing /products/ lines above; these are their /projects/ twins.
 /projects/js-animate-hue/ /utilities/js-animate-hue/ 301
 /projects/email-signature-generator/ /utilities/email-signature-generator/ 301
-
-# sow-457: /youtube-invite/ was live for about an hour on 2026-10-15 before the owner ruled that the YouTube
-# creator invitations should open the ARTICLE with a claim dialog over it rather than a landing page of their
-# own. The page is deleted; this keeps the URL working for the handful of people who saw it, and the coupon
-# rides along because Cloudflare Pages carries the query string onto a redirect whose destination has none.
-/youtube-invite/ /articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/ 301

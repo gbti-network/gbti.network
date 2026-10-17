@@ -23,6 +23,7 @@ import InviteClaim from '../components/invite/InviteClaim.astro';
 import { campaignForPath } from '../lib/invite-claim-core.mjs'; // sow-457: is THIS page a campaign's destination?
 import { knownImageSize } from '../lib/og-image-size.mjs';
 import { SIGNUP_BASE } from '../lib/membership'; // sow-158 Phase 2: the Worker origin, stamped site-wide for the cookie hydrator
+import { jsonForScript } from '../lib/json-ld.mjs'; // sow-462: structured data, escaped for a <script> data block
 
 interface Props {
   title?: string;
@@ -42,6 +43,9 @@ interface Props {
   /** sow-445: the source a link card names after the title ("| Quanta Magazine"). Only og:title takes it: the
       browser tab and the search result keep the site name, because the page is ours. */
   cardSource?: string;
+  /** sow-462: schema.org structured data (one record or a list), written into the head as JSON-LD. Build it with the
+      helpers in src/lib/json-ld.mjs; it is escaped there, so a title holding "</script>" stays data. */
+  jsonLd?: unknown;
 }
 
 const {
@@ -53,6 +57,7 @@ const {
   bare = false,
   ogImageSize: measuredOgImageSize,
   cardSource,
+  jsonLd,
 } = Astro.props;
 
 const siteName = SITE_NAME;
@@ -132,6 +137,8 @@ const ogImageSize = measuredOgImageSize ?? knownImageSize(ogImage || DEFAULT_OG_
     {ogImageSize && <meta property="og:image:height" content={String(ogImageSize.height)} />}
     <meta name="twitter:card" content={ogImageUrl ? 'summary_large_image' : 'summary'} />
     {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
+    {/* sow-462: a data block, never executed, so the CSP's script-src does not apply to it. */}
+    {jsonLd ? <script type="application/ld+json" is:inline set:html={jsonForScript(jsonLd)} /> : null}
 
     <meta name="generator" content={Astro.generator} />
 

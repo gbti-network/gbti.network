@@ -53,6 +53,24 @@ test('deploy.yml: only a main deploy marks and clears the content watermark', ()
   assert.equal(announce['continue-on-error'], true, 'an announcement must never red a deploy that succeeded');
 });
 
+// sow-462: the IndexNow notice brackets the deploy. The snapshot must read the live sitemap BEFORE the deploy replaces
+// it, the submit must run only after a deploy that succeeded, both only for production, and neither may fail a deploy.
+test('deploy.yml: the IndexNow snapshot runs before the deploy and the notice after it, on production only', () => {
+  const { steps } = load('deploy.yml');
+  const deploy = indexOf(steps, (s) => s.id === 'deploy', 'the deploy');
+  const snap = indexOf(steps, (s) => /indexnow\.mjs snapshot/.test(s.run || ''), 'the IndexNow snapshot');
+  const submit = indexOf(steps, (s) => /indexnow\.mjs submit/.test(s.run || ''), 'the IndexNow notice');
+  assert.ok(snap < deploy, 'the snapshot must read the live sitemap before the deploy replaces it');
+  assert.ok(submit > deploy, 'the notice must follow the deploy, so the key file and new pages are live');
+  assert.equal(steps[snap].if, "steps.target.outputs.mode == 'production'");
+  assert.match(steps[submit].if, /steps\.deploy\.outcome == 'success' && steps\.target\.outputs\.mode == 'production'/);
+  for (const i of [snap, submit]) {
+    assert.equal(steps[i]['continue-on-error'], true, 'a search-engine notice must never red a deploy');
+    assert.equal(steps[i].env, undefined, 'the notice needs no secret and must not be handed one');
+    assert.doesNotMatch(steps[i].run, /\$\{\{/, 'no expression may be interpolated into the run body');
+  }
+});
+
 test('deploy-worker.yml: the guard (--worker) runs before install, tests and deploy', () => {
   const { on, steps } = load('deploy-worker.yml');
   assert.equal(on.workflow_dispatch.inputs.confirm_branch.type, 'string');

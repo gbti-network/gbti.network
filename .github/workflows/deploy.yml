@@ -122,6 +122,13 @@ jobs:
           MODE: ${{ steps.target.outputs.mode }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # sow-462: IndexNow. Save the LIVE sitemap before this deploy replaces it, so the step after the deploy can tell
+      # Bing and the other IndexNow engines exactly which addresses are new, re-dated or gone. Production only, reads no
+      # secret, and never blocks a deploy (the script exits 0 when it cannot read the live sitemap).
+      - name: Snapshot the live sitemap for IndexNow
+        if: steps.target.outputs.mode == 'production'
+        continue-on-error: true
+        run: node scripts/indexnow.mjs snapshot "$RUNNER_TEMP/indexnow-before.json"
       # The Pages branch comes from the guard, which only ever emits "main" or "preview".
       - name: Deploy dist to Cloudflare Pages
         id: deploy
@@ -142,6 +149,12 @@ jobs:
           CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
           CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      # sow-462: send the addresses this deploy changed to IndexNow. After the deploy, so the key file and the new pages
+      # are live when an engine checks them; only when the deploy succeeded, so a failed deploy announces nothing.
+      - name: Tell search engines what changed (IndexNow)
+        if: always() && steps.deploy.outcome == 'success' && steps.target.outputs.mode == 'production'
+        continue-on-error: true
+        run: node scripts/indexnow.mjs submit "$RUNNER_TEMP/indexnow-before.json"
       # sow-295: announce a branch on production, a return to main, or a preview. Never fails the run.
       - name: Announce a branch or preview deploy
         if: always() && steps.deploy.outcome == 'success'

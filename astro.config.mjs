@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import yaml from 'js-yaml';
 import { contentFlagsFromParsed, sitemapExcludes } from './membership/content-flags.mjs'; // sow-189: unindexed articles leave the sitemap
 import { membersOnlyPagePaths } from './membership/members-only-pages.mjs'; // sow-323 Phase 3
+import { contentLastmod, withLastmod } from './membership/content-lastmod.mjs'; // sow-462: <lastmod> per content page
 import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from './src/lib/markdown-sanitize.mjs';
 import { rehypeSponsoredLinks } from './src/lib/rehype-sponsored-links.mjs'; // sow-281: partner redirect links in bodies are rel=sponsored
 import { rehypeExternalLinks } from './src/lib/rehype-external-links.mjs'; // sow-378: a body link that leaves the site opens in a new tab
@@ -34,6 +35,10 @@ function rehypeDemoteBodyH1() {
 const UNINDEXED = (() => { try { return sitemapExcludes(contentFlagsFromParsed(yaml.load(fs.readFileSync('house/content-flags.yml', 'utf8')))); } catch { return new Set(); } })();
 // sow-323 Phase 3: a published members-only item keeps its page but leaves the sitemap until a superadmin approves it.
 const MEMBERS_ONLY = membersOnlyPagePaths(process.cwd());
+// sow-462: each content page's own last-revision date, so search engines refetch what changed. A failed scan leaves
+// every page undated (the sitemap is still written); withLastmod itself never throws, because the plugin answers a
+// throw from serialize by writing no sitemap at all.
+const LASTMOD = (() => { try { return contentLastmod(process.cwd()); } catch { return new Map(); } })();
 
 export default defineConfig({
   site: 'https://gbti.network',
@@ -86,7 +91,7 @@ export default defineConfig({
     // a hand-maintained list does when nothing checks it.
     // sow-427: `claim` is the prepared-listing invitation page, /claim/?code=<CODE>, a bearer link for one person.
     // sow-434: `claim\/profile` is its example profile page, /claim/profile/?code=<CODE>, read with the same code.
-    sitemap({ filter: (page) => !/\/(account|account\/notifications|admin|browse|claim(\/profile)?|embed|login|sponsorship|welcome|workbench|workbench\/mcp|workbench\/preview|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
+    sitemap({ filter: (page) => !/\/(account|account\/notifications|admin|browse|claim(\/profile)?|embed|login|sponsorship|welcome|workbench|workbench\/mcp|workbench\/preview|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname), serialize: withLastmod(LASTMOD) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

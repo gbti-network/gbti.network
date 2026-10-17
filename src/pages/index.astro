@@ -31,6 +31,8 @@ import { sortByNewest, rankNewAndPopular, aggregateTags, feedCounts, commitsHeat
 import { commitsByDate, commitCount } from '../lib/git-history';
 import { loadShoptalk, shoptalkWhen, shoptalkTimeShort } from '../lib/shoptalk';
 import { FIRST_TOUCH_PCT, SIGNUP_BASE } from '../lib/membership';
+import { jsonForScript, siteJsonLd } from '../lib/json-ld.mjs'; // sow-462
+import { SOCIAL_LINKS } from '../lib/social';
 
 const { contentItems, membersItems, shareItems, profiles, avatarIndex } = await loadFeedItems();
 
@@ -140,7 +142,7 @@ const SHOPTALK = {
 };
 
 ---
-<BaseLayout title="Building Together. Linking Lives." description="A community for developers and creators, building the open internet together. Publish your articles, projects, and prompts in the open, build alongside peers, and join the conversation in Discord. Free to read; become a member to comment and publish.">
+<BaseLayout title="Building Together. Linking Lives." description="A community for developers and creators, building the open internet together. Publish your articles, projects, and prompts in the open, build alongside peers, and join the conversation in Discord. Free to read; become a member to comment and publish." jsonLd={siteJsonLd({ sameAs: SOCIAL_LINKS.map((l) => l.href) })}>
 
 <div class="wrap feedwrap">
 
@@ -149,7 +151,9 @@ const SHOPTALK = {
 
   <!-- sow-192 Phase D: the Personalize modal + its build-time candidate lists (members/categories/tags). The
        modal itself is a fixed <dialog>, inert until the signed-in Personalize button opens it. -->
-  <script type="application/json" id="gbti-personalize-data" set:html={JSON.stringify(personalizeData)}></script>
+  {/* sow-462: jsonForScript, never a bare JSON.stringify. This block carries member display names, which accept any
+      text, and a name holding "</script>" would otherwise end the element and run whatever followed it as markup. */}
+  <script type="application/json" id="gbti-personalize-data" set:html={jsonForScript(personalizeData)}></script>
   <PersonalizeModal />
   {/* sow-302: the add-to-calendar chooser. Inert until the CTA opens it; the CTA keeps its href so a
       no-JavaScript reader still gets the .ics, which is exactly today's behaviour. */}

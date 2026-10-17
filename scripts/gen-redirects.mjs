@@ -134,6 +134,30 @@ const EXTRA = [
   // the slash.
   ['/join', '/membership/'],
   ['/join/', '/membership/'],
+
+  // sow-462 (the sow-461 decision, owner 2026-10-16): old addresses that answered 404 after the 2026-06-16 launch and
+  // that Google still sent people to, or that a live article still links to. The hire pages offered to arrange
+  // developers, and both articles that link them say "let us know", so they land on the contact page and no article
+  // text changes. The old co-op terms described the point system and profit split, which the revenue model page now
+  // covers. One row per known address rather than a /hire/* splat, so nothing here is a dynamic rule.
+  ['/hire/', '/contact/'],
+  ['/hire/wordpress-developers/', '/contact/'],
+  ['/hire/minecraft-developers/', '/contact/'],
+  ['/hire/mcp-server-developers/', '/contact/'],
+  ['/ai/15-nano-bana-prompts-for-generating-linkedin-headshots/', '/articles/15-nano-banana-prompts-for-generating-linkedin-headshots/'],
+  ['/co-op/terms-of-operation/', '/revenue-model/'],
+  ['/co-op/guides/gbti-network-product-submission-process-guide/', '/submit-content/'],
+  ['/co-op/submit/', '/submit-content/'],
+  ['/minecraft/how-to-edit-flan-text-messages-in-minecraft', '/articles/how-to-edit-flan-text-messages-in-minecraft/'],
+  ['/frameworks/what-is-markdown/', '/articles/what-is-markdown/'],
+  ['/sitemap_index.xml', '/sitemap-index.xml'], // the WordPress sitemap, still registered in Search Console
+
+  // sow-457: /youtube-invite/ was live for about an hour on 2026-10-15 before the owner ruled that the YouTube creator
+  // invitations open the ARTICLE with a claim dialog rather than a landing page of their own. The page is deleted;
+  // this keeps the URL working for the few who saw it, and the coupon rides along because Cloudflare Pages carries
+  // the query string onto a redirect whose destination has none. It was first added to public/_redirects by hand,
+  // which the next run of this script would have dropped, so it lives here now (sow-462).
+  ['/youtube-invite/', '/articles/100-wordpress-youtube-channels-to-subscribe-to-in-2026/'],
 ];
 // A string entry is a raw line (the sow-359 outbound marker); a pair is a redirect.
 for (const e of EXTRA) {
