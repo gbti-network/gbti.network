@@ -411,3 +411,35 @@ test('a REJOIN against an unreachable calendar says try again, and promises noth
   assert.equal(r.status, 503);
   assert.equal(r.body.error, 'calendar_unavailable');
 });
+
+test('a NEW address survives an unreachable calendar: stored, and the sweep will send it', async () => {
+  // Without this the member is told to try again, while the address they just set is already saved and the
+  // sweep is already going to use it. The advice would be wrong and the work would be invisible.
+  const kv = fakeKv();
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'calendar@x.com' }), {}, {
+    kv, authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.saved, true);
+  assert.equal(r.body.enrolled, null, 'we could not look, so we do not claim a seat');
+  assert.match(r.body.message, /next nightly run/);
+  assert.equal(JSON.parse(kv.map.get(SHOPTALK_ADDRESS_KEY('1'))).address, 'calendar@x.com');
+});
+
+test('an address the sweep has ALREADY seen is a dead end, and says so', async () => {
+  // Rule 5: the sweep never re-adds an address it has seen, so "it goes out on the next run" would be a
+  // promise nothing keeps.
+  const kv = fakeKv({ 'shoptalk:seen': JSON.stringify({ 'calendar@x.com': '1' }) });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin', address: 'calendar@x.com' }), {}, {
+    kv, authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'billing@x.com',
+  });
+  assert.equal(r.status, 503);
+  assert.equal(r.body.error, 'calendar_unavailable');
+});
+
+test('a plain rejoin with NO address still says try again', async () => {
+  const r = await handleShoptalk(req('POST', { action: 'rejoin' }), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: throwingCal(), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 503);
+});

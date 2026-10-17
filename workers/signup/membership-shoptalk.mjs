@@ -147,6 +147,7 @@ export async function handleShoptalk(request, env, {
   // sweep must already know which address is theirs, or it enrolls the billing one and the member is back
   // where they started.
   let movedFrom = '';
+  let storedNow = false;
   if (wanted !== undefined && wanted !== null && wanted !== '') {
     if (action !== 'rejoin') {
       return { status: 400, body: { error: 'invalid', message: 'an address can only be set when joining the call list' } };
@@ -165,6 +166,7 @@ export async function handleShoptalk(request, env, {
     const current = await addressFor(env, auth.githubId, { kv, stripe, lookupEmail });
     movedFrom = current.address && current.address !== next ? current.address : '';
     await kv.put(SHOPTALK_ADDRESS_KEY(auth.githubId), JSON.stringify({ address: next, at: new Date().toISOString() }));
+    storedNow = true;
   }
 
   // THE MARKER IS WRITTEN BEFORE THE CALENDAR IS TOUCHED, and the order is load-bearing. If the calendar call
@@ -194,16 +196,27 @@ export async function handleShoptalk(request, env, {
     message: 'recorded; the change reaches the calendar on the next sweep' } };
   if (!calendar) return action === 'leave' ? recorded : unavailable;
 
-  // Same guard on the WRITE path, answered through the two responses above rather than an error page: a leave
-  // is recorded for the sweep to finish, and a rejoin says to try again, which is what those exist for.
+  // Same guard on the WRITE path, answered through the responses above rather than an error page: a leave is
+  // recorded for the sweep to finish, and a rejoin says what is actually true of its case.
+  //
+  // A REJOIN THAT JUST STORED A NEW ADDRESS IS NOT A DEAD END even when the calendar is unreachable. The
+  // address is already written, and the sweep adds addresses it has never seen (rule 5), so the invitation
+  // goes out on the next run. Telling that member to "try again" would hide work that is already done. An
+  // address the sweep HAS seen is a genuine dead end, because rule 5 stops it being added again, and that is
+  // what `unavailable` is for.
+  const rejoinAnswer = async () => {
+    if (!storedNow || await everInvited(kv, address)) return unavailable;
+    return { status: 200, body: { ok: true, optedOut: false, enrolled: null, address, applied: false, saved: true,
+      message: 'Saved. The calendar could not be reached just now, so your invitation goes out on the next nightly run.' } };
+  };
   let s;
   let read;
   try {
     s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
-    if (isSeriesProblem(s)) return action === 'leave' ? recorded : unavailable;
+    if (isSeriesProblem(s)) return action === 'leave' ? recorded : await rejoinAnswer();
     read = (await readGuests(calendar, s.seriesId)) || { guests: [], declined: new Set() };
   } catch {
-    return action === 'leave' ? recorded : unavailable;
+    return action === 'leave' ? recorded : await rejoinAnswer();
   }
   // sow-466: a member who moved their seat has their OLD address taken off in the same request. Leaving it
   // holds two seats on one person, and the stale one keeps receiving the Meet link at the address they just
