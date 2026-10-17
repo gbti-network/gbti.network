@@ -13,7 +13,7 @@ import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbo
 import { relTime } from '../time-core.mjs';
 import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep link (#tab=share&read=<author>/<id>)
 import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
-import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: a video share plays inline
+import { shareEmbed, AUDIO_EMBED_HEIGHT } from '../../../client/src/video-embed.mjs'; // SOW-092: what a share's link plays in place (video, or a Mixcloud mix since 2026-10-17)
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
 import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../topic-labels.mjs'; // the card's category pill
 import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
@@ -42,6 +42,10 @@ const CSS = `
   .share-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; border-radius:10px; margin-top:10px; }
   .share-embed iframe { width:100%; height:100%; border:0; }
   .share-embed.tall { aspect-ratio:9/16; max-width:380px; }
+  /* A Mixcloud mix (2026-10-17): the picture stays and Mixcloud's slim player sits right under it. */
+  /* Mixcloud lays the player out by the FRAME's own height and drops to its 60 pixel compact bar below 120, so the frame gets the full height and the border sits outside it. */
+  .share-audio { overflow:hidden; border-radius:10px; margin-top:8px; border:1px solid var(--line); }
+  .share-audio iframe { display:block; width:100%; height:${AUDIO_EMBED_HEIGHT}px; border:0; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
@@ -253,11 +257,15 @@ class GbtiSharesFeed extends GbtiElement {
     const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc(hostOf(share.url))}</a>` : '';
     // SOW-092: a video link (YouTube/Vimeo/TikTok/Rumble embed) plays inline; the static image (usually
     // that video's thumbnail) shows only for non-video links.
-    const shareEmbed = share.url ? embedUrl(share.url) : null;
+    const play = share.url ? shareEmbed(share.url) : null;
     const heroUrl = share.image ? resolveAsset(share.image) : '';
-    const hero = shareEmbed
-      ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
-      : (heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '');
+    const relay = share.url ? `https://gbti.network/embed/?u=${encodeURIComponent(share.url)}` : '';
+    const picture = heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '';
+    const hero = play && play.kind !== 'audio'
+      ? `<div class="share-embed${play.kind === 'portrait' ? ' tall' : ''}"><iframe src="${esc(relay)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      : play
+        ? `${picture}<div class="share-audio"><iframe src="${esc(relay)}" title="Mixcloud player" loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>`
+        : picture;
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
     // SOW-050 P3: the Favorite + Collection cluster. A Share keys on its composite "<author>/<id>" slug.
     // sow-313 removed the Upvote that used to lead this row, along with the isAuthor test that hid it from the

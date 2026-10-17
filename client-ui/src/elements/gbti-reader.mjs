@@ -33,7 +33,7 @@ import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the s
 import { loadMembersDirectory } from '../members-index.mjs'; // SOW-143: the shared /members-index.json loader (one cache across elements)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
-import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
+import { shareEmbed, AUDIO_EMBED_HEIGHT } from '../../../client/src/video-embed.mjs'; // SOW-092: what a share's link plays in place (video, or a Mixcloud mix since 2026-10-17)
 import { tweetId } from '../../../client/src/tweet-embed.mjs'; // sow-261: an X share shows the live tweet
 import { TWEET_CSS, wireTweets } from '../tweet-frames.mjs';
 // SOW-041: the comment/favorite key for an item (a post/project/prompt's slug, a Share's "<author>/<shareId>").
@@ -147,6 +147,11 @@ const CSS = `
   .cover-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
   .cover-embed iframe { width:100%; height:100%; border:0; }
   .cover-embed.tall { aspect-ratio:9/16; max-width:400px; }
+  /* A Mixcloud mix (2026-10-17): the share's picture stays, and Mixcloud's slim player sits right under it. */
+  .cover.with-audio { margin-bottom:12px; }
+  /* Mixcloud lays the player out by the FRAME's own height and drops to its 60 pixel compact bar below 120, so the frame gets the full height and the border sits outside it. */
+  .cover-audio { overflow:hidden; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
+  .cover-audio iframe { display:block; width:100%; height:${AUDIO_EMBED_HEIGHT}px; border:0; }
 
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -584,7 +589,7 @@ class GbtiReader extends GbtiElement {
     // SOW-050: the hero uses the full-res thumbWide derivative (falls back to the card/list thumb if absent).
     // SOW-092: a share whose link is a recognized video (YouTube/Vimeo/TikTok/Rumble embed) plays INLINE —
     // the embed replaces the static share image (the image was usually just that video's thumbnail).
-    const shareEmbed = it.type === 'share' && it.url ? embedUrl(it.url) : null;
+    const play = it.type === 'share' && it.url ? shareEmbed(it.url) : null;
     // sow-443: a share also falls back to its OWN image. Index thumbnails carry only a cover hosted on gbti.network (the
     // email digest's rule, sow-283), so a share whose copy failed (barn2.com refused it, 2026-10-06) lost its cover on
     // every open after the first, while the website's share page showed the original image.
@@ -593,9 +598,12 @@ class GbtiReader extends GbtiElement {
     // error 153) and a chrome-extension:// page can never send one, so the relay's https origin vouches.
     // sow-441: no cover on a project. For a project the index thumbnail IS the icon, which this stretched across the
     // column; the project hero shows the icon at its own size instead.
-    const cover = proj ? '' : shareEmbed
-      ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`${SITE}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
-      : (coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '');
+    const relay = it.url ? `${SITE}/embed/?u=${encodeURIComponent(it.url)}` : '';
+    const cover = proj ? '' : play && play.kind !== 'audio'
+      ? `<div class="cover-embed${play.kind === 'portrait' ? ' tall' : ''}"><iframe src="${esc(relay)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      : play
+        ? `${coverUrl ? `<img class="cover with-audio" src="${esc(coverUrl)}" alt="" loading="lazy">` : ''}<div class="cover-audio"><iframe src="${esc(relay)}" title="Mixcloud player" loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>`
+        : (coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '');
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;
     else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;

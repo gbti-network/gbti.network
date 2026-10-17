@@ -66,6 +66,45 @@ export function embedPosterHtml(url, { frameSrc } = {}) {
   return `<div class="md-embed md-embed-poster${p.portrait ? ' md-embed-portrait' : ''}" data-embed-src="${escAttr(src)}" data-embed-url="${escAttr(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
 }
 
+// Mixcloud (owner, 2026-10-17: "Can we make Mixcloud shares embedded"). A shared MIX plays in place as Mixcloud's own
+// slim player, the 120 pixel widget its oEmbed hands out. It is AUDIO, so it stays OUT of embedUrl on purpose: that rule
+// also drives comment posters, ```embed fences, the `video:` field and the editor's "add video", all of which assume a
+// 16:9 video and would start offering a mix as one. Only the share views and the extension's player relay ask for it,
+// through shareEmbed below. A mix lives at mixcloud.com/<account>/<mix>/; Mixcloud's own pages and an account's
+// listing pages share that two-part shape, so they are named and refused.
+const MIXCLOUD_SITE_PAGES = new Set(['about', 'account', 'api', 'categories', 'dashboard', 'developers', 'discover', 'genres',
+  'help', 'live', 'login', 'media', 'messages', 'notifications', 'oembed', 'player', 'pricing', 'pro', 'search', 'select',
+  'settings', 'signup', 'tag', 'tags', 'upload', 'widget']);
+const MIXCLOUD_ACCOUNT_PAGES = new Set(['favorites', 'followers', 'following', 'hosts', 'listens', 'playlists', 'reposts',
+  'shows', 'stream', 'uploads']);
+export function audioEmbedUrl(v) {
+  let u;
+  try { u = new URL(String(v || '').trim()); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
+  const seg = u.pathname.split('/').filter(Boolean);
+  if (seg.length !== 2) return null;
+  const [account, mix] = seg;
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
+  if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
+  return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
+}
+
+/**
+ * What a SHARE's link plays in place, decided once for every share view (the extension reader, the shares stream,
+ * the website share page) and the extension's player relay. `kind` is 'video' (16:9), 'portrait' (9:16) or 'audio'
+ * (Mixcloud's slim player, shown under the share's picture rather than instead of it). Null = no player.
+ */
+export function shareEmbed(url) {
+  const video = embedUrl(url);
+  if (video) return { src: video, kind: isPortraitEmbed(video) ? 'portrait' : 'video' };
+  const audio = audioEmbedUrl(url);
+  return audio ? { src: audio, kind: 'audio' } : null;
+}
+
+/** The fixed height of Mixcloud's slim player, in CSS pixels (its oEmbed answer for a single mix). */
+export const AUDIO_EMBED_HEIGHT = 120;
+
 /** SOW-092: portrait providers (TikTok) render in a tall 9:16 frame instead of the default 16:9. */
 export function isPortraitEmbed(src) {
   return /tiktok\.com\/embed\//.test(String(src || ''));

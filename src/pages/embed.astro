@@ -22,7 +22,7 @@
         the two in step: anything permitted here must also be permitted there. */}
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com; base-uri 'none'; object-src 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com https://www.mixcloud.com https://player-widget.mixcloud.com; base-uri 'none'; object-src 'none'; form-action 'none'"
     />
     <title>Video</title>
     <style is:global>
@@ -33,11 +33,12 @@
   </head>
   <body>
     <script>
-      import { embedUrl } from '../../client/src/video-embed.mjs';
+      import { shareEmbed } from '../../client/src/video-embed.mjs';
       import { tweetId, tweetFrameUrl, parseTweetMessage, TWEET_FRAME_ORIGIN } from '../../client/src/tweet-embed.mjs';
       const params = new URLSearchParams(location.search);
       const u = params.get('u') || '';
-      const src = embedUrl(u);
+      // shareEmbed = embedUrl plus a Mixcloud mix (2026-10-17); the extension's share views frame this page for both.
+      const src = shareEmbed(u)?.src || null;
       if (tweetId(u)) {
         // sow-261: transparent, so the tweet's own rounded card sits on the parent page's background.
         document.documentElement.style.background = 'transparent';

@@ -15,7 +15,7 @@ import ExtensionBanner from '../../../components/home/ExtensionBanner.astro';
 import VideoEmbed from '../../../components/VideoEmbed.astro';
 import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
 import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
-import { embedUrl } from '../../../../client/src/video-embed.mjs';
+import { embedUrl, audioEmbedUrl, AUDIO_EMBED_HEIGHT } from '../../../../client/src/video-embed.mjs';
 import { tweetId } from '../../../../client/src/tweet-embed.mjs'; // sow-261: an X share shows the live tweet
 import { linkKind } from '../../../../client/src/link-kind.mjs'; // sow-417: an audio link says Listen, not Read
 import { sourceCardModel } from '../../../../client/src/share-source.mjs'; // sow-222: who the source card points at
@@ -65,6 +65,9 @@ const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 // (embedUrl fails closed to null). No relay needed here: unlike a chrome-extension:// page, this site sends
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
 const videoSrc = d.url ? embedUrl(d.url) : null;
+// 2026-10-17: a Mixcloud mix plays in place too, as Mixcloud's slim player UNDER the picture (the picture stays, since a
+// mix's cover is its art, not a video still). Framed straight from Mixcloud; the site CSP admits www.mixcloud.com.
+const audioSrc = !videoSrc && d.url ? audioEmbedUrl(d.url) : null;
 // sow-261 (owner, 2026-09-22): an X share shows the live tweet under the member's note, framed straight from X (the
 // site CSP admits platform.twitter.com); the scraped picture hides once it shows. Not on a video share.
 const tweetUrl = !videoSrc && d.url && tweetId(d.url) ? d.url : null;
@@ -120,6 +123,9 @@ if (cover && cover.author === d.author && cover.id === d.id) {
         : typeof d.image === 'string' && d.image && (
             <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={shareImageForSite(d.image)} alt="" loading="lazy" decoding="async" /></a>
           )}
+      {audioSrc && (
+        <div class="share-audio"><iframe src={audioSrc} title={`${title} on Mixcloud`} height={AUDIO_EMBED_HEIGHT} style={`height:${AUDIO_EMBED_HEIGHT}px`} loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>
+      )}
 
       {body && (
         <article class:list={['card', 'share-member-note', isNetworkAuthor(d.author) && 'share-member-note--house']} style="padding:24px;margin-top:26px">
@@ -223,6 +229,9 @@ if (cover && cover.author === d.author && cover.id === d.id) {
      radius + background come from VideoEmbed itself. Kept off src/styles/gbti-v3.css so this page owns
      the one rule it needs. */
   .share-player { margin-top: 26px; }
+  .share-audio { margin-top: 12px; overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--line); }
+  /* Mixcloud lays the player out by the FRAME's own height and drops to its 60 pixel compact bar below 120, so the frame gets the full height and the border sits outside it. */
+  .share-audio iframe { display: block; width: 100%; border: 0; }
   /* sow-261: the X share's tweet (the frame is created by the script, hence :global). */
   .share-tweet { margin-top: 26px; max-width: 550px; }
   .share-tweet:not(:has(.is-ready)) { margin-top: 0; } /* zero height until X reports a size; never display:none, which would leave X no width to lay the tweet out in */
