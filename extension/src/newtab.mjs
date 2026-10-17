@@ -18,6 +18,7 @@ import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../../c
 import { buildForVersion } from './version-build.mjs';
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
+import { openMode, shareAddress, shareSlugOf, isSharePage, writeHandoff, takeHandoff, shareTitle } from './share-address.mjs'; // a share opened here gets a real, visible address (2026-10-17)
 import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType } from '../../client-ui/src/feed-route.mjs';
 import { viewKey, viewModeFor, landingType, LAST_SECTION_KEY, LEGACY_MODE_KEY } from '../../client-ui/src/newtab-prefs.mjs'; // SOW-105: last-section + per-section view-mode memory
 import { PROMPT_KIND_KEY, normalizePromptKind, promptKindCounts, filterPromptKind, promptKindSwitchHtml } from '../../client-ui/src/prompt-kind-filter.mjs'; // sow-109: the Prompts & Skills tab's All / Prompts / Skills switch
@@ -217,7 +218,7 @@ function renderFeed(filter = '') {
   const list = document.createElement('gbti-card-list');
   list.mode = MODE;
   list.items = rows; // already card items (toCardItem / newsToItem)
-  list.addEventListener('card-open', (e) => openReader(e.detail?.item)); // content + Shares open IN PLACE
+  list.addEventListener('card-open', (e) => openReader(e.detail?.item, { fromFeed: true })); // content opens IN PLACE; a share goes to its own address
   feed.replaceChildren(list);
   if (MORE_IO) { MORE_IO.disconnect(); MORE_IO = null; }
   if (total > rows.length) {
@@ -243,8 +244,20 @@ function renderFeed(filter = '') {
 // is carried as an explicit openReader option (never ambient state), so the three existing callers clear it by
 // omission and a stale return target can never leak.
 let RETURN_MEMBER = null;
-function openReader(item, { returnTo = null } = {}) {
+// 2026-10-17: true on the share page when a person clicked the share in a feed, so "Back to the feed" steps back in
+// history to that feed instead of showing a second copy of it here.
+let ARRIVED_FROM_FEED = false;
+const tabStorage = () => { try { return window.sessionStorage; } catch { return null; } };
+function openReader(item, { returnTo = null, fromFeed = false, inPlace = false } = {}) {
   if (!item) return;
+  // A share leaves the new tab for its own address, the only way Chrome shows one (./share-address.mjs). A click
+  // ADDS a history entry so Back returns to the feed; a deep link REPLACES this one, so Back never re-enters it.
+  if (!inPlace && openMode(item, location.search) === 'load') {
+    writeHandoff(tabStorage(), item, { fromFeed });
+    const to = shareAddress(shareSlugOf(item));
+    if (fromFeed) location.assign(to); else location.replace(to);
+    return;
+  }
   RETURN_MEMBER = returnTo;
   writeReadHash(item); // SOW-092: the address bar carries a copyable deep link while reading
   const fv = $('[data-feedview]');
@@ -259,6 +272,9 @@ function openReader(item, { returnTo = null } = {}) {
   fv.hidden = true;
   rv.hidden = false;
   window.scrollTo(0, 0);
+  // The share page is a real address, so name the tab after the share: a bookmark then carries its title. The new
+  // tab itself keeps its blank title.
+  if (item.type === 'share' && isSharePage(location.search)) document.title = shareTitle(item);
 }
 
 // SOW-143: render a member's profile detail IN the reader shell (reusing the same host), addressed by
@@ -325,12 +341,15 @@ function closeReader() {
   if (rv) rv.hidden = true;
   if (host) host.replaceChildren();
   if (fv) fv.hidden = false;
+  if (isSharePage(location.search)) document.title = 'Shares · GBTI Network';
 }
 
 // SOW-143: the explicit Back button. If this reader was opened FROM a member view, return to that member view
 // (one-deep stack); otherwise restore the feed. This is the ONLY path that honors the member-return.
 function onReaderBack() {
   if (RETURN_MEMBER) { const u = RETURN_MEMBER; RETURN_MEMBER = null; openMember(u); return; }
+  // A share opened from the feed: step back to that feed rather than rebuilding it on the share page.
+  if (ARRIVED_FROM_FEED && history.length > 1) { ARRIVED_FROM_FEED = false; history.back(); return; }
   closeReader();
 }
 
@@ -662,10 +681,12 @@ function init() {
     const mem = parseMemberHash(h);
     if (mem) { openMember(mem); return; }
     const t = typeForHash(h);
-    selectType(t);
+    // Read the item BEFORE selectType: switching the feed closes the reader, and closing strips read= from the address,
+    // so reading it afterwards found nothing and a share link arriving in an open tab never opened (2026-10-17).
     const rd = readFromHash();
+    const act = rd ? doFromHash() : null;
+    selectType(t);
     if (rd) {
-      const act = doFromHash();
       if (act) consumeDo();
       if (t === 'share') window.gbtiOpenShareBySlug(rd);
       else openReader({ type: t, path: rd, doAction: act });
@@ -694,7 +715,10 @@ function init() {
     if (deepRead) {
       const act = doFromHash();
       if (act) consumeDo();
-      if (TYPE === 'share') window.gbtiOpenShareBySlug(deepRead);
+      // The share page shows the handed-over share at once; anything else (a bookmark, a reload) resolves it below.
+      const handed = TYPE === 'share' && isSharePage(location.search) ? takeHandoff(tabStorage(), deepRead) : null;
+      if (handed) { ARRIVED_FROM_FEED = handed.fromFeed; openReader({ ...handed.item, type: 'share' }); }
+      else if (TYPE === 'share') window.gbtiOpenShareBySlug(deepRead);
       else openReader({ type: TYPE, path: deepRead, doAction: act });
     }
   }
@@ -740,7 +764,7 @@ function init() {
     const item = e?.detail?.item;
     if (!item) return;
     if (e.detail) e.detail.handled = true;
-    openReader(item);
+    openReader(item, { inPlace: true }); // a just-posted share stays here: it may not be in the stream for a minute yet
   });
 }
 

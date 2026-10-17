@@ -4186,6 +4186,69 @@ ${listStyleProseCss(".doc-blocks")}
     const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr3(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr3(p.provider)}</span>`;
     return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr3(src)}" data-embed-url="${escAttr3(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
   }
+  var MIXCLOUD_SITE_PAGES = /* @__PURE__ */ new Set([
+    "about",
+    "account",
+    "api",
+    "categories",
+    "dashboard",
+    "developers",
+    "discover",
+    "genres",
+    "help",
+    "live",
+    "login",
+    "media",
+    "messages",
+    "notifications",
+    "oembed",
+    "player",
+    "pricing",
+    "pro",
+    "search",
+    "select",
+    "settings",
+    "signup",
+    "tag",
+    "tags",
+    "upload",
+    "widget"
+  ]);
+  var MIXCLOUD_ACCOUNT_PAGES = /* @__PURE__ */ new Set([
+    "favorites",
+    "followers",
+    "following",
+    "hosts",
+    "listens",
+    "playlists",
+    "reposts",
+    "shows",
+    "stream",
+    "uploads"
+  ]);
+  function audioEmbedUrl(v2) {
+    let u;
+    try {
+      u = new URL(String(v2 || "").trim());
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
+    const seg = u.pathname.split("/").filter(Boolean);
+    if (seg.length !== 2) return null;
+    const [account, mix] = seg;
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
+    if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
+    return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
+  }
+  function shareEmbed(url) {
+    const video = embedUrl(url);
+    if (video) return { src: video, kind: isPortraitEmbed(video) ? "portrait" : "video" };
+    const audio = audioEmbedUrl(url);
+    return audio ? { src: audio, kind: "audio" } : null;
+  }
+  var AUDIO_EMBED_HEIGHT = 120;
   function isPortraitEmbed(src) {
     return /tiktok\.com\/embed\//.test(String(src || ""));
   }
@@ -23113,6 +23176,10 @@ ${link}` : ""}`;
   .share-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; border-radius:10px; margin-top:10px; }
   .share-embed iframe { width:100%; height:100%; border:0; }
   .share-embed.tall { aspect-ratio:9/16; max-width:380px; }
+  /* A Mixcloud mix (2026-10-17): the picture stays and Mixcloud's slim player sits right under it. */
+  /* Mixcloud lays the player out by the FRAME's own height and drops to its 60 pixel compact bar below 120, so the frame gets the full height and the border sits outside it. */
+  .share-audio { overflow:hidden; border-radius:10px; margin-top:8px; border:1px solid var(--line); }
+  .share-audio iframe { display:block; width:100%; height:${AUDIO_EMBED_HEIGHT}px; border:0; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
@@ -23332,9 +23399,11 @@ ${link}` : ""}`;
       const title = share.title ? `<div class="title">${esc2(share.title)}</div>` : "";
       const desc = share.shortDescription ? `<div class="desc">${esc2(share.shortDescription)}</div>` : "";
       const link = share.url ? `<a class="link" href="${esc2(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc2(hostOf2(share.url))}</a>` : "";
-      const shareEmbed = share.url ? embedUrl(share.url) : null;
+      const play = share.url ? shareEmbed(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
-      const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc2(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
+      const relay = share.url ? `https://gbti.network/embed/?u=${encodeURIComponent(share.url)}` : "";
+      const picture = heroUrl ? `<img class="share-hero" src="${esc2(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
+      const hero = play && play.kind !== "audio" ? `<div class="share-embed${play.kind === "portrait" ? " tall" : ""}"><iframe src="${esc2(relay)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : play ? `${picture}<div class="share-audio"><iframe src="${esc2(relay)}" title="Mixcloud player" loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>` : picture;
       const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc2(t)}</span>`).join("")}</div>` : "";
       const actions = slug ? `<div class="actions">
       <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-favorite>
@@ -28754,6 +28823,11 @@ ${BLOCKED_PILL_CSS}
   .cover-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
   .cover-embed iframe { width:100%; height:100%; border:0; }
   .cover-embed.tall { aspect-ratio:9/16; max-width:400px; }
+  /* A Mixcloud mix (2026-10-17): the share's picture stays, and Mixcloud's slim player sits right under it. */
+  .cover.with-audio { margin-bottom:12px; }
+  /* Mixcloud lays the player out by the FRAME's own height and drops to its 60 pixel compact bar below 120, so the frame gets the full height and the border sits outside it. */
+  .cover-audio { overflow:hidden; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
+  .cover-audio iframe { display:block; width:100%; height:${AUDIO_EMBED_HEIGHT}px; border:0; }
 
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -29131,9 +29205,10 @@ ${BLOCKED_PILL_CSS}
       const proj = it2.type === "project" ? projectViewModel({ item: it2, frontmatter: this._fm, itemPath: it2.path, paid: this._paid === true }) : null;
       const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
-      const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
+      const play = it2.type === "share" && it2.url ? shareEmbed(it2.url) : null;
       const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb || (it2.type === "share" ? it2.image : null));
-      const cover = proj ? "" : shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE22}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
+      const relay = it2.url ? `${SITE22}/embed/?u=${encodeURIComponent(it2.url)}` : "";
+      const cover = proj ? "" : play && play.kind !== "audio" ? `<div class="cover-embed${play.kind === "portrait" ? " tall" : ""}"><iframe src="${esc2(relay)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : play ? `${coverUrl ? `<img class="cover with-audio" src="${esc2(coverUrl)}" alt="" loading="lazy">` : ""}<div class="cover-audio"><iframe src="${esc2(relay)}" title="Mixcloud player" loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
