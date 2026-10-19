@@ -25,6 +25,15 @@ export function isPublicShare(data) {
 }
 
 /**
+ * Owner, 2026-10-19: a published members-only share whose author ticked "Leave a public stub" gets one public artifact,
+ * a LOCKED page at /shares/<author>/<id>/ (title, summary, picture, author; never the link, never the note), which is
+ * what its announcements link to. It is still not listed in any feed. Fail closed: the stub must be exactly true.
+ */
+export function isShareStub(data) {
+  return data?.status === 'published' && data?.visibility === 'members' && data?.publicStub === true;
+}
+
+/**
  * New & Popular: favorites weigh 3, comments 2, newest breaks ties. Pre-launch (all counts zero) this
  * degrades to pure recency. Items carry {favorites, comments, date, kind}. To keep the grid from
  * collapsing into one content type (six prompts in a row), each kind is capped at `maxPerKind`; when

@@ -201,7 +201,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
         <aside class="detail-aside flex col g20">
-          <SyndicateNow type="prompt" slug={d.slug} author={d.author || 'gbti'} authorName={profile?.displayName} title={d.title} blurb={d.shortDescription} url={shareUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={profile?.links} image={synThumb ?? undefined} />
+          <SyndicateNow type="prompt" slug={d.slug} author={d.author || 'gbti'} authorName={profile?.displayName} title={d.title} blurb={d.shortDescription} url={shareUrl} visibility={d.visibility} publicStub={stub} categories={d.categories} tags={d.tags} links={profile?.links} image={synThumb ?? undefined} />
           <div class="card" style="padding:22px">
             <p class="eyebrow">Author</p>
             <div class="flex items-center g12 mt16">

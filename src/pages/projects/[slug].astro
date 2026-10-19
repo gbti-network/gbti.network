@@ -361,7 +361,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
             before." The rail follows the write-up in the source, so a phone stacks it after the column and before the
             closing sections; the two-column page places it by grid position (gbti-v3-detail.css, .pd-rail), either side. */}
         <aside class="pd-rail">
-          <SyndicateNow type="project" slug={d.slug} author={d.author || 'gbti'} authorName={synProfile?.displayName} title={d.title} blurb={d.shortDescription} url={productUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={synProfile?.links} image={synThumb ?? undefined} />
+          <SyndicateNow type="project" slug={d.slug} author={d.author || 'gbti'} authorName={synProfile?.displayName} title={d.title} blurb={d.shortDescription} url={productUrl} visibility={d.visibility} publicStub={stub} categories={d.categories} tags={d.tags} links={synProfile?.links} image={synThumb ?? undefined} />
           {toc.length > 0 && (
             <nav class="pd-toc" aria-label="Contents" data-pd-toc>
               <span class="pd-rail-lab">Contents</span>

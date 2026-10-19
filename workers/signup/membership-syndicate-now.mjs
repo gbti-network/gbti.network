@@ -19,7 +19,7 @@ import { buildQueueItem, dedupeKey, canCancel, markCancelled } from '../../membe
 import { renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit, secretsPresent, rendersMarkdown } from '../../membership/syndication-channels.mjs';
 import { mdToPlain } from '../../membership/markdown-plain.mjs'; // sow-300
-import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, channelCapability } from '../../membership/syndication-config-core.mjs';
+import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, channelCapability, channelAllowedFor } from '../../membership/syndication-config-core.mjs';
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
@@ -167,6 +167,11 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   let item;
   try { item = buildQueueItem({ ...(payload?.item ?? {}), trigger: 'manual' }, { now, holdMs: 0 }); }
   catch (err) { return { status: 400, body: { error: 'invalid', message: `invalid item: ${err.message}` } }; }
+  // Owner, 2026-10-19: a members-only item goes only where its author allowed. With no public stub, a members-only
+  // share may go to the members' Discord and nothing else, and any other members-only item nowhere.
+  if (!channelAllowedFor(item, destination)) {
+    return { status: 409, body: { error: 'members_only', message: item.source === 'share' ? 'This share is members-only with no public stub, so it can only go to the members\' Discord.' : 'This item is members-only with no public stub, so it is not announced anywhere.' } };
+  }
 
   // A REAL Discord mention for the author when the registry knows them (fail-soft to the text fallback).
   if (destination === 'discord' && !item.mention) {

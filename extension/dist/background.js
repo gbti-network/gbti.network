@@ -17445,6 +17445,7 @@ function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
   const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
   if (typeof cleaned.url === "string") cleaned.url = stripTrackingParams(cleaned.url);
+  if (cleaned.publicStub !== true || cleaned.visibility === "public") delete cleaned.publicStub;
   const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("share", result.error.issues);
@@ -17488,6 +17489,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     creatorName: typeof fm.creatorName === "string" && fm.creatorName.trim() ? fm.creatorName.trim() : null,
     sourceName: typeof fm.sourceName === "string" && fm.sourceName.trim() ? fm.sourceName.trim() : null,
     // sow-445: kept by an edit
+    publicStub: !isPublic && fm.publicStub === true,
+    // owner 2026-10-19: kept by an edit (editInputFor)
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,

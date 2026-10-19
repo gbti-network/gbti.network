@@ -17528,6 +17528,7 @@ function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
   const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
   if (typeof cleaned.url === "string") cleaned.url = stripTrackingParams(cleaned.url);
+  if (cleaned.publicStub !== true || cleaned.visibility === "public") delete cleaned.publicStub;
   const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("share", result.error.issues);
@@ -17571,6 +17572,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     creatorName: typeof fm.creatorName === "string" && fm.creatorName.trim() ? fm.creatorName.trim() : null,
     sourceName: typeof fm.sourceName === "string" && fm.sourceName.trim() ? fm.sourceName.trim() : null,
     // sow-445: kept by an edit
+    publicStub: !isPublic && fm.publicStub === true,
+    // owner 2026-10-19: kept by an edit (editInputFor)
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,
@@ -20614,11 +20617,12 @@ var TOOLS = [
   // the share composer, and any paid member may pass "members" to keep it in the members stream.
   {
     name: "add_share",
-    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares are public by default; pass `visibility: "members"` to keep one in the members-only stream (its note is then encrypted). Title, description and image are auto-extracted from the url unless you pass them. A published share needs a `category`: one flat topic key from https://gbti.network/topics.json. Leave it out and the category suggested for the link is used; with neither, the share is refused. Optional: title, shortDescription, image, tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
+    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares are public by default; pass `visibility: "members"` to keep one in the members-only stream (its note is then encrypted); with it, `publicStub: true` also gives the share a locked public page (title, summary, picture; never the link or note) that can be announced on social networks, and without it a members-only share is announced only in the members\' Discord. Title, description and image are auto-extracted from the url unless you pass them. A published share needs a `category`: one flat topic key from https://gbti.network/topics.json. Leave it out and the category suggested for the link is used; with neither, the share is refused. Optional: title, shortDescription, image, tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       {
         url: { type: "string", description: "The link being shared (absolute http/https URL)." },
         visibility: { type: "string", enum: ["public", "members"], description: 'Optional, defaults to "public". "members" keeps the share for signed-in paying members.' },
+        publicStub: { type: "boolean", description: "Optional, members-only shares only, defaults to false. true leaves a locked public page for the share: the title, summary and picture show, the link and the note stay members-only." },
         title: { type: "string" },
         shortDescription: { type: "string" },
         image: { type: "string" },
@@ -20691,6 +20695,8 @@ async function addShare(ctx2, args = {}) {
   const input = stripBlank({
     url: url2,
     visibility,
+    // Owner, 2026-10-19: only an explicit true on a members-only share leaves a public stub.
+    publicStub: visibility === "members" && args.publicStub === true ? true : void 0,
     title: args.title ?? og?.title,
     shortDescription: args.shortDescription ?? og?.description,
     image: args.image ?? og?.image,

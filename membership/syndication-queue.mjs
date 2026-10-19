@@ -10,7 +10,7 @@
 //
 // Shape (synd:item:<id>):
 //   { id, source, targetType, targetSlug, author, authorName, authorDiscord, authorX, authorBluesky, authorMastodon, authorReddit, authorDevto, tags, title, blurb, url,
-//     image, category, categoryPath, visibility, membersOnly, mention, flags, trigger, enqueuedAt, availableAt,
+//     image, category, categoryPath, visibility, membersOnly, publicStub, mention, flags, trigger, enqueuedAt, availableAt,
 //     status, claimedAt, perChannel, sentAt, failedAt, cancelledAt, cancelledBy }
 //   SOW-120: `authorX` (the profile X handle/URL, feeds {member-x-handle}) and `tags` (free-form, feed
 //   {tags-hashtags}) are public metadata only.
@@ -104,6 +104,9 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     categoryPath: Array.isArray(input.categoryPath) ? input.categoryPath.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 6) : null, // SOW-088: the FULL taxonomy path (leaf-first channel routing) // SOW-087: routes the category-channel Discord post
     visibility,
     membersOnly: visibility === 'members',
+    // Owner, 2026-10-19: the author chose to leave a public stub. Only an exact `true` on a members-only item counts;
+    // channelAllowedFor (syndication-config-core.mjs) reads it to decide where the item may be announced.
+    publicStub: visibility === 'members' && input.publicStub === true,
     mention: trimOrNull(input.mention),
     flags: normFlags(input.flags), // SOW-087: moderation word-list hits; non-empty forces approval
     trigger,
@@ -160,6 +163,7 @@ export function normalizeItem(raw) {
     categoryPath: Array.isArray(raw.categoryPath) ? raw.categoryPath.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 6) : null,
     visibility,
     membersOnly: visibility === 'members',
+    publicStub: visibility === 'members' && raw.publicStub === true, // an item stored before 2026-10-19 reads false
     mention: trimOrNull(raw.mention),
     flags: normFlags(raw.flags),
     trigger: trimOrNull(raw.trigger) || 'publish',

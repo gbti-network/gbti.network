@@ -44,7 +44,7 @@ test('publicUrlFor: per-type slug url for a public item; null for Mode A / share
 // ---- item building ----
 test('buildSyndicationItem: published only; title required (non-share); type-mismatch guarded', () => {
   const post = buildSyndicationItem('members/alice/posts/hello/index.md', { type: 'post', title: 'Hello', author: 'alice', status: 'published', visibility: 'public' });
-  assert.deepEqual(post, { type: 'post', slug: 'hello', author: 'alice', title: 'Hello', visibility: 'public', hasPublicPage: true, shareUrl: null });
+  assert.deepEqual(post, { type: 'post', slug: 'hello', author: 'alice', title: 'Hello', visibility: 'public', publicStub: false, hasPublicPage: true, shareUrl: null });
   // draft -> null
   assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { title: 'X', status: 'draft' }), null);
   // missing title (non-share) -> null

@@ -56,7 +56,8 @@ export function buildSyndicationItem(path, frontmatter = {}) {
   if (fm.status !== 'published') return null; // only a published add announces
   // sow-323 Phase 3: a members-only article, project or prompt is never announced. It is announced when a superadmin
   // approves it, which makes it public and is the publish transition the runner selects (publish-transitions.mjs).
-  // A SHARE is exempt: a members-only share is not reviewable and goes to the members' Discord with its own template.
+  // A SHARE is exempt: a members-only share is not reviewable and goes to the members' Discord with its own template,
+  // and further only when its author left a public stub (owner, 2026-10-19; channelAllowedFor decides per channel).
   if (cls.type !== 'share' && fm.visibility === 'members') return null;
   // Defensive: the file's declared type must match the path subtree (a stray type field cannot retarget a channel).
   if (fm.type && fm.type !== cls.type) return null;
@@ -67,7 +68,9 @@ export function buildSyndicationItem(path, frontmatter = {}) {
     slug: cls.slug,
     author: fm.author ? String(fm.author) : 'gbti',
     title: title || (cls.type === 'share' ? 'New share' : ''),
-    visibility: fm.visibility || 'public',
+    // A share with no visibility is members-only (its schema default); every other type defaults to public.
+    visibility: fm.visibility || (cls.type === 'share' ? 'members' : 'public'),
+    publicStub: fm.publicStub === true, // owner, 2026-10-19: the author left a public stub
     hasPublicPage: hasPublicPage({ ...fm, type: cls.type }),
     shareUrl: cls.type === 'share' && typeof fm.url === 'string' ? fm.url : null,
   };
@@ -102,14 +105,15 @@ export function formatPublishMessage(item, { mention, siteOrigin = 'https://gbti
  * carries the discussion, the favorite and collect controls, and a "Read on <domain>" CTA that adds the
  * sow-145 UTM attribution on the way out. Linking the article directly skips all of it.
  *
- * Fail-closed, matching src/lib/home-feed.mjs isPublicShare exactly: only a published share whose
- * visibility is literally 'public' has a page. A members-only or draft share returns null, because
- * getStaticPaths never emitted a page for it and the link would 404. Callers fall back to the
- * off-network link there, which is the only link such a share has.
+ * Fail-closed, matching src/lib/home-feed.mjs isPublicShare and isShareStub exactly: a published share whose
+ * visibility is literally 'public' has a page, and so (owner, 2026-10-19) does a members-only share whose author
+ * left a public stub, as a LOCKED page that never shows the link. Any other members-only or draft share returns
+ * null, because getStaticPaths never emitted a page for it and the link would 404. Callers fall back to the
+ * off-network link there, which is the only link such a share has, and which only the members' Discord gets.
  */
 export function sharePageUrl(item, siteOrigin = 'https://gbti.network') {
   if (!item || item.type !== 'share') return null;
-  if (item.visibility !== 'public') return null;
+  if (item.visibility !== 'public' && !(item.visibility === 'members' && item.publicStub === true)) return null;
   if (!item.author || !item.slug) return null;
   return `${String(siteOrigin).replace(/\/$/, '')}/shares/${item.author}/${item.slug}/`;
 }

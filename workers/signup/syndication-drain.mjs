@@ -6,7 +6,7 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs, MATRIX_CHANNELS, channelCapability } from '../../membership/syndication-config-core.mjs';
+import { isSyndicationEnabled, requiresApproval, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs, MATRIX_CHANNELS, channelCapability, channelAllowedFor } from '../../membership/syndication-config-core.mjs';
 import { renderChannelText, renderRedditTitle, renderRedditComment, renderDevtoTitle } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
@@ -84,6 +84,13 @@ export async function drainSyndication(env, {
     await putItem(kv, item);
 
     let anyFail = false; // SOW-125: a channel (auto OR a manual-assist task write) that failed retryably this tick
+
+    // Owner, 2026-10-19: a members-only item is announced only where channelAllowedFor lets it (a members-only share
+    // with no public stub: the members' Discord only). Every other channel is closed here, before any task or post,
+    // so nothing below can reach it. This also covers items queued before the rule existed.
+    for (const ch of new Set([...MATRIX_CHANNELS, ...ready.map((a) => a.name), ...skipped])) {
+      if (!channelAllowedFor(item, ch) && !channelDone(item, ch)) item = recordChannel(item, ch, { status: 'skipped', reason: 'members-only', at: Number(now()) });
+    }
 
     // Record config-enabled-but-unconfigured channels as skipped (not failed). An ON-MANUAL channel is
     // exempt: its Social Queue review task needs NO adapter secrets (Copy/Assist/done work without them,

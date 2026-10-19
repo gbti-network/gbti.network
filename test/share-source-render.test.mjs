@@ -15,7 +15,7 @@ const reader = readFileSync(new URL('../client-ui/src/elements/gbti-reader.mjs',
 test('sow-222: both copies of the source card read the shared model', () => {
   assert.match(astro, /import \{ sourceCardModel \} from '\.\.\/\.\.\/\.\.\/\.\.\/client\/src\/share-source\.mjs'/);
   assert.match(reader, /import \{ sourceCardModel \} from '\.\.\/\.\.\/\.\.\/client\/src\/share-source\.mjs'/);
-  assert.match(astro, /sourceCardModel\(\{ url: d\.url/);
+  assert.match(astro, /sourceCardModel\(\{ url: link/); // `link`: none on a locked page (2026-10-19)
   assert.match(reader, /sourceCardModel\(\{ url: it\.url/);
   // Each renders the model's three decisions rather than its own.
   for (const [what, src] of [['the page', astro], ['the reader', reader]]) {

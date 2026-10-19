@@ -56,7 +56,7 @@ test('the website sends every attribute the button reads', () => {
   assert.ok(read_.length >= 15, `control: expected the element to read many attributes, found ${read_.length}`);
   const full = syndicateAttrs({
     type: 'post', slug: 's', author: 'a', authorName: 'A', title: 't', blurb: 'b', url: 'https://gbti.network/articles/s/',
-    visibility: 'public', categories: ['c', 'd'], tags: ['x'], links: LINKS, image: '/i.webp',
+    visibility: 'members', publicStub: true, categories: ['c', 'd'], tags: ['x'], links: LINKS, image: '/i.webp',
   });
   for (const attr of new Set(read_)) assert.ok(attr in full, `the element reads ${attr} but the website never sends it`);
 });

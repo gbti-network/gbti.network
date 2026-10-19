@@ -67,6 +67,7 @@ test('every share view asks the one shared question, and the share page adds the
   assert.match(read('client-ui/src/elements/gbti-shares-feed.mjs'), /\.share-audio iframe \{ display:block; width:100%; height:\$\{AUDIO_EMBED_HEIGHT\}px; border:0; \}/);
   const page = read('src/pages/shares/[author]/[id].astro');
   assert.match(page, /<iframe src=\{audioSrc\}[^>]*height=\{AUDIO_EMBED_HEIGHT\}/);
-  assert.match(page, /const audioSrc = !videoSrc && d\.url \? audioEmbedUrl\(d\.url\) : null;/);
+  // The page reads the share's link through `link`, which a members-only share's locked page does not have (2026-10-19).
+  assert.match(page, /const audioSrc = !videoSrc && link \? audioEmbedUrl\(link\) : null;/);
   assert.match(page, /\{audioSrc && \(/);
 });

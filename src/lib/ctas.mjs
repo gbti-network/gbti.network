@@ -118,7 +118,9 @@ export function resolveAssignments(registry, items) {
     items: (Array.isArray(c.items) ? c.items : []).filter((it) => it && typeof it === 'object').map((it) => {
       const found = index.get(itemKey(it.type, it.ref)) || null;
       const live = !!found?.live;
-      return { type: it.type, ref: str(it.ref), resolved: !!found, live, title: found?.title ?? null, url: live ? itemUrl(it.type, it.ref) : null };
+      // ctas.json is public, so an item with no public page (members-only with no stub, or a draft) is never named
+      // there (owner, 2026-10-19); the manager shows its ref instead.
+      return { type: it.type, ref: str(it.ref), resolved: !!found, live, title: live ? (found?.title ?? null) : null, url: live ? itemUrl(it.type, it.ref) : null };
     }),
   }));
 }

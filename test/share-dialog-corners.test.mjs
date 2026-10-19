@@ -7,11 +7,14 @@ import { readFileSync } from 'node:fs';
 import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const src = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+// The stylesheet moved to its own module at the size cap (2026-10-19); the composer imports it as CSS.
 const COMPOSER = src('client-ui/src/elements/gbti-share-composer.mjs');
-const css = COMPOSER.slice(COMPOSER.indexOf('const CSS = `'), COMPOSER.indexOf('`;', COMPOSER.indexOf('const CSS = `')));
+const CSS_MODULE = src('client-ui/src/elements/share-composer-css.mjs');
+const css = CSS_MODULE.slice(CSS_MODULE.indexOf('export const SHARE_COMPOSER_CSS = `'), CSS_MODULE.lastIndexOf('`;'));
 
 test('every corner in the composer is the one 2px value, except the round step numbers and spinner', () => {
   assert.ok(css.length > 1000, 'the composer stylesheet was found');
+  assert.match(COMPOSER, /import \{ SHARE_COMPOSER_CSS as CSS \} from '\.\/share-composer-css\.mjs';/, 'the composer uses this stylesheet');
   assert.match(css, /:host \{ --sc-r: 2px;/);
   const radii = [...css.matchAll(/border-radius:\s*([^;}]+)/g)].map((m) => m[1].trim());
   assert.ok(radii.length >= 15, `read ${radii.length} radii`);

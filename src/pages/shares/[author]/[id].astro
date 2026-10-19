@@ -5,6 +5,10 @@
 // dist/shares/ carries nothing else). The page leads with the external "Read on <domain>" CTA
 // (noopener nofollow) and mounts the member discussion, which renders GATED (share comments are
 // always members-only + encrypted, SOW-044; visitors see locked placeholders + the join nudge).
+//
+// Owner, 2026-10-19: a members-only share whose author ticked "Leave a public stub" also gets a page here, LOCKED
+// (isShareStub): title, summary, picture and author only. The link, its source, the member's note and the discussion
+// never ship, and the page asks search engines to skip it. It is what that share's announcements link to.
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import Avatar from '../../../components/Avatar.astro';
 import FavoriteButton from '../../../components/FavoriteButton.astro';
@@ -12,6 +16,7 @@ import CollectionButton from '../../../components/CollectionButton.astro';
 import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import ExtensionBanner from '../../../components/home/ExtensionBanner.astro';
+import LockedBody from '../../../components/LockedBody.astro';
 import VideoEmbed from '../../../components/VideoEmbed.astro';
 import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
 import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
@@ -24,7 +29,7 @@ import { readNewsSourceList } from '../../../lib/news-source-list.mjs';
 import { getCollection } from 'astro:content';
 import { authorDisplay, formatDate, authorAvatar, isNetworkAuthor } from '../../../lib/authors';
 import { profileHref } from '../../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
-import { isPublicShare, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
+import { isPublicShare, isShareStub, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
 import { favoriteCount } from '../../../lib/favorites';
 import { parseShareCoverUrl, shareImageForSite, isShareCoverUrl, shareCoverUrl } from '../../../../membership/share-cover-url.mjs';
 import SyndicateNow from '../../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
@@ -32,13 +37,17 @@ import sharp from 'sharp';
 import path from 'node:path';
 
 export async function getStaticPaths() {
-  const shares = (await getCollection('share')).filter((s) => isPublicShare(s.data));
+  const shares = (await getCollection('share')).filter((s) => isPublicShare(s.data) || isShareStub(s.data));
   return shares.map((s) => ({ params: { author: s.data.author, id: s.data.id }, props: { share: s } }));
 }
 
 const { share } = Astro.props;
 const d = share.data;
 const slug = `${d.author}/${d.id}`;
+// The locked page of a members-only share with a public stub. Everything below reads the link through `link`, which a
+// locked page does not have, so no player, source card, favicon or "Read on" button can carry it into the page.
+const locked = isShareStub(d);
+const link: string | undefined = locked ? undefined : d.url;
 const title = decodeEntities(d.title ?? d.shortDescription ?? 'A member share');
 const desc = d.title && d.shortDescription ? decodeEntities(d.shortDescription) : undefined;
 // The summary is scraped from the article source (owner QA 2026-07-22): render it QUOTED, append an
@@ -46,9 +55,9 @@ const desc = d.title && d.shortDescription ? decodeEntities(d.shortDescription) 
 const descComplete = desc ? /[.!?]["')\]]?$/.test(desc.trim()) : true;
 const quotedDesc = desc ? `"${desc.trim()}${descComplete ? '' : '...'}"` : undefined;
 let srcDomain: string | undefined;
-try { srcDomain = d.url ? new URL(d.url).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
+try { srcDomain = link ? new URL(link).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
 // sow-445: a posted link card reads "<title> | Quanta Magazine". A share with no link keeps "| GBTI Network".
-const cardSource = cardSourceFor({ url: d.url, sourceName: d.sourceName }, newsHostNames(readNewsSourceList())) || undefined;
+const cardSource = locked ? undefined : cardSourceFor({ url: link, sourceName: d.sourceName }, newsHostNames(readNewsSourceList())) || undefined;
 const profiles = await getCollection('profile');
 const profile = profiles.find((p) => p.data.username === d.author);
 const avatar = authorAvatar(d.author, profile?.data.avatar);
@@ -56,28 +65,28 @@ const headline = profile?.data.headline;
 // sow-454: prefer the profile's displayName, as authors.ts documents and ContentMeta/AuthorBox do. The bare
 // folder read as a machine name on a member's own share, including in the page title and the og description.
 const authorName = profile?.data.displayName ?? authorDisplay(d.author);
-const body = (share.rendered?.html ?? '').trim();
+const body = locked ? '' : (share.rendered?.html ?? '').trim(); // a locked page never shows the member's note
 // sow-145: every outbound click-through carries the UTM attribution for the source publication.
-const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
+const outUrl = link ? utmUrl(link, { campaign: 'shares' }) : undefined;
 // A share pointing at a recognized video (YouTube/Vimeo/TikTok/Rumble) PLAYS INLINE, matching what the
 // extension share views have done since SOW-092: the player replaces the static share image, which for a
 // video link is just that video's thumbnail anyway. Unrecognized links keep the image + read CTA unchanged
 // (embedUrl fails closed to null). No relay needed here: unlike a chrome-extension:// page, this site sends
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
-const videoSrc = d.url ? embedUrl(d.url) : null;
+const videoSrc = link ? embedUrl(link) : null;
 // 2026-10-17: a Mixcloud mix plays in place too, as Mixcloud's slim player UNDER the picture (the picture stays, since a
 // mix's cover is its art, not a video still). Framed straight from Mixcloud; the site CSP admits www.mixcloud.com.
-const audioSrc = !videoSrc && d.url ? audioEmbedUrl(d.url) : null;
+const audioSrc = !videoSrc && link ? audioEmbedUrl(link) : null;
 // sow-261 (owner, 2026-09-22): an X share shows the live tweet under the member's note, framed straight from X (the
 // site CSP admits platform.twitter.com); the scraped picture hides once it shows. Not on a video share.
-const tweetUrl = !videoSrc && d.url && tweetId(d.url) ? d.url : null;
+const tweetUrl = !videoSrc && link && tweetId(link) ? link : null;
 // sow-417: the button's verb. Audio first, so a YouTube Music link says Listen even though it still plays inline.
-const linkWords = { audio: 'Listen to it on', video: 'Watch video on', read: 'Read on' }[d.url ? linkKind(d.url) : 'read'];
+const linkWords = { audio: 'Listen to it on', video: 'Watch video on', read: 'Read on' }[link ? linkKind(link) : 'read'];
 // sow-222: the sidebar source card, decided in one shared module so this page and the extension reader cannot
 // drift apart on it. When a creator resolves (a stored YouTube or Vimeo channel, or a profile derived from the
 // link itself) the card names them and the action becomes Subscribe or Follow; otherwise it is exactly the
 // domain card with Visit that it has always been.
-const srcCard = d.url ? sourceCardModel({ url: d.url, memberName: authorName, creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
+const srcCard = link ? sourceCardModel({ url: link, memberName: authorName, creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
 // The action keeps this page's own outbound decoration, as the Visit link always had.
 const srcActionHref = srcCard ? utmUrl(srcCard.action.href, { campaign: 'shares' }) : undefined;
 // sow-283: when the share points at our hosted copy, declare its real pixel size to link-preview scrapers, read
@@ -92,7 +101,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   } catch { ogImageSize = undefined; }
 }
 ---
-<BaseLayout ogImageSize={ogImageSize} cardSource={cardSource} title={title} description={desc ?? `A link ${authorName} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
+<BaseLayout ogImageSize={ogImageSize} cardSource={cardSource} title={title} description={desc ?? (locked ? `A members-only link ${authorName} shared with the GBTI Network.` : `A link ${authorName} shared with the GBTI Network.`)} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article" noindex={locked ? 'noindex' : false}>
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">
@@ -119,13 +128,20 @@ if (cover && cover.author === d.author && cover.id === d.id) {
       {quotedDesc && <p class="lead share-quote" style="margin-top:14px">{quotedDesc} <span class="sq-credit">- {srcDomain ?? 'the source'}</span></p>}
 
       {videoSrc
-        ? <div class="share-player"><VideoEmbed video={d.url!} title={title} /></div>
-        : typeof d.image === 'string' && d.image && (
-            <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={shareImageForSite(d.image)} alt="" loading="lazy" decoding="async" /></a>
+        ? <div class="share-player"><VideoEmbed video={link!} title={title} /></div>
+        : typeof d.image === 'string' && d.image && (locked
+            ? <div class="share-hero" aria-hidden="true"><img src={shareImageForSite(d.image)} alt="" loading="lazy" decoding="async" /></div>
+            : <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={shareImageForSite(d.image)} alt="" loading="lazy" decoding="async" /></a>
           )}
       {audioSrc && (
         <div class="share-audio"><iframe src={audioSrc} title={`${title} on Mixcloud`} height={AUDIO_EMBED_HEIGHT} style={`height:${AUDIO_EMBED_HEIGHT}px`} loading="lazy" allow="autoplay; encrypted-media; fullscreen; web-share"></iframe></div>
       )}
+
+      {/* The locked page's notice. With an encrypted note, LockedBody shows it to a paid member (and offers the extension,
+          where the link opens); without one, a plain notice. Neither carries the link. */}
+      {locked && (d.encryptedBody
+        ? <div class="share-locked-wrap"><LockedBody encPath={d.encryptedBody} kind="share" label="Members-only link" readerPath={slug} readerType="share" /></div>
+        : <div class="share-locked"><p class="sl-title">Members-only link</p><p class="sl-sub">This link was shared with GBTI Network members. <a href="/membership/">Become a member</a> to open it.</p></div>)}
 
       {body && (
         <article class:list={['card', 'share-member-note', isNetworkAuthor(d.author) && 'share-member-note--house']} style="padding:24px;margin-top:26px">
@@ -143,7 +159,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
       {tweetUrl && <div class="share-tweet" data-share-tweet><div class="md-tweet md-tweet-share" data-tweet-url={tweetUrl}></div></div>}
 
       <div class="share-actions">
-        {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-primary">{linkWords} {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
+        {link && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-primary">{linkWords} {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
         <FavoriteButton targetType="share" targetSlug={slug} count={favoriteCount('share', slug)} />
         <CollectionButton targetType="share" targetSlug={slug} />
       </div>
@@ -159,7 +175,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
     {/* The member discussion: share comments are members-only + encrypted (SOW-044), so the thread
         renders locked placeholders for visitors with the become-a-member nudge, and upgrades in the
         extension for members. */}
-    <Comments targetType="share" targetSlug={slug} author={d.author} wide={true} />
+    {!locked && <Comments targetType="share" targetSlug={slug} author={d.author} wide={true} />}
     {/* sow-435 (owner, 2026-09-30): the homepage's extension banner, right under the discussion. Inline, so it sits in
         this column without page gutters; it still hides for a reader with the extension and follows the CTA switch. */}
     <ExtensionBanner inline />
@@ -167,7 +183,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
 
     {/* The extension-style right sidebar (owner QA, 2026-07-21): the member card + the source card. */}
     <aside class="detail-side">
-      <SyndicateNow type="share" id={d.id} author={d.author} authorName={profile?.data.displayName} title={d.title || ''} blurb={d.shortDescription} url={d.url} visibility={d.visibility} category={d.category} tags={d.tags} links={profile?.data.links} image={isShareCoverUrl(d.image) ? shareCoverUrl(parseShareCoverUrl(d.image).author, parseShareCoverUrl(d.image).file) : undefined} />
+      <SyndicateNow type="share" id={d.id} author={d.author} authorName={profile?.data.displayName} title={d.title || ''} blurb={d.shortDescription} url={locked ? new URL(`/shares/${slug}/`, Astro.site ?? 'https://gbti.network').href : link} visibility={d.visibility} publicStub={locked} category={d.category} tags={d.tags} links={profile?.data.links} image={isShareCoverUrl(d.image) ? shareCoverUrl(parseShareCoverUrl(d.image).author, parseShareCoverUrl(d.image).file) : undefined} />
       <div class="card side-author-card">
         <a href={profileHref(d.author)} class="sac-head">
           <Avatar item={{ name: authorName, avatar, seed: d.author }} class="av" size={52} />
@@ -225,6 +241,12 @@ if (cover && cover.author === d.author && cover.id === d.id) {
   .share-edited { color: var(--fg-mute); }
   .share-edit-link { margin-left: 10px; font-size: 13px; font-weight: 600; color: var(--green-700); text-decoration: none; border: 1px solid var(--line); border-radius: 8px; padding: 2px 9px; }
   .share-edit-link[hidden] { display: none; }
+  /* Owner, 2026-10-19: the locked page of a members-only share with a public stub. */
+  .share-locked-wrap { margin-top: 26px; }
+  .share-locked { margin-top: 26px; padding: 18px 20px; border: 1.5px dashed var(--line); border-radius: var(--r); background: var(--green-tint); }
+  .share-locked .sl-title { font-family: var(--f-display); font-weight: 700; }
+  .share-locked .sl-sub { font-size: 14px; color: var(--fg-soft); margin-top: 2px; }
+  .share-locked .sl-sub a { color: var(--green-700); font-weight: 600; }
   /* Scoped on purpose: the inline player sits where .share-hero would, with the same top gap, but its
      radius + background come from VideoEmbed itself. Kept off src/styles/gbti-v3.css so this page owns
      the one rule it needs. */

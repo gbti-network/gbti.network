@@ -181,6 +181,9 @@ export function editInputFor({ share, fields = {}, now = null, status = null } =
   if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
   const vis = fields.visibility ?? share.visibility;
   input.visibility = vis === 'public' ? 'public' : 'members';
+  // Owner, 2026-10-19: "Leave a public stub" on a members-only share. The edit rebuilds the file, so the stored choice
+  // is kept unless the composer sends a new one; it never survives a switch to Public.
+  if (input.visibility === 'members' && (fields.publicStub ?? share.publicStub) === true) input.publicStub = true;
   const st = status ?? share.status ?? 'published';
   input.status = st === 'draft' ? 'draft' : 'published';
   return input;

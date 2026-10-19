@@ -71,7 +71,8 @@ test('the sitemap scan reads the frontmatter block only, and finds every members
   assert.equal(isMembersOnlyFrontmatter('status: published'), false, 'silence is public, the schema default');
   const paths = membersOnlyPagePaths(ROOT);
   const live = [...paths];
-  assert.ok(live.every((p) => /^\/(articles|projects|prompts)\/[a-z0-9][a-z0-9-]*\/$/.test(p)), live.join(' '));
+  // A members-only share's locked page lives at /shares/<author>/<id>/ (owner, 2026-10-19).
+  assert.ok(live.every((p) => /^\/(articles|projects|prompts)\/[a-z0-9][a-z0-9-]*\/$/.test(p) || /^\/shares\/[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9._-]*\/$/.test(p)), live.join(' '));
   // Control that the scan reads a real item's frontmatter. It used to name the repository's own members-only /QA
   // skill, but the owner made /QA public on 2026-10-08 and no article, project or prompt is members-only now, so the
   // check above could pass on an empty list. A real item file, copied and set to members, has to be found.

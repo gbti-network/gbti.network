@@ -27,7 +27,7 @@ const ENV = { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' };
 
 const POST = `---\ntitle: My Post\nstatus: published\nvisibility: public\nauthor: alice\nshortDescription: A short blurb.\ncoverImage: https://img/x.jpg\n---\nBody.`;
 const DRAFT = `---\ntitle: Draft\nstatus: draft\nauthor: alice\n---\nx`;
-const SHARE = `---\ntitle: A share\nstatus: published\nauthor: alice\nurl: https://ext.com/x\ncategory: devops\nshortDescription: A devops find.\n---\nWorth your time, the pipeline section alone.`;
+const SHARE = `---\ntitle: A share\nstatus: published\nvisibility: public\nauthor: alice\nurl: https://ext.com/x\ncategory: devops\nshortDescription: A devops find.\n---\nWorth your time, the pipeline section alone.`;
 // sow-147: a MEMBERS share, whose body must never resolve as the author note (it is encrypted content).
 const SHARE_MEMBERS = `---\ntitle: A members share\nstatus: published\nvisibility: members\nauthor: alice\nurl: https://ext.com/m\ncategory: devops\n---\nMy private note.`;
 const PROFILE = `---\ntype: profile\nusername: alice\ndisplayName: "Alice Q"\n---\nHi.`;

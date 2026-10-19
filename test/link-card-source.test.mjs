@@ -140,6 +140,7 @@ test('a news card names the publication by source id, else the story link\'s dom
 
 test('the share page passes the card source, and only og:title takes it', () => {
   const p = read('src/pages/shares/[author]/[id].astro');
-  assert.match(p, /const cardSource = cardSourceFor\(\{ url: d\.url, sourceName: d\.sourceName \}, newsHostNames\(readNewsSourceList\(\)\)\) \|\| undefined;/);
+  // A members-only share's locked page names no source (2026-10-19); every other page reads the link through `link`.
+  assert.match(p, /const cardSource = locked \? undefined : cardSourceFor\(\{ url: link, sourceName: d\.sourceName \}, newsHostNames\(readNewsSourceList\(\)\)\) \|\| undefined;/);
   assert.match(p, /<BaseLayout [^>]*cardSource=\{cardSource\}/);
 });

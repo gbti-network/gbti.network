@@ -14,6 +14,7 @@ import { renderTemplate, renderBodyTemplate, recordDestinations } from '../../..
 import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
 import { mdToPlain } from '../../../membership/markdown-plain.mjs'; // sow-300
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
+import { channelAllowedFor } from '../../../membership/syndication-config-core.mjs'; // owner 2026-10-19: where a members-only item may go
 import { orderDiscordChannels, discordChannelOptionsHtml } from '../discord-channel-order.mjs'; // the picker follows Discord's categories
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', substack: 'Substack' }; // sow-159: mastodon retired; sow-217: hashnode retired
@@ -110,6 +111,7 @@ class GbtiSyndicateNow extends GbtiElement {
       tags: d.gbtiTags ? d.gbtiTags.split(',').map((t) => t.trim()).filter(Boolean) : undefined, // SOW-120: {tags-hashtags}
       authorNote: this._authorNote || undefined, // SOW-088 {author-note}: the from-the-author intro comment
       visibility: d.gbtiVisibility === 'members' ? 'members' : 'public', // SOW-088 Proposal A: drives the STUB template set
+      publicStub: d.gbtiPublicStub === 'true', // owner 2026-10-19: without it a members-only item is held back (channelAllowedFor)
     };
   }
 
@@ -203,9 +205,12 @@ class GbtiSyndicateNow extends GbtiElement {
       const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? ' (manual)' : ''}</span>` : '';
       // dev.to crossposts the FULL article body, so a share (no article) cannot go there.
       const shareBlocked = d.id === 'devto' && this._item().source === 'share';
-      return d.ready && !shareBlocked
+      // A members-only item without a public stub: the Worker refuses these too, so the tile says why up front.
+      const membersHeld = !channelAllowedFor(this._item(), d.id);
+      const why = membersHeld ? 'members-only, no public stub' : shareBlocked ? 'content items only' : (d.reason || 'not available');
+      return d.ready && !shareBlocked && !membersHeld
         ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>`
-        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(shareBlocked ? 'content items only' : (d.reason || 'not available'))}</span>${badge}</button>`;
+        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(why)}</span>${badge}</button>`;
     }).join('');
     const sent = Object.keys(sends);
     const prior = sent.length

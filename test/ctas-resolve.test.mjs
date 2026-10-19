@@ -45,7 +45,7 @@ test('resolveAssignments: marks an assignment that names nothing resolved:false 
   assert.equal(out[0].items.length, 3, 'the unresolved assignment is kept');
   assert.deepEqual(out[0].items[0], { type: 'prompt', ref: 'grok', resolved: true, live: true, title: 'Grok', url: '/prompts/grok/' });
   assert.deepEqual(out[0].items[1], { type: 'post', ref: 'gone', resolved: false, live: false, title: null, url: null });
-  assert.deepEqual(out[0].items[2], { type: 'project', ref: 'draft-one', resolved: true, live: false, title: 'Draft', url: null }, 'a draft resolves but has no live url');
+  assert.deepEqual(out[0].items[2], { type: 'project', ref: 'draft-one', resolved: true, live: false, title: null, url: null }, 'a draft resolves but has no live url, and the public file does not name it');
   assert.deepEqual(resolveAssignments({}, items), []);
 });
 

@@ -99,7 +99,9 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     // A PUBLIC share posts its own gbti.network share page (sow-094), NOT the off-network article: the
     // share page is where the discussion and the attributed read-on CTA live, so the article link would
     // route readers straight past us. A members-only share has no such page and falls back to its
-    // off-network link, which is the only link it has. Content posts its public page (null for Mode A).
+    // off-network link, which is the only link it has, and the members' Discord is the only place that link goes. A
+    // members-only share with a public stub links its LOCKED page instead (owner, 2026-10-19). Content posts its
+    // public page (null for Mode A).
     // Both {url} and {shareurl} render this one value, so every channel and template moves together.
     url: (item.type === 'share'
       ? (sharePageUrl(item, siteOrigin) || item.shareUrl)
@@ -108,6 +110,7 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     category: categoryOf(item, fm), // SOW-087: routes the category-channel Discord post
     categoryPath: item.type === 'share' ? null : (Array.isArray(fm.categories) ? fm.categories.filter((c) => typeof c === 'string') : null), // SOW-088: leaf-first channel routing
     visibility: item.visibility,
+    publicStub: item.publicStub === true, // owner, 2026-10-19: decides where a members-only item may go (channelAllowedFor)
     mention: mention || null,
     flags: flagText(moderation, `${title || ''} ${blurb || ''}`), // SOW-087: the posted surface only
     trigger: 'publish',
@@ -276,6 +279,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   for (const inp of inputs) {
     const notes = [
       inp.url ? '' : ' (members-only, link-less)',
+      inp.visibility === 'members' ? (inp.publicStub ? ' (members-only, public stub)' : " (members-only: the members' Discord only)") : '',
       inp.category ? ` [${inp.category}]` : '',
       inp.flags.length ? ` FLAGGED: ${inp.flags.join(', ')}` : '',
     ].join('');

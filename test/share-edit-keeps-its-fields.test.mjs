@@ -35,7 +35,7 @@ test('an edit shows "Loading your share..." until its fields are filled, never a
   const on = edit.indexOf("card.classList.add('loading')");
   assert.ok(on > -1 && on < edit.indexOf('await this.client.decrypt'), 'loading before the note is fetched');
   assert.ok(edit.indexOf("card.classList.remove('loading')") > edit.indexOf("set('input[type=url]'"), 'cleared once filled');
-  assert.match(COMPOSER, /\.wizard\.loading > :not\(\.edit-loading\) \{ visibility:hidden; \}/);
+  assert.match(src('client-ui/src/elements/share-composer-css.mjs'), /\.wizard\.loading > :not\(\.edit-loading\) \{ visibility:hidden; \}/); // the stylesheet's own module since 2026-10-19
   assert.match(COMPOSER, /if \(h\) h\.textContent = 'Edit your share';/, 'the first step says it is an edit, not a new post');
   const wb = src('src/pages/workbench.astro');
   assert.ok(wb.indexOf('if (!dialog.open) dialog.showModal();') < wb.indexOf('await composer.editShare(item);'),

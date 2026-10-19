@@ -98,6 +98,24 @@ export const CHANNEL_CAPABILITY = Object.freeze({
 /** A channel's delivery capability (`auto` | `manual` | `building`); an unknown channel is `building`. */
 export function channelCapability(name) { return CHANNEL_CAPABILITY[name] ?? 'building'; }
 
+// Owner, 2026-10-19: "if a member shares something that is members only, the stubs are not made public unless
+// somewhere explicitly said to leave a public stub. This is for all content." The members' own Discord is the one
+// place a members-only share still goes without a stub (the owner's answer that day: "Discord only").
+const MEMBERS_DISCORD = new Set(['discord', 'discord-category']);
+
+/**
+ * May this queue item be announced on this channel? Public items go anywhere. A members-only item goes anywhere only
+ * when its author left a public stub (`publicStub: true`, which then gives it a locked public page to link to). A
+ * members-only SHARE with no stub goes to the members' Discord and nowhere else; any other members-only item with no
+ * stub goes nowhere. Fail closed: a missing visibility is members-only, and a stub must be exactly `true`.
+ */
+export function channelAllowedFor(item, channel) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.visibility === 'public' && item.membersOnly !== true) return true;
+  if (item.publicStub === true) return true;
+  return String(item.source || item.targetType || '') === 'share' && MEMBERS_DISCORD.has(String(channel || ''));
+}
+
 // SOW-125: the content types that can auto-share (distinct from TEMPLATE_TYPES, which also holds reddit-body
 // etc.). The auto-share MATRIX covers every DELIVERABLE channel (auto + manual), because the owner controls
 // on/off/popular per (type, channel) for every channel they see in the UI, including X (manual-assist). The
@@ -214,8 +232,8 @@ export const DEFAULT_TEMPLATES = Object.freeze({
 // stub built-in (reddit-comment, devto-intro, devto-footer) inherit the public chain.
 const STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
 // sow-180: the members-only SHARE stub keeps the join CTA but drops the member name (a share is not the
-// member's own work). Members-only shares do not syndicate today (only PUBLIC shares do), so this is
-// defense-in-depth, kept consistent with the public share family and guarded by a test.
+// member's own work). It is what a members-only share says in the members' Discord, and, when its author left a
+// public stub (owner, 2026-10-19), everywhere else, with {url} the share's locked page (channelAllowedFor above).
 const SHARE_STUB_FORMAT = 'A members-only link on the GBTI Network: "{title}". {short-description} Join to open it: {url}';
 export const DEFAULT_STUB_TEMPLATES = Object.freeze({
   share: SHARE_STUB_FORMAT, // sow-180: content-first, no member credit

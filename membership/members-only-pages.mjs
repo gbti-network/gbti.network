@@ -32,7 +32,7 @@ export function isMembersOnlyFrontmatter(fm) {
 
 /**
  * Every `/articles|projects|prompts/<slug>/` path whose item is published and members-only, from house/ and every
- * member folder. A Mode A item (no public stub) has no page at all, so naming it here is harmless and keeps the
+ * member folder, plus every members-only share's `/shares/<author>/<id>/`. A Mode A item (no public stub) has no page at all, so naming it here is harmless and keeps the
  * rule one line: a members-only item is never in the sitemap.
  */
 export function membersOnlyPagePaths(root = '.') {
@@ -56,7 +56,22 @@ export function membersOnlyPagePaths(root = '.') {
   const members = path.join(root, 'members');
   let users = [];
   try { users = fs.readdirSync(members); } catch { users = []; }
-  for (const u of users) scan(path.join(members, u));
+  for (const u of users) {
+    scan(path.join(members, u));
+    // Owner, 2026-10-19: a members-only share with a public stub has a locked page at /shares/<author>/<id>/, and it
+    // stays out of the sitemap like every other members-only page. A share with no visibility is members-only (its
+    // schema default), so anything but an explicit `public` is named; a share with no page makes the entry harmless.
+    let shares = [];
+    try { shares = fs.readdirSync(path.join(members, u, 'shares')); } catch { shares = []; }
+    for (const f of shares) {
+      if (!/\.(md|mdx)$/.test(f)) continue;
+      let text;
+      try { text = fs.readFileSync(path.join(members, u, 'shares', f), 'utf8'); } catch { continue; }
+      const fm = frontmatter(text);
+      if (field(fm, 'visibility') === 'public') continue;
+      out.add(`/shares/${u}/${field(fm, 'id') || f.replace(/\.(md|mdx)$/, '')}/`);
+    }
+  }
   return out;
 }
 

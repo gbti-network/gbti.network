@@ -13,6 +13,9 @@
 //   category  a share's flat topic; otherwise the FIRST segment of the category path (the raw top-level key)
 //   category-path  the full path joined with commas (leaf-first routing); a share has none
 //   visibility  "members" or "public" (the element picks the stub templates for members)
+//   public-stub "true" only for a members-only item whose author left a public stub (owner, 2026-10-19); the element
+//             and the Worker then allow every channel, and without it a members-only item is held to the members'
+//             Discord (a share) or nothing (channelAllowedFor in membership/syndication-config-core.mjs)
 //   the author's public handles (discord, x, bluesky, mastodon, reddit, devto) from the profile's links
 //   tags      the string tags, joined with commas
 // An empty value is left out, as the reader left it out, so the element sees "absent" rather than "".
@@ -34,6 +37,7 @@ const str = (v) => (v == null ? '' : String(v));
  * @param {string} [p.blurb]       the item's shortDescription
  * @param {string} [p.url]         a share's shared link, or a content item's ABSOLUTE page URL
  * @param {string} [p.visibility]
+ * @param {boolean} [p.publicStub] the author left a public stub (meaningful only for a members-only item)
  * @param {string[]} [p.categories] a content item's category path
  * @param {string} [p.category]    a share's flat topic
  * @param {string[]} [p.tags]
@@ -60,6 +64,7 @@ export function syndicateAttrs(p = {}) {
   };
   const put = (k, v) => { if (v) out[k] = str(v); };
   put('data-gbti-author-name', p.authorName);
+  put('data-gbti-public-stub', p.publicStub === true && str(p.visibility) === 'members' ? 'true' : '');
   put('data-gbti-blurb', p.blurb);
   put('data-gbti-category', isShare ? str(p.category) : (cats[0] || ''));
   put('data-gbti-category-path', isShare ? '' : cats.join(','));

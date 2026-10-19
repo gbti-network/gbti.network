@@ -245,7 +245,8 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
 
   // SOW-018, SCOPED by SOW-136 + sow-094: a published + visibility:public Share may render in the site feed
   // AND get its own /shares/<author>/<id>/ page. Everything else stays enforced here:
-  //   a) dist/shares/ may contain ONLY public-share pages (a members/draft share page fails the build);
+  //   a) dist/shares/ may contain ONLY public-share pages and, since 2026-10-19 (owner), the LOCKED pages of
+  //      members-only shares whose author left a public stub (a members/draft share page otherwise fails the build);
   //   b) still NO Share entries in the public activity-index.json (the extension reads Shares authenticated);
   //   c) a NON-public Share (members visibility, or any draft) must leak NOTHING to dist — its title,
   //      blurb, and body text are scanned for across every text file in the build output.
@@ -274,7 +275,10 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       return null;
     };
     const shareNeedles = []; // [needle, sourceRel]
-    const publicShares = new Set(); // "<author>/<id>" of published + public shares (the ONLY pages allowed)
+    const publicShares = new Set(); // "<author>/<id>" of published + public shares
+    // "<author>/<id>" -> { url, rel } of published members-only shares with a public stub: each may have a LOCKED page,
+    // which must never carry the link it shares (checked against that page below) or the member's note (a needle).
+    const stubShares = new Map();
     const membersRoot = path.join(root, 'members');
     if (fs.existsSync(membersRoot)) {
       for (const u of fs.readdirSync(membersRoot)) {
@@ -292,7 +296,10 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
           }
           const rel = path.relative(root, p);
           const body = txt.replace(/^---\n[\s\S]*?\n---/, '').trim();
-          for (const needle of [shareField(txt, 'title'), shareField(txt, 'shortDescription'), body.slice(0, 200)]) {
+          const isStub = shareField(txt, 'status') === 'published' && shareField(txt, 'visibility') === 'members' && shareField(txt, 'publicStub') === 'true';
+          if (isStub) stubShares.set(`${u}/${shareField(txt, 'id') || f.replace(/\.(md|mdx)$/, '')}`, { url: shareField(txt, 'url'), rel });
+          // A stub's title and summary are what its locked page shows, so only its note is a needle.
+          for (const needle of isStub ? [body.slice(0, 200)] : [shareField(txt, 'title'), shareField(txt, 'shortDescription'), body.slice(0, 200)]) {
             if (needle && needle.length >= 12) shareNeedles.push([needle, rel]);
           }
         }
@@ -306,8 +313,18 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
         if (!author.isDirectory()) continue;
         for (const id of fs.readdirSync(path.join(distShares, author.name), { withFileTypes: true })) {
           if (!id.isDirectory()) continue;
-          if (!publicShares.has(`${author.name}/${id.name}`)) {
-            errors.push(`a NON-public share has a page in dist: dist/shares/${author.name}/${id.name}/ — only published + visibility:public shares may have pages. See SOW-018 (scoped by SOW-136/sow-094).`);
+          const key = `${author.name}/${id.name}`;
+          const stub = stubShares.get(key);
+          if (!publicShares.has(key) && !stub) {
+            errors.push(`a NON-public share has a page in dist: dist/shares/${author.name}/${id.name}/ — only published + visibility:public shares, and members-only shares with a public stub, may have pages. See SOW-018 (scoped by SOW-136/sow-094).`);
+          }
+          // A locked page shows the share without its link: the link is what the membership opens.
+          if (stub?.url) {
+            for (const f of walk(path.join(distShares, author.name, id.name))) {
+              if (BINARY.test(f)) continue;
+              const txt = fs.readFileSync(f, 'utf8');
+              if (txt.includes(stub.url) || txt.includes(stub.url.replace(/&/g, '&amp;'))) errors.push(`the locked page of a members-only share carries the link it shares: ${path.relative(root, f)} (from ${stub.rel}). A public stub never shows the link (owner, 2026-10-19).`);
+            }
           }
         }
       }

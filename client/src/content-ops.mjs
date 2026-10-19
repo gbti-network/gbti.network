@@ -272,6 +272,9 @@ export function buildShareFile({ username, input, body = '' }) {
   // every host (extension, website, MCP) stores a clean url and every downstream reader (feed, share page,
   // syndication) inherits it. Denylist-only: functional params (a video id, timestamp, playlist) survive.
   if (typeof cleaned.url === 'string') cleaned.url = stripTrackingParams(cleaned.url);
+  // Owner, 2026-10-19: "Leave a public stub" means something only on a members-only share, and only as an exact true.
+  // Anything else is dropped here so no file carries a stub flag that a reader could take the wrong way.
+  if (cleaned.publicStub !== true || cleaned.visibility === 'public') delete cleaned.publicStub;
   // sow-364: and the same denylist over the NOTE. A note written with an assistant carries that assistant's tag
   // on every citation it hands back, and the link the member pasted was already cleaned here while the ones
   // inside their note were not.
@@ -327,6 +330,7 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     creatorUrl: typeof fm.creatorUrl === 'string' && fm.creatorUrl.trim() ? fm.creatorUrl.trim() : null,
     creatorName: typeof fm.creatorName === 'string' && fm.creatorName.trim() ? fm.creatorName.trim() : null,
     sourceName: typeof fm.sourceName === 'string' && fm.sourceName.trim() ? fm.sourceName.trim() : null, // sow-445: kept by an edit
+    publicStub: !isPublic && fm.publicStub === true, // owner 2026-10-19: kept by an edit (editInputFor)
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? 'members',
     status: fm.status ?? null,

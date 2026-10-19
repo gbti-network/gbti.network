@@ -167,7 +167,7 @@ test('every comment surface wires its tweet blocks, and the share views mount th
   assert.match(reader, /const skillBox = this\._skill \?/, 'the box exists only for a skill');
   assert.match(reader, /if \(tweet\) wireTweets\(this\.root, \{ onReady: \(\) => \{ const c = this\.\$\('img\.cover'\); if \(c\) c\.style\.display = 'none'; \} \}\);/);
   const page = read('src/pages/shares/[author]/[id].astro');
-  assert.match(page, /const tweetUrl = !videoSrc && d\.url && tweetId\(d\.url\) \? d\.url : null;/);
+  assert.match(page, /const tweetUrl = !videoSrc && link && tweetId\(link\) \? link : null;/); // `link`: none on a locked page (2026-10-19)
   assert.match(page, /\{tweetUrl && <div class="share-tweet" data-share-tweet><div class="md-tweet md-tweet-share" data-tweet-url=\{tweetUrl\}><\/div><\/div>\}\n\n\s*<div class="share-actions">/);
   assert.match(page, /if \(box\) wireTweets\(box, \{ via: 'direct', onReady: \(\) => \{ const hero = document\.querySelector<HTMLElement>\('\.share-hero'\); if \(hero\) hero\.style\.display = 'none'; \} \}\);/);
   assert.doesNotMatch(page, /\.share-tweet[^{]*\{[^}]*display: none/, 'never display:none while loading (X would have no width)');

@@ -95,7 +95,8 @@ test('sow-435: the banner follows its own width, and the inline form drops only 
 
 test('sow-435: share pages mount the inline banner right after the discussion', () => {
   const share = stripComments(read('src/pages/shares/[author]/[id].astro'));
-  assert.match(share, /<Comments targetType="share" targetSlug=\{slug\} author=\{d\.author\} wide=\{true\} \/>\s*(\{\})?\s*<ExtensionBanner inline \/>/, 'the banner follows the discussion (the comment between them is stripped to {})');
+  // A members-only share's locked page has no discussion (2026-10-19), so the discussion sits in `{!locked && ...}`.
+  assert.match(share, /\{!locked && <Comments targetType="share" targetSlug=\{slug\} author=\{d\.author\} wide=\{true\} \/>\}\s*(\{\})?\s*<ExtensionBanner inline \/>/, 'the banner follows the discussion (the comment between them is stripped to {})');
   assert.equal([...home.matchAll(/<ExtensionBanner\s*\/>/g)].length, 1, 'the homepage still mounts the full-width form once');
 });
 

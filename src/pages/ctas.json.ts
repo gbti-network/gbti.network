@@ -9,7 +9,7 @@ import { getCollection } from 'astro:content';
 import { readCtas } from '../../scripts/lib/ctas-store.mjs';
 import { resolveAssignments, ctaPages } from '../lib/ctas.mjs';
 import { hasPublicPage } from '../lib/content';
-import { isPublicShare } from '../lib/home-feed.mjs';
+import { isPublicShare, isShareStub } from '../lib/home-feed.mjs';
 
 export const prerender = true;
 
@@ -22,7 +22,7 @@ export const GET: APIRoute = async () => {
   }
   for (const s of await getCollection('share')) {
     const d = s.data as any;
-    items.push({ type: 'share', ref: `${d.author}/${d.id}`, title: String(d.title ?? d.shortDescription ?? 'A member share'), live: isPublicShare(d) });
+    items.push({ type: 'share', ref: `${d.author}/${d.id}`, title: String(d.title ?? d.shortDescription ?? 'A member share'), live: isPublicShare(d) || isShareStub(d) }); // a stub share's locked page is public (owner, 2026-10-19)
   }
   const ctas = resolveAssignments(readCtas(process.cwd()), items);
   const pages = ctaPages(items); // sow-337: the manager's "Add a page" search, public pages only
