@@ -13,7 +13,8 @@ tags:
   - creator-economy
   - artificial-intelligence
   - leadership
-image: https://www.blogmarketingacademy.com/wp-content/uploads/2025/06/x-wpedge-feature.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261019150851-nobody-buys-book-12-for-the-plot-0ea69535.webp
+imageSource: https://www.blogmarketingacademy.com/wp-content/uploads/2025/06/x-wpedge-feature.jpg
 sourceName: Blog Marketing Academy
 id: 20261019150851-nobody-buys-book-12-for-the-plot
 createdAt: '2026-10-19T15:08:51.405Z'

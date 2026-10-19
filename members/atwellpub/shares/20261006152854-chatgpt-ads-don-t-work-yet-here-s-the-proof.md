@@ -11,7 +11,8 @@ tags:
   - chatgpt-ads-failure
   - ad-targeting
   - click-through-rate
-image: https://barn2.com/wp-content/uploads/2026/10/ChatGPT-ads-dont-work-yet.-Heres-the-proof-full-1.png
+image: https://gbti.network/media/shares/atwellpub/20261006152854-chatgpt-ads-don-t-work-yet-here-s-the-proof-0d08a1a0.webp
+imageSource: https://barn2.com/wp-content/uploads/2026/10/ChatGPT-ads-dont-work-yet.-Heres-the-proof-full-1.png
 id: 20261006152854-chatgpt-ads-don-t-work-yet-here-s-the-proof
 createdAt: '2026-10-06T15:28:54.713Z'
 type: share
