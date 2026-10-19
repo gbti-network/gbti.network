@@ -133,23 +133,18 @@ Decision framework:
 For every responsive issue, decide which fix category applies:
 
 1. Compression fix:
-
    Use when the desktop structure still works but needs smaller spacing, typography, icons, cards, or media.
 
-1. Layout preservation fix:
-
+2. Layout preservation fix:
    Use when the section should remain in its desktop shape across narrow desktop widths.
 
-1. Mobile restructuring fix:
-
+3. Mobile restructuring fix:
    Use when the viewport is a real mobile device and the section would be more usable as a stacked, simplified, reordered, or collapsed layout.
 
-1. Content priority fix:
-
+4. Content priority fix:
    Use when secondary metadata, decorative elements, repeated labels, dates, avatars, or supporting copy are crowding the core experience.
 
-1. Structural redesign fix:
-
+5. Structural redesign fix:
    Use only when CSS scaling and responsive reflow cannot make the section work cleanly.
 
 Final deliverable:

@@ -98,9 +98,7 @@ npx --yes @gbti/ryker insert ./report.html
 - Export content changes as a machine-readable prompt
 - An outline built from the document's real heading structure
 - Move or delete whole sections from that outline, recorded as moves rather than
-
   as character diffs
-
 - Revision history tracked per document
 - Markdown with nested lists, tables and code fences, returned as the file it came from
 - Save the edited document back over the file you opened, or as a new file beside it
@@ -154,10 +152,7 @@ license and copyright notice must remain intact.
 ## Credits
 
 - Wing icon by [prasong tadoungsorn](https://thenounproject.com/creator/layersky/) from
-
   [Noun Project](https://thenounproject.com/icon/wing-1382909/), licensed
   [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
-
 - HTML5 icon by Stephen Hutchings from Typicons, licensed
-
   [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).

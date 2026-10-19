@@ -81,16 +81,11 @@ Create a disc, place it in a jukebox, and nearby players hear the audio through 
 Each radio disc plays one source:
 
 - **HLS and internet radio:** HLS playlists, SavePoint station streams, Icecast streams, HTTP audio, and
-
   compatible broadcast endpoints.
-
 - **RTMP receive:** the Minecraft server becomes an RTMP ingest endpoint, so you can broadcast directly from
-
   OBS, SavePoint, or other broadcasting software or relays.
-
 - **Direct URLs and local audio:** play a direct audio URL or loop a file kept on the server.
 - **SavePoint:** connect a SavePoint station over HLS, or push a live SavePoint broadcast into Minecraft over
-
   RTMP. The [Now Playing API](https://savepoint.fm/docs/api/now-playing-api) shows the current track in the
   boss bar.
 
