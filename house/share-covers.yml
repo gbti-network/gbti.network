@@ -487,6 +487,10 @@ covers:
     source: https://www.blogmarketingacademy.com/wp-content/uploads/2025/06/x-wpedge-feature.jpg
     failed: http-403
     triedAt: '2026-10-19'
+  gbtilabs/20261019174447-terence-mckenna-s-blue-streak-a-podcast-hosted-b:
+    lookup: https://www.terencemckenna.com/podcast
+    failed: no-preview
+    triedAt: '2026-10-19'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
