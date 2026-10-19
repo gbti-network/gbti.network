@@ -34,7 +34,7 @@ test('takeListRun: depth from indentation, a marker per item, a top-level marker
   assert.equal(run.next, 6);
   assert.deepEqual(takeListRun(['- a', '  - b', '    - c', '- d'], 0).items.map((it) => it.depth), [0, 1, 2, 0], 'two-space nesting and a jump back two levels');
   assert.deepEqual(takeListRun(['- a', '\t- b'], 0).items.map((it) => it.depth), [0, 1], 'a tab indents');
-  assert.deepEqual(takeListRun(['- a', '1. b', '- c'], 0), { items: [{ text: 'a', depth: 0, ordered: false }], next: 1 }, 'a marker change at the top level starts a new list');
+  assert.deepEqual(takeListRun(['- a', '1. b', '- c'], 0), { items: [{ text: 'a', depth: 0, ordered: false }], next: 1, start: 1 }, 'a marker change at the top level starts a new list');
   assert.deepEqual(takeListRun(['1. a', '   - b', '   1. c'], 0).items.map((it) => [it.depth, it.ordered]), [[0, true], [1, false], [1, true]], 'a marker change below the top level stays in the run');
   assert.deepEqual(takeListRun(['- a', 'text', '- b'], 0).next, 1, 'a non-list line ends the run');
   assert.equal(isListLine('   - x'), true);

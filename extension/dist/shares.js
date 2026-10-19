@@ -755,8 +755,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client/src/list-items.mjs
   var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+  var THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+  function isThematicBreak(line) {
+    return THEMATIC_BREAK_RE.test(String(line ?? ""));
+  }
   function isListLine(line) {
-    return LIST_ITEM_RE.test(String(line ?? ""));
+    const s = String(line ?? "");
+    return LIST_ITEM_RE.test(s) && !THEMATIC_BREAK_RE.test(s);
   }
   function opensRunBefore(items, i, depth, ordered) {
     for (let j2 = i - 1; j2 >= 0; j2--) {
@@ -790,14 +795,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return out;
   }
-  function takeListRun(lines2, start = 0) {
+  var BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
+  function continuesItem(line, markerIndent) {
+    const s = String(line ?? "");
+    if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
+    const lead = /^[ \t]*/.exec(s)[0].replace(/\t/g, "    ").length;
+    return lead > markerIndent && !BLOCK_OPENER_RE.test(s.trimStart());
+  }
+  function takeListRun(lines2, from = 0) {
     const items = [];
+    let start = 1;
     const stack = [0];
     let topOrdered = null;
-    let i = start;
+    let i = from;
     while (i < lines2.length) {
       const m = LIST_ITEM_RE.exec(String(lines2[i] ?? ""));
-      if (!m) break;
+      if (!m || THEMATIC_BREAK_RE.test(String(lines2[i] ?? ""))) break;
       const indent = m[1].replace(/\t/g, "    ").length;
       const ordered = /^\d/.test(m[2]);
       while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
@@ -807,17 +820,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (topOrdered === null) topOrdered = ordered;
         else if (ordered !== topOrdered) break;
       }
-      items.push({ text: m[3], depth, ordered });
+      const item = { text: m[3], depth, ordered };
+      if (!items.length && ordered && depth === 0) start = Number.parseInt(m[2], 10) || 1;
+      items.push(item);
       i++;
+      while (i < lines2.length && continuesItem(lines2[i], indent)) {
+        item.text += `
+${String(lines2[i]).trimStart()}`;
+        i++;
+      }
     }
     for (let k = 0; k < items.length; k++) {
       if (!opensRun(items, k)) continue;
-      const split = splitListSuffix(items[k].text, items[k].ordered);
+      const [first, ...more] = items[k].text.split("\n");
+      const split = splitListSuffix(first, items[k].ordered);
       if (!split) continue;
-      items[k].text = split.rest;
+      items[k].text = [split.rest, ...more].join("\n");
       if (split.style) items[k].style = split.style;
     }
-    return { items, next: i };
+    return { items, next: i, start };
   }
   function normalizeListItems(items, ordered = false) {
     const out = [];
@@ -846,7 +867,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return (Number(it2.depth) || 0) === 0 && !!it2.ordered === firstOrdered && !it2.style;
     });
   }
-  function serializeListItems(items, ordered = false) {
+  function serializeListItems(items, ordered = false, { start = 1 } = {}) {
     const norm2 = normalizeListItems(items, ordered);
     const lines2 = [];
     const counters = [];
@@ -856,7 +877,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     let prevOrderedAtDepth = [];
     for (const it2 of norm2) {
       if (it2.depth > prevDepth) {
-        counters[it2.depth] = 0;
+        counters[it2.depth] = it2.depth === 0 ? Math.max(0, Math.floor(Number(start) || 1) - 1) : 0;
         indents[it2.depth] = it2.depth === 0 ? "" : indents[it2.depth - 1] + " ".repeat(markerWidth[it2.depth - 1] || 2);
         prevOrderedAtDepth[it2.depth] = it2.ordered;
       } else if (it2.depth < prevDepth) {
@@ -871,7 +892,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const marker = it2.ordered ? `${counters[it2.depth]}. ` : "- ";
       markerWidth[it2.depth] = marker.length;
       const suffix = it2.style && it2.text.trim() !== "" ? ` {${it2.style}}` : "";
-      lines2.push(`${indents[it2.depth]}${marker}${it2.text}${suffix}`);
+      const [first, ...more] = it2.text.split("\n");
+      lines2.push(`${indents[it2.depth]}${marker}${first}${suffix}`);
+      for (const l of more) lines2.push(`${indents[it2.depth]}${" ".repeat(marker.length)}${l}`);
       prevDepth = it2.depth;
     }
     return lines2;
@@ -1102,13 +1125,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isFence = (l) => /^```/.test(l);
   var isHeading = (l) => /^#{1,6}\s+/.test(l);
   var isQuote = (l) => /^>\s?/.test(l);
-  var isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
+  var isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
   function serializeBlocks(blocks2) {
-    return (Array.isArray(blocks2) ? blocks2 : []).map(serializeBlock).join("\n\n");
+    const list = Array.isArray(blocks2) ? blocks2 : [];
+    let next = 1;
+    return list.map((b, i) => {
+      if (b && b.type === "list" && b.ordered) {
+        const prev = list[i - 1];
+        const start = prev && prev.type === "list" && prev.ordered ? next : 1;
+        const items = listBlockItems(b);
+        next = start + items.filter((it2) => !(it2 && typeof it2 === "object" && Number(it2.depth) > 0)).length;
+        return serializeListItems(items, true, { start }).join("\n");
+      }
+      return serializeBlock(b);
+    }).join("\n\n");
   }
+  var listBlockItems = (b) => Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
     switch (b.type) {
@@ -1127,8 +1162,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       case "quote":
         return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
       case "list": {
-        const items = Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
-        return serializeListItems(items, !!b.ordered).join("\n");
+        return serializeListItems(listBlockItems(b), !!b.ordered).join("\n");
       }
       case "table": {
         const head = Array.isArray(b.head) ? b.head : [];
@@ -1210,6 +1244,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (isListItem(line)) {
         const run = takeListRun(lines2, i);
+        if (run.next <= i) {
+          blocks2.push({ type: "paragraph", text: line });
+          i++;
+          continue;
+        }
         const ordered = !!run.items[0]?.ordered;
         const items = isFlatList(run.items) ? run.items.map((it2) => it2.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
         blocks2.push({ type: "list", ordered, items });
@@ -4790,9 +4829,17 @@ ${barWidthCss(s)}`;
         i++;
         continue;
       }
+      if (isThematicBreak(line)) {
+        flushList();
+        emit("<hr />", i, i);
+        i++;
+        continue;
+      }
       if (isListLine(line)) {
         const run = takeListRun(lines2, i);
-        emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+        const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
+        const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
+        emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
         i = run.next;
         continue;
       }

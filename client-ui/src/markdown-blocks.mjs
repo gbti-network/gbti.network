@@ -5,7 +5,7 @@
 // (we model block STRUCTURE, not inline), so it round-trips verbatim.
 
 import { parseImageLine, imageLayoutSuffix, imageTitleSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words; the title is the caption
-import { takeListRun, serializeListItems, isFlatList } from '../../client/src/list-items.mjs'; // nested lists: depth and marker per item
+import { takeListRun, serializeListItems, isFlatList, isThematicBreak } from '../../client/src/list-items.mjs'; // nested lists: depth and marker per item
 import { underscoreEmphasis, UNDERSCORE_MARK } from '../../client/src/underscore-emphasis.mjs'; // sow-355: _x_ and __x__
 
 export const MEMBERS_MARKER = '<!-- members-only -->';
@@ -43,7 +43,8 @@ export const isMarker = (l) => l.trim() === MEMBERS_MARKER;
 export const isFence = (l) => /^```/.test(l);
 export const isHeading = (l) => /^#{1,6}\s+/.test(l);
 export const isQuote = (l) => /^>\s?/.test(l);
-export const isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
+// A horizontal rule like `* * *` is not a list item (it stays a paragraph block, written back verbatim).
+export const isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
 const isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
 const isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
 // SOW-062 5f: a bare-URL line is an EMBED only if it is a recognized video (YouTube/Vimeo). Any other bare URL is
@@ -51,10 +52,28 @@ const isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
 // video frame and migrate into a misleading ```embed fence.
 const isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
 
-/** Serialize a block list to Markdown (blocks joined by a blank line). */
+/**
+ * Serialize a block list to Markdown (blocks joined by a blank line). A numbered list written with blank lines between
+ * its items is ONE list in CommonMark, but the block model keeps each item as its own list block, so the numbering
+ * carries across consecutive numbered list blocks. Until 2026-10-17 each block restarted at 1, so a save rewrote
+ * "1. 2. 3." as "1. 1. 1." in the file (a prompt, 2026-07-06).
+ */
 export function serializeBlocks(blocks) {
-  return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join('\n\n');
+  const list = Array.isArray(blocks) ? blocks : [];
+  let next = 1;
+  return list.map((b, i) => {
+    if (b && b.type === 'list' && b.ordered) {
+      const prev = list[i - 1];
+      const start = prev && prev.type === 'list' && prev.ordered ? next : 1;
+      const items = listBlockItems(b);
+      next = start + items.filter((it) => !(it && typeof it === 'object' && Number(it.depth) > 0)).length;
+      return serializeListItems(items, true, { start }).join('\n');
+    }
+    return serializeBlock(b);
+  }).join('\n\n');
 }
+
+const listBlockItems = (b) => (Array.isArray(b.items) ? b.items : String(b.text ?? '').split('\n').filter((x) => x !== ''));
 
 function serializeBlock(b) {
   if (!b || typeof b !== 'object') return '';
@@ -73,8 +92,7 @@ function serializeBlock(b) {
     case 'list': {
       // A string item is a top-level item with the list's marker; an object carries its own depth and marker
       // (client/src/list-items.mjs), so a nested list serializes with CommonMark's child indentation.
-      const items = Array.isArray(b.items) ? b.items : String(b.text ?? '').split('\n').filter((x) => x !== '');
-      return serializeListItems(items, !!b.ordered).join('\n');
+      return serializeListItems(listBlockItems(b), !!b.ordered).join('\n');
     }
     case 'table': {
       const head = Array.isArray(b.head) ? b.head : [];
@@ -142,6 +160,8 @@ export function parseBlocks(md) {
       // as CommonMark starts a new list there). A flat, single-marker list keeps the plain-string shape every
       // reader has always seen; only nesting or a marker mix needs the { text, depth, ordered } objects.
       const run = takeListRun(lines, i);
+      // A line this test calls a list but the reader takes nothing from would loop forever; keep it as text instead.
+      if (run.next <= i) { blocks.push({ type: 'paragraph', text: line }); i++; continue; }
       const ordered = !!run.items[0]?.ordered;
       // sow-322: a run's marker style (client/src/list-attrs.mjs) rides on the item that opens it, so it is
       // re-projected here or the next save would strip every `{square}` the author set.

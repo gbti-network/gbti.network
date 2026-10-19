@@ -21,7 +21,7 @@ import {
 } from '../client/src/list-attrs.mjs';
 import {
   takeListRun, serializeListItems, listHtml, normalizeListItems, isFlatList, indentListItem, opensRun, runOf,
-  listRunState, applyListAction,
+  listRunState, applyListAction, isListLine,
 } from '../client/src/list-items.mjs';
 import { renderMarkdown } from '../client/src/markdown.mjs';
 import { parseBlocks, serializeBlocks } from '../client-ui/src/markdown-blocks.mjs';
@@ -382,8 +382,11 @@ test('no shipped list carries a style word, so every existing list serializes ex
     let fence = false;
     for (let i = 0; i < lines.length; i++) {
       if (/^\s*```/.test(lines[i])) { fence = !fence; continue; }
-      if (fence || !/^(\s*)([-*]|\d+\.)\s+/.test(lines[i])) continue;
+      // The reader's own test for a list line: a horizontal rule such as `* * *` looks like one to a looser pattern, and
+      // the reader takes nothing from it, so starting a run there never advanced (2026-10-19, this loop hung).
+      if (fence || !isListLine(lines[i])) continue;
       const run = takeListRun(lines, i);
+      assert.ok(run.next > i, `${f}:${i + 1} a list line the reader takes nothing from`);
       runs++;
       assert.ok(!run.items.some((it) => it.style), `${f}:${i + 1} carries a list style word`);
       assert.ok(run.items.every((it) => !('style' in it)), `${f}:${i + 1} emits the style key`);

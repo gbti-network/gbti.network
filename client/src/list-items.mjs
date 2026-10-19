@@ -13,9 +13,18 @@ import { splitListSuffix, normalizeListStyle, listStyleClass, styleKind } from '
 
 export const LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
 
-/** A line that starts a list item, at any indentation. */
+// A horizontal rule (CommonMark's thematic break): three or more of one of - * _ with optional spaces between, alone on
+// its line. `* * *` and `- - -` also look like a list item, and CommonMark says the rule wins. Read as a list, the
+// WordPress-imported posts' `* * *` came back from a save as a bullet showing "* *" (2026-10-17).
+export const THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+export function isThematicBreak(line) {
+  return THEMATIC_BREAK_RE.test(String(line ?? ''));
+}
+
+/** A line that starts a list item, at any indentation (a horizontal rule is not one). */
 export function isListLine(line) {
-  return LIST_ITEM_RE.test(String(line ?? ''));
+  const s = String(line ?? '');
+  return LIST_ITEM_RE.test(s) && !THEMATIC_BREAK_RE.test(s);
 }
 
 /** Whether an item of `depth` and `ordered` placed at position `i` (after items[0..i-1]) would open a run. */
@@ -51,6 +60,21 @@ export function runOf(items, i) {
   return out;
 }
 
+// A WRAPPED item (2026-10-17). Writers wrap long lines, so an item's text often runs onto an indented line directly
+// under it. CommonMark reads that line as part of the item (a soft break, or a line break when the line above ends in
+// two spaces). This reader used to stop the list there, so the line became a paragraph of its own, and because the
+// editor rewrites the whole body on every save, the blank line it wrote between blocks split the sentence in the file:
+// "...HTTP audio, and" / "compatible broadcast endpoints." on gbti.network and on dev.to. Three saves did it unnoticed
+// (2026-07-06, 2026-08-23, 2026-10-14). A line that opens a block of its own (a fence, a quote, a heading, a table, a
+// footnote, raw HTML) is left alone, as is anything after a blank line, so only true continuations join.
+const BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
+function continuesItem(line, markerIndent) {
+  const s = String(line ?? '');
+  if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
+  const lead = /^[ \t]*/.exec(s)[0].replace(/\t/g, '    ').length;
+  return lead > markerIndent && !BLOCK_OPENER_RE.test(s.trimStart());
+}
+
 /**
  * Read one list run starting at `start`: consecutive list lines, with depth from an indent stack (a line indented
  * more than the open level opens a deeper one; less pops back to the matching level; tabs count four). A marker
@@ -58,14 +82,15 @@ export function runOf(items, i) {
  * (bullets under a numbered item). A style suffix on an item that opens a run is split off into `style` (a
  * suffix anywhere else is the author's text). Returns { items, next } where `next` is the first line NOT consumed.
  */
-export function takeListRun(lines, start = 0) {
+export function takeListRun(lines, from = 0) {
   const items = [];
+  let start = 1; // the number a numbered run is written to begin at (a run after a blank line continues the one before)
   const stack = [0];
   let topOrdered = null;
-  let i = start;
+  let i = from;
   while (i < lines.length) {
     const m = LIST_ITEM_RE.exec(String(lines[i] ?? ''));
-    if (!m) break;
+    if (!m || THEMATIC_BREAK_RE.test(String(lines[i] ?? ''))) break;
     const indent = m[1].replace(/\t/g, '    ').length;
     const ordered = /^\d/.test(m[2]);
     while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
@@ -75,17 +100,23 @@ export function takeListRun(lines, start = 0) {
       if (topOrdered === null) topOrdered = ordered;
       else if (ordered !== topOrdered) break;
     }
-    items.push({ text: m[3], depth, ordered });
+    const item = { text: m[3], depth, ordered };
+    if (!items.length && ordered && depth === 0) start = Number.parseInt(m[2], 10) || 1;
+    items.push(item);
     i++;
+    // The item's own wrapped lines, kept as '\n' + the line without its indent (trailing spaces kept: a hard break).
+    while (i < lines.length && continuesItem(lines[i], indent)) { item.text += `\n${String(lines[i]).trimStart()}`; i++; }
   }
   for (let k = 0; k < items.length; k++) {
     if (!opensRun(items, k)) continue;
-    const split = splitListSuffix(items[k].text, items[k].ordered);
+    // A style suffix belongs to the item's FIRST line, which is where the serializer writes it.
+    const [first, ...more] = items[k].text.split('\n');
+    const split = splitListSuffix(first, items[k].ordered);
     if (!split) continue;
-    items[k].text = split.rest;
+    items[k].text = [split.rest, ...more].join('\n');
     if (split.style) items[k].style = split.style;
   }
-  return { items, next: i };
+  return { items, next: i, start };
 }
 
 /**
@@ -132,7 +163,7 @@ export function isFlatList(items) {
  * that opens it, and only when that item has text: a bare `{word}` line would read back as text, so an empty
  * opener drops its style rather than writing something the parser cannot return.
  */
-export function serializeListItems(items, ordered = false) {
+export function serializeListItems(items, ordered = false, { start = 1 } = {}) {
   const norm = normalizeListItems(items, ordered);
   const lines = [];
   const counters = [];      // per depth: the number of the last ordered item in the current run
@@ -142,7 +173,8 @@ export function serializeListItems(items, ordered = false) {
   let prevOrderedAtDepth = [];
   for (const it of norm) {
     if (it.depth > prevDepth) {
-      counters[it.depth] = 0;
+      // `start` continues a numbered list that a blank line split into separate blocks (serializeBlocks passes it).
+      counters[it.depth] = it.depth === 0 ? Math.max(0, Math.floor(Number(start) || 1) - 1) : 0;
       indents[it.depth] = it.depth === 0 ? '' : indents[it.depth - 1] + ' '.repeat(markerWidth[it.depth - 1] || 2);
       prevOrderedAtDepth[it.depth] = it.ordered;
     } else if (it.depth < prevDepth) {
@@ -155,7 +187,11 @@ export function serializeListItems(items, ordered = false) {
     const marker = it.ordered ? `${counters[it.depth]}. ` : '- ';
     markerWidth[it.depth] = marker.length;
     const suffix = it.style && it.text.trim() !== '' ? ` {${it.style}}` : '';
-    lines.push(`${indents[it.depth]}${marker}${it.text}${suffix}`);
+    // A wrapped item's further lines sit under its text, indented by the marker's width, which is where CommonMark
+    // (and takeListRun above) reads them as the same item.
+    const [first, ...more] = it.text.split('\n');
+    lines.push(`${indents[it.depth]}${marker}${first}${suffix}`);
+    for (const l of more) lines.push(`${indents[it.depth]}${' '.repeat(marker.length)}${l}`);
     prevDepth = it.depth;
   }
   return lines;

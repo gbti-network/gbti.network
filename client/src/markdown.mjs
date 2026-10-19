@@ -8,7 +8,7 @@ import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
 import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder } from './content-blocks.mjs';
 import { bareTweetLine, tweetBlockHtml } from './tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
-import { takeListRun, listHtml, isListLine } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
+import { takeListRun, listHtml, isListLine, isThematicBreak } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
 import { underscoreEmphasis, UNDERSCORE_MARK } from './underscore-emphasis.mjs'; // sow-355: _x_ and __x__
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
@@ -391,9 +391,20 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     // A list is one block for the whole run, nested by indentation (client/src/list-items.mjs): children render inside
     // their parent's <li>, bullets under a numbered item stay bullets, and a marker change at the top level starts
     // a new list. The run's source range is the block's range, as the Preview's stamps expect.
+    // A horizontal rule (`---`, `* * *`), as the published page draws it (2026-10-17: this renderer had none, and
+    // `* * *` came out as a bullet).
+    if (isThematicBreak(line)) { flushList(); emit('<hr />', i, i); i++; continue; }
     if (isListLine(line)) {
       const run = takeListRun(lines, i);
-      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+      // A wrapped item's '\n' is a soft break (a space), or a line break when the line before it ends in two spaces,
+      // exactly as the paragraph branch below treats it (the marker is followed by a space there too, which is what lets
+      // `_italic_` open right after a break).
+      const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, '\u0000BR\u0000 ').replace(/\s*\n\s*/g, ' '), fn, defs)
+        .replace(/\u0000BR\u0000\s*/g, '<br />');
+      // A numbered run that a blank line separated from the one before starts at its written number, as the published
+      // page counts it, instead of every block showing "1.".
+      const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : '';
+      emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
       i = run.next; continue;
     }
     // sow-350: a quote is ONE block for its whole run of `>` lines, and what it holds is a document of its own, as

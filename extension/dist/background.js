@@ -20407,8 +20407,13 @@ function splitListSuffix(text, ordered, { bare = false } = {}) {
 
 // client/src/list-items.mjs
 var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+var THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+function isThematicBreak(line) {
+  return THEMATIC_BREAK_RE.test(String(line ?? ""));
+}
 function isListLine(line) {
-  return LIST_ITEM_RE.test(String(line ?? ""));
+  const s = String(line ?? "");
+  return LIST_ITEM_RE.test(s) && !THEMATIC_BREAK_RE.test(s);
 }
 function opensRunBefore(items, i, depth, ordered) {
   for (let j = i - 1; j >= 0; j--) {
@@ -20421,14 +20426,22 @@ function opensRun(items, i) {
   const it = items[i];
   return !!it && opensRunBefore(items, i, it.depth, it.ordered);
 }
-function takeListRun(lines2, start = 0) {
+var BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
+function continuesItem(line, markerIndent) {
+  const s = String(line ?? "");
+  if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
+  const lead = /^[ \t]*/.exec(s)[0].replace(/\t/g, "    ").length;
+  return lead > markerIndent && !BLOCK_OPENER_RE.test(s.trimStart());
+}
+function takeListRun(lines2, from = 0) {
   const items = [];
+  let start = 1;
   const stack = [0];
   let topOrdered = null;
-  let i = start;
+  let i = from;
   while (i < lines2.length) {
     const m = LIST_ITEM_RE.exec(String(lines2[i] ?? ""));
-    if (!m) break;
+    if (!m || THEMATIC_BREAK_RE.test(String(lines2[i] ?? ""))) break;
     const indent = m[1].replace(/\t/g, "    ").length;
     const ordered = /^\d/.test(m[2]);
     while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
@@ -20438,17 +20451,25 @@ function takeListRun(lines2, start = 0) {
       if (topOrdered === null) topOrdered = ordered;
       else if (ordered !== topOrdered) break;
     }
-    items.push({ text: m[3], depth, ordered });
+    const item = { text: m[3], depth, ordered };
+    if (!items.length && ordered && depth === 0) start = Number.parseInt(m[2], 10) || 1;
+    items.push(item);
     i++;
+    while (i < lines2.length && continuesItem(lines2[i], indent)) {
+      item.text += `
+${String(lines2[i]).trimStart()}`;
+      i++;
+    }
   }
   for (let k = 0; k < items.length; k++) {
     if (!opensRun(items, k)) continue;
-    const split = splitListSuffix(items[k].text, items[k].ordered);
+    const [first, ...more] = items[k].text.split("\n");
+    const split = splitListSuffix(first, items[k].ordered);
     if (!split) continue;
-    items[k].text = split.rest;
+    items[k].text = [split.rest, ...more].join("\n");
     if (split.style) items[k].style = split.style;
   }
-  return { items, next: i };
+  return { items, next: i, start };
 }
 function normalizeListItems(items, ordered = false) {
   const out = [];
@@ -20899,9 +20920,17 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       i++;
       continue;
     }
+    if (isThematicBreak(line)) {
+      flushList();
+      emit("<hr />", i, i);
+      i++;
+      continue;
+    }
     if (isListLine(line)) {
       const run = takeListRun(lines2, i);
-      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+      const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
+      const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
+      emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
       i = run.next;
       continue;
     }
