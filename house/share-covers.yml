@@ -216,8 +216,9 @@ covers:
     copiedAt: '2026-09-29'
   atwellpub/20261006152854-chatgpt-ads-don-t-work-yet-here-s-the-proof:
     source: https://barn2.com/wp-content/uploads/2026/10/ChatGPT-ads-dont-work-yet.-Heres-the-proof-full-1.png
-    failed: http-403
-    triedAt: '2026-10-06'
+    file: 20261006152854-chatgpt-ads-don-t-work-yet-here-s-the-proof-0d08a1a0.webp
+    sha256: 0d08a1a0af42040fb7575647b1940f482b865f755512fcbd2d9709c35686f6f7
+    copiedAt: '2026-10-19'
   atwellpub/20261006155359-what-changed-across-the-wordpress-plugin-market-:
     source: https://rivale.io/wp-content/uploads/card-diff-cover.png
     file: 20261006155359-what-changed-across-the-wordpress-plugin-market--4f37b3dd.webp
@@ -485,8 +486,9 @@ covers:
     copiedAt: '2026-10-19'
   gbtilabs/20261019150851-nobody-buys-book-12-for-the-plot:
     source: https://www.blogmarketingacademy.com/wp-content/uploads/2025/06/x-wpedge-feature.jpg
-    failed: http-403
-    triedAt: '2026-10-19'
+    file: 20261019150851-nobody-buys-book-12-for-the-plot-0ea69535.webp
+    sha256: 0ea6953522fbb3c653b5262da37c32683f0edda0dd7daa291e3f3f2d8c4fb269
+    copiedAt: '2026-10-19'
   gbtilabs/20261019174447-terence-mckenna-s-blue-streak-a-podcast-hosted-b:
     lookup: https://www.terencemckenna.com/podcast
     failed: no-preview
