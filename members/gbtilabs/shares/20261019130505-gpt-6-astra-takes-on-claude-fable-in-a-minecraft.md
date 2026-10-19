@@ -12,7 +12,8 @@ tags:
   - artificial-intelligence
   - gpt-6-astra
   - claude-fable
-image: https://i.ytimg.com/vi/T51XH1-UQhQ/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261019130505-gpt-6-astra-takes-on-claude-fable-in-a-minecraft-bab8ce79.webp
+imageSource: https://i.ytimg.com/vi/T51XH1-UQhQ/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@tommertoa
 creatorName: tommertoa
 sourceName: YouTube
