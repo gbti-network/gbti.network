@@ -36,7 +36,6 @@ platforms:
   - Linux
 icon: ./images/namedaemon-icon.webp
 featuredImage: ./images/gallery-1-cover.png
-bannerPreset: mods
 galleryStyle: carousel
 sidebarPosition: right
 links:
@@ -57,7 +56,7 @@ links:
   - type: support
     url: https://namedaemon.com/contact/
 publishedAt: '2026-10-21T15:21:19.370Z'
-updatedAt: '2026-10-21T16:19:46.075Z'
+updatedAt: '2026-10-21T17:08:02.279Z'
 type: project
 author: krasenslavov
 ---
