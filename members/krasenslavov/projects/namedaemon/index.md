@@ -3,7 +3,7 @@ title: 'NameDaemon: Find .com Names From the Browser or the Command Line'
 slug: namedaemon
 shortDescription: >-
   Free .com domain tools, all reading from a daily snapshot of the whole .com zone. The same answers
-  come back from npm and PyPI packages, a command line and a public JSON API.
+  come back from packages for Node, Python, Go, PHP and Ruby, a command line and a public JSON API.
 categories:
   - devops
   - tooling
@@ -18,9 +18,14 @@ platforms:
   - Web
   - Node.js
   - Python
+  - Go
+  - PHP
+  - Ruby
   - Chrome
+  - Windows
+  - Linux
 pricing: free
-requires: Node 18 or later, or Python 3.9 or later, for the packages
+requires: Node 18, Python 3.9, Go, PHP or Ruby for the packages; a browser for the tools
 license: MIT
 icon: ./images/namedaemon-icon.webp
 featuredImage: ./images/namedaemon-cover.webp
@@ -44,8 +49,8 @@ links:
     url: https://namedaemon.com/developers/
     label: For developers
   - type: repository
-    url: https://github.com/krasenslavov/namedaemon-npm
-    label: The npm package on GitHub
+    url: https://github.com/orgs/namedaemon/repositories
+    label: The repositories on GitHub
   - type: download
     url: >-
       https://chromewebstore.google.com/detail/namedaemon-com-drop-checker/dmipfdmmffmeamphkjocdgkbblfmmbng
@@ -57,7 +62,7 @@ type: project
 author: krasenslavov
 ---
 
-NameDaemon is about thirty free tools for working with .com domain names, and all of them read from one daily snapshot of every registered .com. Its own home page puts it as "30 tools, one snapshot."
+NameDaemon is about thirty free tools for working with .com domain names, and all of them read from one daily snapshot of every registered .com. Its own home page puts it as "30 tools, one snapshot." The site is available in English, Spanish, French and German.
 
 ## A daily snapshot of every registered .com
 
@@ -71,24 +76,24 @@ The daily numbers are published on their own page. On 2026-10-20 the zone held 1
 
 The tools come in three groups.
 
-Finding a name: a generator, short pronounceable names that are missing from the zone, domain hacks, a handle matcher that checks GitHub, npm, PyPI and Bluesky, ENS and Solana names read from the blockchain, and a brand studio.
+**Finding a name:** a generator, short pronounceable names that are missing from the zone, domain hacks, a handle matcher that checks GitHub, npm, PyPI and Bluesky, ENS and Solana names read from the blockchain, and a brand studio.
 
-Judging a name: a 0 to 100 score that shows every part of its reasoning, an appraisal that reports strength and deliberately gives no price, a one-page Domain Report you can share, a screener and cost lookups.
+**Judging a name:** a 0 to 100 score that shows every part of its reasoning, an appraisal that reports strength and deliberately gives no price, a one-page Domain Report you can share, a screener and cost lookups.
 
-Watching a name: an audit of what a name used to be, read from the Internet Archive, plus lookalikes, a health check covering expiry, transfer lock, DNS, SPF, DMARC and blocklists, a WHOIS lookup, a drop calendar, deleted domains, keyword trends and hosting stats.
+**Watching a name:** an audit of what a name used to be, read from the Internet Archive, plus lookalikes, a health check covering expiry, transfer lock, DNS, SPF, DMARC and blocklists, a WHOIS lookup, a drop calendar, deleted domains, keyword trends and hosting stats.
 
 Anyone can watch one name free and get an email when it frees up. Saved domains stay in your own browser.
 
-## npm, PyPI, the command line and the API
+## Packages, the command line and the API
 
-The same tools are a package, free under MIT and needing no key.
+The same tools are packages, free under MIT and needing no key.
 
 ```
 npm install namedaemon
 pip install namedaemon
 ```
 
-Both sides expose the same typed methods with no dependencies at all: Node 18 and later, Deno and Bun on one, Python 3.9 and later on the other, using nothing but the standard library. There is a command line too, through `npx namedaemon` or the `namedaemon` binary, with `--json` for the raw answer.
+The npm and PyPI packages expose the same typed methods with no dependencies at all: Node 18 and later, Deno and Bun on one, Python 3.9 and later on the other, using nothing but the standard library. Clients for Go (with a Homebrew tap), PHP (Composer) and Ruby (RubyGems) sit beside them. There is a command line too, through `npx namedaemon` or the `namedaemon` binary, with `--json` for the raw answer.
 
 ```
 npx namedaemon rate example
@@ -103,17 +108,19 @@ The packages wrap a public JSON API, so any language can call it with a GET or a
 curl "https://namedaemon.com/wp-json/nd/v1/rate?name=example"
 ```
 
-The site runs on WordPress, with a theme of its own, and the API is served straight out of it. A status panel on the developer page reports the API up, checked every five minutes, at 99.97% over 30 days and 99.85% over 7, measured from outside by UptimeRobot. Both packages are at 0.2.0.
+The site runs on WordPress, with a theme of its own, and the API is served straight out of it. A status panel on the developer page reports the API up, checked every five minutes, at 99.97% over 30 days and 99.85% over 7, measured from outside by UptimeRobot.
 
-## The extension and the desktop app
+## The extension, the desktop app and the web app
 
 A browser extension checks any .com from the toolbar. Type a name, or select one on any page and right-click it, and it says whether the name is taken, free or about to drop, with the estimated release date and where to register or backorder it. From there you can appraise it, check its health and audit its past without leaving the tab. It is free, needs no account, and runs on Chrome, Edge, Firefox, Brave and Opera.
 
-A desktop app puts nine of the tools in a window of their own: the Domain Name Generator, Availability Checker (up to 50 names at once), Domain Report, Domain Score, Domain Appraisal, Domain Audit, Domain Health Check, Short Domains and the Drop Calendar. Install it from the browser or from the Microsoft Store. It runs under Chrome and Edge on Windows, macOS, Linux and Android, and on Safari through Add to Home Screen.
+A desktop app for Windows and Linux puts nine of the tools in a window of their own: the Domain Name Generator, Availability Checker (up to 50 names at once, with CSV export), Domain Report, Domain Score, Domain Appraisal, Domain Audit, Domain Health Check, Short Domains and the Drop Calendar. It adds a watchlist kept on your computer that sends a notification when a name changes status, and a tray icon for checking the name you just copied. It is free and open source under MIT, has no account, no ads and no analytics, and sends a name to NameDaemon only when you check it. It is not code-signed yet, so Windows may show a warning before it installs. Download it from SourceForge or the Snap Store, or directly from namedaemon.com, where every file has a SHA-256 checksum.
+
+The same tools also work as an installable web app, from the browser or from the Microsoft Store. It runs under Chrome and Edge on Windows, macOS, Linux and Android, and on Safari through Add to Home Screen.
 
 ## What it costs, and what Pro will be
 
-Every tool and every package is free, with no account and no key.
+Every tool, package and app is free, with no account and no key.
 
 Pro is not open. Its page is headed "PRO / COMING SOON" and carries a waitlist where a checkout would be. The planned price is from $12 a month, and the page says in as many words that the price is not final until Pro opens.
 
