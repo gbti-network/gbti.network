@@ -97,7 +97,7 @@ const jsonLd = unindexed || stub ? undefined : [
   ]),
 ];
 ---
-<BaseLayout title={d.title} description={d.excerpt} ogImage={ogImage} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : stub ? 'noindex' : false} jsonLd={jsonLd}>
+<BaseLayout title={d.title} description={d.excerpt} canonical={d.canonicalUrl} ogImage={ogImage} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : stub ? 'noindex' : false} jsonLd={jsonLd}>
   <DeployStatusNotice type="post" slug={d.slug} updatedAt={d.updatedAt} />
   <Layout d={d} isStub={stub} postId={post.id} postUrl={postUrl} stack={stack} toc={toc}>
     <Content slot="body" />

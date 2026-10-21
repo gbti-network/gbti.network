@@ -10,6 +10,7 @@ import IconSprite from '../components/IconSprite.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import SigninModal from '../components/SigninModal.astro';
+import { resolveCanonical } from '../lib/canonical.mjs';
 import ReferralCapture from '../components/ReferralCapture.astro';
 import TouchTracker from '../components/TouchTracker.astro';
 import { SITE_NAME } from '../lib/brand';
@@ -46,6 +47,11 @@ interface Props {
   /** sow-462: schema.org structured data (one record or a list), written into the head as JSON-LD. Build it with the
       helpers in src/lib/json-ld.mjs; it is escaped there, so a title holding "</script>" stays data. */
   jsonLd?: unknown;
+  /** An absolute URL that owns this content elsewhere, for a cross-post. It changes rel=canonical ONLY: og:url
+      stays on the GBTI URL, so a share, a comment and the referral attribution all land on this page. Posts
+      carry it as the `canonicalUrl` frontmatter field, which members set in the editor. Anything that is not
+      an absolute http(s) URL is ignored rather than written into the head. */
+  canonical?: string;
 }
 
 const {
@@ -58,6 +64,7 @@ const {
   ogImageSize: measuredOgImageSize,
   cardSource,
   jsonLd,
+  canonical: canonicalOverride,
 } = Astro.props;
 
 const siteName = SITE_NAME;
@@ -69,7 +76,9 @@ const pageTitle = String(title ?? '').trim() || siteName;
 const fullTitle = pageTitle === siteName ? pageTitle : `${pageTitle} | ${siteName}`;
 const cardBrand = String(cardSource ?? '').trim();
 const cardTitle = cardBrand && pageTitle !== siteName ? cardTitleFor(pageTitle, cardBrand) : fullTitle; // never "X | Kotaku | Kotaku"
-const canonical = new URL(Astro.url.pathname, Astro.site);
+const pageUrl = new URL(Astro.url.pathname, Astro.site);
+// A cross-posted item points rel=canonical at whoever published it first. og:url deliberately keeps pageUrl.
+const canonicalHref = resolveCanonical({ override: canonicalOverride, pageUrl });
 // sow-457: the campaign whose invitation links land on this page, or null for every other page. Resolved at
 // BUILD time from the pathname, so the dialog's markup only ever enters the destination page.
 const inviteCampaign = campaignForPath(Astro.url.pathname);
@@ -125,13 +134,13 @@ const ogImageSize = measuredOgImageSize ?? knownImageSize(ogImage || DEFAULT_OG_
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content={typeof noindex === 'string' ? noindex : 'noindex'} />}
-    <link rel="canonical" href={canonical} />
+    <link rel="canonical" href={canonicalHref} />
 
     <meta property="og:site_name" content={siteName} />
     <meta property="og:title" content={cardTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content={ogType} />
-    <meta property="og:url" content={canonical} />
+    <meta property="og:url" content={pageUrl} />
     {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
     {ogImageSize && <meta property="og:image:width" content={String(ogImageSize.width)} />}
     {ogImageSize && <meta property="og:image:height" content={String(ogImageSize.height)} />}

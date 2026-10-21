@@ -84,9 +84,13 @@ test('the head is all or nothing, and a card with no picture keeps the default o
 });
 
 test('the layout still writes every tag the rewriter needs, in the shape it matches', () => {
+  // The two URL tags are written from SEPARATE values since the canonical work: rel=canonical takes the
+  // resolved one, which a cross-posted article points at its original, and og:url always stays on this page.
+  // The rewriter matches rendered output (href="...") and is indifferent to the variable names, so this
+  // assertion is a proxy for "the tag is still emitted at all". It is kept, and named, for that alone.
   const src = read('src/layouts/BaseLayout.astro');
-  for (const re of [/<title>\{fullTitle\}<\/title>/, /<link rel="canonical" href=\{canonical\} \/>/, /<meta property="og:title" content=\{cardTitle\} \/>/,
-    /<meta property="og:description" content=\{description\} \/>/, /<meta property="og:url" content=\{canonical\} \/>/,
+  for (const re of [/<title>\{fullTitle\}<\/title>/, /<link rel="canonical" href=\{canonicalHref\} \/>/, /<meta property="og:title" content=\{cardTitle\} \/>/,
+    /<meta property="og:description" content=\{description\} \/>/, /<meta property="og:url" content=\{pageUrl\} \/>/,
     /<meta property="og:image" content=\{ogImageUrl\} \/>/, /<meta name="twitter:image" content=\{ogImageUrl\} \/>/]) {
     assert.match(src, re);
   }
