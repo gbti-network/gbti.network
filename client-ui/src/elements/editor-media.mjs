@@ -76,6 +76,7 @@ export const withEditorMedia = (Base) => class extends Base {
     const st = this.$('[data-gal-st]');
     const taken = this._galleryTakenNames();
     let added = 0; let failed = 0;
+    const problems = [];
     for (const file of files) {
       if (st) st.textContent = `Uploading ${added + failed + 1} of ${files.length}...`;
       try {
@@ -89,11 +90,16 @@ export const withEditorMedia = (Base) => class extends Base {
       } catch (err) {
         failed += 1;
         const h = failHint(err); // SOW-072 P3: consistent failure copy across every composer
-        if (st) st.textContent = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+        // HELD, not written: the next file's "Uploading 3 of 5..." would overwrite it a moment later, and the
+        // final line used to be written only when nothing failed, so a batch whose LAST file succeeded ended
+        // on a frozen progress message and never showed the failure at all.
+        problems.push(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text);
       }
     }
     this._serializeGallery();
-    if (st && !failed) st.textContent = added ? `Added ${added} screenshot${added === 1 ? '' : 's'}.` : '';
+    if (!st) return;
+    if (!failed) st.textContent = added ? `Added ${added} screenshot${added === 1 ? '' : 's'}.` : '';
+    else st.textContent = `${added ? `Added ${added} of ${files.length}. ` : ''}${problems[0]}${problems.length > 1 ? ` (${problems.length} failed)` : ''}`;
   }
 
   // The bare filenames already in play this session: every current row's basename plus (the caller adds) the

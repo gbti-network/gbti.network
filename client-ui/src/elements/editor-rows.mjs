@@ -6,7 +6,7 @@
 import { esc } from '../base.mjs';
 import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
 import { CONTENT_LINK_TYPES, CONTENT_LINK_TYPE_KEYS } from '../../../src/lib/content-link-types.mjs'; // sow-454: the one source for link types
-import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break) + P3 unique upload names
+import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow, takePickedFiles } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break) + P3 unique upload names
 import { GRIP, IMG, PLUS, TRASH } from './editor-icons.mjs';
 
 export const withEditorRows = (Base) => class extends Base {
@@ -263,7 +263,13 @@ export const withEditorRows = (Base) => class extends Base {
     // member's own published images. Both feed the SAME row machinery above (a staged ./images/x path).
     const galFile = this.$('[data-galfile]');
     this.$('[data-galupload]')?.addEventListener('click', () => galFile?.click());
-    galFile?.addEventListener('change', (e) => { const files = e.target.files; e.target.value = ''; this.doGalleryImages(files); });
+    // Snapshot the picked files BEFORE resetting the input. `input.files` is a LIVE FileList, so clearing
+    // `value` (which is what lets the same file be picked twice in a row) empties the very list we are about
+    // to hand over. Reading it into a variable does not help: the variable points at the same live object.
+    // Done the other way round, doGalleryImages received an empty list, returned at its length guard before
+    // it had a status element to write to, and the member saw no upload, no row and no error at all. The
+    // cover picker never had this because it reads e.target.files[0] inline and never resets.
+    galFile?.addEventListener('change', () => this.doGalleryImages(takePickedFiles(galFile)));
     this.$('[data-galreuse]')?.addEventListener('click', (e) => this._openMediaPicker(e.currentTarget, { gallery: true }));
   }
 };

@@ -108,3 +108,25 @@ export function uniqueImageName(name, taken) {
   }
   return `${base}-${Date.now()}${ext}`;
 }
+
+/**
+ * The files a member just picked, taken from a file input and the input then reset.
+ *
+ * ORDER IS THE WHOLE POINT. `input.files` is a LIVE FileList: setting `input.value = ''`, which is what lets
+ * the same file be picked twice in a row, empties it. Reading it into a variable first does not help, because
+ * the variable points at the same live object. Reset-then-use handed the gallery uploader an empty list, so it
+ * returned at its length guard before it even had a status element to write to, and the member saw no upload,
+ * no row and no error. Array.from() snapshots the File objects, which stay readable after the reset.
+ *
+ * It lives here rather than inside the change handler because that is where it went wrong and it is
+ * unreachable from a test once it is tangled up with DOM events.
+ *
+ * @param {{ files?: ArrayLike<File>|null, value?: string }|null} input
+ * @returns {File[]}
+ */
+export function takePickedFiles(input) {
+  if (!input) return [];
+  const picked = Array.from(input.files || []); // snapshot BEFORE the reset
+  try { input.value = ''; } catch { /* a reset the browser refuses must not lose the files */ }
+  return picked;
+}

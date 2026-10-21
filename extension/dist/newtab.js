@@ -15690,6 +15690,15 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return `${base}-${Date.now()}${ext}`;
   }
+  function takePickedFiles(input) {
+    if (!input) return [];
+    const picked = Array.from(input.files || []);
+    try {
+      input.value = "";
+    } catch {
+    }
+    return picked;
+  }
 
   // client-ui/src/elements/editor-rows.mjs
   var withEditorRows = (Base2) => class extends Base2 {
@@ -15945,11 +15954,7 @@ ${listStyleProseCss(".doc-blocks")}
       });
       const galFile = this.$("[data-galfile]");
       this.$("[data-galupload]")?.addEventListener("click", () => galFile?.click());
-      galFile?.addEventListener("change", (e) => {
-        const files = e.target.files;
-        e.target.value = "";
-        this.doGalleryImages(files);
-      });
+      galFile?.addEventListener("change", () => this.doGalleryImages(takePickedFiles(galFile)));
       this.$("[data-galreuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { gallery: true }));
     }
   };
@@ -16012,6 +16017,7 @@ ${listStyleProseCss(".doc-blocks")}
       const taken = this._galleryTakenNames();
       let added = 0;
       let failed = 0;
+      const problems = [];
       for (const file of files) {
         if (st2) st2.textContent = `Uploading ${added + failed + 1} of ${files.length}...`;
         try {
@@ -16025,11 +16031,13 @@ ${listStyleProseCss(".doc-blocks")}
         } catch (err) {
           failed += 1;
           const h = failHint(err);
-          if (st2) st2.textContent = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+          problems.push(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text);
         }
       }
       this._serializeGallery();
-      if (st2 && !failed) st2.textContent = added ? `Added ${added} screenshot${added === 1 ? "" : "s"}.` : "";
+      if (!st2) return;
+      if (!failed) st2.textContent = added ? `Added ${added} screenshot${added === 1 ? "" : "s"}.` : "";
+      else st2.textContent = `${added ? `Added ${added} of ${files.length}. ` : ""}${problems[0]}${problems.length > 1 ? ` (${problems.length} failed)` : ""}`;
     }
     // The bare filenames already in play this session: every current row's basename plus (the caller adds) the
     // names staged in this batch. uniqueImageName suffixes against this so an upload never overwrites a sibling.
