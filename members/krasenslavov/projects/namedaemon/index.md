@@ -7,13 +7,23 @@ shortDescription: >-
 categories:
   - devops
   - tooling
+status: published
+visibility: public
+pricing: free
+pricingUrl: https://namedaemon.com/pro/
+license: MIT
+requires: Node 18, Python 3.9, Go, PHP or Ruby for the packages; a browser for the tools
 tags:
-  - domain-names
   - cli
   - npm
   - pypi
   - whois
-  - wordpress
+  - dns
+  - rdap
+  - namedaemon
+  - tdl
+  - domain-availability
+  - domain-names
 platforms:
   - Web
   - Node.js
@@ -24,22 +34,11 @@ platforms:
   - Chrome
   - Windows
   - Linux
-pricing: free
-requires: Node 18, Python 3.9, Go, PHP or Ruby for the packages; a browser for the tools
-license: MIT
 icon: ./images/namedaemon-icon.webp
-featuredImage: ./images/namedaemon-cover.webp
-bannerPreset: amber
+featuredImage: ./images/gallery-1-cover.png
+bannerPreset: mods
+galleryStyle: carousel
 sidebarPosition: right
-gallery:
-  - src: ./images/namedaemon-quickstart.webp
-    caption: >-
-      The same calls from the command line, JavaScript, Python and plain HTTP. The packages carry no
-      dependencies and need no key.
-  - src: ./images/namedaemon-state.webp
-    caption: >-
-      The daily numbers page, read on 2026-10-20. Every figure carries the snapshot day it came
-      from.
 links:
   - type: homepage
     url: https://namedaemon.com/
@@ -55,9 +54,10 @@ links:
     url: >-
       https://chromewebstore.google.com/detail/namedaemon-com-drop-checker/dmipfdmmffmeamphkjocdgkbblfmmbng
     label: The browser extension
-status: published
-visibility: public
+  - type: support
+    url: https://namedaemon.com/contact/
 publishedAt: '2026-10-21T15:21:19.370Z'
+updatedAt: '2026-10-21T16:19:46.075Z'
 type: project
 author: krasenslavov
 ---
