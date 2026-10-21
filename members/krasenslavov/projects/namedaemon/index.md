@@ -37,6 +37,27 @@ platforms:
 icon: ./images/namedaemon-icon.webp
 featuredImage: ./images/gallery-1-cover.png
 galleryStyle: carousel
+gallery:
+  - src: ./images/gallery-1-domain-name-generator.png
+    caption: >-
+      The Domain Name Generator, run on the keyword spacecraft. Every suggestion carries its score
+      and whether it is available now.
+  - src: ./images/gallery-1-domain-health.png
+    caption: >-
+      The Domain Health Check on google.com, reporting a grade, a score out of 100 and the time the
+      check ran.
+  - src: ./images/gallery-1-state-of-com.png
+    caption: >-
+      The State of .com page: names in the zone for each snapshot day, with how many appeared and
+      left, and the distribution of name lengths.
+  - src: ./images/namedaemon-quickstart.webp
+    caption: >-
+      The same calls from the command line, JavaScript, Python and plain HTTP. The packages carry no
+      dependencies and need no key.
+  - src: ./images/namedaemon-state.webp
+    caption: >-
+      The daily numbers page, read on 2026-10-20. Every figure carries the snapshot day it came
+      from.
 sidebarPosition: right
 links:
   - type: homepage
