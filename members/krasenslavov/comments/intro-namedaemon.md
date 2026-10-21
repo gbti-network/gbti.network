@@ -2,7 +2,7 @@
 id: intro-namedaemon
 targetType: project
 targetSlug: namedaemon
-createdAt: '2026-10-21T17:08:05.290Z'
+createdAt: '2026-10-21T18:36:37.449Z'
 status: published
 visibility: public
 authorNote: true
