@@ -16,6 +16,25 @@
 # The deployment SOP (.data/ops/deployment-ops/README.md) tells the agent to APPEND one entry here on every
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
+  - version: 0.7.0
+    build: 41
+    date: 2026-10-22
+    type: release
+    title: Version 0.7.0, edit from the menu and a faster Shares tab
+    notes:
+      - The ... menu on an article, project, prompt or share now offers Edit to its owner and to superadmins. It opens the item in the WorkBench on gbti.network.
+      - Paid members can post a public share. Before, only a superadmin was offered Public.
+      - A members-only share can leave a public stub, a locked page on gbti.network with the title, summary and picture, while the link and your note stay members-only. The option sits under Members only in the share box and is off by default.
+      - The Shares tab loads in about a second instead of around eight, and says Loading shares while it loads instead of No Shares yet.
+      - A share opened from the feed now has its own address, so it can be copied or bookmarked, and Back returns to the feed.
+      - Share cards in the feed name their category, such as Music or LLM, as they do on the website.
+      - A share of a Mixcloud mix plays the mix in place.
+      - News cards name the publication, such as The Verge, instead of an internal name.
+      - Articles in the reader show their stat strips, buttons, bar charts, fact lists, tag rows and sections you can open, instead of showing them as code.
+      - Pictures inside articles, projects and prompts in the reader now load from GitHub directly. The service they came from had stopped serving newer files, so some were missing.
+      - A list item that wraps onto a second line now reads as one item.
+      - Searching categories in the share box tells the two Entertainment categories apart.
+      - For superadmins, the Social Queue prepares Substack notes, dev.to posts are saved as drafts, the daily.dev link goes to the new squad address, and the channel pickers follow Discord's own category order.
   - version: 0.6.0
     build: 40
     date: 2026-10-08
