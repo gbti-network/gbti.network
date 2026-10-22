@@ -3825,6 +3825,13 @@ ${listStyleProseCss(".doc-blocks")}
     const rest = list.filter((s) => s !== media);
     return { media, rest };
   }
+  function permalinkPlacement(schema) {
+    const details = (Array.isArray(schema) ? schema : []).find((s) => s && s.title === "Details");
+    if (!details) return null;
+    const keys = Array.isArray(details.keys) ? details.keys : [];
+    const anchor = typeof details.permalinkBefore === "string" ? details.permalinkBefore : "";
+    return { before: anchor && keys.includes(anchor) ? anchor : null };
+  }
 
   // client-ui/src/embed-lightbox.mjs
   var FALLBACK_ID = "gbti-embed-lightbox";
@@ -9715,7 +9722,7 @@ ${barWidthCss(s)}`;
   var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
   var RAIL_SCHEMA = {
     post: [
-      { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
+      { title: "Details", open: true, permalinkBefore: "excerpt", keys: ["visibility", "excerpt", "categories", "tags"] },
       // sow-179: its own section, not folded into Details or Media, since it governs how BOTH read together.
       // "Article layout" rather than "Layout" for the section title -- the field's own label is "Layout", and
       // stacking the same word as both the section header and the field label directly below it read redundant.
@@ -9723,7 +9730,7 @@ ${barWidthCss(s)}`;
       { title: "Media", open: false, keys: ["coverImage", "coverAlt"] }
     ],
     project: [
-      { title: "Details", open: true, keys: ["visibility", "shortDescription", "categories", "tags"] },
+      { title: "Details", open: true, permalinkBefore: "shortDescription", keys: ["visibility", "shortDescription", "categories", "tags"] },
       // The three values the project page prints in its rail spec block (Version, Requires, Works with). version and
       // platforms were form fields listed in no section, so they were hidden-submitted with no control to see or
       // change them, the same gap sow-174 closed for the gallery. requires was not a form field at all, so a save
@@ -9738,7 +9745,7 @@ ${barWidthCss(s)}`;
       { title: "Gallery", open: false, keys: ["gallery", "galleryStyle"] }
     ],
     prompt: [
-      { title: "Details", open: true, keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
+      { title: "Details", open: true, permalinkBefore: "shortDescription", keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
       { title: "Media", open: false, keys: ["image"] }
     ]
   };
@@ -9825,12 +9832,18 @@ ${barWidthCss(s)}`;
       const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
       const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub" && f.key !== "bannerPreset");
       const renderSection = (sec, { open = sec.open, cls = "" } = {}) => {
+        const place = sec.title === "Details" ? permalinkPlacement([sec]) : null;
+        let placed = false;
         let inner = sec.keys.map((key) => {
           const f = fieldByKey.get(key);
           let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : "";
-          if (sec.title === "Details" && key === "shortDescription") html = this.permalinkFieldHtml() + html;
+          if (place && key === place.before) {
+            html = this.permalinkFieldHtml() + html;
+            placed = true;
+          }
           return html;
         }).join("");
+        if (place && !placed) inner = this.permalinkFieldHtml() + inner;
         if (!inner) return "";
         if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc2(this.type)}" ref="${esc2(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
         const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";

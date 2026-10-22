@@ -14,7 +14,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { authorSelectValue } from '../workspace-core.mjs';
 import { editorStatus, mediaSummary } from '../editor-core.mjs';
-import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
+import { splitRailSections, permalinkPlacement } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
 import './gbti-discussion.mjs'; // SOW-062 P6: the shared discussion thread, embedded in the editor for published items
 import './gbti-cta-assignment.mjs'; // sow-281: the read-only "which CTA does this item carry" line in the Links section
@@ -60,7 +60,7 @@ const AUTHOR_NOTE_TYPES = new Set(['post', 'project', 'prompt']);
 
 const RAIL_SCHEMA = {
   post: [
-    { title: 'Details', open: true, keys: ['visibility', 'excerpt', 'categories', 'tags'] },
+    { title: 'Details', open: true, permalinkBefore: 'excerpt', keys: ['visibility', 'excerpt', 'categories', 'tags'] },
     // sow-179: its own section, not folded into Details or Media, since it governs how BOTH read together.
     // "Article layout" rather than "Layout" for the section title -- the field's own label is "Layout", and
     // stacking the same word as both the section header and the field label directly below it read redundant.
@@ -68,7 +68,7 @@ const RAIL_SCHEMA = {
     { title: 'Media', open: false, keys: ['coverImage', 'coverAlt'] },
   ],
   project: [
-    { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
+    { title: 'Details', open: true, permalinkBefore: 'shortDescription', keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
     // The three values the project page prints in its rail spec block (Version, Requires, Works with). version and
     // platforms were form fields listed in no section, so they were hidden-submitted with no control to see or
     // change them, the same gap sow-174 closed for the gallery. requires was not a form field at all, so a save
@@ -83,7 +83,7 @@ const RAIL_SCHEMA = {
     { title: 'Gallery', open: false, keys: ['gallery', 'galleryStyle'] },
   ],
   prompt: [
-    { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'targets', 'categories', 'tags'] },
+    { title: 'Details', open: true, permalinkBefore: 'shortDescription', keys: ['visibility', 'shortDescription', 'targets', 'categories', 'tags'] },
     { title: 'Media', open: false, keys: ['image'] },
   ],
 };
@@ -203,13 +203,20 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     // sow-164: one renderer for every rail section; Media is pulled out of the stack into its own slot (top of
     // the rail wide, above the document stacked) and is always open there, whatever the schema's default.
     const renderSection = (sec, { open = sec.open, cls = '' } = {}) => {
+      // SOW-112 QA: the permalink editor lives in the Details rail, directly above the type's description field.
+      // It is anchored by the SECTION's own permalinkBefore, never by a field name the renderer assumes every
+      // type has: it used to key on 'shortDescription', so an article (whose description field is 'excerpt')
+      // rendered no permalink editor at all and could never be given a URL. See permalinkPlacement.
+      const place = sec.title === 'Details' ? permalinkPlacement([sec]) : null;
+      let placed = false;
       let inner = sec.keys.map((key) => {
         const f = fieldByKey.get(key);
         let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : '';
-        // SOW-112 QA: the permalink editor lives in the Details rail, directly above Short description.
-        if (sec.title === 'Details' && key === 'shortDescription') html = this.permalinkFieldHtml() + html;
+        if (place && key === place.before) { html = this.permalinkFieldHtml() + html; placed = true; }
         return html;
       }).join('');
+      // The anchor is absent (a new type, or a renamed field): the editor still renders, at the top of Details.
+      if (place && !placed) inner = this.permalinkFieldHtml() + inner;
       if (!inner) return '';
       if (sec.title === 'Links') inner += `<gbti-cta-assignment type="${esc(this.type)}" ref="${esc(this.presetStr(p.slug) || '')}"></gbti-cta-assignment>`; // sow-281
       // sow-184 (design 3a): an at-a-glance hint on a section header, so a collapsed section still tells you what
