@@ -152,8 +152,10 @@ test('switch and restore change ONLY the image lines, on every real share file, 
       // re-serializes the whole frontmatter, and js-yaml folds a long value onto a continuation line (the
       // Estrada move, PR #533, red main for over an hour). The switcher replaces a folded value with one line
       // on purpose, which the next test pins, so the invariant that survives a re-serialization is value
-      // equality plus every other byte unchanged.
-      const folded = /^image: *[>|]/m.test(/^---\n([\s\S]*?)\n---/.exec(text)[1]);
+      // equality plus every other byte unchanged. 2026-10-22: the same holds for a folded `imageSource`: editing a
+      // share re-serializes it at width 100, and an outside address longer than that folds (the every.to share,
+      // red main from 21:14 UTC).
+      const folded = /^(image|imageSource): *[>|]/m.test(/^---\n([\s\S]*?)\n---/.exec(text)[1]);
       if (!folded) {
         assert.equal(again, text, `${f}: the round trip is byte-identical`);
       } else {
