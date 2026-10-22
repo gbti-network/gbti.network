@@ -17587,6 +17587,7 @@ function isReadablePath(path) {
 var SUBDIR2 = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
 var TYPES = ["post", "project", "prompt", "profile"];
 var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
+var SHARE_READS_AT_ONCE = 8;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
@@ -17720,13 +17721,16 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
       const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && SHARE_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a)));
       const cap = Math.max(0, limit);
       const out = [];
-      for (const rel of paths) {
-        if (out.length >= cap) break;
-        const text = await readFile(rel);
-        if (text == null) continue;
-        const { frontmatter, body } = parseContentFile(text);
-        if ((frontmatter?.status ?? "published") !== "published") continue;
-        out.push(shareSummary(rel, frontmatter, body));
+      for (let i = 0; i < paths.length && out.length < cap; i += SHARE_READS_AT_ONCE) {
+        const batch = paths.slice(i, i + SHARE_READS_AT_ONCE);
+        const texts = await Promise.all(batch.map((rel) => readFile(rel)));
+        batch.forEach((rel, j) => {
+          const text = texts[j];
+          if (text == null || out.length >= cap) return;
+          const { frontmatter, body } = parseContentFile(text);
+          if ((frontmatter?.status ?? "published") !== "published") return;
+          out.push(shareSummary(rel, frontmatter, body));
+        });
       }
       out.sort(byShareNewest);
       return out.slice(0, cap);
@@ -18502,6 +18506,27 @@ async function reapCommentEchoes({ targetType, targetSlug, ids, ...opts }) {
   return call("POST", "", { action: "reap", targetType, targetSlug, ids }, opts);
 }
 
+// client/src/member-shares-client.mjs
+var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var SharesClientError = class extends Error {
+};
+async function workerListShares({ token, signupBase, fetch: fetch2 = globalThis.fetch, limit, before } = {}) {
+  if (!token || !signupBase) throw new SharesClientError("not signed in");
+  const qs2 = new URLSearchParams();
+  if (limit) qs2.set("limit", String(limit));
+  if (before) qs2.set("before", String(before));
+  const q = qs2.toString();
+  const res = await fetch2(`${trimBase2(signupBase)}/membership/shares${q ? `?${q}` : ""}`, { headers: { Authorization: "Bearer " + token } });
+  if (!res || !res.ok) throw new SharesClientError(`shares unavailable (${res ? res.status : "no response"})`);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!Array.isArray(data?.items)) throw new SharesClientError("shares answer had no items");
+  return { items: data.items, nextBefore: typeof data.nextBefore === "string" && data.nextBefore ? data.nextBefore : null };
+}
+
 // membership/comment-echo.mjs
 var byTime = (a, b) => String(a?.createdAt || a?.postedAt || "").localeCompare(String(b?.createdAt || b?.postedAt || ""));
 function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown", viewer = "" } = {}) {
@@ -18612,12 +18637,12 @@ async function hostedAuthor({ token, itemId, files, title, signupBase = SIGNUP_B
 }
 
 // client/src/drafts-client.mjs
-var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var DraftsClientError = class extends Error {
 };
 async function call2(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new DraftsClientError("not signed in");
-  const res = await fetch2(trimBase2(signupBase) + "/membership/drafts", {
+  const res = await fetch2(trimBase3(signupBase) + "/membership/drafts", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -18815,9 +18840,31 @@ async function listMembersOnly(ctx) {
   requireIdentity(ctx);
   return { items: await ctx.reader.listMembersOnly() ?? [] };
 }
+var WORKER_SHARES_PAGE = 40;
+var WORKER_SHARES_MAX_PAGES = 4;
+async function sharesViaWorker(ctx, n) {
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) return null;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
+  const out = [];
+  let before = null;
+  try {
+    for (let page = 0; page < WORKER_SHARES_MAX_PAGES && out.length < n; page += 1) {
+      const r = await workerListShares({ ...opts, limit: Math.min(WORKER_SHARES_PAGE, n - out.length), before });
+      out.push(...r.items);
+      if (!r.nextBefore || !r.items.length) break;
+      before = r.nextBefore;
+    }
+  } catch {
+    return null;
+  }
+  return out.slice(0, n);
+}
 async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
+  const viaWorker = await sharesViaWorker(ctx, n);
+  if (viaWorker) return { items: viaWorker };
   if (typeof ctx.reader?.listShares !== "function") return { items: [] };
   const items = await ctx.reader.listShares(n) ?? [];
   const membership = await membershipOf(ctx);
@@ -19108,12 +19155,12 @@ async function editComment(ctx, { id, body, authorNote, visibility } = {}) {
 }
 
 // client/src/member-activity-client.mjs
-var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var ActivityClientError = class extends Error {
 };
 async function call3(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new ActivityClientError("not signed in");
-  const res = await fetch2(trimBase3(signupBase) + "/membership/activity", {
+  const res = await fetch2(trimBase4(signupBase) + "/membership/activity", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19146,12 +19193,12 @@ async function setCollectionItem({ id, targetType, targetSlug, on = true, ...opt
 }
 
 // client/src/member-earnings-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var EarningsClientError = class extends Error {
 };
 async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new EarningsClientError("not signed in");
-  const res = await fetch2(trimBase4(signupBase) + "/membership/earnings", {
+  const res = await fetch2(trimBase5(signupBase) + "/membership/earnings", {
     headers: { Authorization: "Bearer " + token }
   });
   let data = null;
@@ -19164,12 +19211,12 @@ async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch
 }
 
 // client/src/member-follows-client.mjs
-var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var FollowsClientError = class extends Error {
 };
 async function call4(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new FollowsClientError("not signed in");
-  const res = await fetch2(trimBase5(signupBase) + "/membership/follows", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/follows", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19190,12 +19237,12 @@ async function setFollow({ username, on = true, notify, ...opts }) {
 }
 
 // client/src/member-og-client.mjs
-var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
 async function ogPreview({ url: url2, icon = false, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/og-preview", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(icon === true ? { url: url2, icon: true } : { url: url2 })
@@ -19210,12 +19257,12 @@ async function ogPreview({ url: url2, icon = false, token, signupBase, fetch: fe
 }
 
 // client/src/member-invite-client.mjs
-var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
 async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19342,12 +19389,12 @@ async function workerNewsOpened({ token, signupBase, fetch: fetch2 = globalThis.
 }
 
 // client/src/member-bell-seen-client.mjs
-var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var BellSeenClientError = class extends Error {
 };
 async function call5(path, method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new BellSeenClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + path, {
+  const res = await fetch2(trimBase9(signupBase) + path, {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19443,12 +19490,12 @@ function filterActivity(activity, types2) {
 }
 
 // client/src/member-admin-client.mjs
-var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase10 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19462,7 +19509,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/overrides", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/overrides", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19476,7 +19523,7 @@ async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.
 }
 async function getAuthorTargets({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/author/targets", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/author/targets", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19490,7 +19537,7 @@ async function getAuthorTargets({ token, signupBase, fetch: fetch2 = globalThis.
 }
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/discord-channels", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/discord-channels", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19504,7 +19551,7 @@ async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThi
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -19520,7 +19567,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function postAdminGovernance({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, payload = {} }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/author", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/author", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ ...payload, action })
@@ -19535,7 +19582,7 @@ async function postAdminGovernance({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/coupon-usage", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/coupon-usage", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19549,7 +19596,7 @@ async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/coupon-pool", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/coupon-pool", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19563,7 +19610,7 @@ async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fet
 }
 async function getSponsorInquiries({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/sponsor-inquiries", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/sponsor-inquiries", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19577,7 +19624,7 @@ async function getSponsorInquiries({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function inviteAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/invites", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/invites", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19592,7 +19639,7 @@ async function inviteAdminRequest({ token, signupBase, method = "GET", body = nu
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -19603,7 +19650,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase10(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -19614,7 +19661,7 @@ async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/social-queue", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ action, id })
@@ -19629,7 +19676,7 @@ async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 
 }
 async function newsItemDecide({ action, guid: guid3, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/news-item", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/news-item", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ action, guid: guid3 })

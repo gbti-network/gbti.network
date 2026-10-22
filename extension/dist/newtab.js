@@ -10354,6 +10354,11 @@ ${barWidthCss(s)}`;
   function feedTabs() {
     return FEED_TABS.map((t) => ({ ...t, type: typeForTabKey(t.key), href: `newtab.html#type=${typeForTabKey(t.key)}` }));
   }
+  function sharesEmptyText({ loaded = false, failed = false } = {}) {
+    if (loaded) return "No Shares yet.";
+    if (failed) return "Shares could not be loaded right now.";
+    return "Loading shares…";
+  }
 
   // client-ui/src/newtab-prefs.mjs
   var LAST_SECTION_KEY = "gbti-nt-last-section";
@@ -32691,6 +32696,8 @@ ${BLOCKED_PILL_CSS}
   var SHARES = null;
   var SHARES_LOADED = false;
   var SHARES_LOADED_AT = null;
+  var SHARES_FAILED = false;
+  var SHARES_INFLIGHT = null;
   var NEWS = null;
   var NEWS_LOADED = false;
   var NEWS_NAMES_KEY = "gbti-news-names";
@@ -32757,7 +32764,7 @@ ${BLOCKED_PILL_CSS}
     rows = rows.slice(0, VISIBLE);
     if (!rows.length) {
       const newsLoading = wantNews && canSeeNews(MEMBERSHIP) && !NEWS_LOADED;
-      const empty = VIEW === "following" ? q2 ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q2 ? "No activity matches that filter." : newsLoading ? "Loading the latest news…" : TYPE === "share" ? "No Shares yet." : TYPE === "news" ? "No news right now. Check back soon." : "No activity yet.";
+      const empty = VIEW === "following" ? q2 ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q2 ? "No activity matches that filter." : newsLoading ? "Loading the latest news…" : TYPE === "share" ? sharesEmptyText({ loaded: SHARES_LOADED, failed: SHARES_FAILED && !SHARES_INFLIGHT }) : TYPE === "news" ? "No news right now. Check back soon." : "No activity yet.";
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
@@ -32942,24 +32949,34 @@ ${BLOCKED_PILL_CSS}
       DIRECTORY_LOADING.delete(t);
     }
   }
-  async function loadShares() {
+  function loadShares() {
+    if (!SHARES_INFLIGHT) SHARES_INFLIGHT = fetchShares().finally(() => {
+      SHARES_INFLIGHT = null;
+    });
+    return SHARES_INFLIGHT;
+  }
+  async function fetchShares() {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/shares", query: {} } });
       if (!Array.isArray(r?.json?.items)) {
         devlog("shares", "fetch returned no items array, keeping prior + retrying", { membership: MEMBERSHIP, error: r?.json?.error });
         SHARES = SHARES ?? [];
+        SHARES_FAILED = !SHARES_LOADED;
         return;
       }
       SHARES = r.json.items;
       SHARES_LOADED = true;
+      SHARES_FAILED = false;
       SHARES_LOADED_AT = MEMBERSHIP;
       devlog("shares", "loaded", { count: SHARES.length, membership: MEMBERSHIP });
     } catch (e) {
       devlog("shares", "fetch threw, will retry", { error: e?.message });
+      SHARES_FAILED = !SHARES_LOADED;
     }
   }
   async function ensureSharesForFilter() {
     if (!feedSources(TYPE).wantShares) return;
+    if (SHARES_INFLIGHT) await SHARES_INFLIGHT;
     const stale = SHARES_LOADED && SHARES_LOADED_AT !== MEMBERSHIP && canSeeShares(MEMBERSHIP);
     if (SHARES_LOADED && !stale) return;
     await loadShares();
@@ -33142,6 +33159,7 @@ ${BLOCKED_PILL_CSS}
     initVersionIndicator();
     loadNewsNames();
     loadShareTopics();
+    ensureSharesForFilter();
     applyMembershipState().then(() => {
       ensureSharesForFilter();
       ensureNewsForFilter();

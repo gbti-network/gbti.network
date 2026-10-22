@@ -16,6 +16,7 @@ import { isReadablePath } from '../../src/lib/content-index.mjs';
 const SUBDIR = Object.freeze({ post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' });
 const TYPES = ['post', 'project', 'prompt', 'profile'];
 const SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
+const SHARE_READS_AT_ONCE = 8; // listShares' file reads in flight together (the Worker's REST fallback uses 8 too)
 const COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 const basename = (p) => p.slice(p.lastIndexOf('/') + 1);
 
@@ -191,13 +192,18 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
       const out = [];
       // Read newest-first until the cap is met (or paths are exhausted) so filtered drafts never starve the feed
       // below the cap — matching the npm reader's completeness (which reads every file then slices).
-      for (const rel of paths) {
-        if (out.length >= cap) break;
-        const text = await readFile(rel);
-        if (text == null) continue;
-        const { frontmatter, body } = parseContentFile(text);
-        if ((frontmatter?.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
-        out.push(shareSummary(rel, frontmatter, body));
+      // 2026-10-22: SHARE_READS_AT_ONCE files per round instead of one after another. 40 sequential reads took
+      // 10.2 s; 8 at a time, 1.2 s. Results are taken in path order, so newest-first is unchanged.
+      for (let i = 0; i < paths.length && out.length < cap; i += SHARE_READS_AT_ONCE) {
+        const batch = paths.slice(i, i + SHARE_READS_AT_ONCE);
+        const texts = await Promise.all(batch.map((rel) => readFile(rel)));
+        batch.forEach((rel, j) => {
+          const text = texts[j];
+          if (text == null || out.length >= cap) return;
+          const { frontmatter, body } = parseContentFile(text);
+          if ((frontmatter?.status ?? 'published') !== 'published') return; // missing status = published (schema default); only an explicit draft is skipped
+          out.push(shareSummary(rel, frontmatter, body));
+        });
       }
       out.sort(byShareNewest);
       return out.slice(0, cap);

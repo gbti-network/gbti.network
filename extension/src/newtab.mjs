@@ -19,7 +19,7 @@ import { buildForVersion } from './version-build.mjs';
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
 import { openMode, shareAddress, shareSlugOf, isSharePage, writeHandoff, takeHandoff, shareTitle } from './share-address.mjs'; // a share opened here gets a real, visible address (2026-10-17)
-import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType } from '../../client-ui/src/feed-route.mjs';
+import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType, sharesEmptyText } from '../../client-ui/src/feed-route.mjs';
 import { viewKey, viewModeFor, landingType, LAST_SECTION_KEY, LEGACY_MODE_KEY } from '../../client-ui/src/newtab-prefs.mjs'; // SOW-105: last-section + per-section view-mode memory
 import { PROMPT_KIND_KEY, normalizePromptKind, promptKindCounts, filterPromptKind, promptKindSwitchHtml } from '../../client-ui/src/prompt-kind-filter.mjs'; // sow-109: the Prompts & Skills tab's All / Prompts / Skills switch
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
@@ -107,6 +107,8 @@ let PROMPT_KIND = (() => { try { return normalizePromptKind(localStorage.getItem
 let SHARES = null;
 let SHARES_LOADED = false;
 let SHARES_LOADED_AT = null; // the MEMBERSHIP the loaded SHARES were fetched under, so an upgrade re-fetches
+let SHARES_FAILED = false; // the last fetch failed and nothing has loaded since (the Shares tab says so, not "No Shares yet.")
+let SHARES_INFLIGHT = null; // the fetch in progress, so a second caller waits on it instead of starting another
 let NEWS = null;
 let NEWS_LOADED = false;
 // A story carries only its source id, and the card printed it as the byline: The Verge's id is `object-object`. The
@@ -210,7 +212,7 @@ function renderFeed(filter = '') {
     const newsLoading = wantNews && canSeeNews(MEMBERSHIP) && !NEWS_LOADED;
     const empty = VIEW === 'following'
       ? (q ? 'No followed activity matches that filter.' : 'No recent activity from the members you follow.')
-      : (q ? 'No activity matches that filter.' : newsLoading ? 'Loading the latest news…' : (TYPE === 'share' ? 'No Shares yet.' : (TYPE === 'news' ? 'No news right now. Check back soon.' : 'No activity yet.')));
+      : (q ? 'No activity matches that filter.' : newsLoading ? 'Loading the latest news…' : (TYPE === 'share' ? sharesEmptyText({ loaded: SHARES_LOADED, failed: SHARES_FAILED && !SHARES_INFLIGHT }) : (TYPE === 'news' ? 'No news right now. Check back soon.' : 'No activity yet.')));
     feed.innerHTML = `<p class="muted">${empty}</p>`;
     return;
   }
@@ -422,7 +424,11 @@ async function ensureDirectoryForFilter() {
  *  (never a hard [] while membership is still resolving). May re-load: a membership upgrade re-fetches to fold in
  *  the member stream, and a failed/non-array fetch leaves it unloaded so the next ensure retries. A truly
  *  signed-out caller (no identity) simply gets no items. */
-async function loadShares() {
+function loadShares() {
+  if (!SHARES_INFLIGHT) SHARES_INFLIGHT = fetchShares().finally(() => { SHARES_INFLIGHT = null; });
+  return SHARES_INFLIGHT;
+}
+async function fetchShares() {
   // ALWAYS fetch: the SERVER is the visibility boundary (operations.listShares requires an identity, then returns
   // only PUBLIC shares to a non-paid/unknown session and the full stream to paid/trialing). Fetching while
   // MEMBERSHIP is still 'unknown' therefore shows the PUBLIC shares immediately rather than a blank feed, and the
@@ -430,18 +436,20 @@ async function loadShares() {
   // was loaded under) only on a SUCCESSFUL fetch, so a transient failure or a later upgrade re-fetches.
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
-    if (!Array.isArray(r?.json?.items)) { devlog('shares', 'fetch returned no items array, keeping prior + retrying', { membership: MEMBERSHIP, error: r?.json?.error }); SHARES = SHARES ?? []; return; } // failure/no identity -> keep any prior, allow retry
+    if (!Array.isArray(r?.json?.items)) { devlog('shares', 'fetch returned no items array, keeping prior + retrying', { membership: MEMBERSHIP, error: r?.json?.error }); SHARES = SHARES ?? []; SHARES_FAILED = !SHARES_LOADED; return; } // failure/no identity -> keep any prior, allow retry
     SHARES = r.json.items;
     SHARES_LOADED = true;
+    SHARES_FAILED = false;
     SHARES_LOADED_AT = MEMBERSHIP;
     devlog('shares', 'loaded', { count: SHARES.length, membership: MEMBERSHIP });
-  } catch (e) { devlog('shares', 'fetch threw, will retry', { error: e?.message }); /* leave SHARES_LOADED false so the next ensure re-fetches */ }
+  } catch (e) { devlog('shares', 'fetch threw, will retry', { error: e?.message }); SHARES_FAILED = !SHARES_LOADED; /* leave SHARES_LOADED false so the next ensure re-fetches */ }
 }
 
 /** If the active filter needs Shares and they are not loaded (or were loaded under a lower tier than the now
  *  resolved one, so the member-only stream is still missing), fetch them, then re-render the feed. */
 async function ensureSharesForFilter() {
   if (!feedSources(TYPE).wantShares) return;
+  if (SHARES_INFLIGHT) await SHARES_INFLIGHT; // its own caller renders it; then decide whether this tier needs another
   const stale = SHARES_LOADED && SHARES_LOADED_AT !== MEMBERSHIP && canSeeShares(MEMBERSHIP);
   if (SHARES_LOADED && !stale) return;
   await loadShares();
@@ -633,6 +641,10 @@ function init() {
   initVersionIndicator();
   loadNewsNames();
   loadShareTopics();
+  // 2026-10-22: start the Shares fetch now rather than after the status check. The host gates shares by the caller's
+  // tier itself, so this answers correctly before MEMBERSHIP resolves; the call below re-fetches only if this one
+  // finished under a different tier.
+  ensureSharesForFilter();
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
   // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
   applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });

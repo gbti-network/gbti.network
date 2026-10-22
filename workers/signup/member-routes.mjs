@@ -449,7 +449,8 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
     const cors = corsHeaders(request, env, { credentials: true });
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (method === 'GET') {
-      const r = await listSharesFeed(request, env);
+      // waitUntil lets a list older than a minute be answered at once and re-read after the response (2026-10-22).
+      const r = await listSharesFeed(request, env, { waitUntil: ctx?.waitUntil ? (p) => ctx.waitUntil(p) : null });
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
     }
   }

@@ -89,3 +89,13 @@ export function tabKeyForType(type) {
 export function feedTabs() {
   return FEED_TABS.map((t) => ({ ...t, type: typeForTabKey(t.key), href: `newtab.html#type=${typeForTabKey(t.key)}` }));
 }
+
+/** What the Shares tab says when it has no rows (2026-10-22). It used to say "No Shares yet." while the list was
+ *  still on its way, which read as an empty network for the seconds the load took, and kept saying it after a
+ *  failed load. `loaded` is a successful fetch; `failed` is a fetch that failed with nothing loaded since; anything
+ *  else (not started, or in flight) is loading. */
+export function sharesEmptyText({ loaded = false, failed = false } = {}) {
+  if (loaded) return 'No Shares yet.';
+  if (failed) return 'Shares could not be loaded right now.';
+  return 'Loading shares…';
+}

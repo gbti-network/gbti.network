@@ -17954,6 +17954,7 @@ function createStager(repoPath) {
 var SUBDIR3 = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
 var TYPES2 = ["post", "project", "prompt", "profile"];
 var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
+var SHARE_READS_AT_ONCE = 8;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
@@ -18087,13 +18088,16 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
       const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && SHARE_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a)));
       const cap = Math.max(0, limit);
       const out = [];
-      for (const rel of paths) {
-        if (out.length >= cap) break;
-        const text = await readFile(rel);
-        if (text == null) continue;
-        const { frontmatter, body } = parseContentFile(text);
-        if ((frontmatter?.status ?? "published") !== "published") continue;
-        out.push(shareSummary(rel, frontmatter, body));
+      for (let i = 0; i < paths.length && out.length < cap; i += SHARE_READS_AT_ONCE) {
+        const batch = paths.slice(i, i + SHARE_READS_AT_ONCE);
+        const texts = await Promise.all(batch.map((rel) => readFile(rel)));
+        batch.forEach((rel, j) => {
+          const text = texts[j];
+          if (text == null || out.length >= cap) return;
+          const { frontmatter, body } = parseContentFile(text);
+          if ((frontmatter?.status ?? "published") !== "published") return;
+          out.push(shareSummary(rel, frontmatter, body));
+        });
       }
       out.sort(byShareNewest);
       return out.slice(0, cap);

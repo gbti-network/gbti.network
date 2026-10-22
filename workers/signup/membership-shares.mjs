@@ -4,7 +4,8 @@
 // other signed-in tier (free / expired / banned) sees ONLY public shares. Members bodies stay POINTER-ONLY
 // (encryptedBody); the client decrypts on expand via /membership/decrypt, so the AES key never leaves the
 // Worker. Enumeration is one GitHub Trees call (the share id is a timestamp-slug, lexically = chronologically
-// sortable) + reading the newest N stub files, cached ~60s in SIGNUP_KV so repeat loads are cheap.
+// sortable) + reading the newest N stub files, cached in SIGNUP_KV so repeat loads are cheap: fresh for 60 s, then
+// served at once while a background read replaces it, for up to an hour (see enumerateShares).
 //
 // Returns { status, body } for the router. Pure over injected fetch + kv, so it is unit-tested with fakes.
 
@@ -18,7 +19,8 @@ const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'appl
 const SHARE_PATH = /^members\/[^/]+\/shares\/([^/]+)\.(?:md|mdx)$/;
 const READ_MEMBERS = new Set(['paid', 'trialing']); // who may see the members-only stream (mirror READ_TRIAL_OK)
 const CACHE_KEY = 'shares:feed:v1';
-const CACHE_TTL_SECONDS = 60;
+const CACHE_FRESH_SECONDS = 60; // younger than this: served as it is
+const CACHE_KEEP_SECONDS = 3600; // older but younger than this: served at once, re-read in the background
 const CACHE_N = 60; // cache the newest N summaries (3 pages of 20); older pages read live
 const MAX_LIMIT = 40;
 
@@ -113,12 +115,31 @@ export async function readBlobsRest(paths, { fetchImpl, token, upstream }) {
  * Enumerate + read the newest shares across every member folder, newest-first. Returns share SUMMARIES (public
  * bodies inline; a members share's body is '' with an encryptedBody pointer — the plaintext never travels here).
  * One Trees call selects the files (id desc = newest), then the newest `cacheN` stub files are read. Cached in
- * SIGNUP_KV for CACHE_TTL_SECONDS. Throws on a Trees failure so the route can 502 (never a partial silent open).
+ * SIGNUP_KV (see the cache note inside). Throws on a Trees failure so the route can 502 (never a partial silent open).
  */
-export async function enumerateShares(env, { fetchImpl = globalThis.fetch, kv = env?.SIGNUP_KV, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network', cacheN = CACHE_N, useCache = true, getToken = getInstallationToken } = {}) {
+export async function enumerateShares(env, { fetchImpl = globalThis.fetch, kv = env?.SIGNUP_KV, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network', cacheN = CACHE_N, useCache = true, getToken = getInstallationToken, waitUntil = null, now = Date.now() } = {}) {
+  const read = () => readShares(env, { fetchImpl, kv, upstream, cacheN, useCache, getToken });
   if (useCache && kv) {
-    try { const cached = await kv.get(CACHE_KEY, 'json'); if (cached && Array.isArray(cached.items)) return cached.items; } catch { /* cold read */ }
+    let cached = null;
+    try { cached = await kv.get(CACHE_KEY, 'json'); } catch { /* cold read */ }
+    if (cached && Array.isArray(cached.items)) {
+      // 2026-10-22: a 60-second cache meant most reads were cold (3.9 s) while few members were online, and the
+      // extension's Shares tab waited on them. A list older than a minute is now answered at once and re-read in the
+      // background, so the NEXT request is fresh; the bell's 2-minute poll keeps it fresh while anyone has an
+      // extension page open. An entry with no readable time (written before this) counts as fresh.
+      const age = now - Date.parse(cached.generatedAt);
+      if (!(age > CACHE_FRESH_SECONDS * 1000)) return cached.items;
+      if (age < CACHE_KEEP_SECONDS * 1000 && typeof waitUntil === 'function') {
+        waitUntil(read().catch(() => { /* the stale list stays until the next attempt */ }));
+        return cached.items;
+      }
+    }
   }
+  return read();
+}
+
+/** The GitHub read behind enumerateShares, and the cache write when it succeeds. */
+async function readShares(env, { fetchImpl, kv, upstream, cacheN, useCache, getToken }) {
   const instToken = await getToken(env, { fetchImpl, kv });
   const treeRes = await fetchImpl(`${GH}/repos/${upstream}/git/trees/main?recursive=1`, { headers: GH_HEADERS(instToken) });
   if (!treeRes || !treeRes.ok) throw new Error(`git trees ${treeRes ? treeRes.status : 'no response'}`);
@@ -145,7 +166,7 @@ export async function enumerateShares(env, { fetchImpl = globalThis.fetch, kv = 
   items.sort(byShareNewest);
 
   if (useCache && kv) {
-    try { await kv.put(CACHE_KEY, JSON.stringify({ generatedAt: new Date().toISOString(), items }), { expirationTtl: CACHE_TTL_SECONDS }); } catch { /* best-effort */ }
+    try { await kv.put(CACHE_KEY, JSON.stringify({ generatedAt: new Date().toISOString(), items }), { expirationTtl: CACHE_KEEP_SECONDS }); } catch { /* best-effort */ }
   }
   return items;
 }

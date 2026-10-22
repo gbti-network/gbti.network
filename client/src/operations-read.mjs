@@ -8,6 +8,7 @@ import { checkComponentBlocks } from './content-blocks.mjs';
 import { buildContentFile, parseContentFile, ContentValidationError, byCommentOldest, NETWORK_CONTENT_OWNER } from './content-ops.mjs';
 import { canSeeShares } from './membership.mjs';
 import { getCommentEchoes as workerGetCommentEchoes, reapCommentEchoes as workerReapCommentEchoes } from './member-comment-echo-client.mjs';
+import { workerListShares } from './member-shares-client.mjs';
 import { mergeCommentEchoes } from '../../membership/comment-echo.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { NETWORK_CONTENT_PATH_RE, OperationError, isNetworkContentPath, membershipOf, requireIdentity, requireSuperadminForHouse } from './operations-core.mjs';
@@ -55,9 +56,38 @@ export async function myShares(ctx) {
   return { items };
 }
 
+// The Worker answers at most this many per page; a longer list follows its `nextBefore` cursor.
+const WORKER_SHARES_PAGE = 40;
+const WORKER_SHARES_MAX_PAGES = 4;
+
+/** The stream through the signup Worker (one request, its tier gate, its cache), or null when the Worker cannot
+ *  answer: no token, a network error, a non-2xx. Null sends the caller to the reader path below, so the worst case
+ *  is the old speed, never a broken feed. The Worker filters by the caller's tier itself, which is why its items are
+ *  returned as they come. */
+async function sharesViaWorker(ctx, n) {
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) return null;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
+  const out = [];
+  let before = null;
+  try {
+    for (let page = 0; page < WORKER_SHARES_MAX_PAGES && out.length < n; page += 1) {
+      const r = await workerListShares({ ...opts, limit: Math.min(WORKER_SHARES_PAGE, n - out.length), before });
+      out.push(...r.items);
+      if (!r.nextBefore || !r.items.length) break;
+      before = r.nextBefore;
+    }
+  } catch { return null; }
+  return out.slice(0, n);
+}
+
 export async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
+  // 2026-10-22: the extension's Shares tab took about 8 seconds, because the reader below reads one GitHub file at
+  // a time. The website moved to the Worker route on 2026-09-10; every host asks it first now.
+  const viaWorker = await sharesViaWorker(ctx, n);
+  if (viaWorker) return { items: viaWorker };
   if (typeof ctx.reader?.listShares !== 'function') return { items: [] };
   const items = (await ctx.reader.listShares(n)) ?? [];
   // SOW-078: the public-vs-member visibility split is enforced HERE (host-side), not only in the client's mergeAll.
