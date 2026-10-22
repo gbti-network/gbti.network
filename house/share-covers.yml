@@ -493,6 +493,12 @@ covers:
     lookup: https://www.terencemckenna.com/podcast
     failed: no-preview
     triedAt: '2026-10-19'
+  gbtilabs/20261022135916-share:
+    lookup: https://every.to/guides/the-eight-levels-of-ai-adoption
+    source: https://d24ovhgu8s7341.cloudfront.net/uploads/post/social_media_image/4283/full_page_cover_30c65fb814035eec-the-eight-levels-of-ai-adoption-cover.jpg
+    file: 20261022135916-share-461ede6d.webp
+    sha256: 461ede6dc325d4e2e037b27a7395c00faea3eecf99f5f9f004c9f23ae7167e2b
+    copiedAt: '2026-10-22'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
