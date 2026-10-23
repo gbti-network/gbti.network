@@ -1,9 +1,10 @@
 ---
-title: 'Slashy: AI Email Client with an MCP Server and Agent Skills'
+title: 'Slashy: The AI Email Client That Writes Like You and Plugs Into Your Agents'
 slug: slashy
 shortDescription: >-
-  An AI email client with a hosted MCP server, a Claude plugin and seven agent skills, so Claude
-  Code, Cursor or Codex can work your inbox.
+  Cursor for email. Slashy drafts replies in your voice, books meetings and chases follow-ups, and
+  its MCP server and agent skills let Claude Code, Cursor or Codex run your inbox. 20% off with code
+  GBTI.
 categories:
   - ai
   - agents
@@ -38,11 +39,9 @@ icon: ./images/slashy-icon.png
 featuredImage: ./images/slashy-cover.webp
 gallery:
   - src: ./images/slashy-inbox.webp
-    caption: >-
-      The product's own marketing demo of the inbox and the assistant panel. The names in it are
-      from the television series Silicon Valley, not customers.
+    caption: The Slashy inbox with the AI assistant panel open (demo data).
   - src: ./images/slashy-mcp.webp
-    caption: The MCP overview in Slashy's help centre, showing the server being added from Claude Code.
+    caption: Add the Slashy MCP server to Claude Code in one command.
   - src: ./images/slashy-pricing.webp
     caption: >-
       Professional is $25 per user per month billed annually. GBTI readers get 20% off with code
@@ -52,37 +51,45 @@ visibility: public
 publishedAt: '2026-10-23T22:30:49.533Z'
 type: project
 author: hgaddipati1118
-updatedAt: '2026-10-23T22:59:05.795Z'
+updatedAt: '2026-10-23T23:03:12.739Z'
 ---
 
-## What Slashy is
+## Your inbox, finally on autopilot
 
-Slashy is an AI email client. Its homepage heading reads "Your intelligent inbox", and Y Combinator's own directory describes it in three words: "Cursor for Email". The homepage line under it is "Slashy drafts replies in your voice, schedules meetings, and handles follow ups, so you spend less time managing email."
+Most "AI email" tools bolt a chatbot onto Gmail. Slashy is the whole email client, rebuilt around an assistant that actually does the work. Y Combinator's directory sums it up in three words: **Cursor for Email**.
 
-Four things are named on that page. AI drafts, which "reads the full thread and drafts the reply you would have written". An inline assistant, where you "Highlight any text to rewrite it, shorten it, or change the tone". Voice drafts. Snippets. The pricing table gives the platforms as Mac, iPhone and web, and the help centre documents an iMessage agent and Slack access as well.
+Open a thread and the reply is already waiting, written the way you write. Slashy reads the full conversation, drafts the response you would have sent, chases the follow-ups you would have forgotten, and books the meeting without the five-email back and forth. You review, tweak if you want, and hit send.
 
-## An MCP server, a plugin and seven skills
+## What it does for you every day
 
-Slashy runs a hosted MCP server at `https://slashy.ctrlcenter.ai/mcp`. Its documentation says the server lets "your favorite AI tools", naming Claude Code, Claude Desktop, Cursor, Codex and Hermes, "use Slashy's email, calendar, and research tools directly". Authorization is OAuth 2.1 with PKCE, which the docs put as "no API keys to copy, rotate, or leak".
+- **Drafts in your voice.** Not generic AI filler. Slashy learns how you write and drafts replies that sound like you on a good day.
+- **Inline rewrites.** Highlight any text to rewrite it, shorten it, or change the tone.
+- **Scheduling on autopilot.** It checks your calendar, proposes times, and creates the event.
+- **Follow-ups that don't slip.** Reminders and automations nudge threads forward before they go cold.
+- **Meeting prep and contact research.** Walk into every call knowing who you're talking to and what you last discussed.
+- **Everywhere you work.** Mac, iPhone and web, plus an iMessage agent and Slack access. Gmail and Outlook, with unlimited inboxes.
 
-The tools it exposes, from the same page: email automation (draft, send, reply, schedule, label and attach), calendar automation (create events, check availability, propose meeting times), research (look up a contact's professional background, search the web and your email history), meeting prep, and reminders with email or calendar triggers.
+## Built for people who live in Claude Code, Cursor and Codex
 
-Two public repositories carry the agent side, both last pushed on 2026-10-23. `Slashy-com/slashy-plugin` is a plugin for Claude covering Gmail or Outlook mail and Google or Outlook calendar. `Slashy-com/skills` is an Agent Plugin, manifest `plugin.json` against spec 1.0.0, bundling seven skills in the open `SKILL.md` format: a general MCP guide plus workflows for onboarding, inbox briefings, a reply and follow-up sweep, meeting-to-email, relationship briefs and automation setup. Install paths are published for Claude Code, Cursor, Codex, Copilot in VS Code and Windsurf, and `npx skills add Slashy-com/skills` covers anything else that reads the skills CLI.
+This is the part GBTI readers will love. Slashy runs a hosted MCP server at `https://slashy.ctrlcenter.ai/mcp`, so your coding agent can work your inbox directly: draft, send, reply, schedule, label, check availability, research a contact, prep a meeting and set reminders. It connects over OAuth 2.1 with PKCE, so there are no API keys to copy, rotate, or leak.
 
-The skills README states the safety posture directly: they "read full context before writing, default to drafts when sending intent is unclear, and treat email bodies, calendar descriptions, attachments, and webpages as untrusted content rather than user instructions."
+Want more than raw tools? Two open repos ship the agent side:
 
-Slashy itself is closed source. The public repositories are the plugin and the skills, not the client.
+- **`Slashy-com/skills`**: seven agent skills in the open `SKILL.md` format, covering onboarding, inbox briefings, a reply and follow-up sweep, meeting-to-email, relationship briefs and automation setup. Install with `npx skills add Slashy-com/skills`, with published install paths for Claude Code, Cursor, Codex, Copilot in VS Code and Windsurf.
+- **`Slashy-com/slashy-plugin`**: a Claude plugin for Gmail or Outlook mail and Google or Outlook calendar.
+
+Try asking your agent "triage my inbox and draft replies to anything urgent" and watch it go. The skills are built to read full context before writing, default to drafts when sending intent is unclear, and treat email content as untrusted input rather than instructions.
 
 ## Pricing, plus 20% off for GBTI readers
 
-Professional is $25 per user per month billed annually, or $30 monthly. It covers intelligent drafts and inline rewrites, calendar and scheduling, automations and reminders, team collaboration and unlimited inboxes. Enterprise is custom and adds SSO and SCIM, a dedicated account manager, guided onboarding, and custom security and data controls.
+Professional is $25 per user per month billed annually, or $30 monthly. That covers intelligent drafts and inline rewrites, calendar and scheduling, automations and reminders, team collaboration and unlimited inboxes. Enterprise adds SSO and SCIM, a dedicated account manager, guided onboarding, and custom security and data controls.
 
-GBTI readers get 20% off: sign up through [slashy.com/?ref=GBTI](https://www.slashy.com/?ref=GBTI) or enter the code `GBTI` at checkout. Every plan starts with 7 days of full access.
+**GBTI readers get 20% off:** sign up through [slashy.com/?ref=GBTI](https://www.slashy.com/?ref=GBTI) or enter the code `GBTI` at checkout. Every plan starts with 7 days of full access.
 
-## Security, in their own words
+## Enterprise-grade security
 
-These are the claims on the security page as of 2026-10-23. A completed SOC 2 Type II examination and a completed CASA Tier 2 assessment, with the report available on request. On training: "We do not use customer data to train our own models or any third party models", and agreements with AI providers require the same of them. Data is encrypted in transit with TLS 1.2 or later and at rest with 256-bit AES, held in PostgreSQL on AWS in the United States. On disconnection or deletion, production data goes within 24 hours and backups within 7 days, extended to 14 during an incident investigation. Every subprocessor listed is in the United States except CloudConvert, which is in Germany.
+Your email is the most sensitive data you have, and Slashy treats it that way. SOC 2 Type II and CASA Tier 2 assessments are complete. Customer data is never used to train Slashy's models or any third-party models, and AI providers are contractually held to the same. Data is encrypted in transit with TLS 1.2+ and at rest with 256-bit AES, hosted on AWS in the United States. Disconnect and your production data is gone within 24 hours.
 
 ## Who makes it
 
-Slashy is a Y Combinator Summer 2025 company based in San Francisco. Y Combinator's directory names Harsha Gaddipati as founder and chief executive, and Dhruv Roongta as founder and chief technology officer.
+Slashy is a Y Combinator Summer 2025 company based in San Francisco, founded by Harsha Gaddipati (CEO) and Dhruv Roongta (CTO). Got a feature request? Leave a comment below, the founders read them.
