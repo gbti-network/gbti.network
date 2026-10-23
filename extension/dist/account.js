@@ -7702,11 +7702,19 @@ ${barWidthCss(s)}`;
         .notice a { color:var(--s-green-fg); }
         #out { margin-top:14px; }
         .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); margin-top:12px; }
-        /* sow-062 review feedback: tables render for real now; give them borders and their own horizontal
-           scroll so a wide table never widens the editor column on a phone. */
+        /* sow-062 review feedback: tables render for real now, and need their own horizontal scroll so a wide
+           table never widens the editor column on a phone.
+           sow-470: the LOOK is the site's (option A, ruled rows). This is the preview an author judges their
+           table by, so it showing something the published page does not is the whole defect this fixed. */
         .preview table { display:block; overflow-x:auto; max-width:100%; border-collapse:collapse; margin:0 0 1.1em; font-size:14px; }
-        .preview table th, .preview table td { border:1px solid var(--s-line); padding:6px 10px; text-align:left; vertical-align:top; }
-        .preview table th { background:var(--s-surface); font-weight:700; white-space:nowrap; }
+        .preview table th, .preview table td { border:0; padding:7px 10px; text-align:left; vertical-align:top; }
+        .preview table tr > th:first-child, .preview table tr > td:first-child { padding-left:0; }
+        .preview table tr > th:last-child, .preview table tr > td:last-child { padding-right:0; }
+        .preview table thead th { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; font-weight:500; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--s-fg-mute); padding-top:0; padding-bottom:6px;
+          border-bottom:1.5px solid var(--s-fg); white-space:nowrap; }
+        .preview table tbody td { border-bottom:1px solid var(--s-line); }
+        .preview table tbody tr:last-child td { border-bottom:0; }
         /* sow-184: the rail pins BELOW the sticky toolbar (top:64px clears it), so the top Status card is never
            hidden under the pinned bar. Collapses to static under the breakpoint below. */
         .rail { display:flex; flex-direction:column; gap:14px; position:sticky; top:64px; max-height:calc(100vh - 72px); overflow-y:auto; }
@@ -28907,11 +28915,21 @@ ${BLOCKED_PILL_CSS}
   ${listStyleProseCss(".body")}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   .body blockquote > :last-child { margin-bottom:0; } /* sow-350: a quote holds its paragraphs */
-  /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
-     their own horizontal scroll rather than pushing the article wider than the viewport. */
+  /* sow-062 review feedback: GFM tables render as real tables, so on a phone they need their own horizontal
+     scroll rather than pushing the article wider than the viewport.
+     sow-470: the LOOK is now the site's (design round "Article tables", option A: ruled rows, no vertical
+     lines, no outer box). It matters that these agree. The published article page had NO table styling at
+     all while this surface and the editor preview both had borders, so a member wrote a table, saw it
+     correct here, and got an unstyled one once it published. */
   .body table { display:block; overflow-x:auto; max-width:100%; border-collapse:collapse; margin:0 0 1.2em; font-size:14.5px; }
-  .body table th, .body table td { border:1px solid var(--line); padding:7px 11px; text-align:left; vertical-align:top; }
-  .body table th { background:var(--hover); font-weight:700; white-space:nowrap; }
+  .body table th, .body table td { border:0; padding:8px 11px; text-align:left; vertical-align:top; }
+  .body table tr > th:first-child, .body table tr > td:first-child { padding-left:0; }
+  .body table tr > th:last-child, .body table tr > td:last-child { padding-right:0; }
+  .body table thead th { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; font-weight:500; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--muted); padding-top:0; padding-bottom:7px;
+    border-bottom:1.5px solid var(--fg); white-space:nowrap; }
+  .body table tbody td { border-bottom:1px solid var(--line); }
+  .body table tbody tr:last-child td { border-bottom:0; }
   .body > pre, .body code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   .body :not(pre) > code { background:var(--hover); border:1px solid var(--line); border-radius:5px; padding:.08em .35em; font-size:.9em; }
   /* SOW-062 5d: body callout + embed blocks (rendered by client/src/markdown.mjs) */

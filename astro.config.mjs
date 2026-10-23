@@ -6,6 +6,7 @@ import mdx from '@astrojs/mdx';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { remarkContentBlocks } from './src/lib/remark-content-blocks.mjs';
+import { remarkTableSort } from './src/lib/remark-table-sort.mjs'; // sow-470: <!-- sort: on|off --> before a table
 import fs from 'node:fs';
 import yaml from 'js-yaml';
 import { contentFlagsFromParsed, sitemapExcludes } from './membership/content-flags.mjs'; // sow-189: unindexed articles leave the sitemap
@@ -14,6 +15,7 @@ import { contentLastmod, withLastmod } from './membership/content-lastmod.mjs'; 
 import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from './src/lib/markdown-sanitize.mjs';
 import { rehypeSponsoredLinks } from './src/lib/rehype-sponsored-links.mjs'; // sow-281: partner redirect links in bodies are rel=sponsored
 import { rehypeExternalLinks } from './src/lib/rehype-external-links.mjs'; // sow-378: a body link that leaves the site opens in a new tab
+import { rehypeTableScroll } from './src/lib/rehype-table-scroll.mjs'; // sow-470: a body table gets its scroll container at build, not from a browser script
 import { outboundRows } from './scripts/lib/outbound-links-store.mjs'; // sow-289: the partner redirect paths
 
 // SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
@@ -64,10 +66,10 @@ export default defineConfig({
   // three were hardened after an adversarial red-team (see markdown-sanitize.mjs). Every member body
   // sink (Content + rendered.html) flows through this one config.
   markdown: {
-    remarkPlugins: [remarkContentBlocks],
+    remarkPlugins: [remarkContentBlocks, remarkTableSort],
     // sow-281: LAST, after the sanitizer, because the sanitizer's rel allowlist does not know `sponsored`. Bounded to
     // the exact partner redirect paths in house/outbound-links.yml, so no other link is ever marked.
-    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety, rehypeExternalLinks, [rehypeSponsoredLinks, { paths: outboundRows(process.cwd()).map(([p]) => p) }]],
+    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety, rehypeExternalLinks, rehypeTableScroll, [rehypeSponsoredLinks, { paths: outboundRows(process.cwd()).map(([p]) => p) }]],
   },
   // Dev-only Astro toolbar — hidden so local testing matches the published view.
   devToolbar: { enabled: false },

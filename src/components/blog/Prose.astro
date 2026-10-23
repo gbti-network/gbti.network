@@ -99,9 +99,51 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
   /* sow-248: a table is the one wide block that had no scroll container, so five of the 52 articles pushed a
      phone page sideways by up to 213px (measured at 390px). The GitHub-markdown rule: the table keeps its own
      layout at its natural width and scrolls INSIDE the column, which is the one nested-scroll shape that does not
-     trap a thumb (horizontal inside vertical). `width: max-content` is load-bearing: without it `display: block`
-     stretches the table to the column and the cells wrap instead of scrolling. */
-  .prose-gbti table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+     trap a thumb (horizontal inside vertical).
+     sow-470: that scroll now comes from a WRAPPER (rehype-table-scroll.mjs, at build so it survives with
+     JavaScript off), not from `display: block` on the table itself. The old rule bought the scroll by stopping
+     the table being a table: it could not fill its column, and column widths stopped being negotiated across
+     rows. `min-width: 100%` is what `width: max-content` used to do, without that cost. */
+  .prose-gbti .table-wrap { position: relative; margin: 1.6em 0; }
+  .prose-gbti .table-scroll { overflow-x: auto; }
+  .prose-gbti table { border-collapse: collapse; min-width: 100%; width: max-content; font-size: .95em; }
+  .prose-gbti .table-scroll table { margin: 0; }
+  /* sow-470 (design round "Article tables", option A: ruled rows). Horizontal rules only, no vertical lines and
+     no outer box, so a table reads as part of the article rather than interrupting it. The first and last cells
+     lose their outer padding so the table shares the prose column's left edge. Every value is a token that
+     exists in BOTH themes, so dark mode needs no second copy of any of this. */
+  .prose-gbti th, .prose-gbti td { padding: 9px 12px; text-align: left; vertical-align: top; border: 0; }
+  .prose-gbti tr > th:first-child, .prose-gbti tr > td:first-child { padding-left: 0; }
+  .prose-gbti tr > th:last-child, .prose-gbti tr > td:last-child { padding-right: 0; }
+  .prose-gbti thead th { font-family: var(--f-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--fg-mute); padding-top: 0; padding-bottom: 8px;
+    border-bottom: 1.5px solid var(--fg); white-space: nowrap; }
+  .prose-gbti tbody td { border-bottom: 1px solid var(--line); }
+  .prose-gbti tbody tr:last-child td { border-bottom: 0; }
+  /* A column of figures is only comparable down its length when the digits line up, which needs both the right
+     edge and tabular figures. The class is set by the enhancer, which is also what decides a column is numeric. */
+  .prose-gbti th.tnum, .prose-gbti td.tnum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* A table that continues past the edge looks finished without this, and nobody scrolls a block that looks
+     finished. Painted only while there is somewhere to scroll (the enhancer sets data-overflow). */
+  /* On the OUTER wrapper, which does not scroll. Inside the scroller an absolutely positioned fade is placed
+     against the scrolled content, not the visible edge: measured at 390px it rendered 216px off-screen. */
+  .prose-gbti .table-wrap[data-overflow="1"]::after { content: ''; position: absolute; top: 0; right: 0; width: 34px;
+    height: 100%; pointer-events: none; background: linear-gradient(to right, transparent, var(--paper-2)); }
+  /* sow-470: the sort control. A real <button> inside the th, so Tab reaches it and the th can carry aria-sort.
+     The idle chevron sits at 25% so a sortable column says so without the header becoming a row of arrows. */
+  .prose-gbti .tsort-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
+    margin: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+  .prose-gbti .tsort-btn:hover { color: var(--fg); }
+  .prose-gbti .tsort-ind { opacity: .25; flex: none; transition: opacity .12s, color .12s, transform .12s; }
+  .prose-gbti .tsort-btn:hover .tsort-ind { opacity: .65; }
+  .prose-gbti .tsort-btn.on { color: var(--fg); }
+  .prose-gbti .tsort-btn.on .tsort-ind { opacity: 1; color: var(--green); }
+  .prose-gbti .tsort-btn.on.asc .tsort-ind { transform: rotate(180deg); }
+  .prose-gbti .tsort-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 3px; }
+  /* Without this nothing says the headings are clickable, and a reader does not try. */
+  .prose-gbti caption.tsort-cap { caption-side: top; text-align: left; padding: 0 0 9px; font-size: 11.5px;
+    color: var(--fg-mute); }
+  @media (prefers-reduced-motion: reduce) { .prose-gbti .tsort-ind { transition: none; } }
   /* sow-248, measured after the table rule landed: the two named articles STILL overflowed (195px and 128px at
      390px), and the offenders were bare URLs used as link text in footnotes and a blockquote, which have no
      break opportunity. overflow-wrap inherits, so one rule on the container covers every paragraph, list item
@@ -201,6 +243,9 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
 <script>
   // sow-452: a ```directory block becomes a sort bar over the entries after it.
   import { enhanceSortList } from '../../lib/sort-list.mjs';
+  // sow-470: article tables get their numeric columns aligned, their overflow fade, and (only where the table
+  // earns it) column sorting. The table itself is already styled and already scrolls without this.
+  import { enhanceTables } from '../../lib/table-enhance.mjs';
   import { embedUrl, embedPosterHtml } from '../../../client/src/video-embed.mjs';
   // ```embed lightbox: the built thumbnail link becomes the poster the comments use; Lightbox.astro opens it.
   document.querySelectorAll<HTMLElement>('.prose-gbti .embed-lightbox').forEach((wrap) => {
@@ -210,6 +255,7 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
     if (html) wrap.outerHTML = html;
   });
   document.querySelectorAll('.prose-gbti').forEach((el) => enhanceSortList(el));
+  document.querySelectorAll('.prose-gbti').forEach((el) => enhanceTables(el));
 
   // Code cards: upgrade every fenced code block in rendered prose into a card with a language tag + a
   // working Copy button (the same enhancement the extension reader applies, so the two surfaces match).

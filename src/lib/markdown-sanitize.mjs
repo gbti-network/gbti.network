@@ -65,6 +65,9 @@ export const sanitizeSchema = {
     img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding', 'srcSet', 'sizes', 'width', 'height', 'style', ['className', IMAGE_LAYOUT_CLASS_RE]],
     // A figure (a captioned image) carries the same five layout classes and nothing else.
     figure: [['className', IMAGE_LAYOUT_CLASS_RE]],
+    // sow-470: the author's table sort override (<!-- sort: on|off --> before the table, read by
+    // remark-table-sort.mjs). Exactly these two values; nothing an author writes can widen it.
+    table: [...(defaultSchema.attributes?.table ?? []), ['dataSort', 'on', 'off']],
     li: [...(defaultSchema.attributes?.li ?? []), 'id'],
     // A list carries its GFM task-list class and one of the six marker style classes, nothing else (see above).
     ul: withListClassRule(defaultSchema.attributes?.ul),
