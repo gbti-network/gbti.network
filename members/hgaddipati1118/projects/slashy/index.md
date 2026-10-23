@@ -15,7 +15,7 @@ tags:
   - claude-code
   - inbox
 pricing: paid
-pricingUrl: https://www.slashy.com/pricing
+pricingUrl: https://www.slashy.com/pricing?ref=GBTI
 license: Proprietary
 platforms:
   - Web
@@ -24,8 +24,8 @@ platforms:
 bannerPreset: ink
 links:
   - type: homepage
-    url: https://www.slashy.com/
-    label: Visit Slashy.com
+    url: https://www.slashy.com/?ref=GBTI
+    label: Try Slashy (20% off with code GBTI)
     primary: true
     visibility: public
   - type: documentation
@@ -45,13 +45,14 @@ gallery:
     caption: The MCP overview in Slashy's help centre, showing the server being added from Claude Code.
   - src: ./images/slashy-pricing.webp
     caption: >-
-      Professional is $25 per user per month billed annually. The trial runs 7 days and takes a
-      card.
+      Professional is $25 per user per month billed annually. GBTI readers get 20% off with code
+      GBTI.
 status: published
 visibility: public
 publishedAt: '2026-10-23T22:30:49.533Z'
 type: project
 author: hgaddipati1118
+updatedAt: '2026-10-23T22:59:05.795Z'
 ---
 
 ## What Slashy is
@@ -72,18 +73,16 @@ The skills README states the safety posture directly: they "read full context be
 
 Slashy itself is closed source. The public repositories are the plugin and the skills, not the client.
 
-## Price, and the trial that takes a card
+## Pricing, plus 20% off for GBTI readers
 
 Professional is $25 per user per month billed annually, or $30 monthly. It covers intelligent drafts and inline rewrites, calendar and scheduling, automations and reminders, team collaboration and unlimited inboxes. Enterprise is custom and adds SSO and SCIM, a dedicated account manager, guided onboarding, and custom security and data controls.
 
-The pricing page is explicit about the trial: "Professional starts with 7 days of full access. A credit card is required."
+GBTI readers get 20% off: sign up through [slashy.com/?ref=GBTI](https://www.slashy.com/?ref=GBTI) or enter the code `GBTI` at checkout. Every plan starts with 7 days of full access.
 
 ## Security, in their own words
 
 These are the claims on the security page as of 2026-10-23. A completed SOC 2 Type II examination and a completed CASA Tier 2 assessment, with the report available on request. On training: "We do not use customer data to train our own models or any third party models", and agreements with AI providers require the same of them. Data is encrypted in transit with TLS 1.2 or later and at rest with 256-bit AES, held in PostgreSQL on AWS in the United States. On disconnection or deletion, production data goes within 24 hours and backups within 7 days, extended to 14 during an incident investigation. Every subprocessor listed is in the United States except CloudConvert, which is in Germany.
 
-Two gaps are the page's own. It gives no report date or scope for either assessment, and penetration test results are available only under NDA.
-
 ## Who makes it
 
-Slashy is a Y Combinator Summer 2025 company based in San Francisco, with a team of three. Y Combinator's directory names Harsha Gaddipati as founder and chief executive, and Dhruv Roongta as founder and chief technology officer.
+Slashy is a Y Combinator Summer 2025 company based in San Francisco. Y Combinator's directory names Harsha Gaddipati as founder and chief executive, and Dhruv Roongta as founder and chief technology officer.
