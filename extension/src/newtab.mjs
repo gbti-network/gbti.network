@@ -16,6 +16,7 @@ import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend mem
 import { sourceNameMap } from '../../membership/news-source-name.mjs'; // a news card names the publication, never its id
 import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../../client-ui/src/topic-labels.mjs'; // a share card names its category, as the website's does
 import { buildForVersion } from './version-build.mjs';
+import { readSharesCache, writeSharesCache } from './shares-cache.mjs'; // 2026-10-23: paint the last Shares list at once
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
 import { openMode, shareAddress, shareSlugOf, isSharePage, writeHandoff, takeHandoff, shareTitle } from './share-address.mjs'; // a share opened here gets a real, visible address (2026-10-17)
@@ -440,6 +441,7 @@ async function fetchShares() {
     SHARES = r.json.items;
     SHARES_LOADED = true;
     SHARES_FAILED = false;
+    writeSharesCache(SHARES); // the next tab paints this list at once (per account; fire-and-forget)
     SHARES_LOADED_AT = MEMBERSHIP;
     devlog('shares', 'loaded', { count: SHARES.length, membership: MEMBERSHIP });
   } catch (e) { devlog('shares', 'fetch threw, will retry', { error: e?.message }); SHARES_FAILED = !SHARES_LOADED; /* leave SHARES_LOADED false so the next ensure re-fetches */ }
@@ -641,6 +643,12 @@ function init() {
   initVersionIndicator();
   loadNewsNames();
   loadShareTopics();
+  // 2026-10-23: paint the account's remembered Shares list at once, unless a fetch has already landed. It does not count
+  // as loaded, so the fetch below still runs and replaces it; members-only rows in it wait for the membership check,
+  // because mergeAll hides them until MEMBERSHIP reads paid.
+  readSharesCache().then((cached) => {
+    if (cached && !SHARES_LOADED && !(Array.isArray(SHARES) && SHARES.length)) { SHARES = cached; renderFeed($('[data-filter]')?.value || ''); }
+  });
   // 2026-10-22: start the Shares fetch now rather than after the status check. The host gates shares by the caller's
   // tier itself, so this answers correctly before MEMBERSHIP resolves; the call below re-fetches only if this one
   // finished under a different tier.

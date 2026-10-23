@@ -247,7 +247,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // cache) so a signed-out member's owned-content metadata never survives on the device into another session.
         try {
           const all = await chrome.storage.local.get(null);
-          const keys = Object.keys(all || {}).filter((k) => k.startsWith('gbti:wb:') || k === 'gbti:create-recent');
+          // 2026-10-23: and each account's remembered Shares list (shares-cache.mjs), so none outlives the sign-in.
+          const keys = Object.keys(all || {}).filter((k) => k.startsWith('gbti:wb:') || k === 'gbti:create-recent' || k.startsWith('gbti:shares:'));
           if (keys.length) await chrome.storage.local.remove(keys);
         } catch { /* storage unavailable: best-effort */ }
         // sow-158: clear the once-per-session mint stamp so a later re-sign-in re-mints the website session. The

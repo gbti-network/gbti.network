@@ -4,6 +4,7 @@
 
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { sweepPreparedClaims } from './prepared-claim-sweep.mjs'; // sow-427: finalize claims nobody is watching
+import { warmSharesFeed } from './membership-shares.mjs'; // 2026-10-23: no member's Shares tab waits on a cold list
 import { drainSyndication } from './syndication-drain.mjs';
 import { ingest } from './news/src/ingest.mjs'; // UnifiedWorker: the hourly news RSS fetch + AI classify (was the gbti-news worker)
 import { backfillImages } from './news/src/backfill.mjs'; // UnifiedWorker: the :30 og:image backfill
@@ -136,7 +137,12 @@ async function drainFiveMinute(env) {
   let prepared;
   try { prepared = await sweepPreparedClaims(env); } catch { prepared = { error: true }; }
 
-  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared };
+  // 2026-10-23: re-read the community Shares list every half hour, so the first Shares tab after a quiet spell is not
+  // a cold read. Fail-soft: a GitHub hiccup here leaves the cached list as it is and never touches the drains above.
+  let shares;
+  try { shares = await warmSharesFeed(env); } catch (e) { shares = { error: String(e?.message ?? e) }; }
+
+  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared, shares };
 }
 
 // Shared by both Tuesday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still

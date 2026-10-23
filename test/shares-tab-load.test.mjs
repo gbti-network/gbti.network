@@ -14,7 +14,8 @@ import fs from 'node:fs';
 import { listShares } from '../client/src/operations.mjs';
 import { workerListShares, SharesClientError } from '../client/src/member-shares-client.mjs';
 import { createGithubReader } from '../client/src/github-reader.mjs';
-import { enumerateShares, listSharesFeed } from '../workers/signup/membership-shares.mjs';
+import { enumerateShares, listSharesFeed, warmSharesFeed } from '../workers/signup/membership-shares.mjs';
+import { sharesCacheKey, usableSharesCache, sharesCacheEntry, SHARES_CACHE_PREFIX } from '../extension/src/shares-cache.mjs';
 import { sharesEmptyText } from '../client-ui/src/feed-route.mjs';
 
 const ident = { username: 'alice', login: 'alice', githubId: '1' };
@@ -154,7 +155,7 @@ test('Worker: a list under a minute old is served with no GitHub call', async ()
   assert.equal(gh.calls.length, 0);
 });
 
-test('Worker: a list between a minute and an hour old is served at once and re-read through waitUntil', async () => {
+test('Worker: a list between a minute and three hours old is served at once and re-read through waitUntil', async () => {
   const gh = fakeGitHub();
   const { kv, puts } = fakeKv(cachedAt(5 * 60_000));
   const background = [];
@@ -165,11 +166,11 @@ test('Worker: a list between a minute and an hour old is served at once and re-r
   assert.ok(gh.calls.some((u) => u.includes('/git/trees/')), 'the refresh read GitHub');
   assert.equal(puts.length, 1);
   assert.deepEqual(puts[0].v.items.map((s) => s.id), ['20261022000000-new'], 'the fresh list replaced the cache');
-  assert.equal(puts[0].o.expirationTtl, 3600, 'kept for an hour');
+  assert.equal(puts[0].o.expirationTtl, 3 * 3600, 'kept for three hours (2026-10-23; it was one)');
 });
 
 test('Worker: a stale list with no waitUntil (the digest) or an hour old is read fresh, as before', async () => {
-  for (const [label, entry, waitUntil] of [['no waitUntil', cachedAt(5 * 60_000), null], ['over an hour', cachedAt(2 * 3_600_000), () => assert.fail('not served stale')]]) {
+  for (const [label, entry, waitUntil] of [['no waitUntil', cachedAt(5 * 60_000), null], ['over three hours', cachedAt(4 * 3_600_000), () => assert.fail('not served stale')]]) {
     const gh = fakeGitHub();
     const { kv } = fakeKv(entry);
     const items = await enumerateShares({}, { fetchImpl: gh.fetchImpl, kv, getToken: async () => 't', now: NOW, waitUntil });
@@ -209,4 +210,86 @@ test('the new tab uses that text and starts the shares fetch before the membersh
   const early = init.indexOf('ensureSharesForFilter();');
   const status = init.indexOf('applyMembershipState()');
   assert.ok(early > -1 && status > -1 && early < status, 'the shares fetch starts before the status check returns');
+});
+
+// ---- 5. 2026-10-23: the timer keeps the Worker's list warm --------------------------------------------------------
+// The owner's first Shares tab of the morning still took 6 s: nobody had read the list for over an hour, so the Worker
+// rebuilt it cold (3.7 to 5.1 s measured). The 5-minute timer now re-reads it every half hour.
+
+test('warmSharesFeed re-reads a list older than 30 minutes, or a missing one, and writes it with the 3-hour keep', async () => {
+  for (const [label, entry] of [['31 minutes old', cachedAt(31 * 60_000)], ['missing', null], ['no readable time', { items: [] }]]) {
+    const gh = fakeGitHub();
+    const { kv, puts } = fakeKv(entry);
+    const r = await warmSharesFeed({}, { kv, now: NOW, fetchImpl: gh.fetchImpl, getToken: async () => 't' });
+    assert.equal(r.warmed, true, label);
+    assert.ok(gh.calls.some((u) => u.includes('/git/trees/')), `${label}: it read GitHub`);
+    assert.equal(puts.length, 1, label);
+    assert.equal(puts[0].o.expirationTtl, 3 * 3600, label);
+  }
+});
+
+test('warmSharesFeed leaves a list under 30 minutes old alone, with no GitHub call', async () => {
+  const gh = fakeGitHub();
+  const { kv, puts } = fakeKv(cachedAt(29 * 60_000));
+  const r = await warmSharesFeed({}, { kv, now: NOW, fetchImpl: gh.fetchImpl, getToken: async () => 't' });
+  assert.equal(r.warmed, false);
+  assert.equal(gh.calls.length, 0);
+  assert.equal(puts.length, 0);
+});
+
+test('a failed warm-up read throws to the timer, which catches it and keeps draining', async () => {
+  const { kv } = fakeKv(null);
+  await assert.rejects(() => warmSharesFeed({}, { kv, now: NOW, fetchImpl: async () => json({}, 502), getToken: async () => 't' }));
+  const src = fs.readFileSync(new URL('../workers/signup/cron.mjs', import.meta.url), 'utf8');
+  const start = src.indexOf('async function drainFiveMinute');
+  const end = src.indexOf('const CRON_JOBS');
+  assert.ok(start > -1 && end > start, 'control: the drain function is found and bounded');
+  const drain = src.slice(start, end);
+  assert.match(drain, /try \{ shares = await warmSharesFeed\(env\); \} catch \(e\) \{ shares = \{ error:/, 'the 5-minute drain runs it, fail-soft');
+  assert.match(drain, /return \{[^}]*\bshares \}/, 'and logs what it did');
+});
+
+// ---- 6. 2026-10-23: the new tab paints the account's last list at once ---------------------------------------------
+
+test('the remembered list is keyed per account and never without one', () => {
+  assert.equal(sharesCacheKey({ githubId: '125175036' }), `${SHARES_CACHE_PREFIX}125175036`);
+  assert.equal(sharesCacheKey({ githubId: 42 }), `${SHARES_CACHE_PREFIX}42`);
+  for (const id of [null, undefined, {}, { githubId: '' }, { githubId: 'alice' }, { login: 'alice' }]) assert.equal(sharesCacheKey(id), null);
+});
+
+test('a remembered list over a day old, empty, malformed or from the future is not shown', () => {
+  const now = NOW;
+  const items = [share(1)];
+  assert.deepEqual(usableSharesCache({ at: now - 60_000, items }, now), items);
+  assert.equal(usableSharesCache({ at: now - 25 * 3_600_000, items }, now), null);
+  assert.equal(usableSharesCache({ at: now + 60_000, items }, now), null);
+  assert.equal(usableSharesCache({ at: now, items: [] }, now), null);
+  assert.equal(usableSharesCache({ at: 'x', items }, now), null);
+  assert.equal(usableSharesCache(null, now), null);
+});
+
+test('the remembered entry holds the 40 newest summaries and a time, nothing else', () => {
+  const e = sharesCacheEntry(Array.from({ length: 50 }, (_, i) => share(i)), NOW);
+  assert.deepEqual(Object.keys(e).sort(), ['at', 'items']);
+  assert.equal(e.at, NOW);
+  assert.equal(e.items.length, 40);
+});
+
+test('the new tab reads the remembered list before fetching, writes it after a good fetch, and never counts it as loaded', () => {
+  const src = fs.readFileSync(new URL('../extension/src/newtab.mjs', import.meta.url), 'utf8');
+  const init = src.slice(src.indexOf('function init()'));
+  const read = init.indexOf('readSharesCache()');
+  const fetchEarly = init.indexOf('ensureSharesForFilter();');
+  assert.ok(read > -1 && read < fetchEarly, 'read before the early fetch starts');
+  const paint = init.slice(read, fetchEarly);
+  assert.match(paint, /if \(cached && !SHARES_LOADED && !\(Array\.isArray\(SHARES\) && SHARES\.length\)\) \{ SHARES = cached; renderFeed/);
+  assert.doesNotMatch(paint, /SHARES_LOADED = true/, 'a remembered list is not a load: the fetch still runs');
+  const fetchFn = src.slice(src.indexOf('async function fetchShares'), src.indexOf('async function ensureSharesForFilter'));
+  assert.match(fetchFn, /SHARES_LOADED = true;\n\s+SHARES_FAILED = false;\n\s+writeSharesCache\(SHARES\);/, 'written only after a successful fetch');
+});
+
+test('sign-out removes every remembered Shares list', () => {
+  const src = fs.readFileSync(new URL('../extension/src/background.mjs', import.meta.url), 'utf8');
+  const signout = src.slice(src.indexOf("msg?.type === 'signout'"), src.indexOf("msg?.type === 'open-page'"));
+  assert.match(signout, /k\.startsWith\('gbti:shares:'\)/);
 });

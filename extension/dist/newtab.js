@@ -2940,6 +2940,43 @@ ${link}` : ""}`;
     return best;
   }
 
+  // extension/src/shares-cache.mjs
+  var SHARES_CACHE_PREFIX = "gbti:shares:";
+  var SHARES_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
+  var MAX_ITEMS = 40;
+  function sharesCacheKey(identity) {
+    const id = String(identity?.githubId ?? "").trim();
+    return /^\d+$/.test(id) ? `${SHARES_CACHE_PREFIX}${id}` : null;
+  }
+  function usableSharesCache(entry, now = Date.now()) {
+    if (!entry || !Array.isArray(entry.items) || !entry.items.length) return null;
+    const at3 = Number(entry.at);
+    if (!Number.isFinite(at3) || now - at3 < 0 || now - at3 > SHARES_CACHE_MAX_AGE_MS) return null;
+    return entry.items;
+  }
+  function sharesCacheEntry(items, now = Date.now()) {
+    return { at: now, items: (Array.isArray(items) ? items : []).slice(0, MAX_ITEMS) };
+  }
+  async function readSharesCache(now = Date.now()) {
+    try {
+      const { gbti } = await chrome.storage.local.get("gbti") || {};
+      const key = sharesCacheKey(gbti?.identity);
+      if (!key) return null;
+      const got = await chrome.storage.local.get(key) || {};
+      return usableSharesCache(got[key], now);
+    } catch {
+      return null;
+    }
+  }
+  async function writeSharesCache(items, now = Date.now()) {
+    try {
+      const { gbti } = await chrome.storage.local.get("gbti") || {};
+      const key = sharesCacheKey(gbti?.identity);
+      if (key) await chrome.storage.local.set({ [key]: sharesCacheEntry(items, now) });
+    } catch {
+    }
+  }
+
   // client-ui/src/content-types.mjs
   var LEGACY_TYPE_ALIASES = Object.freeze({
     product: "project"
@@ -32998,6 +33035,7 @@ ${BLOCKED_PILL_CSS}
       SHARES = r.json.items;
       SHARES_LOADED = true;
       SHARES_FAILED = false;
+      writeSharesCache(SHARES);
       SHARES_LOADED_AT = MEMBERSHIP;
       devlog("shares", "loaded", { count: SHARES.length, membership: MEMBERSHIP });
     } catch (e) {
@@ -33190,6 +33228,12 @@ ${BLOCKED_PILL_CSS}
     initVersionIndicator();
     loadNewsNames();
     loadShareTopics();
+    readSharesCache().then((cached) => {
+      if (cached && !SHARES_LOADED && !(Array.isArray(SHARES) && SHARES.length)) {
+        SHARES = cached;
+        renderFeed($("[data-filter]")?.value || "");
+      }
+    });
     ensureSharesForFilter();
     applyMembershipState().then(() => {
       ensureSharesForFilter();

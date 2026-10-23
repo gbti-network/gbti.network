@@ -5,7 +5,8 @@
 // (encryptedBody); the client decrypts on expand via /membership/decrypt, so the AES key never leaves the
 // Worker. Enumeration is one GitHub Trees call (the share id is a timestamp-slug, lexically = chronologically
 // sortable) + reading the newest N stub files, cached in SIGNUP_KV so repeat loads are cheap: fresh for 60 s, then
-// served at once while a background read replaces it, for up to an hour (see enumerateShares).
+// served at once while a background read replaces it, for up to three hours (see enumerateShares). The 5-minute timer
+// re-reads it every half hour (warmSharesFeed), so no reader waits on a cold read.
 //
 // Returns { status, body } for the router. Pure over injected fetch + kv, so it is unit-tested with fakes.
 
@@ -20,7 +21,8 @@ const SHARE_PATH = /^members\/[^/]+\/shares\/([^/]+)\.(?:md|mdx)$/;
 const READ_MEMBERS = new Set(['paid', 'trialing']); // who may see the members-only stream (mirror READ_TRIAL_OK)
 const CACHE_KEY = 'shares:feed:v1';
 const CACHE_FRESH_SECONDS = 60; // younger than this: served as it is
-const CACHE_KEEP_SECONDS = 3600; // older but younger than this: served at once, re-read in the background
+const CACHE_KEEP_SECONDS = 3 * 3600; // older but younger than this: served at once, re-read in the background
+const WARM_AFTER_SECONDS = 30 * 60; // the 5-minute timer re-reads a list older than this (warmSharesFeed)
 const CACHE_N = 60; // cache the newest N summaries (3 pages of 20); older pages read live
 const MAX_LIMIT = 40;
 
@@ -136,6 +138,26 @@ export async function enumerateShares(env, { fetchImpl = globalThis.fetch, kv = 
     }
   }
   return read();
+}
+
+/**
+ * 2026-10-23: keep the list warm from the 5-minute timer. With only readers refreshing it, the first read after a
+ * quiet spell was cold (3.7 to 5.1 s measured), which in practice was every member's first Shares tab of the morning.
+ * Re-reads a list that is missing or older than WARM_AFTER_SECONDS and leaves a younger one alone, so at most 48
+ * reads a day (two GitHub calls and one KV write each). Returns what it did, for the timer's log line; throws only
+ * when the read itself fails, and the timer catches that.
+ */
+export async function warmSharesFeed(env, { kv = env?.SIGNUP_KV, now = Date.now(), ...deps } = {}) {
+  if (!kv) return { warmed: false, reason: 'no-kv' };
+  let cached = null;
+  try { cached = await kv.get(CACHE_KEY, 'json'); } catch { /* treat as missing */ }
+  const age = cached && Array.isArray(cached.items) ? now - Date.parse(cached.generatedAt) : NaN;
+  if (age >= 0 && age < WARM_AFTER_SECONDS * 1000) return { warmed: false, ageSeconds: Math.round(age / 1000) };
+  const items = await readShares(env, {
+    fetchImpl: deps.fetchImpl ?? globalThis.fetch, kv, upstream: deps.upstream ?? env?.UPSTREAM_REPO ?? 'gbti-network/gbti.network',
+    cacheN: deps.cacheN ?? CACHE_N, useCache: true, getToken: deps.getToken ?? getInstallationToken,
+  });
+  return { warmed: true, items: items.length };
 }
 
 /** The GitHub read behind enumerateShares, and the cache write when it succeeds. */
