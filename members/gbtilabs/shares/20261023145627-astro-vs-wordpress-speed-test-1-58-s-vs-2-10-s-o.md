@@ -12,7 +12,8 @@ tags:
   - astro
   - web-performance
   - core-web-vitals
-image: https://ajrwebdesign.com/wp-content/uploads/2026/10/astro-vs-wordpress-share.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261023145627-astro-vs-wordpress-speed-test-1-58-s-vs-2-10-s-o-72dfd4b0.webp
+imageSource: https://ajrwebdesign.com/wp-content/uploads/2026/10/astro-vs-wordpress-share.jpg
 sourceName: AJR Web Design
 id: 20261023145627-astro-vs-wordpress-speed-test-1-58-s-vs-2-10-s-o
 createdAt: '2026-10-23T14:56:27.008Z'
