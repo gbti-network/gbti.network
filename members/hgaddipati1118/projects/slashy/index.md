@@ -51,7 +51,7 @@ visibility: public
 publishedAt: '2026-10-23T22:30:49.533Z'
 type: project
 author: hgaddipati1118
-updatedAt: '2026-10-23T23:03:12.739Z'
+updatedAt: '2026-10-24T21:51:57.908Z'
 ---
 
 ## Your inbox, finally on autopilot
@@ -59,6 +59,22 @@ updatedAt: '2026-10-23T23:03:12.739Z'
 Most "AI email" tools bolt a chatbot onto Gmail. Slashy is the whole email client, rebuilt around an assistant that actually does the work. Y Combinator's directory sums it up in three words: **Cursor for Email**.
 
 Open a thread and the reply is already waiting, written the way you write. Slashy reads the full conversation, drafts the response you would have sent, chases the follow-ups you would have forgotten, and books the meeting without the five-email back and forth. You review, tweak if you want, and hit send.
+
+## What users say
+
+Slashy is rated **4.9/5 on [G2](https://www.g2.com/products/slashy/reviews)**. A few lines from verified reviews:
+
+> "Slashy is the best agent-native email client I've used, and I've probably given almost all of them a serious try."
+> **Adam B., Founder / CEO**
+
+> "The MCP connector, so badly missing with many other email clients, allows me agentic access to my entire mailbox."
+> **Verified user in Investment Banking**
+
+> "It picks up on my voice and what I like and turns out replies I send with barely any edits... Delegating that stuff saves me hours every week."
+> **Julian J., Technical Support Representative**
+
+> "I actually started a side project to just create my own program, then I discovered Slashy. It was literally everything I wanted in an email client."
+> **William R., President**
 
 ## What it does for you every day
 
