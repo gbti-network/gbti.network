@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-24T21:49:50.272Z'
+updatedAt: '2026-10-24T22:05:06.031Z'
 type: post
 author: atwellpub
 ---
@@ -69,7 +69,7 @@ Within the proposed SaaS environment, MCP integrations are presented as configur
 
 The agency assists with their installation, authentication, configuration, permissions, and ongoing maintenance.
 
-Using WordPress as the underlying CMS, the following categories represent a proposed integration ecosystem.
+For narrative, we are imagining a scenario where WordPress is the underlying CMS. The follow items show opportunities where MCP servers can be modularized, permissioned, and served to client. 
 
 ### 2.1 Content Management
 
