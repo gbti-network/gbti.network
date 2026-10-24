@@ -1,5 +1,5 @@
 ---
-title: A Crystal Ball for the Next Digital Agency
+title: 🔮 Predicting the Future of Web Development & Agency Managed Client Relationships
 slug: crystal-ball-for-the-next-digital-agency
 status: published
 visibility: public
@@ -18,8 +18,8 @@ tags:
 layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
-updatedAt: '2026-10-24T21:19:00.447Z'
 publishedAt: '2026-10-24T20:49:39.765Z'
+updatedAt: '2026-10-24T21:45:50.700Z'
 type: post
 author: gbtilabs
 ---
