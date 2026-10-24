@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   planRun, ceilingVerdict, claimsReport, emptyFollowPlan, CLAIM_OUTCOME, IDENTITY_REASON, DIGEST_ENROLL_REPORT_KEY,
+  excludedIdsFrom,
 } from '../scripts/lib/mail-enroll.mjs';
 import { parseArgs, enactRun, renderReport } from '../scripts/mail-enroll.mjs';
 
@@ -204,4 +205,36 @@ test('every unsubscribe on record is counted, and the ones this run cannot place
   });
   assert.match(text, /unsubscribes on record\s*$/m);
   assert.match(text, /\s2\s+not matched to anyone in this run/);
+});
+
+// ---- the owner, 2026-10-23: leave the test accounts out ----
+
+test('an account on the owner\'s exclusion list is never added, and is named as left off by the owner', async () => {
+  const puts = [];
+  const run = planRun({ ...BASE, digestOnly: true, maxAdditions: '25', excluded: new Set(['2']) });
+  assert.ok(!run.mailPlan.enroll.some((r) => r.githubId === '2'), 'the excluded account is not added');
+  assert.deepEqual(run.mailPlan.excludedByOwner.map((r) => r.githubId), ['2']);
+  assert.equal(run.counts.excludedByOwner, 1);
+  await enactRun({ run, apply: true, put: async (k) => { puts.push(k); } });
+  assert.deepEqual(puts, ['mail:subscriber:h1'], 'only the one who is not excluded is written');
+  // A claimant on the list says so in the claims report rather than "not found".
+  assert.equal(claimsReport([claim('2', 'demo', '17')], run.mailPlan)[0].outcome, CLAIM_OUTCOME.OWNER);
+  // The control: without the list they are added.
+  assert.ok(planRun({ ...BASE, digestOnly: true }).mailPlan.enroll.some((r) => r.githubId === '2'));
+});
+
+test('the exclusion list: absent means nobody, unreadable or malformed refuses the run', async () => {
+  assert.deepEqual([...excludedIdsFrom({ ok: true, value: null, status: 404 }).ids], []);
+  assert.deepEqual([...excludedIdsFrom({ ok: true, value: '{"ids":["7"," 8 ",""],"note":"test accounts"}' }).ids], ['7', '8']);
+  assert.deepEqual([...excludedIdsFrom({ ok: true, value: { ids: [9] } }).ids], ['9']);
+  for (const bad of [{ ok: false, status: 500 }, { ok: true, value: 'not json' }, { ok: true, value: '{"id":["7"]}' }, { ok: true, value: '["7"]' }, null]) {
+    assert.equal(excludedIdsFrom(bad).ok, false, `refuses ${JSON.stringify(bad)}`);
+  }
+  // A refusal from the list stops the write, as the ceiling does.
+  const puts = [];
+  const run = planRun({ ...BASE, digestOnly: true, maxAdditions: '25', exclusionProblem: 'the exclusion list could not be read' });
+  assert.equal(run.refusal, 'the exclusion list could not be read');
+  const res = await enactRun({ run, apply: true, put: async (k) => { puts.push(k); } });
+  assert.equal(res.refused, true);
+  assert.equal(puts.length, 0);
 });

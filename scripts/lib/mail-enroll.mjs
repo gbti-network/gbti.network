@@ -67,13 +67,14 @@ function who(m) {
  * @param {Set} enrolledGithubIds github ids that already have a MEMBER record, under ANY hash (sow-472)
  * @returns {object} the plan; `blocked` is true when the run cannot write anything at all
  */
-export function planMailEnrollment({ members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(), enrolledGithubIds = new Set() } = {}) {
+export function planMailEnrollment({ members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(), enrolledGithubIds = new Set(), excluded = new Set() } = {}) {
   const plan = {
     enroll: [],
     alreadyEnrolled: [],
     suppressedSkips: [],
     unreachable: [],
     excludedBanned: [],
+    excludedByOwner: [],
     blocked: false,
   };
 
@@ -84,6 +85,10 @@ export function planMailEnrollment({ members = [], identities = new Map(), suppr
     // A ban is a community ban and it is the one exclusion that happens before anything else is considered.
     // A banned account gets ZERO KV by the standing tier ruling, and a digest subscription is KV.
     if (isBanned(m)) { plan.excludedBanned.push(who(m)); continue; }
+
+    // sow-472: accounts the owner left off by name (test and demo accounts, 2026-10-23), from the KV list
+    // DIGEST_ENROLL_EXCLUDE_KEY. Checked before anything else about them, so no other rule can add them.
+    if (excluded.has(githubId)) { plan.excludedByOwner.push(who(m)); continue; }
 
     // sow-472: ONE MEMBER, ONE RECORD, WHATEVER THEIR ADDRESS IS NOW. A record is keyed by the hash of the
     // address at the time it was written, and sign-in keeps the Stripe address current, so a member who changed
@@ -185,6 +190,7 @@ export function enrollmentCounts(mailPlan, followPlan) {
     suppressed: mailPlan.suppressedSkips.length,
     unreachable: mailPlan.unreachable.length,
     excludedBanned: mailPlan.excludedBanned.length,
+    excludedByOwner: (mailPlan.excludedByOwner ?? []).length,
     followWrites: followPlan.writes.length,
     followAlreadyComplete: followPlan.alreadyComplete.length,
   };
@@ -229,6 +235,7 @@ export const CLAIM_OUTCOME = Object.freeze({
   SUPPRESSED: 'unsubscribed earlier, left off',
   UNREACHABLE: 'no verified email address',
   BANNED: 'banned, left off',
+  OWNER: 'left off by the owner',
   NOT_GATHERED: 'not found among the members',
 });
 
@@ -248,6 +255,7 @@ export function claimsReport(listings = [], mailPlan = {}) {
     [mailPlan.suppressedSkips, CLAIM_OUTCOME.SUPPRESSED],
     [mailPlan.unreachable, CLAIM_OUTCOME.UNREACHABLE],
     [mailPlan.excludedBanned, CLAIM_OUTCOME.BANNED],
+    [mailPlan.excludedByOwner, CLAIM_OUTCOME.OWNER],
   ];
   const outcomeById = new Map();
   for (const [rows, outcome] of buckets) for (const r of rows ?? []) outcomeById.set(String(r?.githubId ?? ''), outcome);
@@ -274,16 +282,38 @@ export function claimsReport(listings = [], mailPlan = {}) {
 export const DIGEST_ENROLL_REPORT_KEY = 'digest-enroll:report';
 
 /**
+ * The accounts the owner has left off the digest by name, as `{ ids: [githubId, ...], note }`. KV and not the
+ * repository, because a list of people is per-person state and the repository is public. Absent means nobody is
+ * left off; a value that cannot be read or parsed REFUSES the run (see excludedIdsFrom), because guessing an
+ * empty list would add exactly the people the owner asked to keep off.
+ */
+export const DIGEST_ENROLL_EXCLUDE_KEY = 'digest-enroll:exclude';
+
+/**
+ * The excluded ids from a strict KV read (`readKvValueStrict`: `{ ok, value, status }`). Returns
+ * `{ ok: true, ids }`, or `{ ok: false, reason }` when the list exists but could not be read or understood.
+ */
+export function excludedIdsFrom(read) {
+  if (!read || read.ok !== true) return { ok: false, reason: 'the exclusion list could not be read' };
+  if (read.value === null || read.value === undefined) return { ok: true, ids: new Set() };
+  let parsed = read.value;
+  if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = null; } }
+  const ids = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.ids : null;
+  if (!Array.isArray(ids)) return { ok: false, reason: 'the exclusion list is not in the expected shape' };
+  return { ok: true, ids: new Set(ids.map((x) => String(x ?? '').trim()).filter(Boolean)) };
+}
+
+/**
  * One run's whole plan, pure, so the daily run's two promises are tested where they are made rather than
  * inside the networked runner: a digest-only run plans no follow write, and the ceiling verdict travels with
  * the plan to the one place that may write (enactRun in scripts/mail-enroll.mjs).
  */
 export function planRun({
   members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(), enrolledGithubIds = new Set(),
-  subscribersUnreadable = 0, followsByGithubId = new Map(), followsUnreadable = new Set(), listings = [],
+  excluded = new Set(), exclusionProblem = null, subscribersUnreadable = 0, followsByGithubId = new Map(), followsUnreadable = new Set(), listings = [],
   digestOnly = false, maxAdditions = null, now = Date.now,
 } = {}) {
-  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled, enrolledGithubIds });
+  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled, enrolledGithubIds, excluded });
   const followPlan = digestOnly ? emptyFollowPlan() : planFollowBackfill({ members, followsByGithubId, followsUnreadable, now });
   const counts = enrollmentCounts(mailPlan, followPlan);
   const ceiling = ceilingVerdict(counts.toEnroll, maxAdditions);
@@ -291,9 +321,9 @@ export function planRun({
   // belongs to could be added a second time, or put back after switching the digest off. The run refuses
   // rather than guess, exactly as it does past the ceiling.
   const unreadable = Number(subscribersUnreadable) || 0;
-  const refusal = unreadable > 0
-    ? `${unreadable} subscriber record(s) could not be read, so who is already on the list is not known`
-    : (ceiling.ok ? null : ceiling.reason);
+  const refusal = exclusionProblem
+    || (unreadable > 0 ? `${unreadable} subscriber record(s) could not be read, so who is already on the list is not known` : null)
+    || (ceiling.ok ? null : ceiling.reason);
   const matchedMarkers = new Set(mailPlan.suppressedSkips.map((r) => r.hash));
   const unsubscribes = { onRecord: suppressed.size, matched: matchedMarkers.size, unmatched: suppressed.size - matchedMarkers.size };
   return { mailPlan, followPlan, counts, ceiling, refusal, unsubscribes, claims: claimsReport(listings, mailPlan) };

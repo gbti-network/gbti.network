@@ -43,9 +43,10 @@ import { gatherMembers, gatherOverrideOnlyMembers } from './lib/reconcile-member
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
-import { listKvByPrefix, putKvValue } from './lib/kv-rest.mjs';
+import { listKvByPrefix, putKvValue, readKvValueStrict } from './lib/kv-rest.mjs';
 import {
   IDENTITY_REASON, HOUSE_FOLLOW_TARGETS, planRun, CLAIM_OUTCOME, DIGEST_ENROLL_REPORT_KEY,
+  DIGEST_ENROLL_EXCLUDE_KEY, excludedIdsFrom,
 } from './lib/mail-enroll.mjs';
 import { LISTING_KEY_PREFIX } from '../membership/prepared-listings-shared.mjs';
 
@@ -157,6 +158,7 @@ export function renderReport({
   out.push(line('skipped, previously unsubscribed', counts.suppressed));
   out.push(line('UNREACHABLE, no address exists', counts.unreachable));
   out.push(line('excluded, banned', counts.excludedBanned));
+  if (counts.excludedByOwner) out.push(line('left off by the owner (KV exclusion list)', counts.excludedByOwner));
   if (unsubscribes) {
     // Every unsubscribe on record, and how many this run could place. An unplaced one is a public-form
     // subscriber, or a member whose address has changed since; the marker is pseudonymous on purpose, so the
@@ -408,8 +410,10 @@ async function main() {
   const enrolledGithubIds = new Set((subs.entries ?? [])
     .filter((e) => e?.value?.source === 'member' && String(e.value.githubId ?? '').trim())
     .map((e) => String(e.value.githubId).trim()));
+  const exclusion = excludedIdsFrom(await readKvValueStrict({ key: DIGEST_ENROLL_EXCLUDE_KEY, env }));
   const run = planRun({
     members, identities, suppressed, enrolled, enrolledGithubIds,
+    excluded: exclusion.ok ? exclusion.ids : new Set(), exclusionProblem: exclusion.ok ? null : exclusion.reason,
     subscribersUnreadable: (subs.unreadable ?? 0) + (subs.unparsed ?? 0),
     followsByGithubId, followsUnreadable,
     listings: (listings.entries ?? []).map((e) => e.value), digestOnly, maxAdditions, now: () => now.getTime(),
@@ -451,6 +455,7 @@ async function main() {
         unsubscribes,
         unreachable: mailPlan.unreachable.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, username: r.username, status: r.status, gather: r.gather })),
         leftOffUnsubscribed: mailPlan.suppressedSkips.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, status: r.status })),
+        leftOffByOwner: (mailPlan.excludedByOwner ?? []).map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin })),
         alreadyUnderEarlierAddress: mailPlan.alreadyEnrolled.filter((r) => r.underEarlierAddress).map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin })),
         enrolled: mailPlan.enroll.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, status: r.status })),
         claims,
