@@ -18,13 +18,13 @@ tags:
 layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
-updatedAt: '2026-10-24T21:17:39.351Z'
+updatedAt: '2026-10-24T21:19:00.447Z'
 publishedAt: '2026-10-24T20:49:39.765Z'
 type: post
 author: gbtilabs
 ---
 
-*A Strategic Vision for the Next Generation of Digital Agencies. **First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="noopener" target="_blank"><em>Google Docs</em></a>* and then on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>* and X.*
+*A Strategic Vision for the Next Generation of Digital Agencies. **First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>* and <a href="https://x.com/atwellpub/status/2114103608069525821" rel="nofollow noopener" target="_blank">X</a>.*
 
 ## Executive Summary
 
@@ -425,8 +425,3 @@ For agencies, it introduces a new commercial opportunity centered on infrastruct
 The agencies that recognize and adapt to this transition will be positioned to deliver greater value through the systems they build, the capabilities they enable, and the expertise they contribute.
 
 Who will build? Who will go to market? Who will win?
-
-For more commentary see:
-
-- Open Questions
-- Author’s Note
