@@ -135,7 +135,7 @@ export function populationSummary(members = []) {
 
 export function renderReport({
   mailPlan, followPlan, counts, apply, haveKey, unsubProven, population = null,
-  digestOnly = false, countsOnly = false, ceiling = null, claims = null,
+  digestOnly = false, countsOnly = false, ceiling = null, claims = null, unsubscribes = null, refusal = null,
 }) {
   const out = [];
   out.push('');
@@ -152,13 +152,24 @@ export function renderReport({
   out.push('SUBSCRIBER ENROLMENT');
   out.push(line('to enrol', counts.toEnroll));
   out.push(line('already enrolled (no-op, re-runnable)', counts.alreadyEnrolled));
+  const earlier = mailPlan.alreadyEnrolled.filter((r) => r.underEarlierAddress).length;
+  if (earlier) out.push(line('  of them, on the list under an earlier address (sow-472)', earlier));
   out.push(line('skipped, previously unsubscribed', counts.suppressed));
   out.push(line('UNREACHABLE, no address exists', counts.unreachable));
   out.push(line('excluded, banned', counts.excludedBanned));
+  if (unsubscribes) {
+    // Every unsubscribe on record, and how many this run could place. An unplaced one is a public-form
+    // subscriber, or a member whose address has changed since; the marker is pseudonymous on purpose, so the
+    // second kind cannot be recognised. The number is the size of that blind spot.
+    out.push(line('unsubscribes on record', unsubscribes.onRecord));
+    out.push(line('  matched to someone in this run, left off', unsubscribes.matched));
+    out.push(line('  not matched to anyone in this run', unsubscribes.unmatched));
+  }
   if (ceiling) {
     out.push(line(`ceiling for this run${ceiling.max === null ? ' (none)' : ''}`, ceiling.max ?? '-'));
-    if (!ceiling.ok) out.push(`  REFUSED, NOTHING WRITTEN: ${ceiling.reason}.`);
   }
+  const why = refusal ?? (ceiling && !ceiling.ok ? ceiling.reason : null);
+  if (why) out.push(`  ${apply ? 'REFUSED, NOTHING WRITTEN' : 'AN APPLY WOULD BE REFUSED'}: ${why}.`);
   if (claims) {
     out.push('');
     out.push(line('ACCEPTED PROJECT CLAIMS', claims.length));
@@ -309,7 +320,7 @@ export async function enactPlan({ mailPlan, followPlan, apply = false, put } = {
  * running it.
  */
 export async function enactRun({ run, apply = false, put } = {}) {
-  if (apply && !run?.ceiling?.ok) return { skipped: true, refused: true, subscribers: 0, follows: 0 };
+  if (apply && (run?.refusal || !run?.ceiling?.ok)) return { skipped: true, refused: true, subscribers: 0, follows: 0 };
   return { refused: false, ...(await enactPlan({ mailPlan: run.mailPlan, followPlan: run.followPlan, apply, put })) };
 }
 
@@ -391,17 +402,25 @@ async function main() {
     (follows.keys ?? []).map((k) => bare(k, FOLLOWS_PREFIX)).filter((id) => !followsByGithubId.has(id)),
   );
 
+  // sow-472: the githubIds that already hold a MEMBER record, under any hash, so a member whose address changed
+  // is never given a second record (see planMailEnrollment). This one needs values, so an unreadable value is
+  // counted and refuses the run (planRun) instead of silently shrinking the set.
+  const enrolledGithubIds = new Set((subs.entries ?? [])
+    .filter((e) => e?.value?.source === 'member' && String(e.value.githubId ?? '').trim())
+    .map((e) => String(e.value.githubId).trim()));
   const run = planRun({
-    members, identities, suppressed, enrolled, followsByGithubId, followsUnreadable,
+    members, identities, suppressed, enrolled, enrolledGithubIds,
+    subscribersUnreadable: (subs.unreadable ?? 0) + (subs.unparsed ?? 0),
+    followsByGithubId, followsUnreadable,
     listings: (listings.entries ?? []).map((e) => e.value), digestOnly, maxAdditions, now: () => now.getTime(),
   });
-  const { mailPlan, followPlan, counts, ceiling, claims } = run;
+  const { mailPlan, followPlan, counts, ceiling, claims, unsubscribes, refusal } = run;
   const population = populationSummary(members);
 
   if (json) {
     console.log(JSON.stringify({ population, counts, ceiling, unreachable: countsOnly ? mailPlan.unreachable.length : mailPlan.unreachable, blocked: mailPlan.blocked }, null, 2));
   } else {
-    console.log(renderReport({ mailPlan, followPlan, counts, apply, haveKey, unsubProven, population, digestOnly, countsOnly, ceiling, claims }));
+    console.log(renderReport({ mailPlan, followPlan, counts, apply, haveKey, unsubProven, population, digestOnly, countsOnly, ceiling, claims, unsubscribes, refusal }));
   }
   // A claim record that could not be read is a claim this report cannot vouch for. Say so rather than let a
   // short list read as a complete one.
@@ -412,7 +431,7 @@ async function main() {
   const enacted = await enactRun({ run, apply, put: (key, value) => putKvValue({ key, value, env }) });
   if (enacted.refused) {
     process.exitCode = 1;
-    console.error(`mail-enroll: refusing to apply: ${ceiling.reason}. Nothing was written.`);
+    console.error(`mail-enroll: refusing to apply: ${refusal ?? ceiling.reason}. Nothing was written.`);
   } else if (!enacted.skipped) {
     console.log(`mail-enroll: wrote ${enacted.subscribers} subscriber records and ${enacted.follows} follow records.`);
   }
@@ -428,7 +447,11 @@ async function main() {
         counts,
         ceiling,
         written: { subscribers: enacted.subscribers },
+        refusal,
+        unsubscribes,
         unreachable: mailPlan.unreachable.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, username: r.username, status: r.status, gather: r.gather })),
+        leftOffUnsubscribed: mailPlan.suppressedSkips.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, status: r.status })),
+        alreadyUnderEarlierAddress: mailPlan.alreadyEnrolled.filter((r) => r.underEarlierAddress).map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin })),
         enrolled: mailPlan.enroll.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, status: r.status })),
         claims,
       },

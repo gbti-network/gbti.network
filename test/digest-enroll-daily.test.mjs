@@ -162,3 +162,46 @@ test('the daily workflow runs with every one of the four daily switches', () => 
   }
   assert.match(wf, /schedule:/, 'it is scheduled, which is the whole point of sow-472');
 });
+
+// ---- the owner, 2026-10-23: "make sure that people who we are adding [have not] previously unsubscribed" ----
+
+test('a member already on the list under an EARLIER address is not added again, so a digest switched off stays off', () => {
+  // Member 3 changed their GitHub email: their record (digest switched off) sits under the old address's hash,
+  // and their current address hashes to h3, which no record carries.
+  const members = [...POPULATION, member('3', 'paid')];
+  const identities = new Map([...IDENTITIES, ['3', { hash: 'h3', reason: IDENTITY_REASON.OK }]]);
+  const withIds = planRun({ ...BASE, members, identities, digestOnly: true, enrolledGithubIds: new Set(['3', '8']) });
+  assert.ok(!withIds.mailPlan.enroll.some((r) => r.githubId === '3'), 'not added a second time');
+  assert.ok(withIds.mailPlan.alreadyEnrolled.some((r) => r.githubId === '3' && r.underEarlierAddress));
+
+  // The control: matching on the hash alone, as the August backfill did, adds them.
+  const hashOnly = planRun({ ...BASE, members, identities, digestOnly: true });
+  assert.ok(hashOnly.mailPlan.enroll.some((r) => r.githubId === '3'), 'without the account match they would be added');
+});
+
+test('a subscriber record that cannot be read refuses the apply, because who is already on the list is unknown', async () => {
+  const puts = [];
+  const run = planRun({ ...BASE, digestOnly: true, maxAdditions: '25', subscribersUnreadable: 1 });
+  assert.match(run.refusal, /could not be read/);
+  const res = await enactRun({ run, apply: true, put: async (k) => { puts.push(k); } });
+  assert.equal(res.refused, true);
+  assert.equal(puts.length, 0, 'nothing written');
+  // The control: the same run with every record readable writes.
+  const fine = await enactRun({ run: planRun({ ...BASE, digestOnly: true, maxAdditions: '25' }), apply: true, put: async (k) => { puts.push(k); } });
+  assert.equal(fine.refused, false);
+  assert.ok(puts.length > 0);
+});
+
+test('every unsubscribe on record is counted, and the ones this run cannot place are counted separately', () => {
+  // h7 is a current member who unsubscribed; hx and hy match nobody in the run (a public-form subscriber, or a
+  // member whose address has changed since, which a pseudonymous marker cannot tell apart).
+  const run = planRun({ ...BASE, suppressed: new Set(['h7', 'hx', 'hy']), digestOnly: true });
+  assert.deepEqual(run.unsubscribes, { onRecord: 3, matched: 1, unmatched: 2 });
+  assert.ok(!run.mailPlan.enroll.some((r) => r.githubId === '7'), 'the member who unsubscribed is left off');
+  const text = renderReport({
+    mailPlan: run.mailPlan, followPlan: run.followPlan, counts: run.counts, apply: false, haveKey: true, unsubProven: true,
+    digestOnly: true, countsOnly: true, ceiling: run.ceiling, unsubscribes: run.unsubscribes, refusal: run.refusal,
+  });
+  assert.match(text, /unsubscribes on record\s*$/m);
+  assert.match(text, /\s2\s+not matched to anyone in this run/);
+});

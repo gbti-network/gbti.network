@@ -64,9 +64,10 @@ function who(m) {
  * @param {Map} identities        githubId -> { hash: string|null, reason }
  * @param {Set} suppressed        hashes carrying a `mail:suppress:<hash>` marker
  * @param {Set} enrolled          hashes that ALREADY have a `mail:subscriber:<hash>` record
+ * @param {Set} enrolledGithubIds github ids that already have a MEMBER record, under ANY hash (sow-472)
  * @returns {object} the plan; `blocked` is true when the run cannot write anything at all
  */
-export function planMailEnrollment({ members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set() } = {}) {
+export function planMailEnrollment({ members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(), enrolledGithubIds = new Set() } = {}) {
   const plan = {
     enroll: [],
     alreadyEnrolled: [],
@@ -83,6 +84,16 @@ export function planMailEnrollment({ members = [], identities = new Map(), suppr
     // A ban is a community ban and it is the one exclusion that happens before anything else is considered.
     // A banned account gets ZERO KV by the standing tier ruling, and a digest subscription is KV.
     if (isBanned(m)) { plan.excludedBanned.push(who(m)); continue; }
+
+    // sow-472: ONE MEMBER, ONE RECORD, WHATEVER THEIR ADDRESS IS NOW. A record is keyed by the hash of the
+    // address at the time it was written, and sign-in keeps the Stripe address current, so a member who changed
+    // their GitHub email hashes to a NEW key while their record sits under the old one. Matching on the hash
+    // alone then reads them as never enrolled, and a daily run would give them a second record (every issue
+    // twice) or, if their record says `digestOff`, put them back on a digest they switched off. The record
+    // carries githubId, so they are matched on that first. (An UNSUBSCRIBE leaves only a pseudonymous marker
+    // under the old hash, so that case cannot be matched here; the run report counts the markers it could not
+    // place, so the size of that blind spot is measured rather than assumed.)
+    if (enrolledGithubIds.has(githubId)) { plan.alreadyEnrolled.push({ ...who(m), underEarlierAddress: true }); continue; }
 
     const ident = identities.get(githubId) ?? { hash: null, reason: IDENTITY_REASON.NO_EMAIL };
 
@@ -268,12 +279,22 @@ export const DIGEST_ENROLL_REPORT_KEY = 'digest-enroll:report';
  * the plan to the one place that may write (enactRun in scripts/mail-enroll.mjs).
  */
 export function planRun({
-  members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(),
-  followsByGithubId = new Map(), followsUnreadable = new Set(), listings = [],
+  members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(), enrolledGithubIds = new Set(),
+  subscribersUnreadable = 0, followsByGithubId = new Map(), followsUnreadable = new Set(), listings = [],
   digestOnly = false, maxAdditions = null, now = Date.now,
 } = {}) {
-  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled });
+  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled, enrolledGithubIds });
   const followPlan = digestOnly ? emptyFollowPlan() : planFollowBackfill({ members, followsByGithubId, followsUnreadable, now });
   const counts = enrollmentCounts(mailPlan, followPlan);
-  return { mailPlan, followPlan, counts, ceiling: ceilingVerdict(counts.toEnroll, maxAdditions), claims: claimsReport(listings, mailPlan) };
+  const ceiling = ceilingVerdict(counts.toEnroll, maxAdditions);
+  // A subscriber record whose VALUE could not be read is a githubId this run cannot see, so the member it
+  // belongs to could be added a second time, or put back after switching the digest off. The run refuses
+  // rather than guess, exactly as it does past the ceiling.
+  const unreadable = Number(subscribersUnreadable) || 0;
+  const refusal = unreadable > 0
+    ? `${unreadable} subscriber record(s) could not be read, so who is already on the list is not known`
+    : (ceiling.ok ? null : ceiling.reason);
+  const matchedMarkers = new Set(mailPlan.suppressedSkips.map((r) => r.hash));
+  const unsubscribes = { onRecord: suppressed.size, matched: matchedMarkers.size, unmatched: suppressed.size - matchedMarkers.size };
+  return { mailPlan, followPlan, counts, ceiling, refusal, unsubscribes, claims: claimsReport(listings, mailPlan) };
 }
