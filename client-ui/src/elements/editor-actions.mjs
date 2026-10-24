@@ -9,6 +9,7 @@ import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../work
 import { publishChanges, changeLabel, formatValue, snippet } from '../publish-diff.mjs'; // sow-327: what exactly is unpublished
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
 import { INFO, CHECK } from './editor-icons.mjs';
+import { landingPath, waitForLanding } from '../editor-core.mjs'; // sow-477: a second publish waits for this editor's move to land
 
 export const withEditorActions = (Base) => class extends Base {
   out(html, cls = 'muted') {
@@ -175,6 +176,23 @@ export const withEditorActions = (Base) => class extends Base {
     this._setChip('Publishing…', 'busy');
     this.out('Publishing…');
     try {
+      // sow-477: the last publish from this editor moved the item, and the move may still be landing. Publishing
+      // over it would refuse on the pictures at best, and at worst undo the move (see waitForLanding).
+      if (this._landingPath) {
+        this._setChip('Waiting for your last publish to land…', 'busy');
+        this.out('Waiting for your last publish to land…');
+        const landed = await waitForLanding({ read: (path) => this.client.getContentItem({ path }), path: this._landingPath });
+        if (landed === 'timeout') {
+          this._setChip('');
+          const msg = 'Your last publish moved this item, and the move has not landed yet. Wait a minute, then publish again.';
+          this._banner(esc(msg), 'danger');
+          this.out(esc(msg), 'danger');
+          return;
+        }
+        this._landingPath = null;
+        this._setChip('Publishing…', 'busy');
+        this.out('Publishing…');
+      }
       // Pictures picked before the item had a permalink upload now (editor-media.mjs), and a required image that is
       // still empty is named in words rather than reaching the schema as "icon: Invalid input".
       await this._flushHeldImages();
@@ -245,6 +263,9 @@ export const withEditorActions = (Base) => class extends Base {
       // SECOND publish in the same session (no reload) targets the new location rather than the just-deleted
       // old one -- true for either a rename or a reassignment, and a harmless no-op for a plain edit.
       if (res?.path) { this.itemPath = res.path; this.itemScope = res.path.startsWith('house/') ? 'house' : 'member'; }
+      // sow-477: the ID readout is drawn once per render, so after a move it kept showing the old folder.
+      if (res?.path) { const id = this.$('#mcpid'); if (id) id.textContent = res.path; }
+      this._landingPath = landingPath(res); // a move lands in about 25 seconds; the next publish waits for it
       this.emit('gbti-published', res);
     } catch (err) {
       this._setChip('');

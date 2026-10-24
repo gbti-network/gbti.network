@@ -3786,6 +3786,11 @@ ${listStyleProseCss(".doc-blocks")}
     const start = at3 * size;
     return { page: at3, pages, start, end: Math.min(n, start + size), size };
   }
+  function followPublishedItem(editing, res) {
+    if (!editing) return editing ?? null;
+    const path = typeof res?.path === "string" && res.path ? res.path : editing.path;
+    return { ...editing, path, staged: false, authorTarget: null };
+  }
 
   // client-ui/src/editor-core.mjs
   function fmtDate(value) {
@@ -3816,6 +3821,25 @@ ${listStyleProseCss(".doc-blocks")}
     const n = spec.keys.reduce((acc, k) => acc + (hasValue(preset[k]) ? 1 : 0), 0);
     if (!n) return "";
     return `${n} ${n === 1 ? spec.one : spec.many}`;
+  }
+  function landingPath(res) {
+    if (!res || !(res.reassigned || res.renamed)) return null;
+    return typeof res.path === "string" && res.path ? res.path : null;
+  }
+  var LANDING_INTERVAL_MS = 3e3;
+  var LANDING_LIMIT_MS = 9e4;
+  async function waitForLanding({ read: read3, path, intervalMs = LANDING_INTERVAL_MS, limitMs = LANDING_LIMIT_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+    let waited = 0;
+    for (; ; ) {
+      try {
+        if (await read3(path)) return "landed";
+      } catch (e) {
+        if (e?.code !== "not-found") return "unknown";
+      }
+      if (waited + intervalMs > limitMs) return "timeout";
+      await sleep(intervalMs);
+      waited += intervalMs;
+    }
   }
 
   // client-ui/src/editor-rail-sections.mjs
@@ -9598,6 +9622,21 @@ ${barWidthCss(s)}`;
       this._setChip("Publishing…", "busy");
       this.out("Publishing…");
       try {
+        if (this._landingPath) {
+          this._setChip("Waiting for your last publish to land…", "busy");
+          this.out("Waiting for your last publish to land…");
+          const landed = await waitForLanding({ read: (path) => this.client.getContentItem({ path }), path: this._landingPath });
+          if (landed === "timeout") {
+            this._setChip("");
+            const msg = "Your last publish moved this item, and the move has not landed yet. Wait a minute, then publish again.";
+            this._banner(esc2(msg), "danger");
+            this.out(esc2(msg), "danger");
+            return;
+          }
+          this._landingPath = null;
+          this._setChip("Publishing…", "busy");
+          this.out("Publishing…");
+        }
         await this._flushHeldImages();
         const missingImages = this._missingImagesMessage();
         if (missingImages) throw new Error(missingImages);
@@ -9635,6 +9674,11 @@ ${barWidthCss(s)}`;
           this.itemPath = res.path;
           this.itemScope = res.path.startsWith("house/") ? "house" : "member";
         }
+        if (res?.path) {
+          const id = this.$("#mcpid");
+          if (id) id.textContent = res.path;
+        }
+        this._landingPath = landingPath(res);
         this.emit("gbti-published", res);
       } catch (err) {
         this._setChip("");
@@ -9841,6 +9885,7 @@ ${barWidthCss(s)}`;
       this.staged = Boolean(staged);
       this._slugVal = null;
       this._slugOwned = null;
+      if (this._landingPath !== path) this._landingPath = null;
       this._heldImages = null;
       this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
       if (this.isConnected) this.render();
@@ -25939,21 +25984,14 @@ ${link}` : ""}`;
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
-        ed?.addEventListener?.("gbti-renamed", (ev) => {
-          const r = ev?.detail || {};
-          if (!r.path) return;
-          this._cache = {};
-          this._drafts = null;
-          this._overview = null;
-          if (this._editing) this._editing.path = r.path;
-          this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(r.path)}`);
-        }, { once: true });
         const notes = [];
         if (e.staged) notes.push("You are editing your saved draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
         if (notes.length && ed?.out) ed.out(esc2(notes.join(" ")), e.invalidNote ? "danger" : "muted");
-        ed?.addEventListener("gbti-published", () => {
-          if (this._editing) this._editing.staged = false;
+        ed?.addEventListener("gbti-published", (ev) => {
+          const before = this._editing?.path;
+          this._editing = followPublishedItem(this._editing, ev?.detail);
+          if (this._editing && this._editing.path && this._editing.path !== before) this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(this._editing.path)}`);
           this._onPublished(e.type);
         });
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());

@@ -74,9 +74,12 @@ test('a successful publish clears the staged flag on the editor', () => {
 });
 
 test('the workspace clears ITS copy of staged, which is re-fed into load on every render', () => {
+  // sow-477: the listener now replaces the editing state through followPublishedItem, which sets staged false
+  // (asserted on the helper in publish-after-move.test.mjs). This reads the listener body up to its closing line.
   const s = workspaceSource();
-  const line = s.split('\n').find((l) => l.includes("addEventListener('gbti-published'"));
-  assert.match(line, /_editing\.staged = false/,
+  const at = s.indexOf("addEventListener('gbti-published'");
+  const block = s.slice(at, s.indexOf('\n      });', at));
+  assert.match(block, /this\._editing = followPublishedItem\(this\._editing, ev\?\.detail\);/,
     'gbti-workspace.mjs re-feeds { staged: e.staged } into load() on every workspace render, so clearing only the editor would be undone');
 });
 

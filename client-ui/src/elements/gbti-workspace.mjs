@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
+import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE, followPublishedItem } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { readStored } from '../storage.mjs'; // sow-347: a stored-setting read that cannot throw
 
@@ -235,18 +235,6 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       // SOW-145: an EDIT carries a house/ path the editor infers scope from; a NEW item has no path, so the
       // current workspace scope decides (a superadmin in House scope creates house content).
       if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
-      // SOW-112 QA fix: after a rename PR opens, drop the stale caches and repoint the deep-link hash at the
-      // NEW path — but do NOT refetch it yet (the auto-merge takes ~2-3 minutes; an immediate read 404s and
-      // looked like the rename did nothing). The editor already updated its own view optimistically.
-      ed?.addEventListener?.('gbti-renamed', (ev) => {
-        const r = ev?.detail || {};
-        if (!r.path) return;
-        this._cache = {};
-        this._drafts = null;
-        this._overview = null;
-        if (this._editing) this._editing.path = r.path;
-        this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(r.path)}`);
-      }, { once: true });
       // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
       const notes = [];
       if (e.staged) notes.push('You are editing your saved draft. It is not live until you Publish.');
@@ -257,7 +245,15 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       // sow-326: the editing state stops being a staged draft the moment the publish succeeds. The ed.load()
       // call above re-feeds `{ staged: e.staged }` into load() on every workspace render, and load() is the only writer
       // of the editor's flag, so clearing the editor's copy alone would be undone by the next repaint.
-      ed?.addEventListener('gbti-published', () => { if (this._editing) this._editing.staged = false; this._onPublished(e.type); });
+      // sow-477: and it follows the item to the path the publish returned, so a reload after a change of author or
+      // permalink reopens the item where it now lives (the old path no longer exists, and failed to open silently).
+      // This replaced a 'gbti-renamed' listener that did the same for renames; nothing had emitted that event in a while.
+      ed?.addEventListener('gbti-published', (ev) => {
+        const before = this._editing?.path;
+        this._editing = followPublishedItem(this._editing, ev?.detail);
+        if (this._editing && this._editing.path && this._editing.path !== before) this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(this._editing.path)}`);
+        this._onPublished(e.type);
+      });
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
       ed?.addEventListener('gbti-prepared-change', (ev) => preparedChanged(this, ev.detail)); // sow-427: survives the next repaint; a saved listing's hash reopens it
       return;

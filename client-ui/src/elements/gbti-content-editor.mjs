@@ -131,6 +131,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     this.staged = Boolean(staged); // SOW-106 QA: loaded from a fork draft branch (not live until published)
     this._slugVal = null; // SOW-112 v2: the pending permalink value follows the loaded item
     this._slugOwned = null; // 2026-10-24: and whether the author chose it is decided afresh for each item
+    if (this._landingPath !== path) this._landingPath = null; // sow-477: a move still landing belongs to its own item
     this._heldImages = null; // pictures picked before a permalink existed belong to the item they were picked for
     // The PENDING author reassignment carried by a saved draft. Set per load, exactly like _slugVal above, so
     // a value left over from a previously-open item can never be attributed to this one.

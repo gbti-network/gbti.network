@@ -54,3 +54,38 @@ export function mediaSummary(type, preset = {}) {
   if (!n) return '';
   return `${n} ${n === 1 ? spec.one : spec.many}`;
 }
+
+// sow-477 (owner, 2026-10-24): a publish that MOVES an item (a change of author or of permalink) takes about 25
+// seconds to land on main, and every publish works out its file set against main. A second publish inside that
+// window finds neither the item nor its pictures at the new path, so it refused with "the image ... is no longer
+// staged". Letting it through would be worse: the Worker rebuilds an open publish's branch from main using the
+// newest request alone (hosted-commit.mjs), so a second save would undo the move and leave two copies. The editor
+// therefore waits for its own move to land before it publishes again.
+
+/** The path a publish moved the item to, or null when it moved nothing (a plain edit, a new item). */
+export function landingPath(res) {
+  if (!res || !(res.reassigned || res.renamed)) return null;
+  return typeof res.path === 'string' && res.path ? res.path : null;
+}
+
+export const LANDING_INTERVAL_MS = 3000;
+export const LANDING_LIMIT_MS = 90000;
+
+/**
+ * Re-read `path` until it is there. 'landed' once a read returns the item; 'timeout' when it is still not found
+ * after limitMs (no read is made past the limit); 'unknown' when a read fails for any reason other than not-found,
+ * because waiting cannot fix that and the publish's own checks report it better. `sleep` is injected for tests.
+ */
+export async function waitForLanding({ read, path, intervalMs = LANDING_INTERVAL_MS, limitMs = LANDING_LIMIT_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let waited = 0;
+  for (;;) {
+    try {
+      if (await read(path)) return 'landed';
+    } catch (e) {
+      if (e?.code !== 'not-found') return 'unknown';
+    }
+    if (waited + intervalMs > limitMs) return 'timeout';
+    await sleep(intervalMs);
+    waited += intervalMs;
+  }
+}

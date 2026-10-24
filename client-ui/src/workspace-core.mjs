@@ -697,3 +697,15 @@ export function pageWindow(total, page = 0, per = WORKSPACE_PAGE_SIZE) {
   const start = at * size;
   return { page: at, pages, start, end: Math.min(n, start + size), size };
 }
+
+/**
+ * sow-477: the WorkBench's editing state after a successful publish. A move (a change of author or of permalink)
+ * gives the item a new path, and the WorkBench writes that path into the page address, so a reload reopens the
+ * item where it now lives instead of failing on the old path and dropping back to the list. The author move is
+ * used up and the item is no longer a staged draft. Returns a new object; the input is not changed.
+ */
+export function followPublishedItem(editing, res) {
+  if (!editing) return editing ?? null;
+  const path = typeof res?.path === 'string' && res.path ? res.path : editing.path;
+  return { ...editing, path, staged: false, authorTarget: null };
+}
