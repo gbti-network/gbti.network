@@ -21,6 +21,7 @@
 # phrase works and a regular expression does not. The build refuses anything else.
 words:
   - bomb
+  - climate change
   - covid
   - democrat
   - fucking
