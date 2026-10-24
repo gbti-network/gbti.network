@@ -23,6 +23,7 @@
 # Written by the superadmin controls on a news item page (a pull request that auto-merges), read by the site build
 # into /news-sources.json, which the news worker fetches each hour. Edit by hand only in a pinch.
 weights:
+  cleantechnica: -1
   coindesk-bitcoin-ethereum-crypto-news-an: -1
   latest-from-tom-s-hardware: -2
   object-object: -2
