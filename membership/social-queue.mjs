@@ -73,8 +73,9 @@ export function buildSocialTask({ item = {}, channel, text, bodyText = '', comme
 
 /**
  * Apply a superadmin action to a task. Returns { task, remove, ok }: `done` stamps doneAt/doneBy and keeps it
- * (it moves into the completed history); `delete` signals the store to remove the key. An unknown action or a
- * missing task is a no-op (ok:false).
+ * (it moves into the completed history); `delete` signals the store to remove the key; `reopen` puts a task marked
+ * done by hand back in To do (owner, 2026-10-23: "revert manually done items (accidentally marked done)"). An
+ * unknown action or a missing task is a no-op (ok:false).
  */
 export function applyTaskAction(task, action, actor = {}, now = 0) {
   if (!task) return { task: null, remove: false, ok: false };
@@ -82,7 +83,19 @@ export function applyTaskAction(task, action, actor = {}, now = 0) {
   const who = actor.githubId ? String(actor.githubId) : (actor.login ? String(actor.login) : null);
   if (action === 'delete') return { task: null, remove: true, ok: true };
   if (action === 'done') return { task: { ...task, status: 'done', doneAt: at, doneBy: who }, remove: false, ok: true };
+  if (action === 'reopen') {
+    // Only a task a person marked done. One Post now actually sent (postedVia 'adapter') stays done: back in To do
+    // it could be posted a second time. createdAt is kept, so it returns to its old place in the oldest-first list.
+    if (!canReopenTask(task)) return { task, remove: false, ok: false };
+    return { task: { ...task, status: 'pending', doneAt: null, doneBy: null, postingAt: null }, remove: false, ok: true };
+  }
   return { task, remove: false, ok: false };
+}
+
+/** Whether `reopen` may move this task back to To do: done, and not sent by Post now. Pure; the panel shows its
+ *  button by the same rule, so it never offers a move the server would refuse. */
+export function canReopenTask(task) {
+  return Boolean(task) && task.status === 'done' && task.postedVia !== 'adapter';
 }
 
 /**

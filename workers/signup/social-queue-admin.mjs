@@ -1,6 +1,7 @@
 // SOW-121: the superadmin Social Queue endpoints (manual-assist syndication worklist).
 //   GET  /membership/social-queue   -> { ok, pending, done }   (the manual-assist tasks; SUPERADMIN only)
-//   POST /membership/social-queue   -> { action: 'done'|'delete'|'post', id }  (SUPERADMIN only)
+//   POST /membership/social-queue   -> { action: 'done'|'delete'|'reopen'|'post', id }  (SUPERADMIN only)
+// `reopen` (2026-10-23) puts a task marked done by hand back in To do; one Post now sent cannot be reopened.
 // `post` is the review-then-send action for a task on an AUTO-capability channel (an On-Manual matrix
 // cell): the reviewed task text posts through the channel adapter, then the task completes like `done`.
 // Gate fail-closed via the reconcile-written overrides mirror (authorizeAdmin) plus the superadmin role, the
@@ -47,7 +48,7 @@ export async function handleSocialQueueAction(request, env, deps = {}) {
   const id = String(payload?.id || '');
   const action = String(payload?.action || '');
   if (!id) return { status: 400, body: { error: 'invalid', message: 'a task id is required' } };
-  if (action !== 'done' && action !== 'delete' && action !== 'post') return { status: 400, body: { error: 'invalid', message: 'action must be done, delete, or post' } };
+  if (action !== 'done' && action !== 'delete' && action !== 'reopen' && action !== 'post') return { status: 400, body: { error: 'invalid', message: 'action must be done, delete, reopen, or post' } };
 
   const task = await getTask(kv, id);
   if (!task) return { status: 404, body: { error: 'not_found', message: 'no such social task' } };
@@ -97,7 +98,10 @@ export async function handleSocialQueueAction(request, env, deps = {}) {
   }
 
   const { task: next, remove, ok } = applyTaskAction(task, action, { githubId: auth.githubId, login: auth.login }, Number(now()));
-  if (!ok) return { status: 400, body: { error: 'invalid', message: 'the action could not be applied' } };
+  if (!ok) {
+    const message = action === 'reopen' ? 'only a task marked done by hand can go back to To do' : 'the action could not be applied';
+    return { status: 400, body: { error: 'invalid', message } };
+  }
   if (remove) { await deleteTask(kv, id); return { status: 200, body: { ok: true, id, removed: true } }; }
   await putTask(kv, next);
   return { status: 200, body: { ok: true, id, status: next.status } };

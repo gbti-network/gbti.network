@@ -11,6 +11,8 @@
 //
 // Every function is pure: inputs are never mutated, new arrays are returned.
 
+import { canReopenTask } from '../../membership/social-queue.mjs';
+
 const LISTS = ['pending', 'done'];
 
 /** Locate a row by id across both lists. Returns { list, index, row } or null. */
@@ -36,10 +38,12 @@ function locate(data, id) {
  */
 export function applyQueueAction(data, action, id, { now = null } = {}) {
   if (!data || !id) return null;
-  if (action !== 'done' && action !== 'delete') return null; // `post` and anything unknown stay synchronous
+  if (action !== 'done' && action !== 'delete' && action !== 'reopen') return null; // `post` and anything unknown stay synchronous
 
   const found = locate(data, id);
   if (!found) return null;
+  // 2026-10-23: reopen is the server's own rule too (applyTaskAction), so a row it would refuse is never moved here.
+  if (action === 'reopen' && (found.list !== 'done' || !canReopenTask({ status: 'done', ...found.row }))) return null;
 
   const next = { ...data };
   for (const list of LISTS) next[list] = Array.isArray(data[list]) ? [...data[list]] : [];
@@ -53,6 +57,15 @@ export function applyQueueAction(data, action, id, { now = null } = {}) {
     const stamped = { ...found.row, doneAt: found.row.doneAt ?? (now ?? Date.now()) };
     next.done = [stamped, ...next.done]; // newest first, matching how the Manual done tab reads
     undo.added = { list: 'done', id };
+  }
+
+  if (action === 'reopen') {
+    const { doneAt, doneBy, postingAt, ...rest } = found.row;
+    const row = { ...rest, status: 'pending' };
+    // To do is oldest first by createdAt (splitTasks), so the row goes back to the place it waited in before.
+    const at = next.pending.findIndex((r) => (r?.createdAt || 0) > (row.createdAt || 0));
+    next.pending.splice(at === -1 ? next.pending.length : at, 0, row);
+    undo.added = { list: 'pending', id };
   }
 
   return { next, undo };

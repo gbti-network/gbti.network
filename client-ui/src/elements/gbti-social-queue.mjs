@@ -9,6 +9,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
 import { applyQueueAction, revertQueueAction } from '../social-queue-core.mjs'; // sow-282: optimistic done/delete
+import { canReopenTask } from '../../../membership/social-queue.mjs'; // 2026-10-23: Move to To do, by the server's own rule
 import { channelCapability } from '../../../membership/syndication-config-core.mjs'; // Post now is auto-capability only
 import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
 import { mdToPlain, mdToHtml } from '../../../membership/markdown-plain.mjs'; // sow-300
@@ -189,6 +190,7 @@ class GbtiSocialQueue extends GbtiElement {
     this.$$('[data-copybody]').forEach((b) => b.addEventListener('click', () => { const t = this._byId(b.dataset.copybody); this._copy(b.dataset.copybody, this._extra(t)?.field || 'bodyText'); }));
     this.$$('[data-done]').forEach((b) => b.addEventListener('click', () => this._action('done', b.dataset.done)));
     this.$$('[data-del]').forEach((b) => b.addEventListener('click', () => this._action('delete', b.dataset.del)));
+    this.$$('[data-reopen]').forEach((b) => b.addEventListener('click', () => this._action('reopen', b.dataset.reopen)));
     this.$$('[data-post]').forEach((b) => b.addEventListener('click', () => this._action('post', b.dataset.post)));
   }
 
@@ -228,7 +230,7 @@ class GbtiSocialQueue extends GbtiElement {
     </div>`;
   }
   _doneRow(t) {
-    return `<div class="row"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, t.postedDraft ? 'draft' : 'sent')}<span class="ti">${esc(t.title || '(untitled)')}</span><span class="when">${t.doneAt ? esc(fmtDate(t.doneAt)) : ''}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
+    return `<div class="row"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, t.postedDraft ? 'draft' : 'sent')}<span class="ti">${esc(t.title || '(untitled)')}</span><span class="when">${t.doneAt ? esc(fmtDate(t.doneAt)) : ''}</span>${canReopenTask({ status: 'done', ...t }) ? `<button class="btn reopen" data-reopen="${esc(t.id)}" type="button">Move to To do</button>` : ''}<button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
   }
   _autoRow(it) {
     const chans = Object.entries(it.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || 'sent')).join('');
@@ -330,7 +332,7 @@ class GbtiSocialQueue extends GbtiElement {
     const opt = applyQueueAction(this._data, action, id);
     if (opt) {
       this._data = opt.next;
-      this._msg = action === 'done' ? 'Marked done.' : 'Deleted.';
+      this._msg = action === 'done' ? 'Marked done.' : action === 'reopen' ? 'Moved back to To do.' : 'Deleted.';
       this.render();
       try { await this.client.socialQueueAction({ action, id }); }
       catch (e) {

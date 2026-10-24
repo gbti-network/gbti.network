@@ -2797,6 +2797,9 @@
     "shortDescription",
     "mention"
   ]);
+  function canReopenTask(task) {
+    return Boolean(task) && task.status === "done" && task.postedVia !== "adapter";
+  }
 
   // membership/news-share.mjs
   var NEWS_SHARE_CHANNELS = Object.freeze(["x", "bluesky", "linkedin", "reddit", "dailydev"]);
@@ -7961,9 +7964,10 @@ ${barWidthCss(s)}`;
   }
   function applyQueueAction(data, action, id, { now = null } = {}) {
     if (!data || !id) return null;
-    if (action !== "done" && action !== "delete") return null;
+    if (action !== "done" && action !== "delete" && action !== "reopen") return null;
     const found = locate(data, id);
     if (!found) return null;
+    if (action === "reopen" && (found.list !== "done" || !canReopenTask({ status: "done", ...found.row }))) return null;
     const next = { ...data };
     for (const list of LISTS) next[list] = Array.isArray(data[list]) ? [...data[list]] : [];
     next[found.list].splice(found.index, 1);
@@ -7973,6 +7977,13 @@ ${barWidthCss(s)}`;
       const stamped = { ...found.row, doneAt: found.row.doneAt ?? (now ?? Date.now()) };
       next.done = [stamped, ...next.done];
       undo.added = { list: "done", id };
+    }
+    if (action === "reopen") {
+      const { doneAt, doneBy, postingAt, ...rest } = found.row;
+      const row = { ...rest, status: "pending" };
+      const at3 = next.pending.findIndex((r) => (r?.createdAt || 0) > (row.createdAt || 0));
+      next.pending.splice(at3 === -1 ? next.pending.length : at3, 0, row);
+      undo.added = { list: "pending", id };
     }
     return { next, undo };
   }
@@ -8602,6 +8613,7 @@ ${barWidthCss(s)}`;
       }));
       this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
+      this.$$("[data-reopen]").forEach((b) => b.addEventListener("click", () => this._action("reopen", b.dataset.reopen)));
       this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
     }
     _shell(inner, msg = "") {
@@ -8639,7 +8651,7 @@ ${barWidthCss(s)}`;
     </div>`;
     }
     _doneRow(t) {
-      return `<div class="row"><span class="src">${esc2(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, t.postedDraft ? "draft" : "sent")}<span class="ti">${esc2(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc2(fmtDate(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>`;
+      return `<div class="row"><span class="src">${esc2(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, t.postedDraft ? "draft" : "sent")}<span class="ti">${esc2(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc2(fmtDate(t.doneAt)) : ""}</span>${canReopenTask({ status: "done", ...t }) ? `<button class="btn reopen" data-reopen="${esc2(t.id)}" type="button">Move to To do</button>` : ""}<button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>`;
     }
     _autoRow(it2) {
       const chans = Object.entries(it2.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
@@ -8731,7 +8743,7 @@ ${barWidthCss(s)}`;
       const opt = applyQueueAction(this._data, action, id);
       if (opt) {
         this._data = opt.next;
-        this._msg = action === "done" ? "Marked done." : "Deleted.";
+        this._msg = action === "done" ? "Marked done." : action === "reopen" ? "Moved back to To do." : "Deleted.";
         this.render();
         try {
           await this.client.socialQueueAction({ action, id });
