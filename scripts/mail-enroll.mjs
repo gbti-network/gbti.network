@@ -45,16 +45,34 @@ import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX }
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
 import { listKvByPrefix, putKvValue } from './lib/kv-rest.mjs';
 import {
-  planMailEnrollment, planFollowBackfill, enrollmentCounts, IDENTITY_REASON, HOUSE_FOLLOW_TARGETS,
+  IDENTITY_REASON, HOUSE_FOLLOW_TARGETS, planRun, CLAIM_OUTCOME, DIGEST_ENROLL_REPORT_KEY,
 } from './lib/mail-enroll.mjs';
+import { LISTING_KEY_PREFIX } from '../membership/prepared-listings-shared.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const FOLLOWS_PREFIX = 'follows:';
 
-/** Dry run unless --apply, matching reconcile. */
+/**
+ * Dry run unless --apply, matching reconcile.
+ *
+ * sow-472 adds the flags the daily workflow runs with:
+ *   --digest-only        plan no follows (the owner ruled the house follows are a one-time backfill, never at signup)
+ *   --counts-only        no names in the printed report (the repository and its Actions logs are public)
+ *   --report-to-kv       keep the named report in KV instead, at DIGEST_ENROLL_REPORT_KEY
+ *   --max-additions=N    refuse the whole run if it would add more than N (see ceilingVerdict)
+ * A --max-additions that is present but not a whole number reaches ceilingVerdict as-is and refuses there.
+ */
 export function parseArgs(argv) {
   const apply = argv.includes('--apply') && !argv.includes('--dry-run');
-  return { apply, json: argv.includes('--json') };
+  const maxArg = argv.find((a) => a.startsWith('--max-additions='));
+  return {
+    apply,
+    json: argv.includes('--json'),
+    digestOnly: argv.includes('--digest-only'),
+    countsOnly: argv.includes('--counts-only'),
+    reportToKv: argv.includes('--report-to-kv'),
+    maxAdditions: maxArg === undefined ? null : maxArg.slice('--max-additions='.length),
+  };
 }
 
 /**
@@ -115,7 +133,10 @@ export function populationSummary(members = []) {
   return { total: members.length, byStatus, overrideOnlyGathered };
 }
 
-export function renderReport({ mailPlan, followPlan, counts, apply, haveKey, unsubProven, population = null }) {
+export function renderReport({
+  mailPlan, followPlan, counts, apply, haveKey, unsubProven, population = null,
+  digestOnly = false, countsOnly = false, ceiling = null, claims = null,
+}) {
   const out = [];
   out.push('');
   out.push(apply ? 'DIGEST BACKFILL: APPLY' : 'DIGEST BACKFILL: DRY RUN (nothing was written)');
@@ -134,29 +155,52 @@ export function renderReport({ mailPlan, followPlan, counts, apply, haveKey, uns
   out.push(line('skipped, previously unsubscribed', counts.suppressed));
   out.push(line('UNREACHABLE, no address exists', counts.unreachable));
   out.push(line('excluded, banned', counts.excludedBanned));
+  if (ceiling) {
+    out.push(line(`ceiling for this run${ceiling.max === null ? ' (none)' : ''}`, ceiling.max ?? '-'));
+    if (!ceiling.ok) out.push(`  REFUSED, NOTHING WRITTEN: ${ceiling.reason}.`);
+  }
+  if (claims) {
+    out.push('');
+    out.push(line('ACCEPTED PROJECT CLAIMS', claims.length));
+    for (const outcome of Object.values(CLAIM_OUTCOME)) {
+      const rows = claims.filter((c) => c.outcome === outcome);
+      if (!rows.length) continue;
+      out.push(line(`  ${outcome}`, rows.length));
+      if (!countsOnly) for (const c of rows) out.push(`      ${c.claimedAt}  github_id ${c.githubId}  login ${c.login ?? '(unknown)'}`);
+    }
+  }
   out.push('');
-  out.push('FOLLOW BACKFILL');
-  out.push(`  targets: ${HOUSE_FOLLOW_TARGETS.join(', ')}`);
-  out.push(line('members needing at least one follow', counts.followWrites));
-  out.push(line('already following both', counts.followAlreadyComplete));
-  if (followPlan.unreadable?.length) {
-    out.push(line('SKIPPED, their follows record could not be read', followPlan.unreadable.length));
-    out.push('    Left untouched deliberately. Writing them would have replaced every follow they chose');
-    out.push('    with just the two house accounts. Re-run once KV reads are healthy.');
-    for (const r of followPlan.unreadable) {
-      out.push(`    github_id ${r.githubId}  login ${r.githubLogin ?? '(unknown)'}`);
+  if (digestOnly) {
+    out.push('FOLLOW BACKFILL: off for this run (--digest-only). The house follows were a one-time backfill;');
+    out.push('new members are never made to follow anyone (owner, 2026-08-21).');
+  } else {
+    out.push('FOLLOW BACKFILL');
+    out.push(`  targets: ${HOUSE_FOLLOW_TARGETS.join(', ')}`);
+    out.push(line('members needing at least one follow', counts.followWrites));
+    out.push(line('already following both', counts.followAlreadyComplete));
+    if (followPlan.unreadable?.length) {
+      out.push(line('SKIPPED, their follows record could not be read', followPlan.unreadable.length));
+      out.push('    Left untouched deliberately. Writing them would have replaced every follow they chose');
+      out.push('    with just the two house accounts. Re-run once KV reads are healthy.');
+      for (const r of followPlan.unreadable) {
+        out.push(`    github_id ${r.githubId}  login ${r.githubLogin ?? '(unknown)'}`);
+      }
+    }
+
+    if (followPlan.invalidTargets.length) {
+      out.push('');
+      out.push('  REFUSED: a follow target is not a valid username, so NOTHING was planned:');
+      for (const t of followPlan.invalidTargets) out.push(`    ${JSON.stringify(t.target)}: ${t.reason}`);
     }
   }
 
-  if (followPlan.invalidTargets.length) {
-    out.push('');
-    out.push('  REFUSED: a follow target is not a valid username, so NOTHING was planned:');
-    for (const t of followPlan.invalidTargets) out.push(`    ${JSON.stringify(t.target)}: ${t.reason}`);
-  }
-
-  // THE UNREACHABLE LIST IS THE PART THE OWNER HAS TO ACT ON, so it is named in full and never summarized.
+  // THE UNREACHABLE LIST IS THE PART THE OWNER HAS TO ACT ON, so it is named in full and never summarized,
+  // EXCEPT in a public log (--counts-only), where the names go to KV and the log says where.
   out.push('');
-  if (mailPlan.unreachable.length) {
+  if (countsOnly && mailPlan.unreachable.length) {
+    out.push(line('UNREACHABLE, by name in KV, not in this public log', mailPlan.unreachable.length));
+    out.push(`    Read ${DIGEST_ENROLL_REPORT_KEY} for who they are.`);
+  } else if (mailPlan.unreachable.length) {
     const overrideOnly = mailPlan.unreachable.filter((r) => r.gather === 'override-only');
     const stripeNoEmail = mailPlan.unreachable.filter((r) => r.gather !== 'override-only');
     out.push('UNREACHABLE MEMBERS, BY NAME. These have no email address anywhere in the system, so they');
@@ -199,7 +243,7 @@ export function renderReport({ mailPlan, followPlan, counts, apply, haveKey, uns
     }
   }
 
-  if (mailPlan.enroll.length) {
+  if (mailPlan.enroll.length && !countsOnly) {
     out.push('');
     out.push('SAMPLE RECORD (the first planned enrolment, as it would be written):');
     const s = mailPlan.enroll[0];
@@ -258,8 +302,19 @@ export async function enactPlan({ mailPlan, followPlan, apply = false, put } = {
   return { skipped: false, subscribers, follows };
 }
 
+/**
+ * sow-472: write one run's plan, or refuse. THE CEILING IS CHECKED BEFORE ANY WRITE, and a refusal writes
+ * nothing at all, not the first N: adding the first N of a suspect plan would mail N people on the strength of
+ * the read that tripped the ceiling. Takes the same injectable `put` as enactPlan, so the refusal is tested by
+ * running it.
+ */
+export async function enactRun({ run, apply = false, put } = {}) {
+  if (apply && !run?.ceiling?.ok) return { skipped: true, refused: true, subscribers: 0, follows: 0 };
+  return { refused: false, ...(await enactPlan({ mailPlan: run.mailPlan, followPlan: run.followPlan, apply, put })) };
+}
+
 async function main() {
-  const { apply, json } = parseArgs(process.argv.slice(2));
+  const { apply, json, digestOnly, countsOnly, reportToKv, maxAdditions } = parseArgs(process.argv.slice(2));
   const env = process.env;
   const secret = env.MAIL_SUPPRESS_KEY ?? '';
   const haveKey = Boolean(String(secret).trim());
@@ -304,10 +359,13 @@ async function main() {
 
   // One list per prefix rather than a read per member: the same three round trips whether the population is
   // eight people or eight hundred.
-  const [subs, supp, follows] = await Promise.all([
+  // sow-472: the daily run plans no follows, so it does not read them either. The listings are read for the
+  // claims report only; they decide nothing about who is enrolled.
+  const [subs, supp, follows, listings] = await Promise.all([
     listKvByPrefix({ prefix: MAIL_SUBSCRIBER_PREFIX, env }),
     listKvByPrefix({ prefix: MAIL_SUPPRESS_PREFIX, env }),
-    listKvByPrefix({ prefix: FOLLOWS_PREFIX, env }),
+    digestOnly ? Promise.resolve({ entries: [], keys: [] }) : listKvByPrefix({ prefix: FOLLOWS_PREFIX, env }),
+    listKvByPrefix({ prefix: LISTING_KEY_PREFIX, env }),
   ]);
   // EXISTENCE QUESTIONS READ `keys`, NOT `entries`, and the difference is a fixed bug rather than a style
   // choice (sow-166, found by @QAmaster, `listKvByPrefix` extended by @SecurityMaster in 238ea2c3).
@@ -333,19 +391,50 @@ async function main() {
     (follows.keys ?? []).map((k) => bare(k, FOLLOWS_PREFIX)).filter((id) => !followsByGithubId.has(id)),
   );
 
-  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled });
-  const followPlan = planFollowBackfill({ members, followsByGithubId, followsUnreadable, now: () => now.getTime() });
-  const counts = enrollmentCounts(mailPlan, followPlan);
+  const run = planRun({
+    members, identities, suppressed, enrolled, followsByGithubId, followsUnreadable,
+    listings: (listings.entries ?? []).map((e) => e.value), digestOnly, maxAdditions, now: () => now.getTime(),
+  });
+  const { mailPlan, followPlan, counts, ceiling, claims } = run;
+  const population = populationSummary(members);
 
   if (json) {
-    console.log(JSON.stringify({ population: populationSummary(members), counts, unreachable: mailPlan.unreachable, blocked: mailPlan.blocked }, null, 2));
+    console.log(JSON.stringify({ population, counts, ceiling, unreachable: countsOnly ? mailPlan.unreachable.length : mailPlan.unreachable, blocked: mailPlan.blocked }, null, 2));
   } else {
-    console.log(renderReport({ mailPlan, followPlan, counts, apply, haveKey, unsubProven, population: populationSummary(members) }));
+    console.log(renderReport({ mailPlan, followPlan, counts, apply, haveKey, unsubProven, population, digestOnly, countsOnly, ceiling, claims }));
+  }
+  // A claim record that could not be read is a claim this report cannot vouch for. Say so rather than let a
+  // short list read as a complete one.
+  if (listings.unreadable || listings.unparsed) {
+    console.warn(`mail-enroll: ${listings.unreadable + listings.unparsed} project claim record(s) could not be read, so the claims list above may be short.`);
   }
 
-  const enacted = await enactPlan({ mailPlan, followPlan, apply, put: (key, value) => putKvValue({ key, value, env }) });
-  if (enacted.skipped) return;
-  console.log(`mail-enroll: wrote ${enacted.subscribers} subscriber records and ${enacted.follows} follow records.`);
+  const enacted = await enactRun({ run, apply, put: (key, value) => putKvValue({ key, value, env }) });
+  if (enacted.refused) {
+    process.exitCode = 1;
+    console.error(`mail-enroll: refusing to apply: ${ceiling.reason}. Nothing was written.`);
+  } else if (!enacted.skipped) {
+    console.log(`mail-enroll: wrote ${enacted.subscribers} subscriber records and ${enacted.follows} follow records.`);
+  }
+
+  if (reportToKv) {
+    await putKvValue({
+      key: DIGEST_ENROLL_REPORT_KEY,
+      env,
+      value: {
+        generatedAt: now.toISOString(),
+        mode: apply ? 'apply' : 'dry-run',
+        population: { total: population.total, byStatus: population.byStatus },
+        counts,
+        ceiling,
+        written: { subscribers: enacted.subscribers },
+        unreachable: mailPlan.unreachable.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, username: r.username, status: r.status, gather: r.gather })),
+        enrolled: mailPlan.enroll.map((r) => ({ githubId: r.githubId, githubLogin: r.githubLogin, status: r.status })),
+        claims,
+      },
+    });
+    console.log(`mail-enroll: the named report is in KV at ${DIGEST_ENROLL_REPORT_KEY}.`);
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

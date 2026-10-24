@@ -1,0 +1,79 @@
+name: Digest sign-up
+
+# sow-472: everybody who signs in is added to the weekly digest (owner, 2026-10-23). This runs the same planner
+# the one-time August backfill used (scripts/mail-enroll.mjs), once a day, with the daily switches:
+#   --digest-only    no follows: the house follows were a one-time backfill, never at signup (owner, 2026-08-21)
+#   --counts-only    this repository and its Actions logs are PUBLIC, so the log carries counts and no names
+#   --report-to-kv   the named report (who could not be reached, every accepted project claim) goes to KV
+#   --max-additions  a ceiling: past it the run adds nobody and goes red, so somebody looks
+# Anyone who unsubscribed, switched the digest off or is banned is never added. A member record stores no
+# address; the drain reads it from Stripe at send time. Each person added gets the welcome issue at the next
+# daily welcome sweep, then the weekly from the following cycle.
+#
+# The one-time catch-up is started by hand: a dry run first, then an apply with max_additions set to the number
+# the dry run showed, so it cannot add more than was previewed.
+
+on:
+  schedule:
+    - cron: '47 7 * * *'   # daily, 30 minutes after reconcile (07:17), so the overrides mirror it reads is fresh
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run shows who would be added (counts here, names in KV); apply adds them'
+        type: choice
+        options: [dry-run, apply]
+        default: dry-run
+      max_additions:
+        description: 'The most people this run may add. For the catch-up, the number its dry run showed.'
+        type: string
+        default: '25'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digest-enroll
+  cancel-in-progress: false
+
+jobs:
+  enroll:
+    runs-on: ubuntu-latest
+    steps:
+      # sow-295: a manual run from a branch other than main would run that branch's code against live systems.
+      - name: Refuse a manual run from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error title=Run refused::This workflow writes to live systems and runs from main only. It was started from '${REF_NAME}', so nothing ran. Merge the change to main, then run it again."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Add new people to the weekly digest
+        env:
+          # A scheduled run applies with the standing ceiling; a manual run takes its inputs.
+          MODE: ${{ github.event_name == 'schedule' && 'apply' || inputs.mode }}
+          MAX_ADDITIONS: ${{ github.event_name == 'schedule' && '25' || inputs.max_additions }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          # The mail identity key: the SAME value the signup Worker holds, or the identities minted here would not
+          # be the ones the Worker reads at unsubscribe. Copied from the key store on 2026-10-23 after recomputing
+          # a stored public-form identity with it (see .data/ops/secrets-ops/README.md).
+          MAIL_SUPPRESS_KEY: ${{ secrets.MAIL_SUPPRESS_KEY }}
+          # The rider auto-enrolment was approved under (sow-166): the opt-out must work before anyone is added.
+          MAIL_ENROLL_UNSUB_PROVEN: "weekly issues with a one-click unsubscribe sent since 2026-08-24; two suppression markers in production KV on 2026-10-23"
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          apply=()
+          if [ "$MODE" = "apply" ]; then apply=(--apply); fi
+          node scripts/mail-enroll.mjs "${apply[@]}" --digest-only --counts-only --report-to-kv "--max-additions=${MAX_ADDITIONS}"
+      # sow-298: a scheduled failure has nobody watching it, so it is reported to #github-events.
+      - name: "Report failure to #github-events"
+        if: failure()
+        run: node scripts/notify-workflow-failure.mjs
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}

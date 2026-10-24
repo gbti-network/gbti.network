@@ -178,3 +178,102 @@ export function enrollmentCounts(mailPlan, followPlan) {
     followAlreadyComplete: followPlan.alreadyComplete.length,
   };
 }
+
+// ---- sow-472: the daily run ------------------------------------------------------------------------------
+//
+// The backfill above ran by hand once, on 2026-08-24/25, and nothing added a member to the digest afterwards
+// except the member's own switch. The owner ruled on 2026-10-23 that everybody who signs in is added from now
+// on, every accepted project claim included, so the same planner now runs once a day
+// (.github/workflows/digest-enroll.yml). Three things it needs that a one-off did not:
+
+/** A follow plan with nothing in it, for the daily run. Same shape planFollowBackfill returns. */
+export function emptyFollowPlan() {
+  return { writes: [], alreadyComplete: [], excludedBanned: [], invalidTargets: [], unreadable: [] };
+}
+
+/**
+ * May this run add `toEnroll` subscribers? A ceiling, because a sudden jump far past what a day of sign-ups
+ * produces is more likely a bad read (a gather that returned somebody else's customers, a suppression list
+ * that came back empty) than real growth, and the cost of being wrong is an email to every person added.
+ *
+ * `maxAdditions` null means no ceiling (a by-hand run that previewed its number). Anything that is not a whole
+ * number of zero or more is REFUSED rather than read as "no ceiling": a typo in the workflow must stop the run,
+ * never lift the limit.
+ */
+export function ceilingVerdict(toEnroll, maxAdditions) {
+  if (maxAdditions === null || maxAdditions === undefined) return { ok: true, max: null, reason: null };
+  // Digits only. Number('') is 0 and Number(' 7 ') is 7, so a cleared or padded workflow input would otherwise
+  // read as a real ceiling instead of a mistake.
+  const raw = String(maxAdditions);
+  if (!/^\d+$/.test(raw)) return { ok: false, max: null, reason: 'the ceiling is not a whole number' };
+  const max = Number(raw);
+  if (toEnroll > max) return { ok: false, max, reason: `${toEnroll} to add is over the ceiling of ${max}` };
+  return { ok: true, max, reason: null };
+}
+
+/** What happened to an accepted claim in this run. */
+export const CLAIM_OUTCOME = Object.freeze({
+  ENROL: 'added',
+  ALREADY: 'already on the digest',
+  SUPPRESSED: 'unsubscribed earlier, left off',
+  UNREACHABLE: 'no verified email address',
+  BANNED: 'banned, left off',
+  NOT_GATHERED: 'not found among the members',
+});
+
+/**
+ * Every accepted project claim and what this run did about it. The owner asked for claims by name ("make sure
+ * that any new accepted claim member are retrospectively added"), so they are checked on their own rather than
+ * assumed to follow from the population: a claimant missing from the gather would otherwise vanish from every
+ * count without a line saying so.
+ *
+ * @param {object[]} listings  prepared-listing records (`invite-listing:<id>` values); only claimed ones count
+ * @param {object} mailPlan    planMailEnrollment's result for the same run
+ */
+export function claimsReport(listings = [], mailPlan = {}) {
+  const buckets = [
+    [mailPlan.enroll, CLAIM_OUTCOME.ENROL],
+    [mailPlan.alreadyEnrolled, CLAIM_OUTCOME.ALREADY],
+    [mailPlan.suppressedSkips, CLAIM_OUTCOME.SUPPRESSED],
+    [mailPlan.unreachable, CLAIM_OUTCOME.UNREACHABLE],
+    [mailPlan.excludedBanned, CLAIM_OUTCOME.BANNED],
+  ];
+  const outcomeById = new Map();
+  for (const [rows, outcome] of buckets) for (const r of rows ?? []) outcomeById.set(String(r?.githubId ?? ''), outcome);
+  const rows = [];
+  for (const l of listings) {
+    if (!l || typeof l !== 'object' || !l.claimedAt) continue;
+    const githubId = String(l.claimedBy ?? '').trim();
+    rows.push({
+      githubId,
+      login: l.claimedLogin ?? null,
+      claimedAt: String(l.claimedAt).slice(0, 10),
+      outcome: (githubId && outcomeById.get(githubId)) || CLAIM_OUTCOME.NOT_GATHERED,
+    });
+  }
+  return rows.sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.githubId.localeCompare(b.githubId));
+}
+
+/**
+ * Where the daily run keeps its NAMED report. The repository is public and so are its Actions logs, so the log
+ * carries counts only; the names (who could not be reached, what happened to each claim) go to KV, which is
+ * where per-person state belongs. Overwritten by every run, so a person erased from the network drops out of
+ * it at the next run without the erasure tool needing to know it exists.
+ */
+export const DIGEST_ENROLL_REPORT_KEY = 'digest-enroll:report';
+
+/**
+ * One run's whole plan, pure, so the daily run's two promises are tested where they are made rather than
+ * inside the networked runner: a digest-only run plans no follow write, and the ceiling verdict travels with
+ * the plan to the one place that may write (enactRun in scripts/mail-enroll.mjs).
+ */
+export function planRun({
+  members = [], identities = new Map(), suppressed = new Set(), enrolled = new Set(),
+  followsByGithubId = new Map(), followsUnreadable = new Set(), listings = [],
+  digestOnly = false, maxAdditions = null, now = Date.now,
+} = {}) {
+  const mailPlan = planMailEnrollment({ members, identities, suppressed, enrolled });
+  const followPlan = digestOnly ? emptyFollowPlan() : planFollowBackfill({ members, followsByGithubId, followsUnreadable, now });
+  const counts = enrollmentCounts(mailPlan, followPlan);
+  return { mailPlan, followPlan, counts, ceiling: ceilingVerdict(counts.toEnroll, maxAdditions), claims: claimsReport(listings, mailPlan) };
+}
