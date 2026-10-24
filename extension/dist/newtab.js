@@ -14367,6 +14367,16 @@ ${listStyleProseCss(".doc-blocks")}
   var ITEM_ID_MAX = 128;
   var SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
   var ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
+  var TITLE_SLUG_MAX = 80;
+  function slugFromTitle(title, max = TITLE_SLUG_MAX) {
+    let s = String(title ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/['`\u2018\u2019\u02bc]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (s.length > max) {
+      const head = s.slice(0, max + 1);
+      const at3 = head.lastIndexOf("-");
+      s = (at3 > 0 ? head.slice(0, at3) : s.slice(0, max)).replace(/-+$/, "");
+    }
+    return s;
+  }
 
   // membership/prepared-listings-shared.mjs
   var LISTING_ID_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{16}$/;
@@ -15579,16 +15589,53 @@ ${listStyleProseCss(".doc-blocks")}
       const loaded = this.presetStr(this.preset?.input?.slug) || "";
       input.addEventListener("input", () => {
         const v2 = String(input.value || "").trim().toLowerCase();
-        this._slugVal = v2;
-        const mirror = this.$('[data-key="slug"]');
-        if (mirror) mirror.value = v2;
-        const inline4 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline4) inline4.textContent = v2;
-        const note = input.closest(".fld")?.querySelector(".urlprev");
-        if (note && this.itemPath) {
-          note.textContent = v2 && v2 !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v2}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
-        }
+        this._slugOwned = Boolean(v2);
+        this._applySlug(v2, input, { typePath, loaded });
       });
+      this.root?.querySelector('[data-header="title"]')?.addEventListener("input", () => this._followTitleSlug());
+    }
+    /** Set the permalink everywhere it shows: this field, the hidden gather() input and the inline header display. */
+    _applySlug(v2, input = this.$("#slugfield"), { typePath, loaded } = {}) {
+      this._slugVal = v2;
+      if (input && input.value !== v2) input.value = v2;
+      const mirror = this.$('[data-key="slug"]');
+      if (mirror) mirror.value = v2;
+      const inline4 = this.root?.querySelector(".doc-slug .slug-val");
+      if (inline4) inline4.textContent = v2;
+      const note = input?.closest(".fld")?.querySelector(".urlprev");
+      if (note && this.itemPath && typePath) {
+        note.textContent = v2 && v2 !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v2}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
+      }
+    }
+    // 2026-10-24 (owner): "when creating a new article the permalink needs to autogenerate based on the title". The
+    // permalink follows the title on an item that has never been published, until the author types their own; clearing
+    // the box hands it back. A published item never follows: changing its permalink renames the page at publish, so
+    // that stays a deliberate edit. A loaded permalink that is not what its title gives was chosen by hand, so it holds.
+    _slugFollowsTitle() {
+      if (this.itemPath) return false;
+      if (this._slugOwned != null) return !this._slugOwned;
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
+      return !loaded || loaded === slugFromTitle(this.presetStr(this.preset?.input?.title) || "");
+    }
+    /**
+     * Fill the permalink from the title when it follows, and make the page show the permalink the editor holds. The
+     * editor renders more than once while it loads, and a render draws the box and the hidden input Save reads from the
+     * LOADED permalink; without the resync a permalink set on the first render was drawn away by the next and Save met
+     * "Add a permalink first" again. Returns whether the permalink differs from the loaded one, so the caller marks the
+     * draft changed.
+     */
+    _followTitleSlug() {
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
+      if (this._slugFollowsTitle()) {
+        const v3 = slugFromTitle(this.root?.querySelector('[data-header="title"]')?.textContent ?? "");
+        if (v3 !== (this._slugVal ?? loaded)) this._slugVal = v3;
+      }
+      const v2 = this._slugVal ?? loaded;
+      const field2 = this.$("#slugfield");
+      const mirror = this.$('[data-key="slug"]');
+      const inline4 = this.root?.querySelector(".doc-slug .slug-val");
+      if (field2 && field2.value !== v2 || mirror && mirror.value !== v2 || inline4 && inline4.textContent !== v2) this._applySlug(v2, field2);
+      return v2 !== loaded;
     }
   };
   function normTok(s) {
@@ -17078,6 +17125,7 @@ ${listStyleProseCss(".doc-blocks")}
       this.itemStore = store2;
       this.staged = Boolean(staged);
       this._slugVal = null;
+      this._slugOwned = null;
       this._heldImages = null;
       this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
       if (this.isConnected) this.render();
@@ -17320,6 +17368,7 @@ ${listStyleProseCss(".doc-blocks")}
         if (e.target.closest("button:not([data-frame]), [data-rm]") && !e.target.closest("summary")) this._markDirty();
       }));
       this._bindHeader();
+      if (this._followTitleSlug()) this._markDirty();
       this._wireRail();
       this._wireLinks();
       this._wireGallery();

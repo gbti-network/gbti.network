@@ -130,6 +130,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     this.itemStore = store; // sow-194: 'repo' when opened from a committed repo draft; Preview reads it canonically
     this.staged = Boolean(staged); // SOW-106 QA: loaded from a fork draft branch (not live until published)
     this._slugVal = null; // SOW-112 v2: the pending permalink value follows the loaded item
+    this._slugOwned = null; // 2026-10-24: and whether the author chose it is decided afresh for each item
     this._heldImages = null; // pictures picked before a permalink existed belong to the item they were picked for
     // The PENDING author reassignment carried by a saved draft. Set per load, exactly like _slugVal above, so
     // a value left over from a previously-open item can never be attributed to this one.
@@ -430,6 +431,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     // containers get it now.
     this.$$('.rail, .media-slot').forEach((box) => box.addEventListener('click', (e) => { if (e.target.closest('button:not([data-frame]), [data-rm]') && !e.target.closest('summary')) this._markDirty(); }));
     this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
+    if (this._followTitleSlug()) this._markDirty(); // 2026-10-24: a draft opened with no permalink takes one from its title
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
     this._wireLinks(); // SOW-062 P6: the project links[] row editor (serializes into the hidden json input)
     this._wireGallery(); // sow-268: the project gallery[] row editor (serializes into the hidden json input)

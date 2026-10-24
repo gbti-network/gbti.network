@@ -4,7 +4,7 @@
 // element crossed the 900-line limit (owner, 2026-09-30).
 
 import { esc } from '../base.mjs';
-import { SLUG_MAX } from '../../../membership/item-id.mjs'; // sow-354
+import { SLUG_MAX, slugFromTitle } from '../../../membership/item-id.mjs'; // sow-354; 2026-10-24 the permalink from the title
 import { audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { gatherInput } from '../form.mjs';
 import { categoryFieldHtml } from '../category-picker-core.mjs'; // sow-227: that field's markup + the hidden input gather() reads
@@ -321,20 +321,61 @@ export const withEditorFields = (Base) => class extends Base {
     const loaded = this.presetStr(this.preset?.input?.slug) || '';
     input.addEventListener('input', () => {
       const v = String(input.value || '').trim().toLowerCase();
-      this._slugVal = v;
-      // Mirror into the hidden gather() input + the inline display (the same live mirror on new and existing).
-      const mirror = this.$('[data-key="slug"]');
-      if (mirror) mirror.value = v;
-      const inline = this.root?.querySelector('.doc-slug .slug-val');
-      if (inline) inline.textContent = v;
-      // The note switches to the concrete old -> new URLs while the value differs from the loaded slug.
-      const note = input.closest('.fld')?.querySelector('.urlprev');
-      if (note && this.itemPath) {
-        note.textContent = v && v !== loaded
-          ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.`
-          : 'Changing the permalink renames this item when you publish; the old link will redirect.';
-      }
+      this._slugOwned = Boolean(v); // the author's own permalink now; clearing the box hands it back to the title
+      this._applySlug(v, input, { typePath, loaded });
     });
+    // 2026-10-24: typing the title fills the permalink while it still follows the title (see _slugFollowsTitle).
+    this.root?.querySelector('[data-header="title"]')?.addEventListener('input', () => this._followTitleSlug());
+  }
+
+  /** Set the permalink everywhere it shows: this field, the hidden gather() input and the inline header display. */
+  _applySlug(v, input = this.$('#slugfield'), { typePath, loaded } = {}) {
+    this._slugVal = v;
+    if (input && input.value !== v) input.value = v;
+    // Mirror into the hidden gather() input + the inline display (the same live mirror on new and existing).
+    const mirror = this.$('[data-key="slug"]');
+    if (mirror) mirror.value = v;
+    const inline = this.root?.querySelector('.doc-slug .slug-val');
+    if (inline) inline.textContent = v;
+    // The note switches to the concrete old -> new URLs while the value differs from the loaded slug.
+    const note = input?.closest('.fld')?.querySelector('.urlprev');
+    if (note && this.itemPath && typePath) {
+      note.textContent = v && v !== loaded
+        ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.`
+        : 'Changing the permalink renames this item when you publish; the old link will redirect.';
+    }
+  }
+
+  // 2026-10-24 (owner): "when creating a new article the permalink needs to autogenerate based on the title". The
+  // permalink follows the title on an item that has never been published, until the author types their own; clearing
+  // the box hands it back. A published item never follows: changing its permalink renames the page at publish, so
+  // that stays a deliberate edit. A loaded permalink that is not what its title gives was chosen by hand, so it holds.
+  _slugFollowsTitle() {
+    if (this.itemPath) return false;
+    if (this._slugOwned != null) return !this._slugOwned;
+    const loaded = this.presetStr(this.preset?.input?.slug) || '';
+    return !loaded || loaded === slugFromTitle(this.presetStr(this.preset?.input?.title) || '');
+  }
+
+  /**
+   * Fill the permalink from the title when it follows, and make the page show the permalink the editor holds. The
+   * editor renders more than once while it loads, and a render draws the box and the hidden input Save reads from the
+   * LOADED permalink; without the resync a permalink set on the first render was drawn away by the next and Save met
+   * "Add a permalink first" again. Returns whether the permalink differs from the loaded one, so the caller marks the
+   * draft changed.
+   */
+  _followTitleSlug() {
+    const loaded = this.presetStr(this.preset?.input?.slug) || '';
+    if (this._slugFollowsTitle()) {
+      const v = slugFromTitle(this.root?.querySelector('[data-header="title"]')?.textContent ?? '');
+      if (v !== (this._slugVal ?? loaded)) this._slugVal = v;
+    }
+    const v = this._slugVal ?? loaded;
+    const field = this.$('#slugfield');
+    const mirror = this.$('[data-key="slug"]');
+    const inline = this.root?.querySelector('.doc-slug .slug-val');
+    if ((field && field.value !== v) || (mirror && mirror.value !== v) || (inline && inline.textContent !== v)) this._applySlug(v, field);
+    return v !== loaded;
   }
 };
 

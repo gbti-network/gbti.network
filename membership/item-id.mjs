@@ -20,3 +20,25 @@ export const SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
 
 /** Regex source (no anchors) for an item id, the same alphabet at ITEM_ID_MAX. */
 export const ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
+
+/** The longest permalink slugFromTitle writes. Shorter than SLUG_MAX on purpose: an author can still type longer. */
+export const TITLE_SLUG_MAX = 80;
+
+/**
+ * 2026-10-24 (owner): "when creating a new article the permalink needs to autogenerate based on the title." The
+ * permalink a title gives: lowercase, accents folded (é to e), apostrophes dropped ("Don't" to "dont", not
+ * "don-t"), every other run of non-letters and non-digits one hyphen, hyphens trimmed, and at most TITLE_SLUG_MAX
+ * characters cut at a hyphen so no word is split. The result matches SLUG_PATTERN, or is '' when the title has no
+ * letters or digits.
+ */
+export function slugFromTitle(title, max = TITLE_SLUG_MAX) {
+  let s = String(title ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/['`\u2018\u2019\u02bc]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (s.length > max) {
+    const head = s.slice(0, max + 1);
+    const at = head.lastIndexOf('-');
+    s = (at > 0 ? head.slice(0, at) : s.slice(0, max)).replace(/-+$/, '');
+  }
+  return s;
+}
