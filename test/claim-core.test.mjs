@@ -486,3 +486,18 @@ test('the page copy follows the writing rules: no dashes, no contractions, and "
   assert.match("It isn't ready", /\b\w+n't\b/);
   assert.match('a trial \u2014 now', /[\u2014\u2013]/);
 });
+
+// sow-475: the claim page shows a prepared PROMPT, and its hero comes from the prompt's own image field.
+// Before this, listingModel built the hero with resolveHero(banner, bannerPreset, featuredImage), which a prompt
+// has none of, so a prompt invitation rendered the plain band and the author's image was silently dropped.
+test('sow-475: a prompt listing takes its hero from `image`, and a project is untouched', () => {
+  const images = { 'p.webp': 'blob:prompt', 'c.webp': 'blob:cover' };
+  const prompt = listingModel({ type: 'prompt', slug: 'mp', frontmatter: { title: 'T', image: './images/p.webp' } }, { images });
+  assert.deepEqual(prompt.hero, { image: 'blob:prompt', preset: null }, 'the prompt shows its own image');
+
+  const project = listingModel({ type: 'project', slug: 'sb', frontmatter: { title: 'T', featuredImage: './images/c.webp' } }, { images });
+  assert.deepEqual(project.hero, { image: 'blob:cover', preset: null }, 'a project resolves exactly as it did before');
+
+  const bare = listingModel({ type: 'prompt', slug: 'mp', frontmatter: { title: 'T' } }, { images });
+  assert.deepEqual(bare.hero, { image: '', preset: 'ink' }, 'a prompt with no image gets the band, not a hole');
+});

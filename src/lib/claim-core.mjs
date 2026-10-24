@@ -18,7 +18,7 @@
 //      can make: it is the inactive panel or a retry.
 
 import {
-  normalizeGallery, hasCaptions, repoUrl, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHero, iconForUrl,
+  normalizeGallery, hasCaptions, repoUrl, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHero, resolveHeroForType, iconForUrl,
   resolveGalleryStyle, buildToc, safeHref, lockedHint, railDate,
 } from './project-page.mjs';
 import { slugifyHeading } from './pd-enhance.mjs';
@@ -340,7 +340,10 @@ export function listingModel(listing, { labels = {}, images = {}, licenses = nul
   const title = str(fm.title) || slug || 'Untitled project';
   const img = (ref) => { const n = listingImageName(ref); return n ? images[n] || '' : ''; };
 
-  const heroPick = resolveHero(fm.banner, fm.bannerPreset, fm.featuredImage);
+  // sow-475: the hero is picked by TYPE, so a prepared prompt shows its own `image` instead of silently falling
+  // back to the plain band. resolveHeroForType is the same function the published page uses, which is the whole
+  // point of this view: the person sees the page as it will be. A project resolves exactly as it did before.
+  const heroPick = resolveHeroForType(str(listing?.type) || 'project', fm);
   const hero = { image: heroPick.image ? img(heroPick.image) : '', preset: heroPick.preset || null };
   if (heroPick.image && !hero.image) hero.preset = 'ink'; // an image that did not arrive: the default band, not a hole
 

@@ -334,7 +334,12 @@ test('the manager row never carries the personal message or the body; the admin 
 test('the public view carries the listing and the terms, and never an account number or the code; a tie shows only as its login', () => {
   const v = publicListingView(listing({ boundGithubId: '4242', boundLogin: 'sam' }), { tier: 'member', freeDays: 365, code: 'CODEABLEYEAR' });
   assert.deepEqual(Object.keys(v).sort(), [
-    'body', 'freeDays', 'frontmatter', 'githubLogin', 'images', 'message', 'preparedByLogin', 'recipientName', 'slug', 'suggestedNote', 'tier', 'type',
+    // sow-475 added creditPreparer. This list is an ALLOWLIST, not a snapshot: it is here so a field added to the
+    // public view has to be looked at before it reaches a signed-out reader. creditPreparer is a boolean about
+    // GBTI, carries nothing about the recipient, and is shown on purpose so they know whose name lands beside
+    // theirs before they claim.
+    'body', 'creditPreparer', 'freeDays', 'frontmatter', 'githubLogin', 'images', 'message', 'preparedByLogin',
+    'recipientName', 'slug', 'suggestedNote', 'tier', 'type',
   ]);
   assert.equal(v.tier, 'member');
   assert.equal(v.freeDays, 365);

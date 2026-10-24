@@ -20159,6 +20159,7 @@ var DESTINATION_BY_CAMPAIGN = Object.freeze({
 
 // membership/prepared-listings-shared.mjs
 var SLUG_RE3 = new RegExp(`^${SLUG_PATTERN}$`);
+var PREPARABLE_TYPES = Object.freeze(["project", "prompt"]);
 var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
 var LISTING_STATE = Object.freeze({
   prepared: "prepared",

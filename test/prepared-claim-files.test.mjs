@@ -201,3 +201,75 @@ test('the notice survives a minimized record and missing facts without printing 
 test('this test file stays at or under 900 lines', () => {
   assert.ok(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').length <= 900);
 });
+
+// ---- sow-475: a prepared PROMPT, and the preparer's contributor credit -------------------------------------------
+//
+// The owner asked for a prompt invitation whose prompt page IS the invitation, with himself credited as a
+// collaborator on it. Two things here fail SILENTLY if they regress, so each is asserted directly rather than
+// inferred from "the build did not throw": the file must land in prompts/ and not projects/, and the credit must
+// come from the stored record rather than from anything the draft could carry.
+
+const promptListing = (fmOver = {}, recOver = {}) => {
+  const r = validatePreparedDraft({
+    type: 'prompt', slug: 'monkey-puppet-portrait', body: 'Turn a portrait into a felted puppet.',
+    frontmatter: { title: 'Monkey Puppet Portrait', kind: 'prompt', shortDescription: 'x', categories: ['ai'], ...fmOver },
+  });
+  assert.ok(r.ok, JSON.stringify(r.issues));
+  return {
+    ...newListing({
+      id: 'ABCDEFGHJKMNPQRS', draft: r.draft, recipientName: 'Alger', message: 'Hi', campaign: 'CODEABLEYEAR',
+      code: 'CDEABEYEAR23456789AB', preparedBy: '2002207', preparedByLogin: 'atwellpub', now: NOW, ...recOver,
+    }),
+    ...recOver,
+  };
+};
+
+test('sow-475: a prepared prompt is claimed into prompts/, never projects/', () => {
+  const r = buildClaimFiles({ listing: promptListing(), folder: 'sewneo', note: 'Mine now.', images: null, now: NOW });
+  assert.ok(r.ok, r.message);
+  assert.equal(r.projectPath, 'members/sewneo/prompts/monkey-puppet-portrait/index.md');
+  assert.ok(!r.files.some((f) => f.path.includes('/projects/')), 'nothing may land in projects/');
+  assert.equal(r.itemId, 'prompt-monkey-puppet-portrait');
+  const intro = r.files.find((f) => f.path.includes('/comments/'));
+  assert.match(intro.content, /targetType:\s*prompt/, 'the author note points at the prompt, not a project');
+});
+
+test('sow-475: the preparer is credited only when the record says so, and never from the draft', () => {
+  const off = buildClaimFiles({ listing: promptListing(), folder: 'sewneo', note: 'Mine.', images: null, now: NOW });
+  const offFm = parseContentFile(off.files[0].content).frontmatter;
+  // The control. An earlier version of this test read a field parseContentFile does not return, so the frontmatter
+  // came back empty and "there is no credit" passed while measuring nothing at all. Prove the parse worked first.
+  assert.equal(offFm.title, 'Monkey Puppet Portrait', 'the frontmatter parsed: without this the next line is vacuous');
+  assert.deepEqual(offFm.contributors ?? [], [], 'no credit unless it was asked for');
+
+  const on = buildClaimFiles({ listing: promptListing({}, { creditPreparer: true }), folder: 'sewneo', note: 'Mine.', images: null, now: NOW });
+  const onFm = parseContentFile(on.files[0].content).frontmatter;
+  assert.equal(onFm.contributors?.length, 1);
+  assert.equal(onFm.contributors[0].login, 'atwellpub');
+  assert.equal(onFm.contributors[0].class, undefined, 'no class: none of grammar/correction/addition means "wrote it"');
+
+  // The credit may NEVER come from the draft. contributors is a server field, so a draft asserting it is stripped.
+  const forged = validatePreparedDraft({
+    type: 'prompt', slug: 'monkey-puppet-portrait', body: 'x',
+    frontmatter: { title: 'T', kind: 'prompt', shortDescription: 'x', categories: ['ai'], contributors: [{ login: 'mallory' }] },
+  });
+  assert.ok(forged.ok, JSON.stringify(forged.issues));
+  assert.equal(forged.draft.frontmatter.contributors, undefined, 'a draft cannot assert its own contributors');
+  const forgedRec = newListing({
+    id: 'ABCDEFGHJKMNPQRS', draft: forged.draft, recipientName: 'A', message: 'Hi', campaign: 'CODEABLEYEAR',
+    code: 'CDEABEYEAR23456789AB', preparedBy: '2002207', preparedByLogin: 'atwellpub', now: NOW,
+  });
+  const built = buildClaimFiles({ listing: forgedRec, folder: 'sewneo', note: 'Mine.', images: null, now: NOW });
+  const forgedFm = parseContentFile(built.files[0].content).frontmatter;
+  assert.equal(forgedFm.title, 'T', 'control: the frontmatter parsed');
+  assert.deepEqual(forgedFm.contributors ?? [], [], 'mallory never reaches the published file');
+});
+
+test('sow-475: an unknown type is still refused, and a project still behaves exactly as before', () => {
+  const bad = validatePreparedDraft({ type: 'post', slug: 'x', frontmatter: { title: 'T' } });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, 'unsupported_type');
+  const missing = validatePreparedDraft({ slug: 'x', frontmatter: { title: 'T' } });
+  assert.equal(missing.error, 'unsupported_type', 'an omitted type is refused exactly as it was before sow-475');
+  assert.equal(build().projectPath, 'members/hudson/projects/surfacedby/index.md', 'projects are unchanged');
+});

@@ -12,7 +12,7 @@ import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, postAdminGovernance, preparedAdminRequest, stagePreparedImage } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 import { SITE_BASE } from './account-ops.mjs';
-import { claimLink, isListingId, isListingImageName, validateSuggestedNote, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
+import { claimLink, isListingId, isListingImageName, validateSuggestedNote, PREPARABLE_TYPES, PREPARED_SLUG_MAX, PREPARED_MAX_IMAGES } from '../../membership/prepared-listings-shared.mjs';
 
 export async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
@@ -239,9 +239,14 @@ function preparedSaveRequest(args = {}) {
     const v = validateSuggestedNote(args.suggestedNote);
     if (!v.ok) throw new OperationError('bad-request', v.message);
   }
+  // sow-475: the item type, defaulting to project so every caller written before prompts existed is unchanged.
+  const type = blankArg(args.type) ? 'project' : String(args.type).trim();
+  if (!PREPARABLE_TYPES.includes(type)) {
+    throw new OperationError('bad-request', `type must be one of ${PREPARABLE_TYPES.join(', ')}.`);
+  }
   const input = args.input;
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw new OperationError('bad-request', 'input (the project frontmatter) is required.');
+    throw new OperationError('bad-request', `input (the ${type} frontmatter) is required.`);
   }
   const slug = String(input.slug ?? ''); // untrimmed: the draft carries input.slug too, and the two must agree
   if (!PREPARED_SLUG_RE.test(slug) || slug.length > PREPARED_SLUG_MAX) {
@@ -263,7 +268,9 @@ function preparedSaveRequest(args = {}) {
     if (seen.has(name)) throw new OperationError('bad-request', `The image ${name} is listed twice.`);
     seen.add(name);
   }
-  const stagedItem = `project:${slug}`;
+  // sow-475: the staging key carries the TYPE, so a prompt and a project sharing a permalink do not share a
+  // staged-image namespace and overwrite each other's uploads. Identical to the old value for a project.
+  const stagedItem = `${type}:${slug}`;
   const body = {
     op: 'save',
     ...(id ? { id } : {}),
@@ -272,7 +279,8 @@ function preparedSaveRequest(args = {}) {
     ...(blankArg(args.message) ? {} : { message: String(args.message) }),
     ...(args.suggestedNote === undefined ? {} : { suggestedNote: args.suggestedNote === null ? '' : args.suggestedNote }),
     ...(args.githubLogin === undefined ? {} : { githubLogin: args.githubLogin === null ? '' : String(args.githubLogin) }),
-    draft: { type: 'project', slug, frontmatter: input, body: typeof args.body === 'string' ? args.body : '' },
+    ...(args.creditPreparer === undefined ? {} : { creditPreparer: args.creditPreparer === true }),
+    draft: { type, slug, frontmatter: input, body: typeof args.body === 'string' ? args.body : '' },
     stagedItem,
   };
   return { stagedItem, images, body };

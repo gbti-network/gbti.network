@@ -19,7 +19,8 @@ import { buildContentFile, buildCommentFile, ContentValidationError } from '../c
 import { validateHostedRequest } from './hosted-author.mjs';
 import { nodeAt } from './taxonomy-edits.mjs';
 import { licenseProblems, licenseEntries } from './licenses.mjs';
-import { claimProjectInput, isListingImageName, PLACEHOLDER_FOLDER, validatePreparedDraft } from './prepared-listings.mjs';
+import { claimProjectInput, isListingImageName, PLACEHOLDER_FOLDER, PREPARABLE_TYPES, validatePreparedDraft } from './prepared-listings.mjs';
+import { insertContributor } from './contributor-credit.mjs';
 
 /** The longest author note the claim accepts. */
 export const MAX_CLAIM_NOTE = 2000;
@@ -114,12 +115,15 @@ export function buildClaimFiles({ listing, folder, note, profile = null, images 
   if (!FOLDER_RE.test(String(folder ?? ''))) return fail('bad_folder', 'No member folder is set up for this account yet.');
   const text = sanitizeClaimNote(note);
   if (!text) return fail('note_required', 'Write a short note about the project in your own words.');
-  if (!isPlainObject(listing) || listing.type !== 'project' || !isPlainObject(listing.frontmatter)) {
+  // sow-475: the type comes from the record and must be one this build understands. Fail closed on anything
+  // else, so a record written by a future build cannot be published by this one.
+  if (!isPlainObject(listing) || !PREPARABLE_TYPES.includes(listing.type) || !isPlainObject(listing.frontmatter)) {
     return fail('invalid', 'This listing cannot be published.');
   }
-  // The stored project is validated AGAIN, exactly as at preparation, so a record edited by hand in KV (or written
+  const type = listing.type;
+  // The stored item is validated AGAIN, exactly as at preparation, so a record edited by hand in KV (or written
   // before a rule existed) cannot reach the repository by skipping the checks.
-  const check = validatePreparedDraft({ type: 'project', slug: listing.slug, frontmatter: listing.frontmatter, body: listing.body ?? '' });
+  const check = validatePreparedDraft({ type, slug: listing.slug, frontmatter: listing.frontmatter, body: listing.body ?? '' });
   if (!check.ok) return fail('invalid', check.issues.join(' '));
   const { slug, frontmatter, body } = check.draft;
   const at = (now instanceof Date ? now : new Date(now)).toISOString();
@@ -127,18 +131,35 @@ export function buildClaimFiles({ listing, folder, note, profile = null, images 
   const files = [];
   let project;
   try {
-    project = buildContentFile({ type: 'project', username: folder, input: claimProjectInput(frontmatter, { slug, publishedAt: at }), body });
+    project = buildContentFile({ type, username: folder, input: claimProjectInput(frontmatter, { slug, publishedAt: at }), body });
   } catch (e) {
-    return fail('invalid', e instanceof ContentValidationError ? e.message : 'The project could not be built.');
+    return fail('invalid', e instanceof ContentValidationError ? e.message : `The ${type} could not be built.`);
   }
-  files.push({ path: project.path, content: project.markdown });
+
+  // sow-475: the preparer's contributor credit, when the invitation was prepared with it.
+  //
+  // It is added HERE, from the STORED RECORD, and never from the draft: `contributors` is in SERVER_FIELDS and
+  // claimProjectInput strips it, so a submitted payload cannot assert its own credit.
+  //
+  // It is a text edit on the built markdown rather than an input field, because `contributors` is SYSTEM_MANAGED
+  // (client/src/schemas.mjs) and buildContentFile drops it from any input. Passing it as a field looked tidier
+  // and produced NO credit at all, silently; the test is what caught it. insertContributor returns its input
+  // unchanged when it finds no frontmatter to edit, so the result is compared rather than trusted: a credit that
+  // was asked for and did not land fails the claim instead of publishing a file that quietly lacks it.
+  // No `class`: the enum is grammar/correction/addition and none of them describes authoring the item.
+  let markdown = project.markdown;
+  if (listing.creditPreparer === true && listing.preparedByLogin) {
+    markdown = insertContributor(markdown, { login: String(listing.preparedByLogin), at });
+    if (markdown === project.markdown) return fail('invalid', 'The contributor credit could not be written into this item.');
+  }
+  files.push({ path: project.path, content: markdown });
 
   let intro;
   try {
     intro = buildCommentFile({
       username: folder,
       input: {
-        id: `intro-${slug}`, targetType: 'project', targetSlug: slug, createdAt: at,
+        id: `intro-${slug}`, targetType: type, targetSlug: slug, createdAt: at, // sow-475: the item's own type
         status: 'published', visibility: 'public', authorNote: true,
       },
       body: text,
@@ -172,7 +193,7 @@ export function buildClaimFiles({ listing, folder, note, profile = null, images 
 
   return {
     ok: true,
-    itemId: `project-${slug}`,
+    itemId: `${type}-${slug}`, // sow-475: the item's own type, so a prompt is not announced as a project
     title: String(frontmatter.title ?? '').trim(),
     projectPath: project.path,
     notePath: intro.path,

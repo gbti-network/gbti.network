@@ -73,6 +73,22 @@ export function mintListingId(bytes) {
  */
 export const PREPARED_SLUG_MAX = 64;
 export const SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
+
+/**
+ * sow-475: the content types that can be prepared for someone who is not a member yet. Project was the only one
+ * until 2026-10-24, when the owner asked for a PROMPT invitation whose prompt page IS the invitation.
+ *
+ * Deliberately a short list rather than "every type the schema knows". Each type needs its own duplicate-name
+ * check in TWO places that must move together (`slugProblem` in workers/signup/membership-prepared-admin.mjs and
+ * its twin in membership-claim.mjs), so each one added is real work rather than a flag.
+ *
+ * It lives in the BROWSER-SAFE half because both halves need it: the validator and the record state machine in
+ * prepared-listings.mjs, and the agent tool's request builder in client/src/operations-admin.mjs, which must not
+ * pull the schema library into a bundle.
+ *
+ * `type` stays REQUIRED at the validator. An omitted type is refused exactly as it was before this existed.
+ */
+export const PREPARABLE_TYPES = Object.freeze(['project', 'prompt']);
 /** Twelve images plus the project, the note and the profile is 15 files, under the hosted 20-file cap. */
 export const PREPARED_MAX_IMAGES = 12;
 export const MAX_MESSAGE = 1000;

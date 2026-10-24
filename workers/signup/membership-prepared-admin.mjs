@@ -44,7 +44,7 @@ import { newInvite, revokeInvite, setInviteBinding, inviteState, INVITE_STATE } 
 import {
   isListingId, isListingImageName, mintListingId, normalizeGithubLogin, validateInvitationText, validatePreparedDraft,
   validateSuggestedNote, newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend,
-  listingSummary, listingAdminView, claimLink,
+  listingSummary, listingAdminView, claimLink, PREPARABLE_TYPES,
 } from '../../membership/prepared-listings.mjs';
 import { listingHouseProblems, preparedSizeProblem } from '../../membership/prepared-claim-files.mjs';
 
@@ -101,16 +101,22 @@ async function resolveBinding(env, io, kv, rawLogin, current) {
 }
 
 /**
- * Refuse a permalink another project already uses: any project on main (read uncached, because a stale minute is
- * exactly when two people pick the same name), or another prepared listing that has not been claimed.
+ * Refuse a permalink another item of the SAME TYPE already uses: any such item on main (read uncached, because a
+ * stale minute is exactly when two people pick the same name), or another prepared listing that has not been
+ * claimed.
+ *
+ * sow-475: the type is compared, not assumed. A prompt and a project may share a permalink, because they are
+ * different collections and land in different folders, so checking a prompt against project slugs would both
+ * refuse valid names and miss real collisions. Its twin at the claim (membership-claim.mjs) MUST move with it:
+ * a check pointed at the wrong collection passes happily while doing nothing.
  */
-async function slugProblem(env, io, kv, slug, selfId) {
+async function slugProblem(env, io, kv, slug, selfId, type = 'project') {
   let tree;
   try { tree = await io.readTree(env, { fetchImpl: io.fetchImpl, kv, upstream: io.upstream, getToken: io.getToken, useCache: false }); }
   catch { tree = null; }
   if (!tree || !Array.isArray(tree.content)) return bad(502, 'tree_unavailable', 'The site could not be read to check the permalink. Try again shortly.');
-  if (tree.content.some((e) => e?.type === 'project' && e.slug === slug)) {
-    return bad(409, 'slug_taken', `A project on the site already uses the permalink ${slug}. Choose another one.`);
+  if (tree.content.some((e) => e?.type === type && e.slug === slug)) {
+    return bad(409, 'slug_taken', `A ${type} on the site already uses the permalink ${slug}. Choose another one.`);
   }
   const all = await listListings(kv);
   if (!all) return unavailable();
@@ -242,7 +248,7 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
     suggestedNote = v.suggestedNote;
   }
 
-  // The project.
+  // The item itself. Its type is validated by validatePreparedDraft against PREPARABLE_TYPES (sow-475).
   let draft = null;
   if (creating || body?.draft !== undefined) {
     const v = validatePreparedDraft(isPlainObject(body?.draft) ? body.draft : {});
@@ -250,11 +256,21 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
     draft = v.draft;
   }
 
+  // sow-475: whether the preparer is credited as a contributor on the claimed item. Opt in, per invitation,
+  // and only meaningful when creating: an edit cannot add or remove a credit, because the recipient was shown
+  // the answer on the claim page before deciding.
+  const creditPreparer = body?.creditPreparer === true;
+
   // The staged images belong to the item the editor staged them under, in the caller's own draft image store.
+  // sow-475: the key is `<type>:<permalink>`, so a prompt and a project sharing a permalink keep separate
+  // staged uploads. It was `project:` only, which would have refused every prompt outright.
   let stagedItem = null;
   if (!blank(body?.stagedItem)) {
     stagedItem = itemTokenOf(body.stagedItem);
-    if (!stagedItem || !stagedItem.startsWith('project:')) return bad(400, 'bad_request', 'stagedItem must be project:<permalink>.');
+    const prefixes = PREPARABLE_TYPES.map((t) => `${t}:`);
+    if (!stagedItem || !prefixes.some((p) => stagedItem.startsWith(p))) {
+      return bad(400, 'bad_request', `stagedItem must be one of ${prefixes.join(' or ')}<permalink>.`);
+    }
   }
 
   const bind = await resolveBinding(env, io, kv, body?.githubLogin, current);
@@ -276,18 +292,18 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
   if (draft) {
     const size = preparedSizeProblem({ listing: draft, images: imageBytesOf(collected.images) });
     if (size) return bad(size.status, size.error, size.message);
-    const taken = await slugProblem(env, io, kv, draft.slug, id);
+    const taken = await slugProblem(env, io, kv, draft.slug, id, draft.type); // sow-475: the draft's own type
     if (taken) return taken;
     const house = await houseProblem(env, io, kv, draft.frontmatter);
     if (house) return house;
   }
 
   return creating
-    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding: bind.binding, collected })
+    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding: bind.binding, collected, creditPreparer })
     : updateListing({ kv, auth, now, io, id, readEarlier: current, text, suggestedNote, draft, binding: bind.binding, collected });
 }
 
-async function createListing({ kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding, collected }) {
+async function createListing({ kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding, collected, creditPreparer = false }) {
   let id = null;
   for (let i = 0; i < LISTING_ID_ATTEMPTS && !id; i += 1) {
     let candidate;
@@ -311,7 +327,7 @@ async function createListing({ kv, auth, now, rand, io, config, campaign, text, 
     rec = newListing({
       id, draft, recipientName: text.recipientName, message: text.message, suggestedNote: suggestedNote ?? '', campaign, code,
       boundGithubId: bound?.boundGithubId ?? null, boundLogin: bound?.boundLogin ?? null,
-      preparedBy: auth.githubId, preparedByLogin: login, now,
+      preparedBy: auth.githubId, preparedByLogin: login, creditPreparer, now,
     });
   } catch {
     return bad(400, 'invalid', 'This listing could not be recorded as given.');

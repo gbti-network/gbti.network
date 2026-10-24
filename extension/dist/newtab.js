@@ -14384,6 +14384,7 @@ ${listStyleProseCss(".doc-blocks")}
     return typeof id === "string" && LISTING_ID_RE.test(id);
   }
   var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
+  var PREPARABLE_TYPES = Object.freeze(["project", "prompt"]);
   var MAX_MESSAGE = 1e3;
   var MAX_RECIPIENT_NAME = 60;
   var MAX_SUGGESTED_NOTE = 2e3;

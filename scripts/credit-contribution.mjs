@@ -12,45 +12,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CONTRIB_INDENT = '  ';
-
-/** Render one contributors[] YAML list item (2-space list indent, 4-space property indent). */
-export function contributorItemYaml(c) {
-  const lines = [`${CONTRIB_INDENT}- login: ${c.login}`];
-  if (c.commit) lines.push(`${CONTRIB_INDENT}  commit: "${c.commit}"`);
-  if (c.url) lines.push(`${CONTRIB_INDENT}  url: "${c.url}"`);
-  if (c.class) lines.push(`${CONTRIB_INDENT}  class: ${c.class}`);
-  // SOW-059: the merge date (ISO). The payout job's collaboration gather reads it so a contribution only counts
-  // toward the 5% pool when it landed BEFORE the conversion it is attributed to. An entry without `at` earns no
-  // collaboration point (the window check drops a non-finite date) -- safe + backward-tolerant for legacy entries.
-  if (c.at) lines.push(`${CONTRIB_INDENT}  at: "${c.at}"`);
-  return lines.join('\n');
-}
-
-/**
- * Add a contributor to a content file's frontmatter `contributors` block, surgically (the rest of the
- * frontmatter is preserved). Idempotent: if the commit is already credited, the file is unchanged.
- * Creates the block after `author:` when none exists, or expands an inline empty `contributors: []`.
- */
-export function insertContributor(fileText, c) {
-  const fmMatch = fileText.match(/^---\n([\s\S]*?)\n---/);
-  if (!fmMatch) return fileText; // no frontmatter: do not place anything
-  const fm = fmMatch[1];
-  if (c.commit && fm.includes(c.commit)) return fileText; // already credited this commit (idempotent)
-  const item = contributorItemYaml(c);
-
-  let newFm;
-  if (/^contributors:[ \t]*\[[ \t]*\][ \t]*$/m.test(fm)) {
-    newFm = fm.replace(/^contributors:[ \t]*\[[ \t]*\][ \t]*$/m, `contributors:\n${item}`);
-  } else if (/^contributors:[ \t]*$/m.test(fm)) {
-    newFm = fm.replace(/^(contributors:[ \t]*)$/m, `$1\n${item}`);
-  } else if (/^author:.*$/m.test(fm)) {
-    newFm = fm.replace(/^(author:.*)$/m, `$1\ncontributors:\n${item}`);
-  } else {
-    newFm = `${fm}\ncontributors:\n${item}`;
-  }
-  return fileText.replace(fm, newFm);
-}
+// sow-475: the two pure functions moved to membership/contributor-credit.mjs, unchanged, because the prepared
+// listing claim needs them and that path runs in the Worker, where this file's node:fs import cannot go. They are
+// re-exported here so every existing importer and test keeps working against the same single implementation.
+export { contributorItemYaml, insertContributor } from '../membership/contributor-credit.mjs';
+import { insertContributor } from '../membership/contributor-credit.mjs';
 
 // ---- thin I/O shell (the deriving Action is human-todo) --------------------
 

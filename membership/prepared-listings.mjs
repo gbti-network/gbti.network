@@ -26,7 +26,7 @@ import { schemaFor } from '../client/src/schemas.mjs';
 // The browser-safe half lives in its own module (see its header); everything there is re-exported from here, so
 // a server-side caller keeps one import path.
 export * from './prepared-listings-shared.mjs';
-import { GITHUB_ID_RE, LISTING_STATE, PLACEHOLDER_FOLDER, PREPARED_MAX_IMAGES, PREPARED_SLUG_MAX, SLUG_RE, isListingId, listingImageRefs, normalizeGithubLogin, sanitizeMessage, sanitizeRecipientName, sanitizeSuggestedNote, validateSuggestedNote } from './prepared-listings-shared.mjs';
+import { GITHUB_ID_RE, LISTING_STATE, PLACEHOLDER_FOLDER, PREPARABLE_TYPES, PREPARED_MAX_IMAGES, PREPARED_SLUG_MAX, SLUG_RE, isListingId, listingImageRefs, normalizeGithubLogin, sanitizeMessage, sanitizeRecipientName, sanitizeSuggestedNote, validateSuggestedNote } from './prepared-listings-shared.mjs';
 
 // ---- validating a prepared project ----------------------------------------------------------------------------
 
@@ -35,9 +35,14 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 // Fields the server owns. They are dropped silently, because the editor sends several of them by default
 // (status, visibility, publishedAt) and the claim sets them itself: published, public, dated at the claim.
 const SERVER_FIELDS = Object.freeze(['type', 'author', 'status', 'visibility', 'publishedAt', 'updatedAt', 'contributors', 'redirectFrom']);
-// Every field a project may carry: the client schema's keys plus `newsFeed`, which the site schema has and the
-// client mirror does not. Anything else is refused rather than dropped, so an agent learns about a typo.
-const PROJECT_KEYS = new Set([...Object.keys(schemaFor('project')?.shape ?? {}), 'newsFeed']);
+// The word used in the messages a superadmin reads, so a prompt is never refused for not being a valid "project".
+const TYPE_NOUN = Object.freeze({ project: 'project', prompt: 'prompt' });
+
+// Every field an item of a given type may carry: the client schema's keys, plus `newsFeed` for a project, which the
+// site schema has and the client mirror does not. Anything else is refused rather than dropped, so an agent learns
+// about a typo. Built once per type at module load, as the single project set was.
+const EXTRA_KEYS = Object.freeze({ project: ['newsFeed'] });
+const TYPE_KEYS = new Map(PREPARABLE_TYPES.map((t) => [t, new Set([...Object.keys(schemaFor(t)?.shape ?? {}), ...(EXTRA_KEYS[t] ?? [])])]));
 const MEMBERS_MARKER = '<!-- members-only -->';
 
 /** Why `v` is not an http or https URL, or null when it is one. */
@@ -51,9 +56,12 @@ function httpUrlProblem(v, { httpsOnly = false } = {}) {
 }
 
 /**
- * The frontmatter the claim builds the project file from: the prepared fields plus what the claim decides
+ * The frontmatter the claim builds the item's file from: the prepared fields plus what the claim decides
  * (the slug, published, public, the claim date). `author` is forced to the claimant's folder by buildContentFile.
  * One function, used by the save-time dry run and by the claim, so the two build the same file.
+ *
+ * sow-475: this was already type-agnostic. It strips the server-owned fields and sets four of them, and names no
+ * project field, so a prompt needs no sibling of it. The name is kept for every existing caller.
  */
 export function claimProjectInput(frontmatter, { slug, publishedAt } = {}) {
   const fm = isPlainObject(frontmatter) ? { ...frontmatter } : {};
@@ -81,8 +89,12 @@ export function claimProjectInput(frontmatter, { slug, publishedAt } = {}) {
  * membership/prepared-claim-files.mjs, and the size limits by preparedSizeProblem beside it.
  */
 export function validatePreparedDraft({ type, slug, frontmatter, body = '' } = {}) {
-  if (type !== 'project') return { ok: false, error: 'unsupported_type', issues: ['Only a project can be prepared for someone.'] };
-  if (!isPlainObject(frontmatter)) return { ok: false, error: 'invalid', issues: ['The project fields are missing.'] };
+  if (!PREPARABLE_TYPES.includes(type)) {
+    return { ok: false, error: 'unsupported_type', issues: [`Only a ${PREPARABLE_TYPES.map((t) => TYPE_NOUN[t]).join(' or a ')} can be prepared for someone.`] };
+  }
+  const noun = TYPE_NOUN[type];
+  const typeKeys = TYPE_KEYS.get(type);
+  if (!isPlainObject(frontmatter)) return { ok: false, error: 'invalid', issues: [`The ${noun} fields are missing.`] };
   if (body !== undefined && body !== null && typeof body !== 'string') return { ok: false, error: 'invalid', issues: ['The body must be text.'] };
   const given = slug !== undefined && slug !== null && slug !== '' ? slug : frontmatter.slug;
   const s = String(given ?? '').trim();
@@ -99,20 +111,21 @@ export function validatePreparedDraft({ type, slug, frontmatter, body = '' } = {
   for (const [k, v] of Object.entries(frontmatter)) {
     if (SERVER_FIELDS.includes(k)) continue;
     if (v === undefined || v === null || v === '') continue;
-    if (k === 'publicStub') { if (v === true) issues.push('A prepared project is published to everyone, so it cannot have a members-only stub.'); continue; }
-    if (k === 'encryptedBody') { issues.push('A prepared project cannot carry a members-only body.'); continue; }
-    if (!PROJECT_KEYS.has(k)) { issues.push(`"${k}" is not a project field.`); continue; }
+    if (k === 'publicStub') { if (v === true) issues.push(`A prepared ${noun} is published to everyone, so it cannot have a members-only stub.`); continue; }
+    if (k === 'encryptedBody') { issues.push(`A prepared ${noun} cannot carry a members-only body.`); continue; }
+    if (k === 'encryptedSkill') { issues.push(`A prepared ${noun} cannot carry a members-only skill file.`); continue; }
+    if (!typeKeys.has(k)) { issues.push(`"${k}" is not a ${noun} field.`); continue; }
     fm[k] = v;
   }
   fm.slug = s;
-  if (text.includes(MEMBERS_MARKER)) issues.push('The body has a members-only section, and a prepared project is published to everyone.');
+  if (text.includes(MEMBERS_MARKER)) issues.push(`The body has a members-only section, and a prepared ${noun} is published to everyone.`);
 
   if (fm.links !== undefined) {
     if (!Array.isArray(fm.links)) issues.push('links must be a list.');
     else {
       fm.links.forEach((l, i) => {
         if (!isPlainObject(l)) { issues.push(`links[${i}] must be an object with a url.`); return; }
-        if (l.encrypted === true) issues.push(`links[${i}] is encrypted, and a prepared project is published to everyone.`);
+        if (l.encrypted === true) issues.push(`links[${i}] is encrypted, and a prepared ${noun} is published to everyone.`);
         const p = httpUrlProblem(l.url);
         if (p) issues.push(`links[${i}].url ${p}.`);
       });
@@ -132,20 +145,20 @@ export function validatePreparedDraft({ type, slug, frontmatter, body = '' } = {
 
   const refs = listingImageRefs(fm, text);
   for (const b of refs.bad) issues.push(`The image ${JSON.stringify(b)} must be a lowercase png, jpg, webp or gif chosen in the editor (./images/<name>).`);
-  if (refs.names.length > PREPARED_MAX_IMAGES) issues.push(`A prepared project may use at most ${PREPARED_MAX_IMAGES} images; this one uses ${refs.names.length}.`);
+  if (refs.names.length > PREPARED_MAX_IMAGES) issues.push(`A prepared ${noun} may use at most ${PREPARED_MAX_IMAGES} images; this one uses ${refs.names.length}.`);
 
   try {
-    buildContentFile({ type: 'project', username: PLACEHOLDER_FOLDER, input: claimProjectInput(fm, { slug: s, publishedAt: '2026-01-01T00:00:00.000Z' }), body: text });
+    buildContentFile({ type, username: PLACEHOLDER_FOLDER, input: claimProjectInput(fm, { slug: s, publishedAt: '2026-01-01T00:00:00.000Z' }), body: text });
   } catch (e) {
     if (e instanceof ContentValidationError) {
-      for (const i of e.issues) issues.push(`${(i.path || []).join('.') || 'project'}: ${i.message}`);
+      for (const i of e.issues) issues.push(`${(i.path || []).join('.') || noun}: ${i.message}`);
     } else {
-      issues.push('The project could not be built from these fields.');
+      issues.push(`The ${noun} could not be built from these fields.`);
     }
   }
 
   if (issues.length) return { ok: false, error: 'invalid', issues: [...new Set(issues)] };
-  return { ok: true, draft: { type: 'project', slug: s, frontmatter: fm, body: text, images: refs.names } };
+  return { ok: true, draft: { type, slug: s, frontmatter: fm, body: text, images: refs.names } };
 }
 
 // ---- the record -----------------------------------------------------------------------------------------------
@@ -166,11 +179,11 @@ function boundFields(boundGithubId, boundLogin) {
  */
 export function newListing({
   id, draft, recipientName, message, suggestedNote = '', campaign, code,
-  boundGithubId = null, boundLogin = null, preparedBy, preparedByLogin = null, now = new Date(),
+  boundGithubId = null, boundLogin = null, preparedBy, preparedByLogin = null, creditPreparer = false, now = new Date(),
 } = {}) {
   if (!isListingId(id)) throw new Error('prepared-listings: invalid listing id');
-  if (!draft || draft.type !== 'project' || !isPlainObject(draft.frontmatter) || !SLUG_RE.test(String(draft.slug ?? ''))) {
-    throw new Error('prepared-listings: a validated project draft is required');
+  if (!draft || !PREPARABLE_TYPES.includes(draft.type) || !isPlainObject(draft.frontmatter) || !SLUG_RE.test(String(draft.slug ?? ''))) {
+    throw new Error('prepared-listings: a validated draft of a preparable type is required');
   }
   const c = normalizeCouponCode(code);
   const camp = normalizeCouponCode(campaign);
@@ -181,7 +194,7 @@ export function newListing({
   return {
     v: 1,
     id,
-    type: 'project',
+    type: draft.type,
     slug: draft.slug,
     title: String(draft.frontmatter.title ?? ''),
     frontmatter: draft.frontmatter,
@@ -196,6 +209,13 @@ export function newListing({
     ...boundFields(boundGithubId, boundLogin),
     preparedBy: String(preparedBy),
     preparedByLogin: preparedByLogin ? String(preparedByLogin) : null,
+    // sow-475: credit the preparer as a contributor on the claimed item. OPT IN, per invitation, because GBTI
+    // usually writes a listing ABOUT someone else's work (Game Art Styles, Slashy) and claiming contributor
+    // credit on a member's page about their own product would assert something nobody said. It is true when
+    // GBTI actually authored the item, which is the case this was built for: a prompt written as a gift.
+    // The credit is applied SERVER-SIDE at claim time from `preparedByLogin`; `contributors` stays in
+    // SERVER_FIELDS and stays stripped from the draft, so a payload can never assert its own credit.
+    creditPreparer: creditPreparer === true,
     createdAt: at,
     updatedAt: at,
     revokedAt: null,
@@ -241,8 +261,14 @@ export function applyListingEdit(rec, edit = {}, { now = new Date(), invite = nu
   let removedImages = [];
   if (edit.draft !== undefined) {
     const d = edit.draft;
-    if (!d || d.type !== 'project' || !isPlainObject(d.frontmatter) || !SLUG_RE.test(String(d.slug ?? ''))) {
-      return { ok: false, error: 'invalid', message: 'The project fields are missing.' };
+    if (!d || !PREPARABLE_TYPES.includes(d.type) || !isPlainObject(d.frontmatter) || !SLUG_RE.test(String(d.slug ?? ''))) {
+      return { ok: false, error: 'invalid', message: 'The item fields are missing.' };
+    }
+    // sow-475: an edit may not change what the listing IS. The images, the claim path and the duplicate-name
+    // check all key on the stored type, and a type that changed under them would write the file into the wrong
+    // folder. Editing the content of a prompt is fine; turning a prompt into a project is not.
+    if (rec?.type && d.type !== rec.type) {
+      return { ok: false, error: 'type_change', message: `This invitation was prepared as a ${TYPE_NOUN[rec.type] ?? rec.type} and cannot be changed into something else.` };
     }
     const images = Array.isArray(d.images) ? [...d.images] : [];
     removedImages = (rec.images || []).filter((n) => !images.includes(n));
@@ -394,6 +420,7 @@ export function listingSummary(rec, invite = null, now = new Date()) {
     recipientName: rec.recipientName ?? '',
     bound: Boolean(rec.boundGithubId),
     boundLogin: rec.boundLogin ?? null,
+    creditPreparer: rec.creditPreparer === true, // sow-475
     campaign: rec.campaign ?? null,
     code: rec.code ?? null,
     priorCodes: Array.isArray(rec.priorCodes) ? [...rec.priorCodes] : [],
@@ -451,6 +478,9 @@ export function publicListingView(rec, terms = null) {
     suggestedNote: typeof rec?.suggestedNote === 'string' ? rec.suggestedNote : '',
     githubLogin: tied ? normalizeGithubLogin(String(rec.boundLogin ?? '')) : null,
     preparedByLogin: rec?.preparedByLogin ?? null,
+    // sow-475: the recipient is told BEFORE claiming that the preparer will appear as a contributor on the
+    // item once it is theirs. Someone accepting a gift should know whose name lands on it beside their own.
+    creditPreparer: rec?.creditPreparer === true,
     tier: terms?.tier ?? null,
     freeDays: Number.isInteger(terms?.freeDays) ? terms.freeDays : null,
   };
@@ -467,7 +497,10 @@ export function publicReadable(invite, listing, now = new Date()) {
   if (st !== INVITE_STATE.issued && st !== INVITE_STATE.redeemed && st !== INVITE_STATE.claim_pending) return false;
   if (!isPlainObject(listing) || !isListingId(listing.id) || invite.listingId !== listing.id) return false;
   if (normalizeCouponCode(listing.code) !== normalizeCouponCode(invite.code)) return false;
-  if (listing.type !== 'project' || !isPlainObject(listing.frontmatter)) return false;
+  // sow-475: fail closed on an UNKNOWN type, not on "not a project". This is the gate the public claim page read
+  // passes through, so a type missing from PREPARABLE_TYPES makes the invitation read as inactive, which is the
+  // right answer for a record this build does not understand and the wrong one for a prompt.
+  if (!PREPARABLE_TYPES.includes(listing.type) || !isPlainObject(listing.frontmatter)) return false;
   if (listing.revokedAt || listing.claimedAt || invite.claimedAt) return false;
   return true;
 }

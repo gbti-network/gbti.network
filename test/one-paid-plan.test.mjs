@@ -157,7 +157,12 @@ test('CENSUS: the retired plan is not offered anywhere a visitor or ordinary mem
   // superadmin surface may still name the internal trust level.
   // extension/mcp is a BUILD ARTIFACT, like extension/dist: npm run build:extension regenerates it from
   // client/src, so scanning it reports its sources twice and fails on a stale bundle rather than on real copy.
-  const skip = /^(node_modules|\.git|dist|members|\.astro|\.data|\.product|\.snapshots|test|public\/extension|client-ui\/dist|extension\/dist|extension\/mcp)/;
+  // `.playwright-mcp` joined this list on 2026-10-24. It is gitignored (.gitignore:87) with zero tracked files,
+  // and holds the page snapshots the browser tool writes during visual QA. The census was reading those as
+  // shipped copy, so any session that had driven a browser got a FALSE RED here on the full local suite, while
+  // CI stayed green because it checks out clean. It is the same category as every other entry: generated or
+  // ignored working-tree output, never shipped copy. Not a relaxation of what the census looks for.
+  const skip = /^(node_modules|\.git|dist|members|\.astro|\.data|\.product|\.snapshots|\.playwright-mcp|test|public\/extension|client-ui\/dist|extension\/dist|extension\/mcp)/;
   const allowed = new Set([
     'client-ui/src/elements/gbti-admin.mjs',              // superadmin grant control
   ]);

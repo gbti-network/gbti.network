@@ -19984,6 +19984,7 @@ function isListingId(id) {
 }
 var PREPARED_SLUG_MAX = 64;
 var SLUG_RE2 = new RegExp(`^${SLUG_PATTERN}$`);
+var PREPARABLE_TYPES = Object.freeze(["project", "prompt"]);
 var PREPARED_MAX_IMAGES = 12;
 var MAX_SUGGESTED_NOTE = 2e3;
 var INVISIBLE_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029]/g;
@@ -20074,9 +20075,13 @@ function preparedSaveRequest(args = {}) {
     const v = validateSuggestedNote(args.suggestedNote);
     if (!v.ok) throw new OperationError("bad-request", v.message);
   }
+  const type = blankArg(args.type) ? "project" : String(args.type).trim();
+  if (!PREPARABLE_TYPES.includes(type)) {
+    throw new OperationError("bad-request", `type must be one of ${PREPARABLE_TYPES.join(", ")}.`);
+  }
   const input = args.input;
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new OperationError("bad-request", "input (the project frontmatter) is required.");
+    throw new OperationError("bad-request", `input (the ${type} frontmatter) is required.`);
   }
   const slug = String(input.slug ?? "");
   if (!PREPARED_SLUG_RE.test(slug) || slug.length > PREPARED_SLUG_MAX) {
@@ -20098,7 +20103,7 @@ function preparedSaveRequest(args = {}) {
     if (seen.has(name)) throw new OperationError("bad-request", `The image ${name} is listed twice.`);
     seen.add(name);
   }
-  const stagedItem = `project:${slug}`;
+  const stagedItem = `${type}:${slug}`;
   const body = {
     op: "save",
     ...id ? { id } : {},
@@ -20107,7 +20112,8 @@ function preparedSaveRequest(args = {}) {
     ...blankArg(args.message) ? {} : { message: String(args.message) },
     ...args.suggestedNote === void 0 ? {} : { suggestedNote: args.suggestedNote === null ? "" : args.suggestedNote },
     ...args.githubLogin === void 0 ? {} : { githubLogin: args.githubLogin === null ? "" : String(args.githubLogin) },
-    draft: { type: "project", slug, frontmatter: input, body: typeof args.body === "string" ? args.body : "" },
+    ...args.creditPreparer === void 0 ? {} : { creditPreparer: args.creditPreparer === true },
+    draft: { type, slug, frontmatter: input, body: typeof args.body === "string" ? args.body : "" },
     stagedItem
   };
   return { stagedItem, images, body };
@@ -20657,15 +20663,17 @@ var TOOLS = [
   // optional `suggestedNote`, a factual starting point their note box opens with, which they edit or keep.
   {
     name: "prepare_listing",
-    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the project frontmatter: title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, pricingUrl, links[] (http or https, public only; each type is one of " + CONTENT_LINK_TYPES_SENTENCE + "), license (an exact id from house/licenses.yml, call list_vocabulary for the full list) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
+    description: "SUPERADMIN ONLY. Prepare a PROJECT listing for someone who is not a member yet, and get back a private invitation link to send them. Nothing is published now: the project waits privately until the recipient opens the link, signs in (the invitation carries the free year of `campaign`), writes their own author note and publishes it in their own folder. The author note belongs to the recipient, so this tool takes no authorNote: they write and publish their own when they claim it. You may pass `suggestedNote`, a starting point that pre-fills their note box and that they edit or keep. State facts about the work in it; never invent their reasons. Write facts about the work only (what it does, its features, its links), never first-person claims about the person, their motives or their history. input is the item frontmatter (a project unless `type` says prompt): title, slug (lowercase letters, digits and hyphens, at most 64 characters), shortDescription, icon and featuredImage (16:10) as ./images/<name> references; optional: categories[] (an ordered taxonomy path, call list_vocabulary for the tree), tags[], pricing, pricingUrl, links[] (http or https, public only; each type is one of " + CONTENT_LINK_TYPES_SENTENCE + "), license (an exact id from house/licenses.yml, call list_vocabulary for the full list) and licenseUrl, gallery[], video. The markdown `body` is the project description. Pass every referenced image in `images` as { name, dataBase64 }: a lowercase png, jpg, webp or gif name, at most 12 images of 1 MB each. `githubLogin` ties the invitation to one GitHub account; leave it out and the first person to use the link can claim it. Pass `id` from an earlier call to edit that listing (input and body then replace the stored project). Returns { id, code, link, state, bound }. The link works until it is claimed or revoked, so send it to the recipient only.",
     inputSchema: obj(
       {
-        input: { type: "object", description: "The project frontmatter, with image fields as ./images/<name> references." },
+        type: { type: "string", enum: ["project", "prompt"], description: "Optional. What is being prepared. Defaults to project (sow-475)." },
+        input: { type: "object", description: "The item frontmatter, with image fields as ./images/<name> references." },
         body: { type: "string", description: "The project description in markdown: facts about the work." },
         recipientName: { type: "string", description: "The name the invitation greets, at most 60 characters." },
         message: { type: "string", description: 'Your personal message to the recipient, plain text, at most 1000 characters. It is shown only on the invitation page, after a greeting the page adds on its own ("Hi <recipientName>,"), so do not open with a greeting.' },
         suggestedNote: { type: "string", description: "Optional. A suggested author note, plain text, at most 2000 characters. It is a starting point they can edit or keep: it shows in the preview as a suggestion and pre-fills the note box when they claim the listing, and nothing is published until they submit their own. State facts about the work; never invent their reasons, motives or history. On an edit, an empty string clears it." },
         githubLogin: { type: "string", description: "Optional. The GitHub account of the recipient. Only that account can claim the listing or its free year." },
+        creditPreparer: { type: "boolean", description: "Optional (sow-475). When true, YOU are added to the claimed item's contributors, because GBTI authored it rather than writing about the recipient's own work. Set only on a create; the recipient is shown it on the claim page before deciding. Default false." },
         campaign: { type: "string", description: "The coupon campaign whose free year the invitation grants. It must be active." },
         images: {
           type: "array",

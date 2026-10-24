@@ -318,8 +318,10 @@ export async function membershipClaimPost(request, env, deps = {}) {
   try { tree = await io.readTree(env, { fetchImpl: io.fetchImpl, kv: io.kv, upstream: io.upstream, getToken: io.getToken, useCache: false }); }
   catch { tree = null; }
   if (!tree || !Array.isArray(tree.content)) return { ...bad(502, 'tree_unavailable', 'The site could not be read. Try again shortly.'), notify };
-  if (tree.content.some((e) => e?.type === 'project' && e.slug === listing.slug)) {
-    return { ...bad(409, 'slug_taken', 'A project on the site already uses this permalink. Tell the person who sent the invitation so they can rename it; the same link keeps working.'), notify };
+  // sow-475: compare the listing's OWN type, the twin of slugProblem in membership-prepared-admin.mjs. A prompt
+  // checked against project slugs would be refused for names that are free and let through names that are taken.
+  if (tree.content.some((e) => e?.type === listing.type && e.slug === listing.slug)) {
+    return { ...bad(409, 'slug_taken', `A ${listing.type} on the site already uses this permalink. Tell the person who sent the invitation so they can rename it; the same link keeps working.`), notify };
   }
   const house = await houseRefusal(io, instToken, listing.frontmatter);
   if (house) return { ...house, notify };
