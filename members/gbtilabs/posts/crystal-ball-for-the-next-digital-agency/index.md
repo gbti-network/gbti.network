@@ -18,13 +18,13 @@ tags:
 layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
-updatedAt: '2026-10-24T20:49:39.764Z'
+updatedAt: '2026-10-24T21:04:52.496Z'
 publishedAt: '2026-10-24T20:49:39.765Z'
 type: post
 author: gbtilabs
 ---
 
-*A Strategic Vision for the Next Generation of Digital Agencies. First published <a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="noopener" target="_blank">here on google docs</a> and released to LinkedIn and X.*
+*A Strategic Vision for the Next Generation of Digital Agencies. First published <a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="noopener" target="_blank">here on google docs</a> and released to <a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank">LinkedIn</a> and X.*
 
 ## Executive Summary
 
