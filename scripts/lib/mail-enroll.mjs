@@ -98,9 +98,15 @@ export function planMailEnrollment({ members = [], identities = new Map(), suppr
     // carries githubId, so they are matched on that first. (An UNSUBSCRIBE leaves only a pseudonymous marker
     // under the old hash, so that case cannot be matched here; the run report counts the markers it could not
     // place, so the size of that blind spot is measured rather than assumed.)
-    if (enrolledGithubIds.has(githubId)) { plan.alreadyEnrolled.push({ ...who(m), underEarlierAddress: true }); continue; }
-
     const ident = identities.get(githubId) ?? { hash: null, reason: IDENTITY_REASON.NO_EMAIL };
+    // `underEarlierAddress` only when their CURRENT address has no record of its own: an account match whose
+    // address also matches is an ordinary repeat. Counting both as "earlier address" overstated the address
+    // changes eighteen to fifteen on the first live dry run (2026-10-24), and the report reader acted on it.
+    if (enrolledGithubIds.has(githubId)) {
+      plan.alreadyEnrolled.push({ ...who(m), underEarlierAddress: !(ident.hash && enrolled.has(ident.hash)) });
+      continue;
+    }
+
 
     // Recorded BEFORE the blocked check: a member with no address is unreachable whether or not a key is
     // configured, and the owner needs that list now rather than after provisioning.

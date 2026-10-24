@@ -238,3 +238,13 @@ test('the exclusion list: absent means nobody, unreadable or malformed refuses t
   assert.equal(res.refused, true);
   assert.equal(puts.length, 0);
 });
+
+test('"under an earlier address" counts only members whose current address has no record of its own', () => {
+  // Member 8's record is under h8, which is also their current address: an ordinary repeat. Member 3's record
+  // is under an old address, and their current one (h3) has none: an address change.
+  const members = [...POPULATION, member('3', 'paid')];
+  const identities = new Map([...IDENTITIES, ['3', { hash: 'h3', reason: IDENTITY_REASON.OK }]]);
+  const run = planRun({ ...BASE, members, identities, digestOnly: true, enrolledGithubIds: new Set(['3', '8']) });
+  const flags = Object.fromEntries(run.mailPlan.alreadyEnrolled.map((r) => [r.githubId, r.underEarlierAddress]));
+  assert.deepEqual(flags, { 3: true, 8: false });
+});
