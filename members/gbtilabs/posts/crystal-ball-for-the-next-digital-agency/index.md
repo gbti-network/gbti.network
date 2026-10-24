@@ -1,5 +1,5 @@
 ---
-title: 🔮 Predicting the Future of Web Development & Agency Managed Client Relationships
+title: 🔮 Predicting the Future of Web Development & the Agency-Client Relationship
 slug: crystal-ball-for-the-next-digital-agency
 status: published
 visibility: public
@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-24T21:45:50.700Z'
+updatedAt: '2026-10-24T21:48:13.019Z'
 type: post
 author: gbtilabs
 ---
