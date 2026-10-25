@@ -14,6 +14,7 @@ import { defaultFeatureImage } from '../../lib/feature-image';
 import LockedBody from '../../components/LockedBody.astro';
 import Avatar from '../../components/Avatar.astro';
 import ContentMeta from '../../components/ContentMeta.astro';
+import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 import ContentActions from '../../components/ContentActions.astro';
 import ContentFooter from '../../components/ContentFooter.astro';
 import AuthorNote from '../../components/blog/AuthorNote.astro'; // sow-459: the phone copy, under the Author card
@@ -53,7 +54,17 @@ const rawBody = (prompt.body ?? '').trim(); // raw markdown source for the "Mark
 
 // Author meta: profile (avatar + headline) and how many prompts they have shared (for the "see more" link).
 const allPrompts = (await getCollection('prompt')).filter(hasPublicPage);
-const profile = (await getCollection('profile')).find((p) => p.data.username === d.author)?.data;
+const profiles = await getCollection('profile');
+const profile = profiles.find((p) => p.data.username === d.author)?.data;
+// A page's credit line names everyone who made the item, not only whoever owns the folder. `contributors` was
+// already on these items and already read by the revenue model, but no prompt or project page rendered it, so a
+// credit could be earned and paid while staying invisible to every reader. Found on the first prepared listing,
+// where GBTI wrote the item and the credit landed in the file and nowhere else.
+//
+// COMMENTERS ARE DELIBERATELY LEFT OUT here, unlike the article stack. avatarStack adds them only when given a
+// targetSlug, and this omits it: an article's credit line is a conversation, while a prompt's is a statement of
+// who built the thing. Adding commenters would move faces into the byline every time somebody replied.
+const stack = avatarStack({ author: d.author, contributors: d.contributors, targetType: 'prompt', index: buildAvatarIndex(profiles) });
 const authorName = profile?.displayName ?? authorDisplay(d.author);
 const byAuthor = allPrompts.filter((p) => p.data.author === d.author);
 const authorCount = byAuthor.length;
@@ -121,7 +132,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
         </div>
         <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
         <div class="mt16 flex items-center g12 wrap-w">
-          <ContentMeta author={d.author} publishedAt={d.publishedAt} />
+          <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} />
           <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
           {paid && <span class="chip chip-green">Paid</span>}
         </div>
