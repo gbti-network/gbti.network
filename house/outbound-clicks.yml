@@ -5,7 +5,7 @@
 # of clicks whose agent names a well-known crawler, other = every answer that was not a 301 (Cloudflare's own Early
 # Hints probes land here). A date in `coverage` was queried; a date absent from it was NOT measured and must never
 # be read as zero. Request counts per path per day only: no personal data of any kind.
-generatedAt: '2026-10-25T12:31:00.306Z'
+generatedAt: '2026-10-25T12:32:49.984Z'
 coverage:
   - '2026-09-08'
   - '2026-09-09'
