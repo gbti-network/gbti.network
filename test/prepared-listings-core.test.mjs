@@ -113,6 +113,43 @@ test('listingImageRefs reads the image fields, the gallery and the body, and rej
   assert.equal(isListingImageName('Icon.png'), false);
 });
 
+// sow-475 follow-up: the collector used ONE project-only field list, so a prompt's lead image (`image`) was never
+// collected. That failed SILENTLY in the worst way available: validatePreparedDraft still passed, the claim still
+// built, and the committed frontmatter carried `image: ./images/x.jpg` naming a file the claim had not committed.
+// The published page would have shipped a broken hero (and a broken og:image) with nothing red anywhere.
+test('listingImageRefs collects a prompt lead image, and does not treat project fields as a prompt\'s', () => {
+  const prompt = listingImageRefs({ image: './images/hero.jpg' }, 'body ![ref](./images/ref.jpg)', 'prompt');
+  assert.deepEqual(prompt.names, ['hero.jpg', 'ref.jpg'], 'the prompt hero is collected, so its bytes are committed');
+  assert.deepEqual(prompt.bad, []);
+
+  // The type decides which fields count. A project field on a prompt is not an image reference (the unknown-field
+  // gate refuses it upstream), and the prompt field is not read for a project.
+  assert.deepEqual(listingImageRefs({ featuredImage: './images/cover.webp' }, '', 'prompt').names, []);
+  assert.deepEqual(listingImageRefs({ image: './images/hero.jpg' }, '', 'project').names, []);
+
+  // Default stays 'project', so every caller that predates the type argument is unchanged.
+  assert.deepEqual(listingImageRefs({ icon: './images/icon.png' }, '').names, ['icon.png']);
+
+  // A bad prompt hero is REFUSED rather than quietly dropped.
+  assert.deepEqual(listingImageRefs({ image: './images/Hero.JPG' }, '', 'prompt').names, []);
+  assert.equal(listingImageRefs({ image: './images/Hero.JPG' }, '', 'prompt').bad.length, 1);
+});
+
+test('a prepared prompt carries its hero image through validation, so the claim commits it', () => {
+  const draft = validatePreparedDraft({
+    type: 'prompt',
+    slug: 'hero-prompt',
+    frontmatter: {
+      title: 'Hero prompt', slug: 'hero-prompt', kind: 'prompt',
+      shortDescription: 'A prompt with a lead image.', categories: [], targets: ['ChatGPT'],
+      image: './images/hero.jpg',
+    },
+    body: 'Body text.',
+  });
+  assert.equal(draft.ok, true, draft.ok ? '' : draft.issues.join(' | '));
+  assert.deepEqual(draft.draft.images, ['hero.jpg'], 'the hero is in the draft image list the claim commits');
+});
+
 // ---- validatePreparedDraft -------------------------------------------------------------------------------------
 
 test('a valid project validates, with the server fields STRIPPED and the images listed', () => {

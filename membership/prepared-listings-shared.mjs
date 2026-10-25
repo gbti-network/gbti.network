@@ -202,6 +202,20 @@ export function validateInvitationText({ recipientName, message } = {}) {
 
 /** The image()-typed project fields, from src/content.config.ts projectShape. `gallery` is handled separately. */
 export const PROJECT_IMAGE_FIELDS = Object.freeze(['icon', 'iconLarge', 'banner', 'featuredImage']);
+/**
+ * The image()-typed frontmatter fields PER PREPARABLE TYPE. A prompt carries ONE optional lead image, `image`
+ * (promptSchema in client/src/schemas.mjs; resolveHeroForType reads it as the hero, and it becomes the og:image).
+ *
+ * WHY THIS IS A MAP AND NOT ONE LIST. sow-475 made the listing type pluggable and left this list project-only,
+ * which did not fail loudly: the hero was written into the prompt's frontmatter while its file was never collected,
+ * so the claim committed an `image:` pointing at an image it had not committed. The page would ship with a broken
+ * hero and nothing would have errored. A type missing from this map contributes no frontmatter image fields, so
+ * adding a preparable type without adding its fields here loses its images the same silent way: add both together.
+ */
+export const TYPE_IMAGE_FIELDS = Object.freeze({
+  project: PROJECT_IMAGE_FIELDS,
+  prompt: Object.freeze(['image']),
+});
 const IMAGE_NAME_RE = /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
 const IMAGE_VALUE_RE = /^\.\/images\/([^/\\]+)$/;
 // The markdown reference form Astro resolves, `](./images/NAME` with an optional title after it. Mirrors
@@ -214,13 +228,14 @@ export function isListingImageName(name) {
 }
 
 /**
- * Every image the prepared project references, from its image fields, its gallery and its body. Returns
+ * Every image the prepared item references, from the image fields OF ITS TYPE (`type`, default 'project'),
+ * its gallery and its body. Returns
  * `{ names, bad }`: `names` are the distinct canonical file names (`./images/<lowercase name>`), in first-seen
  * order; `bad` are the raw values that are not in that shape (a flat path, an uppercase name, an svg, a remote URL
  * in an image field). A bad reference is refused at preparation, because at claim time it would either be refused
  * by the Worker's lowercase image gate or merge a page the site build cannot resolve.
  */
-export function listingImageRefs(frontmatter, body = '') {
+export function listingImageRefs(frontmatter, body = '', type = 'project') {
   const names = [];
   const bad = [];
   const seen = new Set();
@@ -231,7 +246,7 @@ export function listingImageRefs(frontmatter, body = '') {
     if (!seen.has(m[1])) { seen.add(m[1]); names.push(m[1]); }
   };
   const fm = frontmatter && typeof frontmatter === 'object' ? frontmatter : {};
-  for (const k of PROJECT_IMAGE_FIELDS) take(fm[k]);
+  for (const k of TYPE_IMAGE_FIELDS[type] ?? []) take(fm[k]);
   if (Array.isArray(fm.gallery)) {
     for (const row of fm.gallery) take(typeof row === 'string' ? row : (row && typeof row === 'object' ? row.src : row));
   } else if (fm.gallery !== undefined && fm.gallery !== null) {

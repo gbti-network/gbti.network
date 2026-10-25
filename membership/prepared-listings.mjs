@@ -143,7 +143,7 @@ export function validatePreparedDraft({ type, slug, frontmatter, body = '' } = {
 
   if (typeof fm.title !== 'string' || !fm.title.trim()) issues.push('The title must not be blank.');
 
-  const refs = listingImageRefs(fm, text);
+  const refs = listingImageRefs(fm, text, type); // sow-475: the image fields of THIS type, not the project's
   for (const b of refs.bad) issues.push(`The image ${JSON.stringify(b)} must be a lowercase png, jpg, webp or gif chosen in the editor (./images/<name>).`);
   if (refs.names.length > PREPARED_MAX_IMAGES) issues.push(`A prepared ${noun} may use at most ${PREPARED_MAX_IMAGES} images; this one uses ${refs.names.length}.`);
 

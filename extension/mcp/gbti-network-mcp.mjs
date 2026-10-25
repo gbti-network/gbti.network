@@ -20004,6 +20004,10 @@ function validateSuggestedNote(raw) {
   return { ok: true, suggestedNote: sanitizeSuggestedNote(raw) };
 }
 var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
+var TYPE_IMAGE_FIELDS = Object.freeze({
+  project: PROJECT_IMAGE_FIELDS,
+  prompt: Object.freeze(["image"])
+});
 var IMAGE_NAME_RE = /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
 function isListingImageName(name) {
   return typeof name === "string" && name.length <= 128 && IMAGE_NAME_RE.test(name);

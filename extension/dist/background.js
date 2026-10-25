@@ -20161,6 +20161,10 @@ var DESTINATION_BY_CAMPAIGN = Object.freeze({
 var SLUG_RE3 = new RegExp(`^${SLUG_PATTERN}$`);
 var PREPARABLE_TYPES = Object.freeze(["project", "prompt"]);
 var PROJECT_IMAGE_FIELDS = Object.freeze(["icon", "iconLarge", "banner", "featuredImage"]);
+var TYPE_IMAGE_FIELDS = Object.freeze({
+  project: PROJECT_IMAGE_FIELDS,
+  prompt: Object.freeze(["image"])
+});
 var LISTING_STATE = Object.freeze({
   prepared: "prepared",
   revoked: "revoked",
