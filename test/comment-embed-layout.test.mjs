@@ -50,7 +50,8 @@ test('the website built list: the comment card and the author intro declare thei
   const pad = px(/padding:(\d+)px/, st, 'padding'); const gap = px(/gap:(\d+)px/, st, 'gap');
   assert.equal(px(/--embed-out-l:(\d+)px/, st, 'offset'), pad + Number(li[2]) + gap);
   assert.equal(px(/--embed-out-r:(\d+)px/, st, 'right'), pad);
-  const intro = s.match(/<article class="card" style="([^"]+)">/)[1];
+  // sow-459: the author intro card moved, unchanged, into AuthorNote.astro.
+  const intro = read('src/components/blog/AuthorNote.astro').match(/<article class="card" style="([^"]+)">/)[1];
   const ipad = px(/padding:(\d+)px/, intro, 'intro padding');
   assert.equal(px(/--embed-out-l:(\d+)px/, intro, 'intro offset'), ipad, 'the intro\'s avatar is in a header row, so only its padding');
   assert.equal(px(/--embed-out-r:(\d+)px/, intro, 'intro right'), ipad);

@@ -9,6 +9,7 @@ import CommunityInvite from './CommunityInvite.astro';
 import ReferralCredit from './ReferralCredit.astro';
 import Comments from './blog/Comments.astro';
 import AuthorBox from './blog/AuthorBox.astro';
+import AuthorNote from './blog/AuthorNote.astro';
 import FollowNetwork from './FollowNetwork.astro';
 import DigestSubscribe from './mail/DigestSubscribe.astro';
 import { hasAuthorNote } from '../lib/comments';
@@ -24,8 +25,9 @@ interface Props {
   hideAuthor?: boolean; // skip the "Written by" box when the page already shows the author elsewhere (e.g. the prompt sidebar Author card)
   aliases?: string[]; // SOW-112: pre-rename slugs, unioned into comment lookups so a renamed item still finds its thread + intro
   invite?: boolean; // sow-435: false drops the join panel but keeps the author's referral credit (articles pass false)
+  noteFirst?: boolean; // sow-459: the author note opens this block, above the join panel, instead of topping the thread (prompts pass true)
 }
-const { type, slug, author, publishedAt, via, wide = false, hideAuthor = false, aliases = [], invite = true } = Astro.props;
+const { type, slug, author, publishedAt, via, wide = false, hideAuthor = false, aliases = [], invite = true, noteFirst = false } = Astro.props;
 const viaTag = via ?? `${type}:${slug}`;
 // The "From the author" intro (SOW-014, rendered by Comments.astro) already carries the author's name and
 // avatar right above the thread, so a plain "Written by" box is redundant whenever one exists -- skip it
@@ -33,6 +35,10 @@ const viaTag = via ?? `${type}:${slug}`;
 // somewhere else entirely, regardless of whether an intro exists.
 const skipAuthorBox = hideAuthor || hasAuthorNote(await getCollection('comment'), type, slug, author, aliases);
 ---
+{/* sow-459 (owner, 2026-10-25): on a prompt page the author note sits under the prompt, ABOVE the join panel, rather
+    than under it at the top of the discussion. This is the desktop copy (placement="wide"); the prompt page puts
+    the phone copy under its sidebar Author card itself. Articles and projects keep the note in the thread. */}
+{noteFirst && <AuthorNote targetType={type} targetSlug={slug} author={author} aliases={aliases} placement="wide" />}
 {invite ? <CommunityInvite author={author} via={viaTag} /> : <ReferralCredit author={author} via={viaTag} />}
 {!skipAuthorBox && <AuthorBox author={author} publishedAt={publishedAt} />}
 {/* sow-166 / sow-202: the digest capture. Mounted HERE rather than on each of the three page templates,
@@ -44,7 +50,7 @@ const skipAuthorBox = hideAuthor || hasAuthorNote(await getCollection('comment')
     produced and verified; each content page also carries a sidebar digest, and the component's load
     guard keeps the two instances from loading Turnstile twice. */}
 <DigestSubscribe variant="inline" quietTurnstile />
-<Comments targetType={type} targetSlug={slug} author={author} wide={wide} aliases={aliases} />
+<Comments targetType={type} targetSlug={slug} author={author} wide={wide} aliases={aliases} note={!noteFirst} />
 {/* The social-follow block CLOSES the page, under the discussion (owner request, 2026-08-28; it used to
     sit above the comments, where the digest is now). Was hand-copied, and stale, inside individual
     article markdown; now one shared mount bound to SOCIAL_LINKS. */}

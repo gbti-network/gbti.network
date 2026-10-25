@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import yaml from 'js-yaml';
-import { parseTierDisplay, validateTierDisplay, TierDisplayError, TIER_ORDER, benefitProse } from '../membership/tiers-display.mjs';
+import { parseTierDisplay, validateTierDisplay, TierDisplayError, TIER_ORDER, benefitProse, taglineFragments } from '../membership/tiers-display.mjs';
 import { TIER } from '../membership/tiers.mjs';
 
 // A minimal valid file used across the shape tests.
@@ -154,6 +154,42 @@ test('benefitProse: degenerate inputs yield a usable string, never a stray separ
   assert.equal(benefitProse(undefined), '');
   // A blank label is dropped rather than producing "; and".
   assert.equal(benefitProse({ benefits: [{ label: 'Kept' }, { label: '   ' }] }), 'kept');
+});
+
+// sow-459: the short join box says the offer in one sentence, the tagline, with the revenue program linked.
+const REV = 'Supporters share in the [revenue program](/revenue-model/).';
+
+test('taglineFragments: the closing "revenue" becomes the revenue line\'s own link', () => {
+  assert.deepEqual(taglineFragments({ tagline: 'Join the community, publish your work, and share in the revenue.', revenue: REV }), [
+    { text: 'Join the community, publish your work, and share in the ' },
+    { text: 'revenue program', href: '/revenue-model/' },
+    { text: '.' },
+  ]);
+});
+
+test('taglineFragments: a tagline that ends another way keeps the whole revenue line, so the link survives', () => {
+  const out = taglineFragments({ tagline: 'Share in the profits.', revenue: REV });
+  assert.equal(out[0].text, 'Share in the profits. ');
+  assert.deepEqual(out.find((f) => f.href), { text: 'revenue program', href: '/revenue-model/' });
+  assert.equal(out.map((f) => f.text).join(''), 'Share in the profits. Supporters share in the revenue program.');
+  // "revenue" inside a longer word is not the closing word.
+  assert.equal(taglineFragments({ tagline: 'Grow your prerevenue.', revenue: REV })[0].text, 'Grow your prerevenue. ');
+});
+
+test('taglineFragments: no link means the tagline alone; no tagline means the revenue line alone', () => {
+  assert.deepEqual(taglineFragments({ tagline: 'Join us.', revenue: 'Supporters share in the revenue.' }), [{ text: 'Join us.' }]);
+  assert.deepEqual(taglineFragments({ tagline: '', revenue: REV }).map((f) => f.text).join(''), 'Supporters share in the revenue program.');
+  assert.deepEqual(taglineFragments({}), []);
+  assert.deepEqual(taglineFragments(undefined), []);
+});
+
+test('taglineFragments: the committed member tier reads as the board does, linked to the revenue page', () => {
+  const tiers = parseTierDisplay(yaml.load(fs.readFileSync(new URL('../house/membership-tiers.yml', import.meta.url), 'utf8')));
+  const out = taglineFragments(tiers.find((t) => t.key === 'member'));
+  const link = out.find((f) => f.href);
+  assert.ok(link, 'the member tier sentence carries the revenue link');
+  assert.equal(link.href, '/revenue-model/');
+  assert.match(out.map((f) => f.text).join(''), /revenue program\.$/);
 });
 
 test('the committed registry no longer sells feed curation or shop talk as tier benefits', () => {

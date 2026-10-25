@@ -19,7 +19,7 @@ test('articles drop the panel; projects and prompts keep it', () => {
 
 test('the content footer renders the credit alone when there is no panel', () => {
   const s = read('src/components/ContentFooter.astro');
-  assert.match(s, /invite = true \} = Astro\.props;/, 'the panel stays the default');
+  assert.match(s, /invite = true, noteFirst = false \} = Astro\.props;/, 'the panel stays the default, and the note tops the thread by default');
   assert.match(s, /\{invite \? <CommunityInvite author=\{author\} via=\{viaTag\} \/> : <ReferralCredit author=\{author\} via=\{viaTag\} \/>\}/);
 });
 

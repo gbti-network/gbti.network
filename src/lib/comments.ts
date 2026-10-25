@@ -18,6 +18,35 @@ export function commitHistoryHref(filePath?: string): string | null {
 }
 
 /**
+ * sow-459: an item's published comments, oldest first, with the SOW-112 alias union (comments written before a
+ * rename carry the OLD slug), exactly as Comments.astro renders them. Shared with AuthorNote.astro, which renders
+ * the pinned "From the author" note by itself where a page places it outside the thread (the prompt page).
+ * SOW-016: drafts drop; member-only comments stay, because the thread renders them locked.
+ */
+export function itemComments(
+  comments: CollectionEntry<'comment'>[],
+  targetType: 'post' | 'project' | 'prompt' | 'share',
+  targetSlug: string,
+  aliases: string[] = [],
+): CollectionEntry<'comment'>[] {
+  const slugSet = new Set([targetSlug, ...aliases]);
+  return comments
+    .filter((c) => c.data.status === 'published')
+    .filter((c) => sameType(c.data.targetType, targetType) && slugSet.has(c.data.targetSlug))
+    .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
+}
+
+/**
+ * SOW-014: the content author's deliberate notes (flagged `authorNote`) among an item's comments, oldest first.
+ * The PINNED note is the last one (the author's latest intent; after a rename the alias union can surface an
+ * old-slug intro too), and EVERY one is kept out of the thread so an intro never renders as a plain comment.
+ * The intro is PUBLIC by convention (it is the teaser), so only the owner's public authorNote comments count.
+ */
+export function authorNotesOf(published: CollectionEntry<'comment'>[], author?: string): CollectionEntry<'comment'>[] {
+  return author ? published.filter((c) => c.data.author === author && c.data.visibility === 'public' && c.data.authorNote) : [];
+}
+
+/**
  * Count the visible comment thread for a content item, matching the logic in Comments.astro:
  * published only, the content owner's PUBLIC comment flagged `authorNote` is lifted out as the
  * "from the author" intro (SOW-014, pinned regardless of date) and not counted, and a members-only comment is only counted when it carries an

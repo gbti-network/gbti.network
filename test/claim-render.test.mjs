@@ -341,8 +341,10 @@ test('the preview card is pinned where Comments.astro pins it, with its label, i
   const rules = [...listing.matchAll(/^\s*(\.cmt-rich[^{]*\{[^}]*\})/gm)].map((m) => m[1]);
   assert.ok(rules.length >= 3, 'the copied body rules were found');
   for (const r of rules) assert.ok(comments.includes(r), `${r} is no longer in Comments.astro`);
-  // The edit row the published card closes with, empty here.
-  assert.match(comments, /<div class="flex items-center g12" style="margin-top:8px">/);
+  // The edit row the published card closes with, empty here. sow-459: the card moved, unchanged, to AuthorNote.astro,
+  // which Comments.astro renders at the top of the section, where the preview pins it.
+  assert.match(read('src/components/blog/AuthorNote.astro'), /<div class="flex items-center g12" style="margin-top:8px">/);
+  assert.ok(comments.indexOf('{intro && <AuthorNote ') < comments.indexOf('<h2 class="h3"'), 'the card still sits above the count');
   const render = read(RENDER);
   assert.match(render, /const row = el\(doc, 'div', 'flex items-center g12'\);\n\s*row\.setAttribute\('style', 'margin-top:8px'\);/);
   assert.match(render, /const tag = el\(doc, 'span', 'cl-note-tag', view\.label\);/);

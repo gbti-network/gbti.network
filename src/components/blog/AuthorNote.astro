@@ -1,0 +1,64 @@
+---
+// sow-459: the pinned "From the author" note (SOW-014), as its own component so a page can place it outside the
+// discussion. Comments.astro renders it at the top of the thread, as it always has (articles, projects, the share
+// page). The prompt page renders it twice instead, by owner ruling (2026-10-25: "move the author note right up
+// under the author card instead of under the CTA"): `rail` directly under the sidebar Author card, shown only while
+// the page is one column (a phone), and `wide` above the join box under the prompt, shown only while the sidebar
+// sits beside the prompt. The 940px line is the prompt grid's own (`.detail-grid`, gbti-v3-feed.css); one copy is
+// ever visible. The card markup is unchanged from Comments.astro, where the preview contracts were written against
+// it (src/lib/author-note.mjs, test/author-note.test.mjs). Its embeds are wired by Comments.astro's page scripts,
+// which cover [data-author-note] as well as #comments, and Comments is on every page that mounts this.
+import { getCollection } from 'astro:content';
+import { authorDisplay, authorAvatar } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
+import { commitHistoryHref, itemComments, authorNotesOf } from '../../lib/comments';
+import Avatar from '../Avatar.astro';
+import CommentBox from './CommentBox.astro';
+
+interface Props {
+  targetType: 'post' | 'project' | 'prompt' | 'share';
+  targetSlug: string;
+  author?: string; // content owner; only their own public authorNote comment is ever pinned
+  aliases?: string[]; // SOW-112: pre-rename slugs, so a renamed item still finds its intro
+  placement?: 'rail' | 'wide'; // unset: always shown (inside Comments)
+}
+const { targetType, targetSlug, author, aliases = [], placement } = Astro.props;
+const notes = authorNotesOf(itemComments(await getCollection('comment'), targetType, targetSlug, aliases), author);
+const intro = notes.length ? notes[notes.length - 1] : null;
+// sow-454: the card prints the profile's displayName when there is one, like ContentMeta and AuthorBox, and the
+// bare handle only without one. One map, from the collection that also supplies the avatar.
+const profiles = await getCollection('profile');
+const profileAvatar = new Map(profiles.map((p) => [p.data.username, p.data.avatar]));
+const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(username));
+const profileName = new Map(
+  profiles.filter((p) => p.data.displayName).map((p) => [p.data.username, p.data.displayName as string]),
+);
+const nameOf = (username: string) => profileName.get(username) ?? authorDisplay(username);
+const introName = intro ? nameOf(intro.data.author) : '';
+---
+{intro && (
+  <div class="author-note-slot" data-author-note data-placement={placement}>
+    <article class="card" style="padding:24px;border-color:var(--green);background:var(--green-tint);--embed-out-l:24px;--embed-out-r:24px">
+      <div class="flex items-center g12">
+        <a href={profileHref(intro.data.author)} class="shrink-0"><Avatar item={{ name: introName, avatar: avatarOf(intro.data.author), seed: intro.data.author }} size={44} class="rounded-full" /></a>
+        <div>
+          <p class="eyebrow" style="color:var(--green-700)">From the author</p>
+          <a href={profileHref(intro.data.author)} class="link" style="font-weight:700;display:inline-flex">{introName}</a>
+        </div>
+      </div>
+      <div class="cmt-rich" style="margin-top:14px;color:var(--fg)" set:html={intro.rendered?.html ?? ''} />
+      <div class="flex items-center g12" style="margin-top:8px">
+        {intro.data.updatedAt && commitHistoryHref(intro.filePath) && (
+          <a href={commitHistoryHref(intro.filePath)} rel="noopener" class="cmt-edited">edited &middot; view history</a>
+        )}
+        <CommentBox targetType={targetType} targetSlug={targetSlug} commentId={intro.data.id} commentAuthor={intro.data.author} />
+      </div>
+    </article>
+  </div>
+)}
+<style is:global>
+  /* The wide copy opens the closing block under the prompt, the same distance below it as the join box was. */
+  .author-note-slot[data-placement="wide"] { margin-top: 48px; }
+  @media (max-width: 940px) { .author-note-slot[data-placement="wide"] { display: none; } }
+  @media (min-width: 941px) { .author-note-slot[data-placement="rail"] { display: none; } }
+</style>

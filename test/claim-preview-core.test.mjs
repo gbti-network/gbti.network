@@ -152,7 +152,8 @@ test('the note card name is the display name the published card prints, not the 
   // The preview cannot know the exact value: the claim writes displayName from the claimant's GitHub name
   // (membership-claim.mjs), which this page never sees. The recipient name is the closest knowable thing and
   // is the same words for a person, so that is what both surfaces predict.
-  const comments = read('src/components/blog/Comments.astro');
+  // sow-459: the published card now lives in AuthorNote.astro (Comments.astro and the prompt page both render it).
+  const comments = read('src/components/blog/AuthorNote.astro');
   assert.match(comments, /const nameOf = \(username: string\) => profileName\.get\(username\) \?\? authorDisplay\(username\);/, 'the published card prefers the profile name');
   assert.match(comments, /const introName = intro \? nameOf\(intro\.data\.author\) : '';/);
   assert.match(comments, /class="link" style="font-weight:700;display:inline-flex">\{introName\}<\/a>/);

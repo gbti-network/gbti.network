@@ -2,19 +2,21 @@
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorAvatar, formatDate } from '../../lib/authors';
 import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
-import { canonicalType } from '../../../membership/content-types.mjs';
-import { commitHistoryHref } from '../../lib/comments';
+import { commitHistoryHref, itemComments, authorNotesOf } from '../../lib/comments';
 import Avatar from '../Avatar.astro';
 import LockedBody from '../LockedBody.astro';
 import CommentBox from './CommentBox.astro';
+import AuthorNote from './AuthorNote.astro'; // sow-459: the pinned intro, also placed on its own by the prompt page
 
 interface Props {
   targetType: 'post' | 'project' | 'prompt' | 'share'; // sow-094: the public share page mounts the discussion
   targetSlug: string;
   author?: string; // content owner; their earliest comment renders as the pinned "From the author" block (SOW-014)
   wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
+  aliases?: string[]; // SOW-112: pre-rename slugs, unioned so the discussion follows a renamed item
+  note?: boolean; // sow-459: false when the page renders the author note elsewhere (the prompt page); notes stay out of the thread
 }
-const { targetType, targetSlug, author, wide = false, aliases = [] } = Astro.props;
+const { targetType, targetSlug, author, wide = false, aliases = [], note = true } = Astro.props;
 // SOW-112 QA: the parent item's index.md path, for the paid-member open-in-extension reader deep link.
 const SUB = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' } as Record<string, string>;
 // sow-094: a share's targetSlug is "<author>/<id>" and its file is flat (members/<author>/shares/<id>.md).
@@ -23,27 +25,21 @@ const itemReaderPath = targetType === 'share'
   : SUB[targetType]
     ? (author === 'gbti' || author === 'house' ? `house/${SUB[targetType]}/${targetSlug}/index.md` : `members/${author}/${SUB[targetType]}/${targetSlug}/index.md`)
     : undefined;
-// SOW-112: comments written before a rename carry the OLD slug; union it so the discussion follows the item.
-const slugSet = new Set([targetSlug, ...aliases]);
-
 // Comments are authored by members via the local client -> PR (auto-merged for paid members);
-// rendered here read-only. See .data/specs/comments.md.
-const published = (await getCollection('comment'))
-  .filter((c) => c.data.status === 'published') // SOW-016: drop drafts only; member-only comments render locked
-  // sow-196: match on the CANONICAL type, so a comment stored under the retired `product` name still
-  // attaches to its item instead of silently vanishing from the thread. See src/lib/comments.ts.
-  .filter((c) => canonicalType(c.data.targetType) === canonicalType(targetType) && slugSet.has(c.data.targetSlug))
-  .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
+// rendered here read-only. See .data/specs/comments.md. itemComments (src/lib/comments.ts) is the item's published
+// comments, oldest first: SOW-016 drops drafts only, so member-only comments render locked; sow-196 matches on the
+// CANONICAL type, so a comment stored under the retired `product` name still attaches; SOW-112 unions the
+// pre-rename slugs, so the discussion follows a renamed item.
+const published = itemComments(await getCollection('comment'), targetType, targetSlug, aliases);
 
 // SOW-014: the content author's deliberate note (flagged `authorNote`) is the required "from the author"
 // introduction, lifted out and pinned REGARDLESS of when it was written, so an author may post it after a
 // discussion has begun and it still reads as the headline (a casual conversational comment is never pinned).
-// The intro is PUBLIC by convention (it is the teaser), so select the owner's public, authorNote comment.
-// SOW-112 QA: after a rename the alias union can surface MORE THAN ONE authorNote (an old-slug intro plus
-// the fresh one). Pin the NEWEST (the author's latest intent) and exclude EVERY authorNote from the thread,
-// so an intro can never render as a plain member comment. `published` sorts ascending, so last = newest.
-const notes = author ? published.filter((c) => c.data.author === author && c.data.visibility === 'public' && c.data.authorNote) : [];
-const intro = notes.length ? notes[notes.length - 1] : null;
+// authorNotesOf keeps the owner's PUBLIC authorNote comments; the newest is pinned (AuthorNote.astro renders it)
+// and EVERY one is excluded from the thread, so an intro can never render as a plain member comment, including
+// when the page shows the note somewhere else (note={false}, sow-459).
+const notes = authorNotesOf(published, author);
+const intro = note && notes.length ? notes[notes.length - 1] : null;
 // Thread = the rest. A member-only comment (SOW-016) renders as a locked placeholder via its encryptedBody;
 // a legacy member-only comment with no encrypted body stays excluded (matches the prior soft-gate behavior).
 const thread = published
@@ -59,32 +55,15 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
 // profile prefers its displayName and only a caller without one falls through to the handle, and
 // ContentMeta/AuthorBox both do that. This file had the profiles in hand for the avatars and still used
 // the bare handle for the name, and computed introName ABOVE the line that loads them, so it could not
-// have done otherwise. One map, read in all three places a name is shown here.
+// have done otherwise. One map, read wherever a name is shown here (the intro card's name moved with the card to
+// AuthorNote.astro in sow-459, which builds the same map the same way).
 const profileName = new Map(
   profiles.filter((p) => p.data.displayName).map((p) => [p.data.username, p.data.displayName as string]),
 );
 const nameOf = (username: string) => profileName.get(username) ?? authorDisplay(username);
-const introName = intro ? nameOf(intro.data.author) : '';
 ---
 <section id="comments" class:list={[!wide && 'mx-auto']} style={`margin-top:48px${wide ? '' : ';max-width:800px'}`}>
-  {intro && (
-    <article class="card" style="padding:24px;border-color:var(--green);background:var(--green-tint);--embed-out-l:24px;--embed-out-r:24px">
-      <div class="flex items-center g12">
-        <a href={profileHref(intro.data.author)} class="shrink-0"><Avatar item={{ name: introName, avatar: avatarOf(intro.data.author), seed: intro.data.author }} size={44} class="rounded-full" /></a>
-        <div>
-          <p class="eyebrow" style="color:var(--green-700)">From the author</p>
-          <a href={profileHref(intro.data.author)} class="link" style="font-weight:700;display:inline-flex">{introName}</a>
-        </div>
-      </div>
-      <div class="cmt-rich" style="margin-top:14px;color:var(--fg)" set:html={intro.rendered?.html ?? ''} />
-      <div class="flex items-center g12" style="margin-top:8px">
-        {intro.data.updatedAt && commitHistoryHref(intro.filePath) && (
-          <a href={commitHistoryHref(intro.filePath)} rel="noopener" class="cmt-edited">edited &middot; view history</a>
-        )}
-        <CommentBox targetType={targetType} targetSlug={targetSlug} commentId={intro.data.id} commentAuthor={intro.data.author} />
-      </div>
-    </article>
-  )}
+  {intro && <AuthorNote targetType={targetType} targetSlug={targetSlug} author={author} aliases={aliases} />}
 
   <h2 class="h3" style={intro ? 'margin-top:40px' : ''} data-comments-count={thread.length}>
     {thread.length} {thread.length === 1 ? 'Comment' : 'Comments'}
@@ -180,7 +159,8 @@ const introName = intro ? nameOf(intro.data.author) : '';
   // becomes the same poster the client renderers draw, so a click opens the page lightbox instead of playing
   // in place. Comment sections only; an article body keeps its inline player. Runs for every reader.
   import { embedPosterHtml } from '../../../client/src/video-embed.mjs';
-  document.querySelectorAll<HTMLElement>('#comments .cmt-rich .embed-wrap').forEach((wrap) => {
+  // sow-459: and the author note where a page places it outside the thread (AuthorNote.astro, [data-author-note]).
+  document.querySelectorAll<HTMLElement>('#comments .cmt-rich .embed-wrap, [data-author-note] .cmt-rich .embed-wrap').forEach((wrap) => {
     const src = wrap.querySelector('iframe')?.getAttribute('src') || '';
     const html = src ? embedPosterHtml(src, { frameSrc: src }) : '';
     if (html) wrap.outerHTML = html;
@@ -190,6 +170,7 @@ const introName = intro ? nameOf(intro.data.author) : '';
   import { wireTweets } from '../../../client-ui/src/tweet-frames.mjs';
   const thread = document.querySelector('#comments');
   if (thread) wireTweets(thread, { via: 'direct' });
+  document.querySelectorAll<HTMLElement>('[data-author-note]').forEach((n) => { if (!n.closest('#comments')) wireTweets(n, { via: 'direct' }); });
 </script>
 
 <script>

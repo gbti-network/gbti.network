@@ -78,7 +78,9 @@ test('every comment renderer wires its posters and carries the shared poster CSS
   }
   const page = read('src/components/blog/Comments.astro');
   assert.match(page, /import \{ embedPosterHtml \} from '\.\.\/\.\.\/\.\.\/client\/src\/video-embed\.mjs';/);
-  assert.match(page, /document\.querySelectorAll<HTMLElement>\('#comments \.cmt-rich \.embed-wrap'\)\.forEach/, 'comment sections only');
+  // sow-459: and the author note where a page places it outside the thread (the prompt page), never an article body.
+  assert.match(page, /document\.querySelectorAll<HTMLElement>\('#comments \.cmt-rich \.embed-wrap, \[data-author-note\] \.cmt-rich \.embed-wrap'\)\.forEach/, 'comment sections and the author note only');
+  assert.match(read('src/components/blog/AuthorNote.astro'), /<div class="author-note-slot" data-author-note data-placement=\{placement\}>/, 'the hook the swap reads');
   assert.match(page, /wrap\.outerHTML = html;/);
   assert.match(page, /\.cmt-rich \.embed-wrap, \.cmt-rich \.md-embed \{ position: relative; width: 100%;[^}]*aspect-ratio: 16 \/ 9; border-radius: 10px; overflow: hidden/);
   assert.match(page, /\.cmt-rich \.md-embed\.md-embed-portrait \{ aspect-ratio: 9 \/ 16/);

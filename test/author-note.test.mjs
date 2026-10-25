@@ -11,22 +11,35 @@ import { AUTHOR_NOTE_BLOCK, introPathFor, buildAuthorNoteHtml, NOTE_PLACEHOLDER,
 import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const COMMENTS = fs.readFileSync(fileURLToPath(new URL('../src/components/blog/Comments.astro', import.meta.url)), 'utf8');
+// sow-459: the pinned card moved, verbatim, out of Comments.astro into AuthorNote.astro, so the prompt page can place
+// it outside the thread; Comments.astro renders <AuthorNote> where the card used to be.
+const NOTE = fs.readFileSync(fileURLToPath(new URL('../src/components/blog/AuthorNote.astro', import.meta.url)), 'utf8');
+const LIB = fs.readFileSync(fileURLToPath(new URL('../src/lib/comments.ts', import.meta.url)), 'utf8');
 // The pinned block is the `{intro && (...)}` branch; scope the assertions to it so an unrelated class
 // elsewhere in the file cannot make a stale contract entry look present.
-const PINNED = COMMENTS.slice(COMMENTS.indexOf('{intro && ('), COMMENTS.indexOf('<h2 class="h3"'));
+const PINNED = NOTE.slice(NOTE.indexOf('{intro && ('), NOTE.indexOf('<style is:global>'));
 
 test('DRIFT: every class and style in the shared contract still appears in the published pinned block', () => {
-  assert.ok(PINNED.length > 200, 'the pinned intro branch was not found in Comments.astro; the slice anchors moved');
+  assert.ok(PINNED.length > 200, 'the pinned intro branch was not found in AuthorNote.astro; the slice anchors moved');
   for (const [key, value] of Object.entries(AUTHOR_NOTE_BLOCK)) {
     if (key === 'avatarSize') { assert.match(PINNED, /size=\{44\}/, 'the avatar size drifted from the contract'); continue; }
-    assert.ok(PINNED.includes(String(value)), `contract entry ${key} ("${value}") is no longer in Comments.astro`);
+    assert.ok(PINNED.includes(String(value)), `contract entry ${key} ("${value}") is no longer in AuthorNote.astro`);
   }
+  // And the thread still renders THAT card, not a copy of it, so the two cannot drift apart.
+  assert.match(COMMENTS, /\{intro && <AuthorNote targetType=\{targetType\} targetSlug=\{targetSlug\} author=\{author\} aliases=\{aliases\} \/>\}/);
+  assert.doesNotMatch(COMMENTS, /<article class="card"|>From the author</, 'Comments.astro carries no second copy of the card');
 });
 
 test('DRIFT: the published block still selects a PUBLIC authorNote comment, which the preview mirrors', () => {
   // The preview re-implements this filter client-side. If the published rule changes (say it starts pinning a
   // members-visibility note), the preview would silently show something the page does not.
-  assert.match(COMMENTS, /c\.data\.visibility === 'public' && c\.data\.authorNote/);
+  // sow-459: the rule lives in ONE helper both renderers call, so the card and the thread's exclusion agree.
+  const fn = LIB.slice(LIB.indexOf('export function authorNotesOf('));
+  assert.match(fn.slice(0, fn.indexOf('\n}\n')), /c\.data\.author === author && c\.data\.visibility === 'public' && c\.data\.authorNote/);
+  assert.match(NOTE, /const notes = authorNotesOf\(itemComments\(await getCollection\('comment'\), targetType, targetSlug, aliases\), author\);/);
+  assert.match(NOTE, /const intro = notes\.length \? notes\[notes\.length - 1\] : null;/, 'the newest note is the pinned one');
+  assert.match(COMMENTS, /const notes = authorNotesOf\(published, author\);/);
+  assert.match(COMMENTS, /\.filter\(\(c\) => !notes\.includes\(c\)\)/, 'every note stays out of the thread');
 });
 
 test('introPathFor: derives the sibling comment path from the item path', () => {

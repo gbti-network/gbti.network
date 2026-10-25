@@ -19,6 +19,9 @@ export { benefitProse } from '../../membership/tiers-display.mjs';
 // live homepage showed the raw brackets and URL to every visitor. One function, both renderers.
 export { revenueFragments } from '../../membership/tiers-display.mjs';
 
+// sow-459: the tagline with the revenue program linked, for the short join box. Copy stays in the yaml.
+export { taglineFragments } from '../../membership/tiers-display.mjs';
+
 // Re-export the AXIS (bind, do NOT rebuild): TIER identity, ranking, and the fail-closed membership test.
 export { TIER, tierRank, meetsTier, isTier, tierLabel } from '../../membership/tiers.mjs';
 

@@ -124,6 +124,34 @@ export function revenueFragments(s) {
 }
 
 /**
+ * sow-459: a tier's one-line tagline with the revenue program linked, for the short join box
+ * (src/components/CommunityInvite.astro). The box says the offer in one sentence, so it reads the tagline
+ * ("Join the community, publish your work, and share in the revenue.") rather than the benefit labels, and the
+ * revenue line's own link ("[revenue program](/revenue-model/)") takes the place of the tagline's closing word
+ * when that word opens the link text: "...share in the revenue program." with "revenue program" linked.
+ *
+ * When the tagline ends any other way, the revenue line follows it whole, so the link is never dropped by a copy
+ * edit to either field. No link in the revenue line means the tagline alone. Both strings stay in the yaml.
+ *
+ * @returns Array<{ text: string, href?: string }>
+ */
+export function taglineFragments(tier) {
+  const tagline = String(tier?.tagline ?? '').trim();
+  const frag = revenueFragments(String(tier?.revenue ?? '').trim());
+  const link = frag.find((f) => f.href);
+  if (!tagline) return link ? frag : [];
+  if (!link) return [{ text: tagline }];
+  const first = link.text.trim().split(/\s+/)[0] || '';
+  const m = first ? new RegExp(`^(.*\\b)${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([.!?]?)$`, 'i').exec(tagline) : null;
+  if (!m) return [{ text: `${tagline} ` }, ...frag];
+  const out = [];
+  if (m[1]) out.push({ text: m[1] });
+  out.push({ text: link.text, href: link.href });
+  if (m[2]) out.push({ text: m[2] });
+  return out;
+}
+
+/**
  * sow-323: the tiers a PRICING surface may offer, in canonical order. Every axis tier still has to be present
  * in the file (parseTierDisplay enforces that, because the axis is what gates), but only these are for sale.
  *

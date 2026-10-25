@@ -2,7 +2,7 @@
 import { authorDisplay } from '../lib/authors';
 import { refCodeForAuthor } from '../lib/referral';
 import ReferralCredit from './ReferralCredit.astro'; // sow-435: the first-touch credit, shared with pages that show no panel
-import { offeredTiers, benefitProse, revenueFragments } from '../lib/tiers';
+import { offeredTiers, taglineFragments } from '../lib/tiers';
 
 interface Props {
   /** Content author username. Resolved to the author's immutable github_id referral code. */
@@ -22,73 +22,49 @@ if (via) params.set('via', via);
 const query = params.toString();
 const joinHref = query ? `/membership/?${query}` : '/membership/';
 
-// Tier copy is BOUND to the registry (house/membership-tiers.yml via src/lib/tiers.ts) so this CTA can never
-// advertise a benefit a tier does not carry: benefitProse renders a tier's benefit labels as one clause, and
-// the prices come from the same record. This is the same governance the membership page follows, and
-// test/community-invite-parity.test.mjs asserts the invite never hand-writes a benefit label.
-// sow-323: ONE row now. The owner collapsed the two paid plans on 2026-09-12, so a second row would advertise
-// a plan nobody can buy, on a component that is mounted on EVERY article. The row is built from offeredTiers so
-// it follows the registry rather than naming a key: if a tier stops being offered, its row stops rendering, and
-// if another is added its row appears, with no edit here. The revenue line goes through revenueFragments for
-// the same reason the cards do, since the registry value carries an inline markdown link.
-const tierRows = offeredTiers()
-  .filter((t) => t.priceAnnual > 0 || t.priceMonthly > 0)
-  .map((t) => {
-    const frag = revenueFragments(t.revenue);
-    const link = frag.find((f) => f.href);
-    return {
-      label: t.label,
-      priceLabel: `$${t.priceAnnual}/year`,
-      lead: '',
-      prose: benefitProse(t),
-      // The text before the link, so the markup can render the link itself as an anchor.
-      revenue: frag.filter((f) => !f.href).map((f) => f.text).join('').trim().replace(/\.$/, ''),
-      revenueHref: link?.href ?? null,
-    };
-  }) as {
-  label: string;
-  priceLabel: string;
-  lead: string;
-  prose: string;
-  revenue: string;
-  revenueHref: string | null;
-}[];
+// sow-459 (owner's pick, 2026-10-16, design option A "the offer in one line"): the heading with the price beside
+// it, one sentence, the button. The tier copy is still BOUND to the registry (house/membership-tiers.yml via
+// src/lib/tiers.ts), so this CTA can never advertise a benefit a tier does not carry: the price line is the
+// tier's label and annual price, and the sentence is the tier's own tagline with its revenue link
+// (taglineFragments). The five benefit labels left this panel; /membership/ lists them, and
+// test/community-invite-parity.test.mjs asserts none of them is typed here.
+// sow-323: the plans come from offeredTiers, never a named key, so a plan that stops being offered stops
+// rendering with no edit here. A second offered plan would add its price to the line; the sentence reads the
+// first, because one sentence cannot carry two offers. Two plans on sale again is a design question, not a copy one.
+const paid = offeredTiers().filter((t) => t.priceAnnual > 0 || t.priceMonthly > 0);
+const prices = paid.map((t) => `${t.label}, $${t.priceAnnual} a year`);
+const sentence = paid.length ? taglineFragments(paid[0]) : [];
 const isMemberAuthored = author !== 'gbti';
 ---
-<section class="dark community-invite" style="max-width:820px;margin:48px auto 0;border-radius:var(--r-lg);overflow:hidden;padding:40px">
-  <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> A creator network, powered by Git</div>
-  <h2 class="h2 mt16" style="color:#fff">Join the GBTI Network</h2>
-  <p class="lead mt12">
-    The GBTI Network is a creator community. Browse, follow, and save across the network for free, no card
-    required. Join a paid tier to take part and share in the revenue.
-  </p>
-  <div class="flex col g14 mt24">
-    {tierRows.map((t) => (
-      <div class="flex g12">
-        <svg viewBox="0 0 24 24" width="20" height="20" style="color:var(--green-mint);flex:none;margin-top:3px"><use href="#ico-check"/></svg>
-        <span style="color:#fff;line-height:1.5">
-          <strong>{t.label}</strong> ({t.priceLabel}): {t.lead}{t.prose}.
-          {t.revenueHref
-            ? <> {t.revenue}{' '}<a href={t.revenueHref} style="color:var(--green-mint);text-decoration:underline">revenue program</a>.</>
-            : <> {t.revenue}</>}
-        </span>
-      </div>
-    ))}
+<section class="dark community-invite">
+  <div class="ci-head">
+    <h2 class="ci-title">Join the GBTI Network</h2>
+    {prices.map((p) => <span class="ci-price">{p}</span>)}
   </div>
-  <div class="flex wrap-w items-center g20 mt28">
-    <a href={joinHref} class="btn btn-primary">Become a member <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+  <p class="ci-line">
+    {sentence.length ? 'Browsing, following and saving are free, with no card. ' : 'Browsing, following and saving are free, with no card.'}
+    {sentence.map((f) => (f.href ? <a href={f.href}>{f.text}</a> : f.text))}
+  </p>
+  <div class="ci-actions">
+    <a href={joinHref} class="btn btn-primary ci-join">Become a member <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+    <a href="/membership/" class="ci-more">What a membership includes</a>
+  </div>
+  {/* The footer: the attribution line, then the sow-394 Submit line (kept at the bottom, owner 2026-10-25). On house
+      content there is no attribution, so for a signed-in reader, who never sees the Submit line, the whole footer
+      and its rule hide instead of leaving an empty rule under the button. */}
+  <div class:list={['ci-foot', !isMemberAuthored && 'ci-foot-submit-only']}>
     {isMemberAuthored && (
-      <span class="body-sm" style="color:var(--on-dark-mute)">You are reading {display}'s work. Joining from this page credits {display}.</span>
+      <p class="ci-credit">You are reading {display}'s work. Joining from this page credits {display}.</p>
     )}
+    {/* sow-394 (owner's design, 2026-09-24, version B): the way in to publishing, on its own line so "Become a
+        member" stays the one button. It goes to the plans, like the header's Submit content button (owner,
+        2026-09-24). Signed-out readers only: the rule below hides it for any signed-in account. */}
+    <p class="ci-submit">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-pencil"/></svg>
+      <span class="ci-submit-t">Publish your work on the network.</span>
+      <a href="/membership/" class="ci-submit-a">Submit content <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+    </p>
   </div>
-  {/* sow-394 (owner's design, 2026-09-24, version B): the way in to publishing, on its own line so "Become a
-      member" stays the one button. It goes to the plans, like the header's Submit content button (owner,
-      2026-09-24). Signed-out readers only: the rule below hides it for any signed-in account. */}
-  <p class="ci-submit">
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-pencil"/></svg>
-    <span class="ci-submit-t">Publish your work on the network.</span>
-    <a href="/membership/" class="ci-submit-a">Submit content <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
-  </p>
 </section>
 <style is:global>
   /* SOW-050: the Join CTA is irrelevant to an ACTIVE member (paid or trial). member-signal.ts toggles
@@ -96,10 +72,27 @@ const isMemberAuthored = author !== 'gbti';
      Presentation-only (the signal is untrusted by design; the CTA is cosmetic). Visitors + lapsed accounts,
      for whom joining/renewing matters, still see it. */
   html.is-gbti-member-active .community-invite { display: none; }
+
+  /* sow-459: the board's text values. The sentence and the attribution sit lighter than --on-dark-soft (.66) and
+     --on-dark-mute (.42): the picked board drew them at .82 and .6, and .42 reads at about 3.7:1 on the ink panel,
+     under the 4.5:1 a 14px line needs. */
+  .community-invite { --ci-soft: rgba(245,244,242,.82); --ci-mute: rgba(245,244,242,.6);
+    max-width: 820px; margin: 48px auto 0; border-radius: var(--r-lg); overflow: hidden; padding: 36px 40px; }
+  .community-invite .ci-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
+  .community-invite .ci-title { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 34px; line-height: 1.1; color: #fff; }
+  .community-invite .ci-price { font-family: var(--f-mono); font-size: 13px; letter-spacing: .02em; color: var(--green-mint); }
+  .community-invite .ci-line { margin: 14px 0 0; max-width: 40em; font-size: 18px; line-height: 1.6; color: var(--ci-soft); }
+  .community-invite .ci-line a { color: var(--green-mint); text-decoration: underline; text-underline-offset: 3px; }
+  .community-invite .ci-line a:hover { color: #fff; }
+  .community-invite .ci-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; margin-top: 26px; }
+  .community-invite .ci-more { color: var(--green-mint); font-weight: 600; font-size: 15px; text-decoration: underline; text-underline-offset: 4px; }
+  .community-invite .ci-more:hover { color: #fff; }
+  .community-invite .ci-foot { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); }
+  .community-invite .ci-credit { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ci-mute); }
   /* sow-394: the Submit content line. html.is-gbti-member is set for ANY signed-in account (src/lib/member-signal.ts),
      so a free account, which still sees the join pitch above, does not see this line. */
-  .community-invite .ci-submit { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin: 28px 0 0;
-    padding-top: 20px; border-top: 1px solid rgba(255,255,255,.12); }
+  .community-invite .ci-submit { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin: 0; }
+  .community-invite .ci-credit + .ci-submit { margin-top: 14px; }
   .community-invite .ci-submit > svg { color: var(--green-mint); flex: none; }
   /* A 14em basis keeps the sentence beside the icon on a phone (it wraps there, the icon does not strand) and
      sends only the link to the next line; on a wide block all three share one line. */
@@ -109,5 +102,21 @@ const isMemberAuthored = author !== 'gbti';
   .community-invite .ci-submit-a:hover { color: #fff; }
   .community-invite .ci-submit-a svg { flex: none; }
   html.is-gbti-member .community-invite .ci-submit { display: none; }
+  html.is-gbti-member .community-invite .ci-foot-submit-only { display: none; }
+
+  /* The phone board (PhoneA, 390px): heading and price stack, the button takes the full width, the link centres.
+     Kept LAST so it wins over the rules above at equal specificity. */
+  @media (max-width: 600px) {
+    .community-invite { padding: 24px 20px; }
+    .community-invite .ci-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .community-invite .ci-title { font-size: 27px; line-height: 1.15; }
+    .community-invite .ci-price { font-size: 12.5px; }
+    .community-invite .ci-line { font-size: 16px; }
+    .community-invite .ci-actions { flex-direction: column; align-items: stretch; gap: 16px; margin-top: 22px; }
+    .community-invite .ci-join { justify-content: center; }
+    .community-invite .ci-more { align-self: center; }
+    .community-invite .ci-foot { margin-top: 20px; padding-top: 16px; }
+    .community-invite .ci-credit { font-size: 13.5px; }
+  }
 </style>
 <ReferralCredit author={author} via={via} />
