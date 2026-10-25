@@ -135,6 +135,20 @@ test('listingImageRefs collects a prompt lead image, and does not treat project 
   assert.equal(listingImageRefs({ image: './images/Hero.JPG' }, '', 'prompt').bad.length, 1);
 });
 
+test('a skill cannot be prepared, because an invitation cannot carry its SKILL.md', () => {
+  // A skill's text lives in a SKILL.md beside index.md, and buildClaimFiles has no way to commit one. Accepting
+  // kind: skill would publish a skill page with no file and a dead install box, with nothing reporting it.
+  const base = {
+    title: 'A skill', slug: 'a-skill', shortDescription: 'x', categories: [], targets: ['Claude Code'],
+  };
+  const skill = validatePreparedDraft({ type: 'prompt', slug: 'a-skill', frontmatter: { ...base, kind: 'skill' }, body: 'Body.' });
+  assert.equal(skill.ok, false, 'a skill invitation is refused');
+  assert.match(skill.issues.join(' '), /SKILL\.md/, 'and the refusal says why');
+
+  const prompt = validatePreparedDraft({ type: 'prompt', slug: 'a-skill', frontmatter: { ...base, kind: 'prompt' }, body: 'Body.' });
+  assert.equal(prompt.ok, true, 'a prompt with the same fields is still fine');
+});
+
 test('a prepared prompt carries its hero image through validation, so the claim commits it', () => {
   const draft = validatePreparedDraft({
     type: 'prompt',

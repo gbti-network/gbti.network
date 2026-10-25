@@ -28,6 +28,7 @@ import {
 } from './claim-core.mjs';
 import { hasWebSessionCookie, signOutWeb, readMemberSignal, currentIdentity, onMemberSignal } from './member-signal';
 import { renderCrumbs, renderGallery, renderToc, fillByline, renderNoteCard } from './claim-render';
+import { applyPreviewShell, shellHasToc } from './preview-shells.mjs';
 
 type View = ReturnType<typeof claimView>;
 type Action = View['actions'][number];
@@ -479,6 +480,29 @@ export function startClaimPage(doc: Document): void {
     bodyEl.replaceChildren(frag);
   }
 
+  /** HTML escape, matching the preview's, for the strings applyPreviewShell interpolates into its header. */
+  const escHtml = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+  /**
+   * Move the `data-cl-byline` hook from `.pd-byline` to a wrapper INSIDE it, before the shell reshapes.
+   *
+   * The prompt shell copies `.pd-byline`'s innerHTML into the header it builds and then REMOVES the element.
+   * The hook sits on the element, not inside it, so without this the hook would be destroyed and every later
+   * `showIdentity()` would silently do nothing: the byline would freeze at whatever it said when the page first
+   * rendered, and an identity arriving afterwards (the session cookie resolving, or the extension's signal)
+   * would never reach it. Moving the hook inside means it survives the copy and keeps working.
+   */
+  function moveBylineHookInside(): void {
+    const bl = $('[data-cl-byline]');
+    if (!bl || !bl.classList.contains('pd-byline')) return; // already moved, or not the shell's element
+    const inner = doc.createElement('div');
+    inner.setAttribute('data-cl-byline', '');
+    inner.replaceChildren(...Array.from(bl.childNodes));
+    bl.removeAttribute('data-cl-byline');
+    bl.replaceChildren(inner);
+  }
+
   async function showListing(l: any): Promise<void> {
     // The dialog's greeting and message first: they are what the person came for.
     setText($('[data-claim-greeting]', dialog), greetingLine(l.recipientName));
@@ -488,6 +512,7 @@ export function startClaimPage(doc: Document): void {
 
     const images = await loadImages(l);
     const m = listingModel(l, { labels, images, licenses, now: new Date() });
+    const type = typeof l?.type === 'string' && l.type ? l.type : 'project';
 
     const hero = $('[data-cl-hero]');
     if (hero) { if (m.hero.preset) hero.setAttribute('data-preset', m.hero.preset); else hero.removeAttribute('data-preset'); }
@@ -598,12 +623,41 @@ export function startClaimPage(doc: Document): void {
     await renderBody(m.body, images);
     const nav = $('[data-cl-toc]');
     const bodyEl = $('[data-cl-body]');
-    if (nav && bodyEl) renderToc(doc, nav, bodyEl, { hasGallery: m.gallery.length > 0 });
+    // A prompt page has no Contents rail, so do not build one it will only hide.
+    if (nav && bodyEl && shellHasToc(type)) renderToc(doc, nav, bodyEl, { hasGallery: m.gallery.length > 0 });
+
+    // THE INVITATION IS THE PAGE IT WILL PUBLISH AS, and this document is the project detail shell.
+    //
+    // An invitation rendered through that shell no matter what it carried, so a prompt invitation arrived looking
+    // like an article: a hero band instead of the result figure, no prompt block, no Copy, and a Contents rail the
+    // prompt page does not have. The workbench draft preview had this same problem and already solved it, so this
+    // calls the same reshaper (src/lib/preview-shells.mjs) rather than growing a second one here. A project is
+    // left exactly as it was: applyPreviewShell only branches on 'post' and 'prompt'.
+    //
+    // ORDER MATTERS, and it is the opposite of the preview's. The preview reshapes first and fills after; here the
+    // fills above have already run, which is deliberate: the shell copies .pd-byline's CONTENTS into the header it
+    // builds, so the byline has to be populated before it is copied.
+    //
+    // `asset` is the identity function because this host has already resolved its images: listingModel turns every
+    // `./images/x` into a data: URL from the invitation's own image store, so hero.image is a URL, not a ref.
+    showIdentity();
+    moveBylineHookInside();
+    applyPreviewShell(doc, {
+      type,
+      fm: (l && typeof l.frontmatter === 'object' && l.frontmatter) || {},
+      slug: typeof l?.slug === 'string' ? l.slug : '',
+      cats: m.crumbs.map((c: { key: string }) => c.key),
+      labels,
+      catPath: m.crumbs.map((c: { label: string }) => c.label).join(' \u203a '),
+      hero: { image: m.hero.image, alt: m.title },
+      esc: escHtml,
+      asset: (v: string) => v,
+      itemPath: '',
+    });
 
     // The suggested note starts the claim note (sow-434 decision 1), unless the browser restored something typed.
     const suggestion = typeof l.suggestedNote === 'string' ? l.suggestedNote : '';
     if (noteText && !noteText.value && suggestion) { noteText.value = suggestion; syncCount(); }
-    showIdentity();
   }
 
   // ---- the byline and the author note: whose name and face, and the note as it stands -------------------------

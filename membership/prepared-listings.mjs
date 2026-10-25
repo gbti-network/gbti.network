@@ -114,6 +114,12 @@ export function validatePreparedDraft({ type, slug, frontmatter, body = '' } = {
     if (k === 'publicStub') { if (v === true) issues.push(`A prepared ${noun} is published to everyone, so it cannot have a members-only stub.`); continue; }
     if (k === 'encryptedBody') { issues.push(`A prepared ${noun} cannot carry a members-only body.`); continue; }
     if (k === 'encryptedSkill') { issues.push(`A prepared ${noun} cannot carry a members-only skill file.`); continue; }
+    // A SKILL IS NOT PREPARABLE, because nothing here can carry its file. A skill's text lives in a SKILL.md
+    // beside index.md (skillFileOf, src/lib/skill-install.ts), and buildClaimFiles commits index.md, the intro
+    // comment, an optional profile and the images, and nothing else. Accepting kind: skill would publish a skill
+    // page with no file, no install box and a dead "Copy SKILL.md", and nothing upstream would report it. Refused
+    // here rather than at the claim, so a superadmin learns it while writing the invitation.
+    if (k === 'kind' && v === 'skill') { issues.push('A skill cannot be prepared for someone yet, because the invitation cannot carry its SKILL.md file. Prepare it as a prompt, or publish the skill yourself and invite them separately.'); continue; }
     if (!typeKeys.has(k)) { issues.push(`"${k}" is not a ${noun} field.`); continue; }
     fm[k] = v;
   }
