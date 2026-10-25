@@ -77,7 +77,7 @@ export function shellHasToc(type) {
  * @param {(v: any, itemPath: string) => string} ctx.asset  resolves a repo-relative image to a URL
  * @param {string} ctx.itemPath  the draft's repo path, for `asset`
  */
-export function applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath, skillFile = null, signupBase = '', ref = '' }) {
+export function applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath, skillFile = null, signupBase = '', ref = '', promptRaw = null }) {
   // sow-214: an ARTICLE is not a project, and until now the preview rendered it as one. The published
   // page picks ArticleJournal / ArticleEditorial / ArticleCard from `layout`; this preview rendered every
   // type through the project Doc Shell, so an article preview was a different page from the article and
@@ -222,7 +222,18 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
       } : null;
       void fillSkillPreview(document, { fm, skillFile, readSkillFile });
     } else if (povw?.parentElement) {
-      povw.insertAdjacentHTML('beforebegin', buildPromptBlockHtml({ interactive: false }));
+      // `promptRaw` decides whether this is a LOOK at a prompt or a USABLE one.
+      //
+      // The WorkBench draft preview passes nothing and gets the bar without controls, which is right: its body is
+      // the live editing surface (sow-235), and a Copy there would hand over text the author is still changing.
+      // The INVITATION passes the raw markdown, because the whole point of a prompt is that a reader takes it
+      // away, and an invitation that shows a prompt you cannot copy is asking someone to retype it by hand.
+      //
+      // The raw element is built as a NODE with textContent rather than interpolated into the HTML string. The
+      // invitation page's standing rule is that no listing string ever reaches innerHTML, and a prompt body is
+      // the most attacker-shaped string on that page.
+      const interactive = typeof promptRaw === 'string';
+      povw.insertAdjacentHTML('beforebegin', buildPromptBlockHtml({ interactive }));
       const pbody = document.querySelector(`.${PROMPT_SHELL.body}`);
       if (pbody) {
         const view = document.createElement('div');
@@ -230,6 +241,15 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
         view.setAttribute('data-view', 'visual');
         pbody.appendChild(view);
         view.appendChild(povw);
+        if (interactive) {
+          const pre = document.createElement('pre');
+          pre.className = PROMPT_SHELL.raw;
+          pre.setAttribute('data-view', 'markdown');
+          pre.setAttribute('data-prompt-raw', '');
+          pre.hidden = true;
+          pre.textContent = promptRaw;
+          pbody.appendChild(pre);
+        }
       }
       // The lead image, above the block. resolveHeroForType already resolved fm.image into hero.image for
       // a prompt, and the hero band it would otherwise have filled is hidden above.

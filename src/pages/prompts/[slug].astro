@@ -334,36 +334,15 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
     import { wireEditAffordance } from '../../lib/content';
     wireEditAffordance('[data-detail-edit]', 'data-detail-owner');
 
-    // Copy always yields the raw markdown source (the canonical prompt), regardless of the active view.
-    const btn = document.querySelector<HTMLButtonElement>('[data-copy]');
-    btn?.addEventListener('click', async () => {
-      const raw = document.querySelector('[data-prompt-raw]') as HTMLElement | null;
-      const text = (raw?.textContent ?? document.querySelector('.prompt-body')?.textContent ?? '').trim();
-      try {
-        await navigator.clipboard.writeText(text);
-        btn.textContent = 'Copied';
-        setTimeout(() => (btn.textContent = 'Copy'), 1500);
-      } catch {
-        btn.textContent = 'Copy failed';
-      }
-    });
-
     // (Social share copy/Substack handlers now live in the shared ShareRow component.)
 
     // sow-109: a skill page's tool tabs, its Copy SKILL.md buttons and the show-the-whole-file toggle.
     import { wireSkillPage } from '../../lib/skill-page.mjs';
     wireSkillPage(document);
 
-    // Visual <-> Markdown toggle for the prompt body.
-    document.querySelectorAll<HTMLElement>('.prompt-block').forEach((block) => {
-      const btns = Array.from(block.querySelectorAll<HTMLButtonElement>('[data-mode-btn]'));
-      const views = Array.from(block.querySelectorAll<HTMLElement>('.prompt-view'));
-      btns.forEach((b) => b.addEventListener('click', () => {
-        const mode = b.dataset.modeBtn;
-        block.dataset.mode = mode;
-        btns.forEach((x) => x.classList.toggle('on', x === b));
-        views.forEach((v) => { v.hidden = v.dataset.view !== mode; });
-      }));
-    });
+    // Copy and the Visual/Markdown toggle. Both were inline here, which left the INVITATION page unable to
+    // offer Copy without a second copy of the logic. They now live beside the markup contract they act on.
+    import { wirePromptPage } from '../../lib/prompt-page.mjs';
+    wirePromptPage(document);
   </script>
 </BaseLayout>

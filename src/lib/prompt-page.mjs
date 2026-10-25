@@ -134,6 +134,60 @@ export function buildPromptBlockHtml({ bodyHtml = '', interactive = true } = {})
 }
 
 /**
+ * Wire a prompt block: the Copy button and the Visual/Markdown toggle.
+ *
+ * Lifted out of src/pages/prompts/[slug].astro so the INVITATION page can run the same code. It was inline
+ * there, which meant the invitation had no way to offer Copy without a second copy of the logic, and a second
+ * copy is how the two silently drift. `wireSkillPage` beside this is the same pattern for the same reason.
+ *
+ * Copy always yields the RAW MARKDOWN, whichever view is showing, because that is the canonical prompt: the
+ * rendered view has lost the markdown the author wrote. It falls back to the rendered text only when no raw
+ * element is present, so a block without one still copies something usable rather than nothing.
+ *
+ * Idempotent: a block already wired is skipped, so calling this twice on one document cannot double-fire a
+ * copy or leave two listeners fighting over the mode buttons.
+ *
+ * @param {Document|Element} root
+ * @param {{clipboard?: {writeText: (s: string) => Promise<void>}}} [deps] injectable for tests
+ */
+export function wirePromptPage(root = document, deps = {}) {
+  const clipboard = deps.clipboard ?? globalThis.navigator?.clipboard ?? null;
+  const blocks = Array.from(root.querySelectorAll(`.${PROMPT_SHELL.block}`));
+  for (const block of blocks) {
+    if (block.dataset.promptWired === '1') continue;
+    block.dataset.promptWired = '1';
+
+    const btn = block.querySelector('[data-copy]');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        const raw = block.querySelector('[data-prompt-raw]');
+        const text = (raw?.textContent ?? block.querySelector(`.${PROMPT_SHELL.body}`)?.textContent ?? '').trim();
+        try {
+          if (!clipboard) throw new Error('no clipboard');
+          await clipboard.writeText(text);
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        } catch {
+          btn.textContent = 'Copy failed';
+        }
+      });
+    }
+
+    const btns = Array.from(block.querySelectorAll('[data-mode-btn]'));
+    const views = Array.from(block.querySelectorAll(`.${PROMPT_SHELL.view}`));
+    for (const b of btns) {
+      b.addEventListener('click', () => {
+        const mode = b.dataset.modeBtn;
+        block.dataset.mode = mode;
+        btns.forEach((x) => x.classList.toggle('on', x === b));
+        views.forEach((v) => { v.hidden = v.dataset.view !== mode; });
+      });
+    }
+  }
+  return blocks.length;
+}
+
+/**
  * How to frame a prompt's lead image: its alt text, and whether it gets a caption.
  *
  * The image used to be reserved for image-gen targets and is now allowed on any prompt, so the frame has to

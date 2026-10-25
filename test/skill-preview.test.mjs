@@ -65,7 +65,11 @@ test('if the steps cannot load, the file still shows and no wrong box is drawn',
 
 test('the preview wires it: a skill is not wrapped in the prompt block, and the page passes the draft\'s file', () => {
   const shells = readFileSync(new URL('../src/lib/preview-shells.mjs', import.meta.url), 'utf8');
-  assert.match(shells, /if \(isSkill && povw\?\.parentElement\) \{[\s\S]*?void fillSkillPreview\(document, \{ fm, skillFile, readSkillFile \}\);\n    \} else if \(povw\?\.parentElement\) \{\n      povw\.insertAdjacentHTML\('beforebegin', buildPromptBlockHtml/);
+  // The assertion is the STRUCTURE: the skill branch fills the skill preview, and the prompt block is built only
+  // in the else, so a skill is never wrapped in one. It no longer pins the lines BETWEEN those two points, which
+  // is what broke when the else branch grew a comment and its `interactive` decision. Pinning intervening source
+  // made this red on a change that did not touch what it is testing.
+  assert.match(shells, /if \(isSkill && povw\?\.parentElement\) \{[\s\S]*?void fillSkillPreview\(document, \{ fm, skillFile, readSkillFile \}\);\n    \} else if \(povw\?\.parentElement\) \{[\s\S]*?buildPromptBlockHtml/);
   assert.match(shells, /const kindBadge = isSkill \?/);
   assert.match(shells, /!fm\.encryptedSkill \?/, 'a members-only skill\'s file is never fetched in the clear');
   assert.match(previewSource(), // the page plus src/lib/preview-page.ts, where the call now lives

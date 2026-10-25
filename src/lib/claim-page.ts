@@ -29,6 +29,7 @@ import {
 import { hasWebSessionCookie, signOutWeb, readMemberSignal, currentIdentity, onMemberSignal } from './member-signal';
 import { renderCrumbs, renderGallery, renderToc, fillByline, renderNoteCard } from './claim-render';
 import { applyPreviewShell, shellHasToc } from './preview-shells.mjs';
+import { wirePromptPage } from './prompt-page.mjs';
 
 type View = ReturnType<typeof claimView>;
 type Action = View['actions'][number];
@@ -653,7 +654,12 @@ export function startClaimPage(doc: Document): void {
       esc: escHtml,
       asset: (v: string) => v,
       itemPath: '',
+      // The prompt is the thing the reader came for, so give them a working Copy rather than a picture of one.
+      // Passing the raw markdown is what turns the block interactive; the draft preview passes nothing and is
+      // unchanged. Only a prompt has a block to wire, so nothing else pays for this.
+      promptRaw: type === 'prompt' ? m.body : null,
     });
+    wirePromptPage(doc);
 
     // The suggested note starts the claim note (sow-434 decision 1), unless the browser restored something typed.
     const suggestion = typeof l.suggestedNote === 'string' ? l.suggestedNote : '';

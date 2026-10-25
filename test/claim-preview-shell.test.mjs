@@ -100,3 +100,22 @@ test('the reshape runs after the byline is filled, because the shell copies its 
   assert.ok(filled > 0, 'the byline is filled before the reshape');
   assert.ok(reshaped > filled, 'and the reshape follows it');
 });
+
+test('the invitation offers a working Copy, and builds the raw element as a node rather than markup', () => {
+  const page = read('src/lib/claim-page.ts');
+  assert.match(page, /promptRaw: type === 'prompt' \? m\.body : null/,
+    'a prompt invitation hands the reshaper its raw markdown, which is what turns Copy on');
+  assert.match(page, /wirePromptPage\(doc\)/, 'and wires the same Copy handler the published page uses');
+
+  // The draft preview must NOT become interactive: its body is the live editing surface, so a Copy there would
+  // hand over text the author is still changing.
+  const preview = read('src/lib/preview-page.ts');
+  assert.ok(!/promptRaw/.test(preview), 'the draft preview passes no raw body and keeps its inert block');
+
+  // The prompt body is the most attacker-shaped string on the invitation page, and the page's standing rule is
+  // that no listing string reaches innerHTML. Assert the reshaper builds that element and assigns textContent.
+  const shell = read(SHELL);
+  assert.match(shell, /createElement\('pre'\)/, 'the raw element is created as a node');
+  assert.match(shell, /pre\.textContent = promptRaw/, 'and filled with textContent, never interpolated as markup');
+  assert.ok(!/insertAdjacentHTML\([^)]*promptRaw/.test(shell), 'the raw body is never injected as HTML');
+});
