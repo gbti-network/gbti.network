@@ -52,6 +52,7 @@ Paper leans newest: 63.58% of its servers run a year-based version. The forks le
 
 The table lists the days from Mojang's release to each software's first build and first stable build, for 26.1.2, 26.2 and 26.3. Paper marked 26.3 stable 26 days after Mojang's release. Folia's first 26.3 build, an alpha, arrived 29 days after. Every Leaf 26.x build is still marked experimental, and Purpur's builds carry a build result rather than a release channel, so Purpur does not mark any build stable.
 
+<!-- sort: off -->
 | Version | Server software | First build | First stable build |
 |---|---|---|---|
 | 26.1.2 | Paper | 2.1 days (alpha) | 21.9 days |

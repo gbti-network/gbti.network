@@ -14,6 +14,7 @@ import {
   parseNumericCell, isNumericColumn, qualifiesForSorting, numericColumns, sortedOrder, nextDirection,
   MIN_SORTABLE_ROWS,
 } from '../src/lib/table-sort.mjs';
+import { sortMarkerValue } from '../src/lib/remark-table-sort.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -131,7 +132,12 @@ test('a non-number inside a numeric sort sinks, rather than sorting as zero', ()
 
 // --- the census -------------------------------------------------------------------------------------------
 
-/** Every GFM table in the content corpus, as { file, header, rows }. */
+/**
+ * Every GFM table in the content corpus, as { file, header, rows, override }. `override` is the author's
+ * `<!-- sort: on|off -->` marker (sow-470) on the last non-blank line before the table, read with the renderer's own
+ * sortMarkerValue, because a table switched off never shows sort controls (2026-10-26: the Minecraft article's
+ * reference grid of build dates qualified only because its version column looks numeric).
+ */
 function corpusTables() {
   const out = [];
   const sep = /^\s*\|?[\s:-]*-{2,}[\s:|-]*\|/;
@@ -147,10 +153,13 @@ function corpusTables() {
           if (!lines[i].trimStart().startsWith('|') || !sep.test(lines[i + 1] || '')) continue;
           const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
           const header = cells(lines[i]);
+          let k = i - 1;
+          while (k >= 0 && !lines[k].trim()) k -= 1;
+          const override = k >= 0 ? sortMarkerValue({ type: 'html', value: lines[k] }) : null;
           const rows = [];
           let j = i + 2;
           while (j < lines.length && lines[j].trimStart().startsWith('|')) { rows.push(cells(lines[j])); j += 1; }
-          out.push({ file: path.relative(ROOT, p), header, rows });
+          out.push({ file: path.relative(ROOT, p), header, rows, override });
           i = j;
         }
       }
@@ -166,7 +175,7 @@ test('census: the rule lights up the ranked tables in the corpus and leaves the 
   // A census that found nothing would pass every assertion below it. Refuse to be vacuous.
   assert.ok(tables.length >= 10, `expected to find the corpus tables, found ${tables.length}`);
 
-  const qualify = tables.filter((t) => qualifiesForSorting({ header: t.header, rows: t.rows }));
+  const qualify = tables.filter((t) => qualifiesForSorting({ header: t.header, rows: t.rows, override: t.override }));
   const two = tables.filter((t) => t.header.length <= 2);
   assert.ok(two.length >= 5, `expected the two-column reference tables to be present, found ${two.length}`);
 
