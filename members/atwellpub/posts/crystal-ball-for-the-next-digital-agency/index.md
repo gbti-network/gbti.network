@@ -1,5 +1,5 @@
 ---
-title: 🔮 Predicting the Future of Web Development & the Agency-Client Relationship
+title: 'Crystal Ball: An Inevitable Future For Agency-driven Web Property Management & Service Provision'
 slug: crystal-ball-for-the-next-digital-agency
 status: published
 visibility: public
@@ -19,16 +19,10 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-24T22:05:06.031Z'
+updatedAt: '2026-10-26T21:35:43.163Z'
 type: post
 author: atwellpub
 ---
-
-```audio Listen to the podcast version
-length: 22 minutes
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
-```
 
 *A Strategic Vision for the Next Generation of Digital Agencies.* 
 First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>* and <a href="https://x.com/atwellpub/status/2114103608069525821" rel="nofollow noopener" target="_blank">X</a>.
