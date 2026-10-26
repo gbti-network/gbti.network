@@ -39,6 +39,7 @@ A Minecraft mod that makes lecterns with regenerating books. When a player takes
 - Players read the book as usual, and take it by sneaking with an empty hand or with the lectern's Take Book button
 - An in-game lectern manager on Minecraft 1.21.6 and later: `/lecterns`
 - Only operators can break a Traveler's Lectern
+- Explosions, withers, the ender dragon and fire leave a Traveler's Lectern standing
 - One jar for Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11 and 26.1 to 26.3 (Fabric Server Required)
 
 ## Use Cases
