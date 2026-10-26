@@ -50,6 +50,7 @@ import {
   finalizeIfMerged, takeClaim, releaseClaim, recordOpenedPr, FINALIZE_STATE,
 } from './prepared-claim-finalize.mjs';
 import { sendListingClaimedAlert } from './listing-claimed-alert.mjs';
+import { sendWelcomeMail } from './welcome-mail-send.mjs'; // sow-478: the claimant's own welcome email
 import { validateHostedRequest, hostedBranchFor } from '../../membership/hosted-author.mjs';
 import { normalizeCouponCode, COUPON_CODE_RE } from '../../membership/coupons.mjs';
 import {
@@ -403,12 +404,19 @@ export async function membershipClaimPost(request, env, deps = {}) {
  */
 export function preparedFinalizeHook(env, ctx, deps = {}) {
   const send = deps.sendAlert ?? sendListingClaimedAlert;
+  const sendWelcome = deps.sendWelcome ?? sendWelcomeMail;
   const finalize = deps.finalize ?? finalizeIfMerged;
   return async ({ listing, invite }) => {
     const f = await finalize(env, { listing, invite }, deps);
     if (f?.notify) {
       const p = send(env, f.notify);
       if (ctx?.waitUntil) ctx.waitUntil(p); else await p;
+    }
+    // sow-478: the member's welcome goes out wherever the merge is noticed, so a claim finalized by the manager
+    // behaves exactly like one finalized by the claimant's own poll or by the sweep.
+    if (f?.welcome) {
+      const w = sendWelcome(env, f.welcome);
+      if (ctx?.waitUntil) ctx.waitUntil(w); else await w;
     }
     return { listing: f?.listing, invite: f?.invite };
   };

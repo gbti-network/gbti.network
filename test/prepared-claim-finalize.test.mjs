@@ -33,6 +33,24 @@ async function locked({ prNumber = 77, lockedAt = NOW, ...seedOpts } = {}) {
   return { kv: s.kv, listing: listingOf(s.kv), invite: inviteOf(s.kv) };
 }
 
+test('sow-478: finalize MERGED also returns the CLAIMANT welcome record, built before the record is minimized', async () => {
+  const { kv, listing, invite } = await locked();
+  const gh = ghFake([], { pulls: new Map([[77, pull(77, { state: 'closed', merged: true })]]) });
+  const f = await finalizeIfMerged({}, { listing, invite }, deps(kv, gh));
+  assert.equal(f.state, FINALIZE_STATE.claimed);
+  assert.ok(f.welcome, 'a merged claim produces a welcome record beside the owner notice');
+  assert.equal(f.welcome.githubId, CLAIMANT);
+  assert.equal(f.welcome.name, 'Sam', 'greeted by the name the invitation was prepared with');
+  assert.equal(f.welcome.item.type, 'project');
+  assert.equal(f.welcome.item.slug, 'surfacedby');
+  assert.equal(f.welcome.item.folder, 'sam', 'the member FOLDER the files were committed to');
+  // THE REASON IT IS BUILT BEFORE MINIMIZE. The claimed record has no frontmatter left and its images are
+  // already deleted, so a welcome built from `f.listing` could never carry the picture.
+  assert.equal(f.welcome.item.image, './images/cover.webp');
+  assert.equal(f.listing.frontmatter, null, 'while the stored record keeps none of it');
+  assert.equal(imageKeys(kv).length, 0);
+});
+
 test('finalize MERGED: invite claimed (no year ever again), images deleted, listing claimed + minimized, ONE notify', async () => {
   const { kv, listing, invite } = await locked();
   const gh = ghFake([], { pulls: new Map([[77, pull(77, { state: 'closed', merged: true })]]) });
@@ -194,15 +212,19 @@ test('sweep: only on the quarter-hour tick, at most SWEEP_MAX_PER_TICK, oldest f
   const aligned = new Date(Math.floor(NOW.getTime() / (7 * WINDOW_MS)) * 7 * WINDOW_MS);
   const seen = [];
   const sent = [];
+  const welcomed = [];
   const out = await sweepPreparedClaims({}, {
     kv: s.kv, now: aligned,
-    finalize: async (_env, { listing }) => { seen.push(listing.id); return listing.id === LISTING_ID ? { state: 'claimed', notify: { title: 'SurfacedBy' } } : { state: 'publishing' }; },
+    // sow-478: a claim the sweep notices welcomes its member too, so closing the tab costs them nothing.
+    finalize: async (_env, { listing }) => { seen.push(listing.id); return listing.id === LISTING_ID ? { state: 'claimed', notify: { title: 'SurfacedBy' }, welcome: { githubId: CLAIMANT } } : { state: 'publishing' }; },
     sendAlert: async (_env, rec) => { sent.push(rec); return { sent: true }; },
+    sendWelcome: async (_env, rec) => { welcomed.push(rec); return { sent: true }; },
   });
   assert.equal(seen.length, SWEEP_MAX_PER_TICK, 'bounded');
   assert.equal(seen[0], LISTING_ID, 'oldest lock first');
-  assert.deepEqual(out, { ran: true, scanned: 7, publishing: 7, checked: 5, claimed: 1, failed: 0, open: 4, notified: 1, errors: 0 });
+  assert.deepEqual(out, { ran: true, scanned: 7, publishing: 7, checked: 5, claimed: 1, failed: 0, open: 4, notified: 1, welcomed: 1, errors: 0 });
   assert.equal(sent.length, 1);
+  assert.deepEqual(welcomed, [{ githubId: CLAIMANT }], 'the member is welcomed exactly once');
   for (const v of Object.values(out)) assert.ok(typeof v === 'number' || typeof v === 'boolean', 'counts only: nothing identifying is logged');
 });
 
@@ -268,13 +290,21 @@ test('the manager hook finalizes a row and sends its notice through ctx.waitUnti
   const gh = ghFake([], { pulls: new Map([[77, pull(77, { state: 'closed', merged: true })]]) });
   const waited = [];
   const sent = [];
+  const welcomed = [];
   const hook = preparedFinalizeHook({}, { waitUntil: (p) => waited.push(p) }, {
-    ...deps(kv, gh), sendAlert: async (_e, rec) => { sent.push(rec); return { sent: true }; },
+    ...deps(kv, gh),
+    sendAlert: async (_e, rec) => { sent.push(rec); return { sent: true }; },
+    sendWelcome: async (_e, rec) => { welcomed.push(rec); return { sent: true }; },
   });
   const r = await hook({ listing, invite });
   await Promise.all(waited);
-  assert.equal(waited.length, 1);
+  // sow-478: TWO deferred sends now, the owner's notice and the member's welcome, and both through waitUntil so
+  // neither can delay the manager's response.
+  assert.equal(waited.length, 2);
   assert.equal(sent.length, 1);
+  assert.equal(welcomed.length, 1);
+  assert.equal(welcomed[0].githubId, CLAIMANT);
+  assert.equal(welcomed[0].item.slug, 'surfacedby');
   assert.equal(listingState(r.listing), LISTING_STATE.claimed);
   assert.equal(inviteState(r.invite, NOW), INVITE_STATE.claimed);
 });

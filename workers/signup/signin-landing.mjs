@@ -9,6 +9,18 @@
 const CLAIM_RETURN = /^\/claim\/\?code=[A-Z0-9]{3,32}$/;
 
 /**
+ * sow-478: is this (already validated) return path a prepared-listing claim page?
+ *
+ * EXPORTED so the welcome email's trigger asks THIS function rather than carrying its own copy of the pattern.
+ * A claim sign-in defers the welcome until the item is actually published, so the two decisions have to be the
+ * same decision: a pattern that widened here and not there would send "your prompt is live" to somebody holding
+ * nothing.
+ */
+export function isClaimReturn(returnTo) {
+  return CLAIM_RETURN.test(typeof returnTo === 'string' ? returnTo : '');
+}
+
+/**
  * sow-343: where a completed website sign-in lands, as a same-site path.
  *
  * A NEW account meets the welcome steps first (owner decision 2026-09-16), carrying where it was headed as `next`
@@ -24,7 +36,7 @@ export function signinLanding({ created, returnTo = '' } = {}) {
   const rt = typeof returnTo === 'string' ? returnTo : ''; // already validated by the caller (safeReturnTo)
   if (created !== true) return rt || '/account/';
   if (/^\/membership(\/|\?|#|$)/.test(rt)) return rt;
-  if (CLAIM_RETURN.test(rt)) return `${rt}&welcome=1`;
+  if (isClaimReturn(rt)) return `${rt}&welcome=1`;
   if (!rt || rt === '/account/' || /^\/welcome(\/|\?|#|$)/.test(rt)) return '/welcome/';
   return `/welcome/?next=${encodeURIComponent(rt)}`;
 }

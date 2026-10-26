@@ -246,7 +246,9 @@ test('a failed warm-up read throws to the timer, which catches it and keeps drai
   assert.ok(start > -1 && end > start, 'control: the drain function is found and bounded');
   const drain = src.slice(start, end);
   assert.match(drain, /try \{ shares = await warmSharesFeed\(env\); \} catch \(e\) \{ shares = \{ error:/, 'the 5-minute drain runs it, fail-soft');
-  assert.match(drain, /return \{[^}]*\bshares \}/, 'and logs what it did');
+  // `shares` as a KEY anywhere in the returned object, not as the last one: sow-478 added a sixth key after
+  // it, and an anchor on the closing brace made this red for a change that took nothing away.
+  assert.match(drain, /return \{[^}]*\bshares\b[^}]*\}/, 'and logs what it did');
 });
 
 // ---- 6. 2026-10-23: the new tab paints the account's last list at once ---------------------------------------------

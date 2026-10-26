@@ -29,6 +29,7 @@ import { listListings } from './prepared-store.mjs';
 import { readInvite } from './invites-store.mjs';
 import { finalizeIfMerged, FINALIZE_STATE } from './prepared-claim-finalize.mjs';
 import { sendListingClaimedAlert } from './listing-claimed-alert.mjs';
+import { sendWelcomeMail } from './welcome-mail-send.mjs'; // sow-478: the claimant's own welcome email
 import { listingState, LISTING_STATE } from '../../membership/prepared-listings.mjs';
 
 /** At most this many publishing listings are finalized per run. */
@@ -74,6 +75,7 @@ export async function sweepPreparedClaims(env, deps = {}) {
   const readInv = deps.readInv ?? readInvite;
   const finalize = deps.finalize ?? finalizeIfMerged;
   const sendAlert = deps.sendAlert ?? sendListingClaimedAlert;
+  const sendWelcome = deps.sendWelcome ?? sendWelcomeMail; // sow-478
   const max = Number.isInteger(deps.max) && deps.max > 0 ? deps.max : SWEEP_MAX_PER_TICK;
   if (!kv) return { ran: true, unavailable: true };
 
@@ -86,7 +88,7 @@ export async function sweepPreparedClaims(env, deps = {}) {
     .filter((rec) => rec && listingState(rec) === LISTING_STATE.publishing)
     .sort((a, b) => String(a.claimPendingAt ?? '').localeCompare(String(b.claimPendingAt ?? '')));
 
-  const out = { ran: true, scanned: all.length, publishing: publishing.length, checked: 0, claimed: 0, failed: 0, open: 0, notified: 0, errors: 0 };
+  const out = { ran: true, scanned: all.length, publishing: publishing.length, checked: 0, claimed: 0, failed: 0, open: 0, notified: 0, welcomed: 0, errors: 0 };
   for (const listing of sweepBatch(publishing, max, now)) {
     out.checked += 1;
     try {
@@ -98,6 +100,11 @@ export async function sweepPreparedClaims(env, deps = {}) {
       if (f?.notify) {
         const sent = await sendAlert(env, f.notify);
         if (sent?.sent) out.notified += 1;
+      }
+      // sow-478: a claim nobody watched still welcomes its member, with the receipt.
+      if (f?.welcome) {
+        const w = await sendWelcome(env, f.welcome);
+        if (w?.sent) out.welcomed += 1;
       }
     } catch {
       out.errors += 1;

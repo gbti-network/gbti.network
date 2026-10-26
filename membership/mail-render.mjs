@@ -153,7 +153,11 @@ function trackUrl(url, links, content) {
 
 // The PALETTE TOKEN LAYER. Both variants are copied verbatim from the design's Light and Dark blocks, so the
 // owner's choice is one value in ctx and never a template edit. LIGHT is the default and the shipping variant.
-const PALETTES = {
+//
+// EXPORTED since sow-478, for the new-member welcome email (membership/welcome-mail.mjs). That email is a second
+// template rather than a second issue kind, and it shares these tokens rather than copying the hexes, so the two
+// cannot drift apart on colour. Nothing outside this file may MUTATE them: they are frozen below.
+export const PALETTES = {
   light: {
     pageBg: '#efece7', cardBg: '#ffffff', cardBorder: '#e0dbd3', hairline: '#eae6df',
     ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', rule: '#187a4b',
@@ -168,6 +172,9 @@ const PALETTES = {
     footerLink: '#bdbac4', postalMeta: '#847f8d', pillBg: '#1e3329', pillBorder: '#2d5240',
   },
 };
+Object.freeze(PALETTES);
+Object.freeze(PALETTES.light);
+Object.freeze(PALETTES.dark);
 
 // Per-type public feed routes (SOW-131 / SOW-139), the only link targets the renderer invents, each a real
 // public route.

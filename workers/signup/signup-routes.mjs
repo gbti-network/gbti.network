@@ -3,7 +3,8 @@
 // handleSignupRoutes at the point in its router where these checks stood, so their order is unchanged.
 
 import { signSession, verifySession, sessionCookieHeader, readSessionCookie } from './session.mjs';
-import { signinLanding } from './signin-landing.mjs'; // sow-343: a new account meets the welcome steps first
+import { signinLanding, isClaimReturn } from './signin-landing.mjs'; // sow-343: a new account meets the welcome steps first
+import { markWelcomeOwed, sendWelcomeMail } from './welcome-mail-send.mjs'; // sow-478: the new member's welcome email
 import { handleExtensionCallback, EXT_STATE_KIND } from './extension-signin.mjs'; // sow-393: extension sign-in through the website
 import {
   githubAuthorizeUrl,
@@ -209,6 +210,31 @@ async function handleGithubCallback(request, env, ctx) {
       globalThis.fetch,
     )).catch(() => false);
     if (ctx?.waitUntil) ctx.waitUntil(nudge); else await nudge;
+  }
+
+  // sow-478: A GENUINELY NEW MEMBER IS OWED A WELCOME EMAIL, and this is the only place that says so.
+  //
+  // Until this, onboarding depended on nobody closing a tab: the one automatic hand-off into /welcome/ was a six
+  // second redirect on the success panel, and /welcome/ is in no nav, no footer, no account page and no email.
+  //
+  // `created` is signup's own answer, so a returning member re-running signup is owed nothing. The owed key is
+  // the entitlement AND the retry queue, so it is written first and the send clears it; a send that fails leaves
+  // it for the five-minute sweep. Fired through waitUntil and fail-soft, exactly like the coupon alert above, so
+  // it can never delay or break the member's redirect.
+  //
+  // A CLAIM SIGN-IN IS OWED ONE AND IS NOT SENT ONE YET. They are about to publish something, and the email
+  // leads with it, so the send waits for the merge (prepared-claim-finalize.mjs) and the sweep covers a claim
+  // that never completes. isClaimReturn is the SAME predicate signinLanding uses to choose that landing, not a
+  // second copy of the rule.
+  if (signup.created === true) {
+    const viaClaim = isClaimReturn(safeReturnTo(state.returnTo));
+    const welcome = markWelcomeOwed(env.SIGNUP_KV, githubId, { viaClaim })
+      .then((owed) => (owed && !viaClaim
+        // A fresh coupon redemption IS the free year, so it reads as paid and the email lists all five steps.
+        ? sendWelcomeMail(env, { githubId, email, status: signup.couponApplied ? 'paid' : 'none' })
+        : null))
+      .catch(() => null);
+    if (ctx?.waitUntil) ctx.waitUntil(welcome); else await welcome;
   }
 
   const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);

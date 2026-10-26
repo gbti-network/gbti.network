@@ -36,6 +36,7 @@ import {
   markListingClaimed, minimizeClaimedListing, projectUrl, CLAIM_STATE,
 } from '../../membership/prepared-listings.mjs';
 import { listingClaimedRecord } from '../../membership/prepared-notify.mjs';
+import { welcomeRecordFromListing } from '../../membership/welcome-mail.mjs'; // sow-478: the claimant's welcome email
 
 /**
  * A lock with NO pull request anywhere on GitHub for its branch is released only once it is older than this. The claim
@@ -284,6 +285,11 @@ export async function finalizeIfMerged(env, { listing, invite = null } = {}, dep
     listing: next,
     invite: invNext,
     notify: listingClaimedRecord(next, { siteBase: io.siteBase, upstream: io.upstream }),
+    // sow-478: the CLAIMANT's welcome email, beside the owner's notice. Built from `listing`, the record as it
+    // stood BEFORE minimize, because `next` has had its frontmatter nulled and the images are already deleted:
+    // this is the last moment the item's cover is known. Sending it is the caller's job, fail-soft through
+    // waitUntil, exactly as `notify` is, and it goes out only to a member who is actually owed one.
+    welcome: welcomeRecordFromListing(listing, { githubId: claimant }),
     projectUrl: projectUrl(io.siteBase, next.slug),
     prNumber: pr.number,
   };

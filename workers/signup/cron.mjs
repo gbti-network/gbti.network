@@ -5,6 +5,7 @@
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { sweepPreparedClaims } from './prepared-claim-sweep.mjs'; // sow-427: finalize claims nobody is watching
 import { warmSharesFeed } from './membership-shares.mjs'; // 2026-10-23: no member's Shares tab waits on a cold list
+import { sweepOwedWelcomes } from './welcome-mail-send.mjs'; // sow-478: welcome anyone whose email was never sent
 import { drainSyndication } from './syndication-drain.mjs';
 import { ingest } from './news/src/ingest.mjs'; // UnifiedWorker: the hourly news RSS fetch + AI classify (was the gbti-news worker)
 import { backfillImages } from './news/src/backfill.mjs'; // UnifiedWorker: the :30 og:image backfill
@@ -142,7 +143,15 @@ async function drainFiveMinute(env) {
   let shares;
   try { shares = await warmSharesFeed(env); } catch (e) { shares = { error: String(e?.message ?? e) }; }
 
-  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared, shares };
+  // sow-478: THE WELCOME EMAIL'S SAFETY NET, and it is not optional. A member owed a welcome gets the plain
+  // version an hour after they joined, whatever happened to the claim that was supposed to carry the receipt.
+  // It is needed because the finalize step that would otherwise send it is currently failing (the first real
+  // prompt claim, 2026-10-25, left pristine listing and invite records), so without this exactly the people who
+  // accept an invitation would get no welcome at all. One prefix list of a set that is almost always empty.
+  let welcomeMail;
+  try { welcomeMail = await sweepOwedWelcomes(env); } catch (e) { welcomeMail = { error: String(e?.message ?? e) }; }
+
+  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared, shares, welcomeMail };
 }
 
 // Shared by both Tuesday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still

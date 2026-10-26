@@ -11,6 +11,7 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { inviteListingRead, inviteListingImage, inviteTitleRead } from './prepared-claim-read.mjs'; // sow-427: the signed-out read of a prepared listing by its code
 import { membershipClaimStatus, membershipClaimPost } from './membership-claim.mjs'; // sow-427: claiming a prepared listing
 import { sendListingClaimedAlert } from './listing-claimed-alert.mjs'; // sow-427: the owner notice when a claim merges
+import { sendWelcomeMail } from './welcome-mail-send.mjs'; // sow-478: the claimant's own welcome email
 import { sendNewItemsAlert } from './new-item-alert.mjs'; // sow-458: the owner is told when a member creates something
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
@@ -180,6 +181,9 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
         ? await membershipClaimStatus(request, env, { allowCookie: true })
         : await membershipClaimPost(request, env, { allowCookie: true });
       if (r.notify && ctx?.waitUntil) ctx.waitUntil(sendListingClaimedAlert(env, r.notify));
+      // sow-478: and the member's own welcome, which carries the receipt for what just went live. Fail-soft
+      // and owed-gated, so a returning member claiming a second listing is sent nothing.
+      if (r.welcome && ctx?.waitUntil) ctx.waitUntil(sendWelcomeMail(env, r.welcome));
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
     }
   }
