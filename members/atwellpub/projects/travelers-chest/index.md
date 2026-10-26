@@ -5,19 +5,21 @@ slug: travelers-chest
 author: atwellpub
 status: published
 visibility: public
-shortDescription: "A Minecraft Fabric 1.21.1 server mod that adds dynamic, auto-refilling chests on a configurable cooldown."
+shortDescription: "A Minecraft mod that adds chests that refill one cooldown after a player first takes from them, with chest menus for operators on every supported version."
 categories: ["entertainment", "gaming", "minecraft", "mods"]
 icon: "./images/minecraft-mod-travelers-chest-icon-128x128-1.webp"
 publishedAt: 2025-09-27
 banner: "./images/github-product-banner-minecraft-mod-travelers-chest.webp"
-featuredImage: "./images/travelers-chest-featured.webp"
+featuredImage: "./images/travelers-chest-2-0-0-featured.webp"
 gallery:
-  - "./images/travelers-chest-shot-1.webp"
-  - "./images/travelers-chest-shot-2.webp"
-  - "./images/travelers-chest-shot-3.webp"
-  - "./images/travelers-chest-shot-4.webp"
-  - "./images/travelers-chest-shot-5.webp"
-video: "emiTGBMBYeY"
+  - "./images/travelers-chest-2-0-0-list.webp"
+  - "./images/travelers-chest-2-0-0-clock.webp"
+  - "./images/travelers-chest-2-0-0-open.webp"
+  - "./images/travelers-chest-2-0-0-refill.webp"
+  - "./images/travelers-chest-2-0-0-teleport.webp"
+  - "./images/travelers-chest-2-0-0-rename.webp"
+  - "./images/travelers-chest-2-0-0-itself.webp"
+  - "./images/travelers-chest-2-0-0-in-world.webp"
 links:
   - { type: download, url: "https://modrinth.com/mod/travelers-chest", primary: true }
   - { type: repository, url: "https://github.com/gbti-network/minecraft-mod-travelers-chest" }
@@ -27,45 +29,47 @@ redirectFrom:
 
 # Traveler's Chest
 
-A Minecraft server mod for Fabric 1.21.1 that introduces dynamic, refillable chests for enhanced gameplay and server management.
+A Minecraft mod for chests that refill themselves. When a player first takes from a Traveler's Chest, it refills with the same items in the same slots after a cooldown you set.
 
-Chests are automatically replenished after a configurable cooldown period.
+Operators manage every Traveler's Chest from chest menus with `/chests`, on every supported version.
 
 ## Key Features
 
--   **Automated Chest Refills**: Create chests that automatically replenish their contents after a customizable cooldown period
--   **Admin Controls**: Simple command system for creating, editing, and managing special chests
--   **Protection System**: Prevents unauthorized players from breaking or modifying managed chests
--   **Flexible Configuration**: Customize cooldown times and contents for each chest individually
--   **Double Chest Support**: Seamlessly works with both single and double chest configurations
+- **Refills After the First Take**: The chest refills one cooldown after a player first takes from it, with each saved stack back in its slot
+- **Shared Contents**: Everyone takes from the same chest, as from any chest
+- **Players Only**: Hoppers, hopper minecarts, droppers and copper golems cannot pull from or push into a Traveler's Chest
+- **Chest Menus**: Operators change a chest's cooldown on a clock, open the chest itself from anywhere to change its items, refill it now, rename it, or teleport to any Traveler's Chest on the server
+- **Protection System**: Only operators can break a Traveler's Chest: single, trapped, copper, or either half of a double chest. Explosions, withers and the ender dragon leave it standing
 
 ## Technical Details
 
--   Built for Fabric Loader (>=0.16.5)
--   Requires Minecraft 1.21.1
--   Java 21 compatibility
--   Server-side mod
--   Includes comprehensive configuration system
--   Debug logging capabilities for troubleshooting
+- One jar for Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11 and 26.1 to 26.3
+- Server-side mod, with no client-side installation required
+- The chest menus are built from the game's own chest screens, on every supported version
+- Configurable debug logging, in `config/travelers-chest/travelers_chest_config.txt`
+- JSON-based data storage in `config/travelers-chest/chests.json`, kept when a world moves to a newer Minecraft
+- Releases before 2.0.0 used `travelers_chests.json`, which 2.0.0 imports and leaves as it was
 
 ## Perfect For
 
--   Server administrators looking to create dynamic loot systems
--   Adventure maps requiring automated resource distribution
--   RPG-style servers needing controlled item dispensing
--   Community servers wanting to maintain balanced resource availability
+- Loot spots at adventure points of interest
+- Adventure maps
+- RPG and survival servers
+- Resource hubs
+- Community servers
 
 ## Installation Requirements
 
--   Fabric Loader
--   Fabric API
--   Minecraft Server 1.21.1
--   Java 21 or higher
+- Fabric Loader 0.16.10 or newer
+- Fabric API
+- Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11 or 26.1 to 26.3 (Fabric Server Required)
+- The Java version your Minecraft needs: 17 for 1.20.x, 21 for 1.21.x, 25 for 26.x
 
 ## Commands
 
-```bash
-/travelers_chest create [cooldown_in_seconds]  # Create a new chest
-/travelers_chest edit [new_cooldown_in_seconds]  # Modify existing chest
-/travelers_chest destroy  # Remove a chest
-```
+Admin-level commands (requires permission level 4), used while looking at a chest:
+
+- `/chests`: Opens the chest menus: the Traveler's Chest you face, or a list of every Traveler's Chest
+- `/travelers_chest create [time]`: Creates a new Traveler's Chest that refills with the items in it now, with a cooldown in seconds
+- `/travelers_chest edit <time>`: Modifies the cooldown
+- `/travelers_chest destroy`: Turns it back into a plain chest, leaving its items in it
