@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="540" viewBox="0 0 760 540" role="img" aria-label="Share of one week of mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per loader (Modrinth only): Fabric: 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. NeoForge: 1.21.1 39.1%, 1.20.1 21.7%, 1.21 8.6%, 26.3 8.2%, 1.20 4.6%, 26.2 3.5%. Forge: 1.20.1 66.3%, 1.20 13.0%, 1.19.2 2.3%, 1.20.2 1.8%, 1.20.4 1.6%, 1.20.3 1.5%. Quilt: 26.3 20.0%, 1.20.1 16.8%, 1.21.11 12.7%, 1.21.1 10.0%, 26.2 9.3%, 1.21 6.1%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of one week of mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per loader (Modrinth only): Fabric: 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. NeoForge: 1.21.1 39.1%, 1.20.1 21.7%, 1.21 8.6%, 26.3 8.2%, 1.20 4.6%, 26.2 3.5%. Forge: 1.20.1 66.3%, 1.20 13.0%, 1.19.2 2.3%, 1.20.2 1.8%, 1.20.4 1.6%, 1.20.3 1.5%. Quilt: 26.3 20.0%, 1.20.1 16.8%, 1.21.11 12.7%, 1.21.1 10.0%, 26.2 9.3%, 1.21 6.1%.</title>
+<rect x="0.5" y="0.5" width="759" height="539" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Which versions modded players download</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of one week of downloads, 17 October 2026 to 24 October 2026, top 500 mods per loader, Modrinth only</text>
+<text x="28.0" y="112.0" font-size="15" font-weight="650" fill="#0b0b0b" text-anchor="start">Fabric</text>
+<text x="28.0" y="138.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.3</text>
+<path d="M92.0,126.0 H162.8 Q166.8,126.0 166.8,130.0 V138.0 Q166.8,142.0 162.8,142.0 H92.0 Z" fill="#2a78d6"/>
+<text x="172.8" y="138.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">22.1%</text>
+<text x="28.0" y="164.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<path d="M92.0,152.0 H142.7 Q146.7,152.0 146.7,156.0 V164.0 Q146.7,168.0 142.7,168.0 H92.0 Z" fill="#2a78d6"/>
+<text x="152.7" y="164.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">16.2%</text>
+<text x="28.0" y="190.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
+<path d="M92.0,178.0 H138.3 Q142.3,178.0 142.3,182.0 V190.0 Q142.3,194.0 138.3,194.0 H92.0 Z" fill="#2a78d6"/>
+<text x="148.3" y="190.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">14.9%</text>
+<text x="28.0" y="216.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
+<path d="M92.0,204.0 H131.9 Q135.9,204.0 135.9,208.0 V216.0 Q135.9,220.0 131.9,220.0 H92.0 Z" fill="#2a78d6"/>
+<text x="141.9" y="216.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">13.0%</text>
+<text x="28.0" y="242.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
+<path d="M92.0,230.0 H119.9 Q123.9,230.0 123.9,234.0 V242.0 Q123.9,246.0 119.9,246.0 H92.0 Z" fill="#2a78d6"/>
+<text x="129.9" y="242.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">9.4%</text>
+<text x="28.0" y="268.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21</text>
+<path d="M92.0,256.0 H104.5 Q108.5,256.0 108.5,260.0 V268.0 Q108.5,272.0 104.5,272.0 H92.0 Z" fill="#2a78d6"/>
+<text x="114.5" y="268.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">4.9%</text>
+<text x="392.0" y="112.0" font-size="15" font-weight="650" fill="#0b0b0b" text-anchor="start">NeoForge</text>
+<text x="392.0" y="138.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
+<path d="M456.0,126.0 H584.1 Q588.1,126.0 588.1,130.0 V138.0 Q588.1,142.0 584.1,142.0 H456.0 Z" fill="#2a78d6"/>
+<text x="594.1" y="138.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">39.1%</text>
+<text x="392.0" y="164.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<path d="M456.0,152.0 H525.3 Q529.3,152.0 529.3,156.0 V164.0 Q529.3,168.0 525.3,168.0 H456.0 Z" fill="#2a78d6"/>
+<text x="535.3" y="164.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">21.7%</text>
+<text x="392.0" y="190.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21</text>
+<path d="M456.0,178.0 H481.2 Q485.2,178.0 485.2,182.0 V190.0 Q485.2,194.0 481.2,194.0 H456.0 Z" fill="#2a78d6"/>
+<text x="491.2" y="190.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">8.6%</text>
+<text x="392.0" y="216.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.3</text>
+<path d="M456.0,204.0 H479.8 Q483.8,204.0 483.8,208.0 V216.0 Q483.8,220.0 479.8,220.0 H456.0 Z" fill="#2a78d6"/>
+<text x="489.8" y="216.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">8.2%</text>
+<text x="392.0" y="242.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20</text>
+<path d="M456.0,230.0 H467.5 Q471.5,230.0 471.5,234.0 V242.0 Q471.5,246.0 467.5,246.0 H456.0 Z" fill="#2a78d6"/>
+<text x="477.5" y="242.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">4.6%</text>
+<text x="392.0" y="268.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
+<path d="M456.0,256.0 H463.9 Q467.9,256.0 467.9,260.0 V268.0 Q467.9,272.0 463.9,272.0 H456.0 Z" fill="#2a78d6"/>
+<text x="473.9" y="268.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">3.5%</text>
+<text x="28.0" y="320.0" font-size="15" font-weight="650" fill="#0b0b0b" text-anchor="start">Forge</text>
+<text x="28.0" y="346.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<path d="M92.0,334.0 H312.0 Q316.0,334.0 316.0,338.0 V346.0 Q316.0,350.0 312.0,350.0 H92.0 Z" fill="#2a78d6"/>
+<text x="322.0" y="346.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">66.3%</text>
+<text x="28.0" y="372.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20</text>
+<path d="M92.0,360.0 H132.0 Q136.0,360.0 136.0,364.0 V372.0 Q136.0,376.0 132.0,376.0 H92.0 Z" fill="#2a78d6"/>
+<text x="142.0" y="372.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">13.0%</text>
+<text x="28.0" y="398.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.19.2</text>
+<path d="M92.0,386.0 H96.0 Q99.9,386.0 99.9,390.0 V398.0 Q99.9,402.0 96.0,402.0 H92.0 Z" fill="#2a78d6"/>
+<text x="105.9" y="398.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">2.3%</text>
+<text x="28.0" y="424.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.2</text>
+<path d="M92.0,412.0 H95.1 Q98.1,412.0 98.1,415.1 V424.9 Q98.1,428.0 95.1,428.0 H92.0 Z" fill="#2a78d6"/>
+<text x="104.1" y="424.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">1.8%</text>
+<text x="28.0" y="450.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.4</text>
+<path d="M92.0,438.0 H94.7 Q97.3,438.0 97.3,440.7 V451.3 Q97.3,454.0 94.7,454.0 H92.0 Z" fill="#2a78d6"/>
+<text x="103.3" y="450.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">1.6%</text>
+<text x="28.0" y="476.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.3</text>
+<path d="M92.0,464.0 H94.5 Q97.1,464.0 97.1,466.5 V477.5 Q97.1,480.0 94.5,480.0 H92.0 Z" fill="#2a78d6"/>
+<text x="103.1" y="476.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">1.5%</text>
+<text x="392.0" y="320.0" font-size="15" font-weight="650" fill="#0b0b0b" text-anchor="start">Quilt</text>
+<text x="392.0" y="346.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.3</text>
+<path d="M456.0,334.0 H519.6 Q523.6,334.0 523.6,338.0 V346.0 Q523.6,350.0 519.6,350.0 H456.0 Z" fill="#2a78d6"/>
+<text x="529.6" y="346.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">20.0%</text>
+<text x="392.0" y="372.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<path d="M456.0,360.0 H508.8 Q512.8,360.0 512.8,364.0 V372.0 Q512.8,376.0 508.8,376.0 H456.0 Z" fill="#2a78d6"/>
+<text x="518.8" y="372.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">16.8%</text>
+<text x="392.0" y="398.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
+<path d="M456.0,386.0 H494.9 Q498.9,386.0 498.9,390.0 V398.0 Q498.9,402.0 494.9,402.0 H456.0 Z" fill="#2a78d6"/>
+<text x="504.9" y="398.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">12.7%</text>
+<text x="392.0" y="424.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
+<path d="M456.0,412.0 H485.8 Q489.8,412.0 489.8,416.0 V424.0 Q489.8,428.0 485.8,428.0 H456.0 Z" fill="#2a78d6"/>
+<text x="495.8" y="424.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">10.0%</text>
+<text x="392.0" y="450.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
+<path d="M456.0,438.0 H483.4 Q487.4,438.0 487.4,442.0 V450.0 Q487.4,454.0 483.4,454.0 H456.0 Z" fill="#2a78d6"/>
+<text x="493.4" y="450.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">9.3%</text>
+<text x="392.0" y="476.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21</text>
+<path d="M456.0,464.0 H472.5 Q476.5,464.0 476.5,468.0 V476.0 Q476.5,480.0 472.5,480.0 H456.0 Z" fill="#2a78d6"/>
+<text x="482.5" y="476.0" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">6.1%</text>
+<text x="28.0" y="522.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: Modrinth download counts. GBTI Network research.</text>
+</svg>

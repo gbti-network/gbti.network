@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="488" viewBox="0 0 760 488" role="img" aria-label="The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a Java release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a Java release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%.</title>
+<rect x="0.5" y="0.5" width="759" height="487" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">The most used Minecraft Java versions on servers</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of the 196,558 servers that reported a Java release to bStats on 24 October 2026</text>
+<text x="28.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">26.3</text>
+<text x="92.0" y="112.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Sep 2026</text>
+<path d="M228.0,98.0 H672.0 Q676.0,98.0 676.0,102.0 V114.0 Q676.0,118.0 672.0,118.0 H228.0 Z" fill="#2a78d6"/>
+<text x="684.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">23.4%</text>
+<text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
+<text x="92.0" y="146.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Dec 2025</text>
+<path d="M228.0,132.0 H667.0 Q671.0,132.0 671.0,136.0 V148.0 Q671.0,152.0 667.0,152.0 H228.0 Z" fill="#2a78d6"/>
+<text x="679.0" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">23.1%</text>
+<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
+<text x="92.0" y="180.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Jun 2026</text>
+<path d="M228.0,166.0 H665.9 Q669.9,166.0 669.9,170.0 V182.0 Q669.9,186.0 665.9,186.0 H228.0 Z" fill="#2a78d6"/>
+<text x="677.9" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">23.1%</text>
+<text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">26.1.2</text>
+<text x="92.0" y="214.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Apr 2026</text>
+<path d="M228.0,200.0 H356.2 Q360.2,200.0 360.2,204.0 V216.0 Q360.2,220.0 356.2,220.0 H228.0 Z" fill="#2a78d6"/>
+<text x="368.2" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">6.9%</text>
+<text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.4</text>
+<text x="92.0" y="248.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Dec 2024</text>
+<path d="M228.0,234.0 H292.6 Q296.6,234.0 296.6,238.0 V250.0 Q296.6,254.0 292.6,254.0 H228.0 Z" fill="#2a78d6"/>
+<text x="304.6" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">3.6%</text>
+<text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.10</text>
+<text x="92.0" y="282.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Oct 2025</text>
+<path d="M228.0,268.0 H274.2 Q278.2,268.0 278.2,272.0 V284.0 Q278.2,288.0 274.2,288.0 H228.0 Z" fill="#2a78d6"/>
+<text x="286.2" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.6%</text>
+<text x="28.0" y="316.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
+<text x="92.0" y="316.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Aug 2024</text>
+<path d="M228.0,302.0 H271.9 Q275.9,302.0 275.9,306.0 V318.0 Q275.9,322.0 271.9,322.0 H228.0 Z" fill="#2a78d6"/>
+<text x="283.9" y="316.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.5%</text>
+<text x="28.0" y="350.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.8</text>
+<text x="92.0" y="350.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Jul 2025</text>
+<path d="M228.0,336.0 H271.9 Q275.9,336.0 275.9,340.0 V352.0 Q275.9,356.0 271.9,356.0 H228.0 Z" fill="#2a78d6"/>
+<text x="283.9" y="350.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.5%</text>
+<text x="28.0" y="384.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<text x="92.0" y="384.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Jun 2023</text>
+<path d="M228.0,370.0 H266.2 Q270.2,370.0 270.2,374.0 V386.0 Q270.2,390.0 266.2,390.0 H228.0 Z" fill="#2a78d6"/>
+<text x="278.2" y="384.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.2%</text>
+<text x="28.0" y="418.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.8.8</text>
+<text x="92.0" y="418.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">released Jul 2015</text>
+<path d="M228.0,404.0 H265.2 Q269.2,404.0 269.2,408.0 V420.0 Q269.2,424.0 265.2,424.0 H228.0 Z" fill="#2a78d6"/>
+<text x="277.2" y="418.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.1%</text>
+<text x="28.0" y="448.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">The other 58 versions together: 8.0%.</text>
+<text x="28.0" y="470.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026. GBTI Network research.</text>
+</svg>

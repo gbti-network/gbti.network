@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="444" viewBox="0 0 760 444" role="img" aria-label="Which Minecraft Java versions servers run, by server software, read 24 October 2026. All servers (196,558 servers): 26.3 23.4%, 26.2 23.1%, 26.1.x 7.2%, 1.21.11 23.1%, Older versions 23.2%. Paper (178,346 servers): 26.3 30.5%, 26.2 25.4%, 26.1.x 7.7%, 1.21.11 19.8%, Older versions 16.6%. Purpur (20,870 servers): 26.3 22.6%, 26.2 23.3%, 26.1.x 7.8%, 1.21.11 24.8%, Older versions 21.5%. Leaf (4,703 servers): 26.3 8.9%, 26.2 22.0%, 26.1.x 3.1%, 1.21.11 51.1%, Older versions 14.8%. UniverseSpigot (2,442 servers): 26.3 7.7%, 26.2 23.5%, 26.1.x 3.5%, 1.21.11 42.4%, Older versions 22.9%. Folia (2,160 servers): 26.3 11.8%, 26.2 25.6%, 26.1.x 22.6%, 1.21.11 33.5%, Older versions 6.5%. Mohist (1,189 servers): 26.3 0.0%, 26.2 0.0%, 26.1.x 0.0%, 1.21.11 0.0%, Older versions 100.0%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Which Minecraft Java versions servers run, by server software, read 24 October 2026. All servers (196,558 servers): 26.3 23.4%, 26.2 23.1%, 26.1.x 7.2%, 1.21.11 23.1%, Older versions 23.2%. Paper (178,346 servers): 26.3 30.5%, 26.2 25.4%, 26.1.x 7.7%, 1.21.11 19.8%, Older versions 16.6%. Purpur (20,870 servers): 26.3 22.6%, 26.2 23.3%, 26.1.x 7.8%, 1.21.11 24.8%, Older versions 21.5%. Leaf (4,703 servers): 26.3 8.9%, 26.2 22.0%, 26.1.x 3.1%, 1.21.11 51.1%, Older versions 14.8%. UniverseSpigot (2,442 servers): 26.3 7.7%, 26.2 23.5%, 26.1.x 3.5%, 1.21.11 42.4%, Older versions 22.9%. Folia (2,160 servers): 26.3 11.8%, 26.2 25.6%, 26.1.x 22.6%, 1.21.11 33.5%, Older versions 6.5%. Mohist (1,189 servers): 26.3 0.0%, 26.2 0.0%, 26.1.x 0.0%, 1.21.11 0.0%, Older versions 100.0%.</title>
+<rect x="0.5" y="0.5" width="759" height="443" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">The version mix differs by server software</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of each software&#x27;s servers on each version; softwares with 1,000 servers or more</text>
+<rect x="28.0" y="89" width="10" height="10" rx="2" fill="#2a78d6"/>
+<text x="44.0" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">26.3 (newest)</text>
+<rect x="153.4" y="89" width="10" height="10" rx="2" fill="#eb6834"/>
+<text x="169.4" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">26.2</text>
+<rect x="218.2" y="89" width="10" height="10" rx="2" fill="#1baf7a"/>
+<text x="234.2" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">26.1.x</text>
+<rect x="296.6" y="89" width="10" height="10" rx="2" fill="#eda100"/>
+<text x="312.6" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">1.21.11</text>
+<rect x="381.6" y="89" width="10" height="10" rx="2" fill="#a8a69d"/>
+<text x="397.6" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Older versions</text>
+<text x="28.0" y="137.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">All servers</text>
+<path d="M158.0,120.0 H270.5 Q270.5,120.0 270.5,120.0 V144.0 Q270.5,144.0 270.5,144.0 H158.0 Z" fill="#2a78d6"/>
+<text x="214.3" y="136.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.4%</text>
+<path d="M272.5,120.0 H383.5 Q383.5,120.0 383.5,120.0 V144.0 Q383.5,144.0 383.5,144.0 H272.5 Z" fill="#eb6834"/>
+<text x="328.0" y="136.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.1%</text>
+<path d="M385.5,120.0 H419.0 Q419.0,120.0 419.0,120.0 V144.0 Q419.0,144.0 419.0,144.0 H385.5 Z" fill="#1baf7a"/>
+<path d="M421.0,120.0 H532.3 Q532.3,120.0 532.3,120.0 V144.0 Q532.3,144.0 532.3,144.0 H421.0 Z" fill="#eda100"/>
+<text x="476.6" y="136.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.1%</text>
+<path d="M534.3,120.0 H644.0 Q648.0,120.0 648.0,124.0 V140.0 Q648.0,144.0 644.0,144.0 H534.3 Z" fill="#a8a69d"/>
+<text x="591.1" y="136.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.2%</text>
+<text x="658.0" y="137.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">196,558</text>
+<text x="28.0" y="179.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Paper</text>
+<path d="M158.0,162.0 H305.5 Q305.5,162.0 305.5,162.0 V186.0 Q305.5,186.0 305.5,186.0 H158.0 Z" fill="#2a78d6"/>
+<text x="231.7" y="178.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">30.5%</text>
+<path d="M307.5,162.0 H429.9 Q429.9,162.0 429.9,162.0 V186.0 Q429.9,186.0 429.9,186.0 H307.5 Z" fill="#eb6834"/>
+<text x="368.7" y="178.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">25.4%</text>
+<path d="M431.9,162.0 H467.6 Q467.6,162.0 467.6,162.0 V186.0 Q467.6,186.0 467.6,186.0 H431.9 Z" fill="#1baf7a"/>
+<path d="M469.6,162.0 H564.6 Q564.6,162.0 564.6,162.0 V186.0 Q564.6,186.0 564.6,186.0 H469.6 Z" fill="#eda100"/>
+<text x="517.1" y="178.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">19.8%</text>
+<path d="M566.6,162.0 H644.0 Q648.0,162.0 648.0,166.0 V182.0 Q648.0,186.0 644.0,186.0 H566.6 Z" fill="#a8a69d"/>
+<text x="607.3" y="178.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">16.6%</text>
+<text x="658.0" y="179.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">178,346</text>
+<text x="28.0" y="221.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Purpur</text>
+<path d="M158.0,204.0 H267.0 Q267.0,204.0 267.0,204.0 V228.0 Q267.0,228.0 267.0,228.0 H158.0 Z" fill="#2a78d6"/>
+<text x="212.5" y="220.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">22.6%</text>
+<path d="M269.0,204.0 H381.0 Q381.0,204.0 381.0,204.0 V228.0 Q381.0,228.0 381.0,228.0 H269.0 Z" fill="#eb6834"/>
+<text x="325.0" y="220.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.3%</text>
+<path d="M383.0,204.0 H419.2 Q419.2,204.0 419.2,204.0 V228.0 Q419.2,228.0 419.2,228.0 H383.0 Z" fill="#1baf7a"/>
+<path d="M421.2,204.0 H540.8 Q540.8,204.0 540.8,204.0 V228.0 Q540.8,228.0 540.8,228.0 H421.2 Z" fill="#eda100"/>
+<text x="481.0" y="220.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">24.8%</text>
+<path d="M542.8,204.0 H644.0 Q648.0,204.0 648.0,208.0 V224.0 Q648.0,228.0 644.0,228.0 H542.8 Z" fill="#a8a69d"/>
+<text x="595.4" y="220.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">21.5%</text>
+<text x="658.0" y="221.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">20,870</text>
+<text x="28.0" y="263.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Leaf</text>
+<path d="M158.0,246.0 H199.9 Q199.9,246.0 199.9,246.0 V270.0 Q199.9,270.0 199.9,270.0 H158.0 Z" fill="#2a78d6"/>
+<text x="178.9" y="262.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">8.9%</text>
+<path d="M201.9,246.0 H307.6 Q307.6,246.0 307.6,246.0 V270.0 Q307.6,270.0 307.6,270.0 H201.9 Z" fill="#eb6834"/>
+<text x="254.7" y="262.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">22.0%</text>
+<path d="M309.6,246.0 H322.8 Q322.8,246.0 322.8,246.0 V270.0 Q322.8,270.0 322.8,270.0 H309.6 Z" fill="#1baf7a"/>
+<path d="M324.8,246.0 H573.4 Q573.4,246.0 573.4,246.0 V270.0 Q573.4,270.0 573.4,270.0 H324.8 Z" fill="#eda100"/>
+<text x="449.1" y="262.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">51.1%</text>
+<path d="M575.4,246.0 H644.0 Q648.0,246.0 648.0,250.0 V266.0 Q648.0,270.0 644.0,270.0 H575.4 Z" fill="#a8a69d"/>
+<text x="611.7" y="262.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">14.8%</text>
+<text x="658.0" y="263.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">4,703</text>
+<text x="28.0" y="305.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">UniverseSpigot</text>
+<path d="M158.0,288.0 H193.7 Q193.7,288.0 193.7,288.0 V312.0 Q193.7,312.0 193.7,312.0 H158.0 Z" fill="#2a78d6"/>
+<path d="M195.7,288.0 H308.7 Q308.7,288.0 308.7,288.0 V312.0 Q308.7,312.0 308.7,312.0 H195.7 Z" fill="#eb6834"/>
+<text x="252.2" y="304.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">23.5%</text>
+<path d="M310.7,288.0 H326.0 Q326.0,288.0 326.0,288.0 V312.0 Q326.0,312.0 326.0,312.0 H310.7 Z" fill="#1baf7a"/>
+<path d="M328.0,288.0 H533.8 Q533.8,288.0 533.8,288.0 V312.0 Q533.8,312.0 533.8,312.0 H328.0 Z" fill="#eda100"/>
+<text x="430.9" y="304.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">42.4%</text>
+<path d="M535.8,288.0 H644.0 Q648.0,288.0 648.0,292.0 V308.0 Q648.0,312.0 644.0,312.0 H535.8 Z" fill="#a8a69d"/>
+<text x="591.9" y="304.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">22.9%</text>
+<text x="658.0" y="305.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">2,442</text>
+<text x="28.0" y="347.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Folia</text>
+<path d="M158.0,330.0 H213.8 Q213.8,330.0 213.8,330.0 V354.0 Q213.8,354.0 213.8,354.0 H158.0 Z" fill="#2a78d6"/>
+<text x="185.9" y="346.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">11.8%</text>
+<path d="M215.8,330.0 H339.3 Q339.3,330.0 339.3,330.0 V354.0 Q339.3,354.0 339.3,354.0 H215.8 Z" fill="#eb6834"/>
+<text x="277.6" y="346.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">25.6%</text>
+<path d="M341.3,330.0 H450.2 Q450.2,330.0 450.2,330.0 V354.0 Q450.2,354.0 450.2,354.0 H341.3 Z" fill="#1baf7a"/>
+<text x="395.8" y="346.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">22.6%</text>
+<path d="M452.2,330.0 H614.2 Q614.2,330.0 614.2,330.0 V354.0 Q614.2,354.0 614.2,354.0 H452.2 Z" fill="#eda100"/>
+<text x="533.2" y="346.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">33.5%</text>
+<path d="M616.2,330.0 H644.0 Q648.0,330.0 648.0,334.0 V350.0 Q648.0,354.0 644.0,354.0 H616.2 Z" fill="#a8a69d"/>
+<text x="658.0" y="347.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">2,160</text>
+<text x="28.0" y="389.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Mohist</text>
+<path d="M158.0,372.0 H644.0 Q648.0,372.0 648.0,376.0 V392.0 Q648.0,396.0 644.0,396.0 H158.0 Z" fill="#a8a69d"/>
+<text x="403.0" y="388.5" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">100.0%</text>
+<text x="658.0" y="389.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">1,189</text>
+<text x="658.0" y="110.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">servers</text>
+<text x="28.0" y="426.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026. GBTI Network research.</text>
+</svg>

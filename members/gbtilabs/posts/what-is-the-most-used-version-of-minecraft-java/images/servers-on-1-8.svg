@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="376" viewBox="0 0 760 376" role="img" aria-label="Share of servers reporting to bStats that run a Minecraft 1.8 release, at the first archived reading of each year and our reading of 24 October 2026: Jul 2018 31.4%; Aug 2020 13.1%; Feb 2021 8.9%; Apr 2022 7.3%; Feb 2023 5.8%; Jan 2024 4.9%; Feb 2025 3.7%; Mar 2026 2.6%; Oct 2026 2.2%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of servers reporting to bStats that run a Minecraft 1.8 release, at the first archived reading of each year and our reading of 24 October 2026: Jul 2018 31.4%; Aug 2020 13.1%; Feb 2021 8.9%; Apr 2022 7.3%; Feb 2023 5.8%; Jan 2024 4.9%; Feb 2025 3.7%; Mar 2026 2.6%; Oct 2026 2.2%.</title>
+<rect x="0.5" y="0.5" width="759" height="375" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Servers still on 1.8.x, 2018 to 2026</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of servers on any 1.8 release, at the first archived reading of each year</text>
+<line x1="68" y1="318.0" x2="732" y2="318.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="60.0" y="322.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">0%</text>
+<line x1="68" y1="263.0" x2="732" y2="263.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60.0" y="267.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">10%</text>
+<line x1="68" y1="208.0" x2="732" y2="208.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60.0" y="212.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">20%</text>
+<line x1="68" y1="153.0" x2="732" y2="153.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60.0" y="157.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">30%</text>
+<line x1="68" y1="98.0" x2="732" y2="98.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60.0" y="102.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">40%</text>
+<path d="M92.9,318.0 V149.3 Q92.9,145.3 96.9,145.3 H112.9 Q116.9,145.3 116.9,149.3 V318.0 Z" fill="#2a78d6"/>
+<text x="104.9" y="139.3" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">31.4%</text>
+<text x="104.9" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2018</text>
+<path d="M166.7,318.0 V249.9 Q166.7,245.9 170.7,245.9 H186.7 Q190.7,245.9 190.7,249.9 V318.0 Z" fill="#2a78d6"/>
+<text x="178.7" y="239.9" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">13.1%</text>
+<text x="178.7" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2020</text>
+<path d="M240.4,318.0 V273.3 Q240.4,269.3 244.4,269.3 H260.4 Q264.4,269.3 264.4,273.3 V318.0 Z" fill="#2a78d6"/>
+<text x="252.4" y="263.3" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">8.9%</text>
+<text x="252.4" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2021</text>
+<path d="M314.2,318.0 V282.0 Q314.2,278.0 318.2,278.0 H334.2 Q338.2,278.0 338.2,282.0 V318.0 Z" fill="#2a78d6"/>
+<text x="326.2" y="272.0" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">7.3%</text>
+<text x="326.2" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2022</text>
+<path d="M388.0,318.0 V290.3 Q388.0,286.3 392.0,286.3 H408.0 Q412.0,286.3 412.0,290.3 V318.0 Z" fill="#2a78d6"/>
+<text x="400.0" y="280.3" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">5.8%</text>
+<text x="400.0" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2023</text>
+<path d="M461.8,318.0 V295.1 Q461.8,291.1 465.8,291.1 H481.8 Q485.8,291.1 485.8,295.1 V318.0 Z" fill="#2a78d6"/>
+<text x="473.8" y="285.1" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">4.9%</text>
+<text x="473.8" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2024</text>
+<path d="M535.6,318.0 V301.5 Q535.6,297.5 539.6,297.5 H555.6 Q559.6,297.5 559.6,301.5 V318.0 Z" fill="#2a78d6"/>
+<text x="547.6" y="291.5" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">3.7%</text>
+<text x="547.6" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2025</text>
+<path d="M609.3,318.0 V307.7 Q609.3,303.7 613.3,303.7 H629.3 Q633.3,303.7 633.3,307.7 V318.0 Z" fill="#2a78d6"/>
+<text x="621.3" y="297.7" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">2.6%</text>
+<text x="621.3" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Mar 2026</text>
+<path d="M683.1,318.0 V310.0 Q683.1,306.0 687.1,306.0 H703.1 Q707.1,306.0 707.1,310.0 V318.0 Z" fill="#2a78d6"/>
+<text x="695.1" y="300.0" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">2.2%</text>
+<text x="695.1" y="336.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Oct 2026</text>
+<text x="28.0" y="358.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, Internet Archive copies 2018 to 2026 and our reading of 24 October 2026. GBTI Network research.</text>
+</svg>

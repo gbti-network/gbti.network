@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="488" viewBox="0 0 760 488" role="img" aria-label="Server software of the 190,740 Bukkit-family servers reporting to bStats, read 24 October 2026: Paper 74.4%; Purpur 9.1%; Spigot 6.3%; Unknown 2.8%; Leaf 2.3%; UniverseSpigot 1.1%; Arclight 0.8%; Folia 0.7%; Mohist 0.5%; AdvancedSlimePaper 0.5%; 20 others together 1.6%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Server software of the 190,740 Bukkit-family servers reporting to bStats, read 24 October 2026: Paper 74.4%; Purpur 9.1%; Spigot 6.3%; Unknown 2.8%; Leaf 2.3%; UniverseSpigot 1.1%; Arclight 0.8%; Folia 0.7%; Mohist 0.5%; AdvancedSlimePaper 0.5%; 20 others together 1.6%.</title>
+<rect x="0.5" y="0.5" width="759" height="487" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Which server software custom servers run</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of the 190,740 servers in bStats&#x27; global Bukkit statistics</text>
+<text x="28.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">Paper</text>
+<path d="M198.0,98.0 H672.0 Q676.0,98.0 676.0,102.0 V114.0 Q676.0,118.0 672.0,118.0 H198.0 Z" fill="#2a78d6"/>
+<text x="684.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">74.4%</text>
+<text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Purpur</text>
+<path d="M198.0,132.0 H252.2 Q256.2,132.0 256.2,136.0 V148.0 Q256.2,152.0 252.2,152.0 H198.0 Z" fill="#2a78d6"/>
+<text x="264.2" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">9.1%</text>
+<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Spigot</text>
+<path d="M198.0,166.0 H234.5 Q238.5,166.0 238.5,170.0 V182.0 Q238.5,186.0 234.5,186.0 H198.0 Z" fill="#2a78d6"/>
+<text x="246.5" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">6.3%</text>
+<text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Unknown</text>
+<path d="M198.0,200.0 H211.8 Q215.8,200.0 215.8,204.0 V216.0 Q215.8,220.0 211.8,220.0 H198.0 Z" fill="#2a78d6"/>
+<text x="223.8" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.8%</text>
+<text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Leaf</text>
+<path d="M198.0,234.0 H208.8 Q212.8,234.0 212.8,238.0 V250.0 Q212.8,254.0 208.8,254.0 H198.0 Z" fill="#2a78d6"/>
+<text x="220.8" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.3%</text>
+<text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">UniverseSpigot</text>
+<path d="M198.0,268.0 H201.5 Q205.1,268.0 205.1,271.5 V284.5 Q205.1,288.0 201.5,288.0 H198.0 Z" fill="#2a78d6"/>
+<text x="213.1" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.1%</text>
+<text x="28.0" y="316.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Arclight</text>
+<path d="M198.0,302.0 H200.6 Q203.1,302.0 203.1,304.6 V319.4 Q203.1,322.0 200.6,322.0 H198.0 Z" fill="#2a78d6"/>
+<text x="211.1" y="316.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">0.8%</text>
+<text x="28.0" y="350.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Folia</text>
+<path d="M198.0,336.0 H200.3 Q202.6,336.0 202.6,338.3 V353.7 Q202.6,356.0 200.3,356.0 H198.0 Z" fill="#2a78d6"/>
+<text x="210.6" y="350.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">0.7%</text>
+<text x="28.0" y="384.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Mohist</text>
+<path d="M198.0,370.0 H199.6 Q201.1,370.0 201.1,371.6 V388.4 Q201.1,390.0 199.6,390.0 H198.0 Z" fill="#2a78d6"/>
+<text x="209.1" y="384.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">0.5%</text>
+<text x="28.0" y="418.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">AdvancedSlimePaper</text>
+<path d="M198.0,404.0 H199.6 Q201.1,404.0 201.1,405.6 V422.4 Q201.1,424.0 199.6,424.0 H198.0 Z" fill="#2a78d6"/>
+<text x="209.1" y="418.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">0.5%</text>
+<text x="28.0" y="448.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">20 other server softwares together: 1.6%.</text>
+<text x="28.0" y="470.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026. GBTI Network research.</text>
+</svg>
