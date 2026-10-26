@@ -18690,8 +18690,8 @@ function parseReveal(body, meta3 = "") {
   }
   return out;
 }
-var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
-var AUDIO_TYPES = { opus: "audio/ogg; codecs=opus", m4a: "audio/mp4" };
+var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
 var AUDIO_DEFAULT_LABEL = "Listen";
 function parseAudio(body, meta3 = "") {
   const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
@@ -18761,7 +18761,7 @@ function checkComponentBlocks(md) {
       const a = parseAudio(text, meta3);
       if (!meta3) warn("audio needs its label after the block name, such as ```audio Listen to the podcast version");
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
-      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .opus or .m4a; it is left out`);
+      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
       if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
       for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
     }
@@ -20454,18 +20454,18 @@ ${F}`,
   {
     name: "audio",
     kind: "fence",
-    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus first, then an M4A copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play.",
+    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus in an .ogg file first, then an MP3 copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play.",
     syntax: `${F}audio <label...>
 length: <how long>
-src: /media/podcasts/<name>.opus
-src: /media/podcasts/<name>.m4a
+src: /media/podcasts/<name>.ogg
+src: /media/podcasts/<name>.mp3
 ${F}`,
     example: `${F}audio Listen to the podcast version
 length: 22 minutes
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ${F}`,
-    renders: "Site, preview and reader: the label, the length, then the player. Cross-posts: the label as a link to the M4A file, with the length."
+    renders: "Site, preview and reader: the label, the length, then the player. Cross-posts: the label as a link to the MP3 file, with the length."
   },
   {
     name: "image layout",

@@ -4468,8 +4468,8 @@ ${listStyleProseCss(".doc-blocks")}
     flush();
     return out.join("");
   }
-  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
-  var AUDIO_TYPES = { opus: "audio/ogg; codecs=opus", m4a: "audio/mp4" };
+  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+  var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
   var AUDIO_DEFAULT_LABEL = "Listen";
   function parseAudio(body, meta = "") {
     const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };

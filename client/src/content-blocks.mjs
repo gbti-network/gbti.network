@@ -168,12 +168,15 @@ function revealBodyHtml(md) {
 // /media/podcasts/ file; anything else is left out. preload="none": nothing downloads until the reader presses play.
 //   ```audio Listen to the podcast version
 //   length: 22 minutes
-//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
-//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
+//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
+//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 //   ```
-// Sources are tried in order, so Opus (the smaller file) goes first and M4A covers the browsers that cannot play it.
-export const AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
-export const AUDIO_TYPES = { opus: 'audio/ogg; codecs=opus', m4a: 'audio/mp4' };
+// Sources are tried in order, so Opus (the smaller file, in an .ogg) goes first and MP3 covers the browsers that cannot
+// play it. Only .ogg and .mp3, because Cloudflare caches by file extension and those two are on its list: the first
+// upload was .opus and .m4a, which it served uncached and WITHOUT byte ranges (200 to a Range request, measured
+// 2026-10-26), so Chrome could not read the recording's length and a reader could not skip ahead.
+export const AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+export const AUDIO_TYPES = { ogg: 'audio/ogg; codecs=opus', mp3: 'audio/mpeg' };
 const AUDIO_DEFAULT_LABEL = 'Listen';
 const SITE_ORIGIN = 'https://gbti.network';
 
@@ -274,9 +277,9 @@ export function dataBlockToMarkdown(name, body, meta = '') {
     const r = parseReveal(body, meta);
     return [r.weights ? r.weights.map((w) => `**${w.name}** ${w.n}%`).join(' · ') : r.weightsRaw, r.note, r.body].filter(Boolean).join('\n\n');
   }
-  if (name === 'audio') { // a cross-post cannot play it: a link to the M4A, which every browser plays
+  if (name === 'audio') { // a cross-post cannot play it: a link to the MP3, which every browser plays
     const a = parseAudio(body, meta);
-    const file = a.sources.find((x) => x.src.endsWith('.m4a')) || a.sources[0];
+    const file = a.sources.find((x) => x.src.endsWith('.mp3')) || a.sources[0];
     if (!file) return '';
     return `[${a.label}](${SITE_ORIGIN}${file.src})${a.length ? ` (${a.length})` : ''}`;
   }
@@ -370,7 +373,7 @@ export function checkComponentBlocks(md) {
       const a = parseAudio(text, meta);
       if (!meta) warn('audio needs its label after the block name, such as ```audio Listen to the podcast version');
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
-      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .opus or .m4a; it is left out`);
+      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
       if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
       for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
     }

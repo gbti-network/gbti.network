@@ -26,8 +26,8 @@ author: atwellpub
 
 ```audio Listen to the podcast version
 length: 22 minutes
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
-src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ```
 
 *A Strategic Vision for the Next Generation of Digital Agencies.* 

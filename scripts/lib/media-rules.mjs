@@ -78,13 +78,13 @@ export const AUDIO_FILE = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)$/i;
 export function podcastFileProblem({ rel, bytes }) {
   const served = `/${String(rel).replace(/^public\//, '')}`;
   if (!AUDIO_SRC_RE.test(served)) {
-    return `audio file ${rel}: recordings go in ${PODCAST_DIR}/ as a lowercase .opus or .m4a file (letters, digits, - and _)`;
+    return `audio file ${rel}: recordings go in ${PODCAST_DIR}/ as a lowercase .ogg (Opus) or .mp3 file (letters, digits, - and _)`;
   }
   if (bytes > PODCAST_MAX_BYTES) return `audio file over 20 MB (${(bytes / 1024 / 1024).toFixed(1)} MB): ${rel}, which Cloudflare Pages would refuse past 25 MiB`;
   return null;
 }
 
-/** Every well-formed source the ```audio blocks in one markdown body name, as served paths (/media/podcasts/x.opus). */
+/** Every well-formed source the ```audio blocks in one markdown body name, as served paths (/media/podcasts/x.ogg). */
 export function audioBlockSources(markdown) {
   const out = [];
   const src = String(markdown ?? '').split('\n');
