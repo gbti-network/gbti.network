@@ -14,6 +14,7 @@ import { underscoreEmphasis, UNDERSCORE_MARK } from './underscore-emphasis.mjs';
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
 const EMBED_RELAY = 'https://gbti.network/embed/';
+const SITE_ORIGIN = 'https://gbti.network';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -239,8 +240,9 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   // sow-452: a sortable list placeholder. The WorkBench preview upgrades it (src/lib/sort-list.mjs); the reader
   // leaves it empty, so the entries after it read in their source order.
   if (info[0] === 'directory') return sortListPlaceholder(info.slice(1).join(' '));
-  // sow-453: tags, bar, facts, button, through the one module the site uses too.
-  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' ')); if (html != null) return html; }
+  // sow-453: tags, bar, facts, button, through the one module the site uses too. The origin makes an audio block's
+  // /media/ sources load from gbti.network on the extension's chrome-extension:// pages too.
+  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' '), { origin: SITE_ORIGIN }); if (html != null) return html; }
   if (info[0] === 'embed') {
     const url = body.trim();
     // Frame the SOW-092 relay, never the provider directly. This renderer only ever runs off-https (the

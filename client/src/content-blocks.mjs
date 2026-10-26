@@ -7,7 +7,7 @@
 // thing. Output HTML uses only the classes the site sanitizer admits (src/lib/markdown-sanitize.mjs); a bar's length
 // is a class (gbti-bar-w-<0..100>) because the sanitizer does not admit an inline width.
 
-export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal']; // stats: option A, picked 2026-10-13; reveal: sow-455
+export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lines = (body) => String(body ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -163,6 +163,45 @@ function revealBodyHtml(md) {
   return out.join('');
 }
 
+// The podcast player (owner, 2026-10-26, option A on the article podcast canvas: the browser's own player under a
+// one-line label and its length). The files are served by gbti.network itself, so a source must be a
+// /media/podcasts/ file; anything else is left out. preload="none": nothing downloads until the reader presses play.
+//   ```audio Listen to the podcast version
+//   length: 22 minutes
+//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
+//   src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
+//   ```
+// Sources are tried in order, so Opus (the smaller file) goes first and M4A covers the browsers that cannot play it.
+export const AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
+export const AUDIO_TYPES = { opus: 'audio/ogg; codecs=opus', m4a: 'audio/mp4' };
+const AUDIO_DEFAULT_LABEL = 'Listen';
+const SITE_ORIGIN = 'https://gbti.network';
+
+export function parseAudio(body, meta = '') {
+  const out = { label: String(meta ?? '').trim() || AUDIO_DEFAULT_LABEL, length: '', sources: [], bad: [], unknown: [] };
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    const key = (k || '').toLowerCase();
+    if (key === 'length') out.length = v;
+    else if (key === 'src') {
+      const m = v.match(AUDIO_SRC_RE);
+      if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] }); else out.bad.push(v);
+    } else out.unknown.push(l);
+  }
+  return out;
+}
+
+// origin: '' on the site, where a /media/ path is the page's own; the extension reader runs on chrome-extension://,
+// so markdown.mjs passes the site origin and the files still come from gbti.network.
+function renderAudio(body, meta, origin = '') {
+  const a = parseAudio(body, meta);
+  if (!a.sources.length) return null;
+  return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
+    + (a.length ? ` <span class="gbti-audio-length">${esc(a.length)}</span>` : '') + '</div>'
+    + `<audio class="gbti-audio-player" controls preload="none" aria-label="${esc(a.label)}">`
+    + a.sources.map((x) => `<source src="${esc(origin + x.src)}" type="${esc(x.type)}">`).join('') + '</audio></div>';
+}
+
 /** Whole-percent widths that sum to exactly 100, in proportion to the weights. */
 function weightWidths(weights) {
   const total = weights.reduce((a, w) => a + w.n, 0) || 1;
@@ -190,9 +229,11 @@ function renderReveal(body, meta) {
     + `<div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
 }
 
-/** The HTML for a data block, or null when the fence is not one of them (or the block is empty). */
-export function renderDataBlock(name, body, meta = '') {
+/** The HTML for a data block, or null when the fence is not one of them (or the block is empty). opts.origin: the
+ *  site origin, for renderers that do not run on gbti.network (the audio block's sources). */
+export function renderDataBlock(name, body, meta = '', opts = {}) {
   if (name === 'reveal') return renderReveal(body, meta);
+  if (name === 'audio') return renderAudio(body, meta, opts.origin || '');
   if (name === 'tags') {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -232,6 +273,12 @@ export function dataBlockToMarkdown(name, body, meta = '') {
   if (name === 'reveal') { // everything written out open: a cross-post cannot fold it
     const r = parseReveal(body, meta);
     return [r.weights ? r.weights.map((w) => `**${w.name}** ${w.n}%`).join(' · ') : r.weightsRaw, r.note, r.body].filter(Boolean).join('\n\n');
+  }
+  if (name === 'audio') { // a cross-post cannot play it: a link to the M4A, which every browser plays
+    const a = parseAudio(body, meta);
+    const file = a.sources.find((x) => x.src.endsWith('.m4a')) || a.sources[0];
+    if (!file) return '';
+    return `[${a.label}](${SITE_ORIGIN}${file.src})${a.length ? ` (${a.length})` : ''}`;
   }
   if (name === 'tags') return parseTags(body).tags.map((t) => `_${t}_`).join(' · ');
   if (name === 'bar') {
@@ -319,6 +366,14 @@ export function checkComponentBlocks(md) {
       if (!b.label) warn('button needs its label on the first line');
       if (!b.url) warn(`button needs an http or https URL on the second line (got "${b.rawUrl}")`);
     }
+    if (name === 'audio') {
+      const a = parseAudio(text, meta);
+      if (!meta) warn('audio needs its label after the block name, such as ```audio Listen to the podcast version');
+      if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
+      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .opus or .m4a; it is left out`);
+      if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
+      for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
+    }
     if (name === 'reveal') {
       const r = parseReveal(text, meta);
       if (r.weightsRaw && !r.weights) warn(`reveal weights "${r.weightsRaw}" do not parse; write "Name 40, Name 60"`);
@@ -397,5 +452,11 @@ ${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:
 ${s} .gbti-reveal-body p{margin:8px 0 12px}
 ${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
 ${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-audio{margin:1.2em 0}
+${s} > .gbti-audio:first-child{margin-top:14px}
+${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
+${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
+${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
 ${barWidthCss(s)}`;
 }

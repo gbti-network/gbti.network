@@ -81,6 +81,14 @@ export const COMPONENTS = Object.freeze([
     renders: 'Site, preview and reader: the summary, then a Show and Hide toggle, closed at first. Cross-posts: everything written out open.',
   },
   {
+    name: 'audio',
+    kind: 'fence',
+    purpose: 'Play a recording, such as the podcast version of an article, with the browser\'s own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus first, then an M4A copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play.',
+    syntax: `${F}audio <label...>\nlength: <how long>\nsrc: /media/podcasts/<name>.opus\nsrc: /media/podcasts/<name>.m4a\n${F}`,
+    example: `${F}audio Listen to the podcast version\nlength: 22 minutes\nsrc: /media/podcasts/how-ai-agents-replace-web-dashboards.opus\nsrc: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a\n${F}`,
+    renders: 'Site, preview and reader: the label, the length, then the player. Cross-posts: the label as a link to the M4A file, with the length.',
+  },
+  {
     name: 'image layout',
     kind: 'suffix',
     purpose: `Place an image. Add words in braces after the image line: ${IMAGE_LAYOUT_WORDS.join(', ')} (wrap goes with left or right).`,

@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Media policy check for committed content (content-schemas.md media handling). Fails if any
 // content image exceeds the size cap, falls under the size floor, uses a non-web format, or if any
-// video file is committed (video is embed-only). Runs locally and in CI
-// (.github/workflows/media-check.yml) on content PRs.
+// video file is committed (video is embed-only). Audio (the ```audio block) lives only in
+// public/media/podcasts/ as Opus or M4A under a size cap, and every file a block names must exist.
+// Runs locally and in CI (.github/workflows/media-check.yml) on content PRs.
 //   node scripts/check-media.mjs
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import sharp from 'sharp';
-import { sizedImageRefs, undersizeProblem } from './lib/media-rules.mjs';
+import { sizedImageRefs, undersizeProblem, AUDIO_FILE, podcastFileProblem, audioBlockSources } from './lib/media-rules.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const ROOTS = ['house', 'members'];
@@ -48,10 +49,34 @@ for (const root of ROOTS) {
       errors.push(`video committed: ${rel} — host on YouTube/Vimeo and embed via the \`video\` field`);
       continue;
     }
+    if (AUDIO_FILE.test(f)) {
+      errors.push(podcastFileProblem({ rel: rel.split(path.sep).join('/'), bytes: fs.statSync(f).size }));
+      continue;
+    }
     if (RASTER.test(f)) {
       if (!WEB_OK.test(f)) errors.push(`non-web image format: ${rel} — use webp/avif/jpg/png/svg`);
       const sz = fs.statSync(f).size;
       if (sz > MAX_BYTES) errors.push(`image over 1 MB (${(sz / 1024 / 1024).toFixed(1)} MB): ${rel} — optimize it`);
+    }
+  }
+}
+
+// Audio: every recording under public/media/ is a podcast file within the rules, and every file an ```audio block
+// names is on disk (a missing one is a player that never plays).
+let audioFiles = 0;
+for (const f of walk(path.join(ROOT, 'public', 'media'))) {
+  if (!AUDIO_FILE.test(f)) continue;
+  audioFiles += 1;
+  const problem = podcastFileProblem({ rel: path.relative(ROOT, f).split(path.sep).join('/'), bytes: fs.statSync(f).size });
+  if (problem) errors.push(problem);
+}
+let audioRefs = 0;
+for (const root of ROOTS) {
+  for (const f of walk(path.join(ROOT, root))) {
+    if (!MARKDOWN.test(f)) continue;
+    for (const src of audioBlockSources(fs.readFileSync(f, 'utf8'))) {
+      audioRefs += 1;
+      if (!fs.existsSync(path.join(ROOT, 'public', src))) errors.push(`audio block in ${path.relative(ROOT, f)} names ${src}, which is not in public/`);
     }
   }
 }
@@ -100,4 +125,5 @@ if (!measured) {
 }
 console.log(`✓ media check passed (no committed video, no oversized or non-web images; ${measured} featured/gallery `
   + `image${measured === 1 ? '' : 's'} measured against the size floor`
-  + `${skipped.length ? `, ${skipped.length} skipped with no file on disk` : ''})`);
+  + `${skipped.length ? `, ${skipped.length} skipped with no file on disk` : ''}`
+  + `${audioFiles || audioRefs ? `; ${audioFiles} audio file${audioFiles === 1 ? '' : 's'}, ${audioRefs} audio block source${audioRefs === 1 ? '' : 's'} found` : ''})`);

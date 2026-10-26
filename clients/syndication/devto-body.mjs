@@ -9,7 +9,7 @@
 //   4. prepend the rendered byline intro (the {fullName}/{member-url} template) + a blank line;
 //   5. normalize tags for dev.to (lowercase alphanumeric, max 4; fallback: the taxonomy path leaves).
 
-import { dataBlockToMarkdown } from '../../client/src/content-blocks.mjs';
+import { DATA_BLOCKS, dataBlockToMarkdown } from '../../client/src/content-blocks.mjs';
 import yaml from 'js-yaml';
 import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
@@ -65,9 +65,11 @@ export function stripSiteOnlyFences(body) {
 }
 
 /** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link).
- *  sow-455: a ```reveal is written out open (its weights, note and body). */
+ *  sow-455: a ```reveal is written out open (its weights, note and body). An ```audio player becomes a link to the
+ *  file. The names come from DATA_BLOCKS, so a new block cannot reach a cross-post as a code block. */
+const DATA_FENCE_RE = new RegExp(`^\`\`\`(${DATA_BLOCKS.join('|')})(?:[ \\t]([^\\n]*))?\\n([\\s\\S]*?)^\`\`\`[ \\t]*$`, 'gm');
 export function dataBlocksToMarkdown(body) {
-  return String(body).replace(/^```(tags|bar|facts|button|stats|reveal)(?:[ \t]([^\n]*))?\n([\s\S]*?)^```[ \t]*$/gm, (m, name, meta, inner) => dataBlockToMarkdown(name, inner, meta || '') ?? m);
+  return String(body).replace(DATA_FENCE_RE, (m, name, meta, inner) => dataBlockToMarkdown(name, inner, meta || '') ?? m);
 }
 
 /** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts

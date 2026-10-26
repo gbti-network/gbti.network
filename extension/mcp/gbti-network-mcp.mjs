@@ -18592,7 +18592,7 @@ async function requireAdmin(ctx2) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18690,6 +18690,23 @@ function parseReveal(body, meta3 = "") {
   }
   return out;
 }
+var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
+var AUDIO_TYPES = { opus: "audio/ogg; codecs=opus", m4a: "audio/mp4" };
+var AUDIO_DEFAULT_LABEL = "Listen";
+function parseAudio(body, meta3 = "") {
+  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "length") out.length = v;
+    else if (key === "src") {
+      const m = v.match(AUDIO_SRC_RE);
+      if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] });
+      else out.bad.push(v);
+    } else out.unknown.push(l);
+  }
+  return out;
+}
 var DIRECTORY_STYLES = ["youtube"];
 var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
 function checkComponentBlocks(md) {
@@ -18739,6 +18756,14 @@ function checkComponentBlocks(md) {
       const b = parseButton(text);
       if (!b.label) warn("button needs its label on the first line");
       if (!b.url) warn(`button needs an http or https URL on the second line (got "${b.rawUrl}")`);
+    }
+    if (name === "audio") {
+      const a = parseAudio(text, meta3);
+      if (!meta3) warn("audio needs its label after the block name, such as ```audio Listen to the podcast version");
+      if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
+      for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .opus or .m4a; it is left out`);
+      if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
+      for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
     }
     if (name === "reveal") {
       const r = parseReveal(text, meta3);
@@ -20425,6 +20450,22 @@ note: Then **× 0.75** for channels run by plugin or theme companies.
 - **Focus:** share of 2026 videos about WordPress
 ${F}`,
     renders: "Site, preview and reader: the summary, then a Show and Hide toggle, closed at first. Cross-posts: everything written out open."
+  },
+  {
+    name: "audio",
+    kind: "fence",
+    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus first, then an M4A copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play.",
+    syntax: `${F}audio <label...>
+length: <how long>
+src: /media/podcasts/<name>.opus
+src: /media/podcasts/<name>.m4a
+${F}`,
+    example: `${F}audio Listen to the podcast version
+length: 22 minutes
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.opus
+src: /media/podcasts/how-ai-agents-replace-web-dashboards.m4a
+${F}`,
+    renders: "Site, preview and reader: the label, the length, then the player. Cross-posts: the label as a link to the M4A file, with the length."
   },
   {
     name: "image layout",

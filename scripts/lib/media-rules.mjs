@@ -17,6 +17,8 @@
 // The floor is on the LONGEST side, so a tall portrait screenshot (799x1145 is the narrowest one in the
 // repository) passes on its height.
 
+import { AUDIO_SRC_RE, parseAudio } from '../../client/src/content-blocks.mjs';
+
 /** The smallest acceptable long edge, in pixels, for a featured or gallery image. */
 export const MIN_LONG_EDGE = 1000;
 
@@ -62,4 +64,38 @@ export function undersizeProblem({ role, rel, width, height }) {
       + 'The lightbox opens this file at its natural size, so export it bigger rather than scaling it down to the card.';
   }
   return null;
+}
+
+// The ```audio block's files (2026-10-26, the podcast version of an article). Audio is served by gbti.network itself
+// from public/media/podcasts/. A content folder is the wrong place: the site build copies a folder's images and
+// nothing else, so a recording committed beside its article would 404 on the page. Each file stays under 20 MB,
+// because Cloudflare Pages refuses a whole deploy that carries any file over 25 MiB.
+export const PODCAST_DIR = 'public/media/podcasts';
+export const PODCAST_MAX_BYTES = 20 * 1024 * 1024;
+export const AUDIO_FILE = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)$/i;
+
+/** The problem with one audio file under public/media/ (rel is repo-relative, forward slashes), or null. */
+export function podcastFileProblem({ rel, bytes }) {
+  const served = `/${String(rel).replace(/^public\//, '')}`;
+  if (!AUDIO_SRC_RE.test(served)) {
+    return `audio file ${rel}: recordings go in ${PODCAST_DIR}/ as a lowercase .opus or .m4a file (letters, digits, - and _)`;
+  }
+  if (bytes > PODCAST_MAX_BYTES) return `audio file over 20 MB (${(bytes / 1024 / 1024).toFixed(1)} MB): ${rel}, which Cloudflare Pages would refuse past 25 MiB`;
+  return null;
+}
+
+/** Every well-formed source the ```audio blocks in one markdown body name, as served paths (/media/podcasts/x.opus). */
+export function audioBlockSources(markdown) {
+  const out = [];
+  const src = String(markdown ?? '').split('\n');
+  for (let i = 0; i < src.length; i++) {
+    const open = src[i].match(/^```audio(?:[ \t]+(.*))?$/);
+    if (!open) continue;
+    const body = [];
+    let j = i + 1;
+    while (j < src.length && !/^```\s*$/.test(src[j])) body.push(src[j++]);
+    for (const s of parseAudio(body.join('\n'), open[1] || '').sources) out.push(s.src);
+    i = j;
+  }
+  return out;
 }

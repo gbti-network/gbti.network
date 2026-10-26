@@ -5528,7 +5528,7 @@ ${String(lines2[i]).trimStart()}`;
   }
 
   // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
+  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
   var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
   function parsePercent(v2) {
@@ -5672,6 +5672,28 @@ ${String(lines2[i]).trimStart()}`;
     flush();
     return out.join("");
   }
+  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
+  var AUDIO_TYPES = { opus: "audio/ogg; codecs=opus", m4a: "audio/mp4" };
+  var AUDIO_DEFAULT_LABEL = "Listen";
+  function parseAudio(body, meta = "") {
+    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "length") out.length = v2;
+      else if (key === "src") {
+        const m = v2.match(AUDIO_SRC_RE);
+        if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
+        else out.bad.push(v2);
+      } else out.unknown.push(l);
+    }
+    return out;
+  }
+  function renderAudio(body, meta, origin = "") {
+    const a = parseAudio(body, meta);
+    if (!a.sources.length) return null;
+    return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
+  }
   function weightWidths(weights) {
     const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
     const ws = weights.map((w2) => Math.round(100 * w2.n / total));
@@ -5691,8 +5713,9 @@ ${String(lines2[i]).trimStart()}`;
     if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
     return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
   }
-  function renderDataBlock(name, body, meta = "") {
+  function renderDataBlock(name, body, meta = "", opts = {}) {
     if (name === "reveal") return renderReveal(body, meta);
+    if (name === "audio") return renderAudio(body, meta, opts.origin || "");
     if (name === "tags") {
       const { tags } = parseTags(body);
       if (!tags.length) return null;
@@ -5791,6 +5814,12 @@ ${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:
 ${s} .gbti-reveal-body p{margin:8px 0 12px}
 ${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
 ${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-audio{margin:1.2em 0}
+${s} > .gbti-audio:first-child{margin-top:14px}
+${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
+${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
+${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
 ${barWidthCss(s)}`;
   }
 
@@ -5848,6 +5877,7 @@ ${barWidthCss(s)}`;
 
   // client/src/markdown.mjs
   var EMBED_RELAY = "https://gbti.network/embed/";
+  var SITE_ORIGIN = "https://gbti.network";
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   }
@@ -6009,7 +6039,7 @@ ${barWidthCss(s)}`;
     }
     if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
     if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN });
       if (html != null) return html;
     }
     if (info[0] === "embed") {
@@ -14007,7 +14037,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-cta-assignment", GbtiCtaAssignment);
 
   // client-ui/src/public-url.mjs
-  var SITE_ORIGIN = "https://gbti.network";
+  var SITE_ORIGIN2 = "https://gbti.network";
   var TYPE_BASE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
   function slugFromPath(path) {
     const parts = String(path || "").split("/").filter(Boolean);
@@ -14020,7 +14050,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (!base) return "";
     const s = String(slug ?? "").trim() || slugFromPath(path);
     if (!s) return "";
-    return `${SITE_ORIGIN}/${base}/${encodeURIComponent(s)}/`;
+    return `${SITE_ORIGIN2}/${base}/${encodeURIComponent(s)}/`;
   }
 
   // src/lib/skill-box-css.mjs
@@ -14190,7 +14220,7 @@ ${listStyleProseCss(".doc-blocks")}
     return ta ? ta.value : void 0;
   }
   function siteFor(loc = globalThis.location) {
-    return loc && /^https?:$/.test(loc.protocol || "") && /(^|\.)gbti\.network$/.test(loc.hostname || "") ? loc.origin : SITE_ORIGIN;
+    return loc && /^https?:$/.test(loc.protocol || "") && /(^|\.)gbti\.network$/.test(loc.hostname || "") ? loc.origin : SITE_ORIGIN2;
   }
   var toolsCache = null;
   async function loadTools(fetchImpl, site) {

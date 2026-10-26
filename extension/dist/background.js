@@ -18276,7 +18276,7 @@ async function requireAdmin(ctx) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
 var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
@@ -18420,6 +18420,28 @@ function revealBodyHtml(md) {
   flush();
   return out.join("");
 }
+var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(opus|m4a)$/;
+var AUDIO_TYPES = { opus: "audio/ogg; codecs=opus", m4a: "audio/mp4" };
+var AUDIO_DEFAULT_LABEL = "Listen";
+function parseAudio(body, meta3 = "") {
+  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+  for (const l of lines(body)) {
+    const { k, v } = keyValue(l);
+    const key = (k || "").toLowerCase();
+    if (key === "length") out.length = v;
+    else if (key === "src") {
+      const m = v.match(AUDIO_SRC_RE);
+      if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] });
+      else out.bad.push(v);
+    } else out.unknown.push(l);
+  }
+  return out;
+}
+function renderAudio(body, meta3, origin = "") {
+  const a = parseAudio(body, meta3);
+  if (!a.sources.length) return null;
+  return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc2(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc2(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + a.sources.map((x) => `<source src="${esc2(origin + x.src)}" type="${esc2(x.type)}">`).join("") + "</audio></div>";
+}
 function weightWidths(weights) {
   const total = weights.reduce((a, w) => a + w.n, 0) || 1;
   const ws = weights.map((w) => Math.round(100 * w.n / total));
@@ -18439,8 +18461,9 @@ function renderReveal(body, meta3) {
   if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
   return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc2(r.label)}</span><span class="gbti-reveal-hide">${esc2(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
 }
-function renderDataBlock(name, body, meta3 = "") {
+function renderDataBlock(name, body, meta3 = "", opts = {}) {
   if (name === "reveal") return renderReveal(body, meta3);
+  if (name === "audio") return renderAudio(body, meta3, opts.origin || "");
   if (name === "tags") {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -20680,6 +20703,7 @@ var UNDERSCORE_MARK = 'data-md="_"';
 
 // client/src/markdown.mjs
 var EMBED_RELAY = "https://gbti.network/embed/";
+var SITE_ORIGIN = "https://gbti.network";
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
@@ -20841,7 +20865,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   }
   if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
   if (DATA_BLOCKS.includes(info[0])) {
-    const html = renderDataBlock(info[0], body, info.slice(1).join(" "));
+    const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN });
     if (html != null) return html;
   }
   if (info[0] === "embed") {

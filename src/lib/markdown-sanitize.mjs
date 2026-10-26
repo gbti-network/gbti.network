@@ -10,6 +10,7 @@
 import { defaultSchema } from 'rehype-sanitize';
 import { IMAGE_LAYOUT_CLASS_RE } from '../../client/src/image-attrs.mjs'; // the five image layout classes
 import { LIST_STYLE_CLASS_RE } from '../../client/src/list-attrs.mjs';    // the six list marker style classes (sow-322)
+import { AUDIO_SRC_RE, AUDIO_TYPES } from '../../client/src/content-blocks.mjs'; // the ```audio block's sources
 
 /**
  * sow-322: the ONE className rule for a list. hast-util-sanitize honours only the FIRST className entry on a tag
@@ -46,10 +47,10 @@ export const IFRAME_HOSTS = new Set([
 export const sanitizeSchema = {
   ...defaultSchema,
   clobberPrefix: '',
-  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption'])], // figure: a captioned image
+  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption', 'audio', 'source'])], // figure: a captioned image; audio: the ```audio block
   attributes: {
     ...defaultSchema.attributes,
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist(-youtube)?$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row|stats|stats-caption|stats-row|stat|reveal|reveal-weights|reveal-legend|reveal-note|reveal-body)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
+    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist(-youtube)?$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row|stats|stats-caption|stats-row|stat|reveal|reveal-weights|reveal-legend|reveal-note|reveal-body|audio|audio-head)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
     iframe: [['src'], 'loading', 'allowFullScreen', 'title', 'allow', 'sandbox'],
     // sow-453: ```button adds one class. The default schema already lists a className rule for footnote links, and a
     // second className entry is ignored, so the two are merged into one rule.
@@ -57,6 +58,11 @@ export const sanitizeSchema = {
     dl: [['className', /^gbti-facts$/]], // sow-453: ```facts
     details: [...(defaultSchema.attributes?.details ?? []), ['className', /^gbti-reveal-more$/]], // sow-455: ```reveal
     summary: [...(defaultSchema.attributes?.summary ?? []), ['className', /^gbti-reveal-toggle$/]],
+    // The ```audio block (2026-10-26): the browser's own player, loading nothing until play, and ONLY gbti.network's
+    // own /media/podcasts/ files. An audio tag an author writes by hand gets the same rule, so it cannot autoplay,
+    // preload or point anywhere else.
+    audio: [['className', /^gbti-audio-player$/], 'controls', ['preload', 'none'], 'ariaLabel'],
+    source: [['src', AUDIO_SRC_RE], ['type', ...Object.values(AUDIO_TYPES)]],
     pre: [...(defaultSchema.attributes?.pre ?? []), 'style', 'tabIndex', 'dataLanguage'],
     code: [...(defaultSchema.attributes?.code ?? []), 'style'],
     span: [...(defaultSchema.attributes?.span ?? []), 'style', 'className'],

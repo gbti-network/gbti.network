@@ -1,17 +1,19 @@
 name: Media check
 
 # Enforce the content media policy (content-schemas.md): no committed video, web image formats
-# only, and a per-image size cap. Runs on content PRs and on pushes to main.
+# only, a per-image size cap, and podcast audio only in public/media/podcasts/. Runs on content PRs and on pushes to main.
 on:
   pull_request:
     paths:
       - 'house/**'
       - 'members/**'
+      - 'public/media/**'
   push:
     branches: [main]
     paths:
       - 'house/**'
       - 'members/**'
+      - 'public/media/**'
 
 jobs:
   media-check:
