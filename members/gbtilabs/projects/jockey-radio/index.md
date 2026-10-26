@@ -119,17 +119,17 @@ headphones but the radio plays on your speakers, set Simple Voice Chat's output 
 
 ## Bundled media tools
 
-The release jar bundles ffmpeg, for decoding and RTMP ingest, and yt-dlp, for optional platform-link
-resolution. They extract into the server configuration directory on first use, so the mod runs on managed
+The release jar bundles three tools: ffmpeg for decoding and RTMP ingest, yt-dlp for platform links, and
+deno, the JavaScript runtime yt-dlp needs for some of them. They extract into the server configuration directory on first use, so the mod runs on managed
 hosts that offer no shell access. Server operators can turn the bundled binaries off and provide their own
 executable paths instead. The release includes third-party notices and license texts.
 
 ## Platform links
 
-Platform-link resolution is off unless a server operator sets `enablePlatformLinks`. Before turning it on,
-the operator must review the terms of service of every platform they intend to use and confirm they hold
-the rights to rebroadcast the selected content. Jockey Radio distributes no audio, grants no rebroadcasting
-rights, and is not affiliated with or endorsed by any of those platforms.
+Platform links are off by default and stay off until a server operator sets `enablePlatformLinks`. Turning
+it on is the operator's statement that they have read each source platform's terms of service and hold the
+rights to rebroadcast what they play: Jockey Radio distributes no audio, grants no rebroadcasting rights,
+offers no warranty for these sources, and is not affiliated with or endorsed by any platform.
 
 ## Scaling
 
