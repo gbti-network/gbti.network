@@ -3,7 +3,7 @@
 //   GET  /membership/admin/prepared                      -> { ok, listings: [summary] }       the manager's rows
 //   GET  /membership/admin/prepared?id=<ID>              -> { ok, listing: adminView, link }  Edit loads this
 //   GET  /membership/admin/prepared?id=<ID>&image=<name> -> { ok, name, dataBase64, contentType }
-//   POST /membership/admin/prepared { op: 'save' | 'revoke' | 'resend' | 'delete', ... }
+//   POST /membership/admin/prepared { op: 'save' | 'revoke' | 'resend' | 'delete' | 'mark-sent' | 'unmark-sent', ... }
 //
 // SUPERADMIN ONLY (owner decision 10), through authorizeSuperadmin: identity from the verified token or the signed
 // website session (CSRF enforced on the POST for a cookie caller), the role from the fresh overrides mirror, banned
@@ -43,7 +43,7 @@ import { itemTokenOf } from '../../membership/draft-images.mjs';
 import { newInvite, revokeInvite, setInviteBinding, inviteState, INVITE_STATE } from '../../membership/invites.mjs';
 import {
   isListingId, isListingImageName, mintListingId, normalizeGithubLogin, validateInvitationText, validatePreparedDraft,
-  validateSuggestedNote, newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend,
+  validateSuggestedNote, newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend, listingMarkSent, listingUnmarkSent, carrySent,
   listingSummary, listingAdminView, claimLink, PREPARABLE_TYPES,
 } from '../../membership/prepared-listings.mjs';
 import { listingHouseProblems, preparedSizeProblem } from '../../membership/prepared-claim-files.mjs';
@@ -370,7 +370,7 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
     const status = applied.error === 'not_editable' || applied.error === 'binding_locked' ? 409 : 400;
     return bad(status, applied.error, applied.message);
   }
-  const next = applied.next;
+  let next = applied.next;
 
   // New or replaced image bytes first, so the record never names an image that is not stored.
   const images = await writeCollectedImages(kv, id, collected.images, { now });
@@ -395,6 +395,9 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
       if (nextInvite !== invite) await restoreInviteBinding(kv, current.code, current, now);
       return again.res;
     }
+    // sow-481: Mark sent does not move updatedAt (so it never refuses this save), which also means the check above
+    // cannot see one that landed meanwhile. Take the sent fields from this read rather than from `current`.
+    next = carrySent(next, again.rec);
     if (!(await writeListing(kv, next))) {
       if (nextInvite !== invite) await restoreInviteBinding(kv, current.code, current, now); // the old tie beside the old record
       return unavailable();
@@ -449,6 +452,32 @@ async function revokeListingOp(body, { kv, auth, now }) {
   if (!again) return bad(404, 'not_found', 'No prepared listing has that id.');
   if (again.code !== rec.code) return listingChanged();
   const r2 = listingRevoke(again, { by: auth.githubId, now });
+  if (!r2.ok) return bad(409, r2.error, r2.message);
+  if (r2.changed && !(await writeListing(kv, r2.next))) return unavailable();
+  return { status: 200, body: { ok: true, changed: r2.changed, listing: listingSummary(r2.next, invite, now) } };
+}
+
+/**
+ * sow-481: `{ op: 'mark-sent', id }` and `{ op: 'unmark-sent', id }`. The superadmin sent the link, or pressed that
+ * by mistake. Built exactly like revokeListingOp above it, for the same reason: a claim can take the lock between
+ * this op's read and its write, and writing the copy read first would erase that lock. So the listing is read
+ * again before the write, a code that changed meanwhile (a Send again) is refused, and the pure transition is
+ * applied to the fresh copy. The invite is never touched: being sent is a fact about the listing, not the year.
+ */
+async function sentListingOp(body, { kv, auth, now }, mark) {
+  const { id, rec, res } = await loadForOp(kv, body);
+  if (res) return res;
+  const transition = (r) => (mark
+    ? listingMarkSent(r, { by: auth.githubId, byLogin: preparerLogin(auth), now })
+    : listingUnmarkSent(r));
+  const first = transition(rec);
+  if (!first.ok) return bad(409, first.error, first.message);
+  const invite = await readInvite(kv, rec.code);
+  if (!first.changed) return { status: 200, body: { ok: true, changed: false, listing: listingSummary(first.next, invite, now) } };
+  const again = await readListing(kv, id);
+  if (!again) return bad(404, 'not_found', 'No prepared listing has that id.');
+  if (again.code !== rec.code) return listingChanged();
+  const r2 = transition(again);
   if (!r2.ok) return bad(409, r2.error, r2.message);
   if (r2.changed && !(await writeListing(kv, r2.next))) return unavailable();
   return { status: 200, body: { ok: true, changed: r2.changed, listing: listingSummary(r2.next, invite, now) } };
@@ -617,6 +646,8 @@ export async function membershipPreparedPost(request, env, {
     case 'revoke': return revokeListingOp(body, ctx);
     case 'resend': return resendListingOp(body, ctx);
     case 'delete': return deleteListingOp(body, ctx);
-    default: return bad(400, 'bad_request', "op must be 'save', 'revoke', 'resend' or 'delete'.");
+    case 'mark-sent': return sentListingOp(body, ctx, true); // sow-481
+    case 'unmark-sent': return sentListingOp(body, ctx, false); // sow-481
+    default: return bad(400, 'bad_request', "op must be 'save', 'revoke', 'resend', 'delete', 'mark-sent' or 'unmark-sent'.");
   }
 }

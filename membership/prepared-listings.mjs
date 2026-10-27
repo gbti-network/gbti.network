@@ -323,6 +323,69 @@ export function listingRevoke(rec, { by = null, now = new Date() } = {}) {
 }
 
 /**
+ * sow-481: the superadmin SENT this invitation's link to its recipient.
+ *
+ * A FIELD, NOT A STATE, on purpose. `claimDecision`, `publicReadable`, `applyListingEdit` and `listingRevoke` all
+ * compare against `prepared`, and the claim path must not learn a new word because an admin pressed a button: a
+ * sent invitation is exactly as claimable, editable and revocable as an unsent one. Only the manager's lanes read
+ * these fields. test/prepared-sent.test.mjs pins that claimDecision answers the same with and without them.
+ *
+ * Allowed only while `prepared`: a revoked link is dead, and a publishing or claimed listing is past being sent.
+ * Idempotent: marking an already-sent listing changes nothing and keeps the first who and when.
+ *
+ * `updatedAt` is LEFT ALONE, here and in the undo. It is the WorkBench save's concurrency token (rereadListing in
+ * the admin route refuses a save whose base `updatedAt` moved), and pressing Mark sent in one tab must not make an
+ * open edit of the same listing fail with "changed while this was being saved". The save keeps the sent fields
+ * instead: it copies them from its last re-read onto what it writes (carrySent), so a Mark sent that landed while
+ * the save waited on GitHub is not erased by it.
+ */
+export function listingMarkSent(rec, { by = null, byLogin = null, now = new Date() } = {}) {
+  if (listingState(rec) !== LISTING_STATE.prepared) {
+    return { ok: false, error: 'not_sendable', message: 'Only a prepared invitation with a live link can be marked sent.' };
+  }
+  if (rec.sentAt || rec.sentAtLaunch === true) return { ok: true, next: rec, changed: false };
+  return {
+    ok: true,
+    changed: true,
+    next: {
+      ...rec,
+      sentAt: iso(now),
+      sentBy: by === null ? null : String(by),
+      sentByLogin: byLogin ? String(byLogin) : null,
+      sentAtLaunch: false,
+    },
+  };
+}
+
+/** sow-481: "Not sent yet", the undo for a mis-click. Clears all four fields, including a launch stamp. */
+export function listingUnmarkSent(rec) {
+  if (listingState(rec) !== LISTING_STATE.prepared) {
+    return { ok: false, error: 'not_sendable', message: 'Only a prepared invitation can be moved back to Ready to send.' };
+  }
+  if (!rec.sentAt && rec.sentAtLaunch !== true) return { ok: true, next: rec, changed: false };
+  return { ok: true, changed: true, next: { ...rec, ...UNSENT } };
+}
+
+/** The four sent fields, cleared. A new link (Send again) and the undo both start from here. */
+const UNSENT = Object.freeze({ sentAt: null, sentBy: null, sentByLogin: null, sentAtLaunch: false });
+
+/**
+ * sow-481: `next` with the sent fields taken from `from`, the freshest read of the same listing. An edit is about
+ * the project and the invitation text, never about whether the link went out, so whatever the stored record says
+ * about that is what the edit writes.
+ */
+export function carrySent(next, from) {
+  const src = from && typeof from === 'object' ? from : {};
+  return {
+    ...next,
+    sentAt: src.sentAt ?? null,
+    sentBy: src.sentBy ?? null,
+    sentByLogin: src.sentByLogin ?? null,
+    sentAtLaunch: src.sentAtLaunch === true,
+  };
+}
+
+/**
  * "Send again" after a revoke: the same listing under a newly minted invitation code (and optionally a new
  * campaign). The old code moves to `priorCodes`, so the record still explains every link it was ever sent under,
  * and every one of those old links stays inactive because publicReadable requires `listing.code === invite.code`.
@@ -334,7 +397,8 @@ export function listingResend(rec, { code, campaign = null, now = new Date() } =
   const camp = campaign ? normalizeCouponCode(campaign) : rec.campaign;
   if (!COUPON_CODE_RE.test(camp)) return { ok: false, error: 'invalid', message: 'The campaign is not valid.' };
   const priorCodes = [...(Array.isArray(rec.priorCodes) ? rec.priorCodes : []), rec.code].filter(Boolean);
-  return { ok: true, next: { ...rec, code: c, campaign: camp, priorCodes, revokedAt: null, revokedBy: null, updatedAt: iso(now) } };
+  // sow-481: a newly minted link has not been sent to anybody, whatever happened to the old one.
+  return { ok: true, next: { ...rec, ...UNSENT, code: c, campaign: camp, priorCodes, revokedAt: null, revokedBy: null, updatedAt: iso(now) } };
 }
 
 // ---- the claim lock -------------------------------------------------------------------------------------------
@@ -443,6 +507,10 @@ export function listingSummary(rec, invite = null, now = new Date()) {
     claimedLogin: rec.claimedLogin ?? null,
     claimedPath: rec.claimedPath ?? null,
     imageCount: Array.isArray(rec.images) ? rec.images.length : 0,
+    // sow-481: when the link went out and who sent it. The LOGIN only: this row never carries an account number.
+    sentAt: rec.sentAt ?? null,
+    sentByLogin: rec.sentByLogin ?? null,
+    sentAtLaunch: rec.sentAtLaunch === true,
   };
 }
 

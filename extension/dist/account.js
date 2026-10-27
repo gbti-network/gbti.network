@@ -15610,286 +15610,8 @@ ${barWidthCss(s)}`;
   };
   define("gbti-quote-manager", GbtiQuoteManager);
 
-  // client-ui/src/prepared-listings-core.mjs
-  var PREPARED_SITE_BASE = "https://gbti.network";
-  var PREPARE_NEW_HREF = "/workbench/#new=project&prepare=1";
-  function preparedEditHref(id) {
-    return isListingId(id) ? `/workbench/#prepare=${id}` : null;
-  }
-  var PREPARED_STATE_LABELS = Object.freeze({
-    [LISTING_STATE.prepared]: "Prepared",
-    [LISTING_STATE.publishing]: "Publishing",
-    [LISTING_STATE.claimed]: "Claimed",
-    [LISTING_STATE.revoked]: "Revoked",
-    [LISTING_STATE.unknown]: "Unreadable"
-  });
-  function preparedLoadPlan({ status = null, loadedFor = null, client = null } = {}) {
-    const available = typeof client?.preparedList === "function";
-    if (!available) return { available, reset: false, load: false };
-    const reset = loadedFor !== client;
-    const st2 = reset ? "idle" : status || "idle";
-    return { available, reset, load: st2 === "idle" };
-  }
-  function preparedRowState(row) {
-    const s = row && typeof row === "object" ? String(row.state || "") : "";
-    return Object.prototype.hasOwnProperty.call(PREPARED_STATE_LABELS, s) && !row.corrupt ? s : LISTING_STATE.unknown;
-  }
-  function preparedStateLabel(row) {
-    return PREPARED_STATE_LABELS[preparedRowState(row)];
-  }
-  var PREPARED_ACTION = Object.freeze({
-    copy: "copy",
-    edit: "edit",
-    revoke: "revoke",
-    resend: "resend",
-    remove: "delete",
-    view: "view"
-  });
-  function preparedActions(row) {
-    const st2 = preparedRowState(row);
-    if (!isListingId(row?.id)) return [];
-    const hasCode = typeof row.code === "string" && row.code.length > 0;
-    switch (st2) {
-      case LISTING_STATE.prepared:
-        return [...hasCode ? [PREPARED_ACTION.copy] : [], PREPARED_ACTION.edit, PREPARED_ACTION.revoke, PREPARED_ACTION.remove];
-      case LISTING_STATE.revoked:
-        return [PREPARED_ACTION.edit, PREPARED_ACTION.resend, PREPARED_ACTION.remove];
-      case LISTING_STATE.publishing:
-        return hasCode ? [PREPARED_ACTION.copy] : [];
-      case LISTING_STATE.claimed:
-        return [...projectUrl(PREPARED_SITE_BASE, row.slug) ? [PREPARED_ACTION.view] : [], PREPARED_ACTION.remove];
-      default:
-        return [];
-    }
-  }
-  function preparedLinkFor(row, siteBase = PREPARED_SITE_BASE) {
-    if (!preparedActions(row).includes(PREPARED_ACTION.copy)) return null;
-    return claimLink(siteBase, row.code);
-  }
-  function preparedProjectHref(row, siteBase = PREPARED_SITE_BASE) {
-    if (preparedRowState(row) !== LISTING_STATE.claimed) return null;
-    return projectUrl(siteBase, row.slug);
-  }
-  var day = (v2) => typeof v2 === "string" && v2.length >= 10 ? v2.slice(0, 10) : "";
-  var at2 = (login) => login ? `@${String(login).replace(/^@/, "")}` : "";
-  function preparedRowMeta(row) {
-    if (!row || typeof row !== "object") return [];
-    const out = [];
-    if (row.recipientName) out.push(`For ${row.recipientName}`);
-    out.push(row.bound ? row.boundLogin ? `Tied to ${at2(row.boundLogin)}` : "Tied to one GitHub account" : "Open to whoever claims it first");
-    if (row.campaign) out.push(`Campaign ${row.campaign}`);
-    if (row.createdAt) out.push(`Prepared ${day(row.createdAt)}${row.preparedByLogin ? ` by ${at2(row.preparedByLogin)}` : ""}`);
-    const st2 = preparedRowState(row);
-    if (st2 === LISTING_STATE.revoked && row.revokedAt) out.push(`Revoked ${day(row.revokedAt)}`);
-    if (st2 === LISTING_STATE.publishing) out.push(row.prNumber ? `Pull request #${row.prNumber} is open` : "Opening the pull request");
-    if (st2 === LISTING_STATE.claimed) out.push(`Claimed${row.claimedAt ? ` ${day(row.claimedAt)}` : ""}${row.claimedLogin ? ` by ${at2(row.claimedLogin)}` : ""}`);
-    if (row.redeemedByLogin && st2 !== LISTING_STATE.claimed) out.push(`Free year taken by ${at2(row.redeemedByLogin)}`);
-    const prior = Array.isArray(row.priorCodes) ? row.priorCodes.length : 0;
-    if (prior) out.push(`Sent again ${prior === 1 ? "once" : `${prior} times`}; earlier links no longer work`);
-    return out;
-  }
-  function preparedDeleteConfirm(row) {
-    const who = row?.recipientName ? ` for ${row.recipientName}` : "";
-    const claimed = preparedRowState(row) === LISTING_STATE.claimed;
-    return claimed ? `Delete the record of this claimed listing${who}? The published project stays where it is.` : `Delete this prepared listing${who}? The project and its images are removed and its invitation link stops working. This cannot be undone.`;
-  }
-  function preparedResendCampaigns(coupons, row) {
-    const active = (Array.isArray(coupons) ? coupons : []).filter((c) => c && c.active !== false && c.code).map((c) => String(c.code).toUpperCase());
-    const unique = [...new Set(active)];
-    const own = String(row?.campaign || "").toUpperCase();
-    return unique.includes(own) ? [own, ...unique.filter((c) => c !== own)] : unique;
-  }
-  function preparedApplyResult(rows, result, { deletedId = null } = {}) {
-    const list = Array.isArray(rows) ? rows : [];
-    if (deletedId && result?.deleted === true) return list.filter((r) => r?.id !== deletedId);
-    const next = result?.listing;
-    if (!next || !isListingId(next.id)) return list;
-    const i = list.findIndex((r) => r?.id === next.id);
-    return i < 0 ? [next, ...list] : list.map((r, k) => k === i ? next : r);
-  }
-
-  // client-ui/src/elements/gbti-prepared-listings.mjs
-  var CSS16 = `
-  :host { display:block; }
-  [hidden] { display:none !important; }
-  .pl-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:26px 0 12px; padding-top:20px; border-top:1px solid var(--line); }
-  .pl-head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
-  .pl-hint { font-size:12.5px; color:var(--muted); flex:1 1 320px; }
-  .pl-msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
-  .pl-msg.warn { color:var(--danger); }
-  .pl-list { list-style:none; margin:0; padding:0; }
-  .pl-row { border-top:1px solid var(--line); padding:12px 2px; }
-  .pl-row:first-child { border-top:0; }
-  .pl-row.busy { opacity:.55; pointer-events:none; }
-  .pl-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .pl-title { font-weight:700; font-size:14.5px; color:var(--fg); overflow-wrap:anywhere; }
-  .pl-st { font-family:var(--font-mono, monospace); font-size:11px; text-transform:uppercase; letter-spacing:.08em; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted); }
-  .pl-st.prepared { color:var(--accent); border-color:var(--accent); }
-  .pl-st.publishing { color:var(--fg); border-color:var(--fg); }
-  .pl-st.revoked, .pl-st.unknown { color:var(--danger); border-color:var(--danger); }
-  .pl-meta { margin-top:5px; font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 14px; }
-  .pl-link { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
-  .pl-link input { flex:1 1 300px; width:auto; min-width:0; font-family:var(--font-mono, monospace); font-size:12px; padding:6px 9px; }
-  .pl-acts { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
-  .pl-acts select { width:auto; min-width:0; font-size:12.5px; padding:5px 8px; }
-  .pl-btn { display:inline-flex; align-items:center; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; text-decoration:none; }
-  .pl-btn:hover { background:var(--hover); border-color:var(--accent); color:var(--fg); }
-  .pl-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .pl-btn[disabled] { opacity:.55; cursor:default; }
-  .pl-btn.pl-danger { color:var(--danger); }
-  .pl-btn.pl-danger:hover { background:var(--hover); border-color:var(--danger); color:var(--danger); }
-  .pl-new { display:inline-flex; align-items:center; border:1px solid var(--accent); background:var(--accent); color:var(--on-accent); border-radius:7px; font-weight:700; font-size:13px; padding:7px 14px; text-decoration:none; }
-  .pl-new:hover { background:var(--accent); border-color:var(--fg); color:var(--on-accent); }
-  .pl-new:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .pl-confirm { margin-top:9px; padding:9px 11px; border:1px solid var(--danger); border-radius:8px; font-size:13px; color:var(--fg); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .pl-confirm span { flex:1 1 260px; }
-  .pl-empty { font-size:13px; color:var(--muted); padding:10px 2px; }
-`;
-  var GbtiPreparedListings = class extends GbtiElement {
-    /** The coupon registry the host manager already read, for the Send again campaign choice. Never fetched here. */
-    set coupons(list) {
-      this._couponList = Array.isArray(list) ? list : [];
-      if (this._status === "ready" && this.isConnected) this.render();
-    }
-    async load() {
-      const client = this.client;
-      this._loadedFor = client;
-      this._status = "loading";
-      let rows = null;
-      try {
-        const r = await client.preparedList();
-        rows = Array.isArray(r?.listings) ? r.listings : null;
-      } catch {
-        rows = null;
-      }
-      if (client !== this.client) return;
-      this._rows = rows;
-      this._status = rows ? "ready" : "failed";
-      this.render();
-    }
-    render() {
-      const plan = preparedLoadPlan({ status: this._status, loadedFor: this._loadedFor, client: this.client });
-      if (!plan.available) {
-        this.set("");
-        return;
-      }
-      if (plan.reset) {
-        this._status = "idle";
-        this._rows = null;
-        this._confirmId = null;
-      }
-      if (plan.load) this.load();
-      const head = `<div class="pl-head"><h3>Prepared listings</h3>
-      <span class="pl-hint">Projects prepared for someone who is not a member yet. Each has its own invitation link; the person claims the project under their own name with a free year, and writes their own author note.</span>
-      <a class="pl-new" href="${esc2(PREPARE_NEW_HREF)}">Prepare a listing</a></div>`;
-      const msg = this._msg ? `<p class="pl-msg${this._msgWarn ? " warn" : ""}" role="status">${esc2(this._msg)}</p>` : "";
-      if (this._status === "loading") {
-        this.set(this.css(CSS16) + head + msg + '<p class="pl-empty">Loading prepared listings...</p>');
-        return;
-      }
-      if (this._status === "failed") {
-        this.set(this.css(CSS16) + head + msg + `<p class="pl-empty">Could not load the prepared listings. The coupons and invites above are unaffected. <button type="button" class="pl-btn" data-retry>Try again</button></p>`);
-        this.$("[data-retry]")?.addEventListener("click", () => {
-          this._status = "idle";
-          this._msg = null;
-          this.render();
-        });
-        return;
-      }
-      const rows = (this._rows || []).map((row) => this._rowHtml(row)).join("");
-      this.set(this.css(CSS16) + head + msg + `<ul class="pl-list">${rows || '<li class="pl-empty">No prepared listings yet.</li>'}</ul>`);
-      this._wire();
-    }
-    _rowHtml(row) {
-      const id = String(row?.id || "");
-      const st2 = preparedRowState(row);
-      const acts = preparedActions(row);
-      const title = row?.title || row?.slug || "Untitled project";
-      const link = preparedLinkFor(row);
-      const meta = preparedRowMeta(row).map((m) => `<span>${esc2(m)}</span>`).join("");
-      const btn = (act, label, extra = "") => `<button type="button" class="pl-btn${extra}" data-act="${act}" data-id="${esc2(id)}">${esc2(label)}</button>`;
-      const parts = [];
-      if (acts.includes(PREPARED_ACTION.edit)) parts.push(`<a class="pl-btn" href="${esc2(preparedEditHref(id))}">Edit</a>`);
-      if (acts.includes(PREPARED_ACTION.view)) parts.push(`<a class="pl-btn" href="${esc2(preparedProjectHref(row))}" target="_blank" rel="noopener">View project</a>`);
-      if (acts.includes(PREPARED_ACTION.revoke)) parts.push(btn("revoke", "Revoke"));
-      if (acts.includes(PREPARED_ACTION.resend)) {
-        const camps = preparedResendCampaigns(this._couponList, row);
-        const opts = camps.map((c) => `<option value="${esc2(c)}">${esc2(c)}</option>`).join("");
-        parts.push(camps.length ? `<select data-camp="${esc2(id)}" aria-label="Campaign for the new link">${opts}</select>${btn("resend", "Send again")}` : `<span class="pl-meta">No active campaign to send it again with.</span>`);
-      }
-      if (acts.includes(PREPARED_ACTION.remove)) parts.push(btn("delete", "Delete", " pl-danger"));
-      const confirm2 = this._confirmId === id && acts.includes(PREPARED_ACTION.remove) ? `<div class="pl-confirm"><span>${esc2(preparedDeleteConfirm(row))}</span>${btn("confirm-delete", "Delete for good", " pl-danger")}${btn("cancel-delete", "Keep it")}</div>` : "";
-      return `<li class="pl-row${this._busyId === id ? " busy" : ""}" data-id="${esc2(id)}">
-      <div class="pl-top"><span class="pl-title">${esc2(title)}</span><span class="pl-st ${esc2(st2)}">${esc2(preparedStateLabel(row))}</span></div>
-      ${meta ? `<div class="pl-meta">${meta}</div>` : ""}
-      ${link ? `<div class="pl-link"><input readonly value="${esc2(link)}" aria-label="Invitation link for ${esc2(title)}" />${btn("copy", "Copy link")}</div>` : ""}
-      ${parts.length ? `<div class="pl-acts">${parts.join("")}</div>` : ""}
-      ${confirm2}
-    </li>`;
-    }
-    _wire() {
-      this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._act(b.dataset.act, b.dataset.id, b)));
-    }
-    _row(id) {
-      return (this._rows || []).find((r) => r?.id === id) || null;
-    }
-    async _act(act, id, button) {
-      const row = this._row(id);
-      if (!row) return;
-      if (act === "copy") {
-        const link = preparedLinkFor(row);
-        if (!link) return;
-        try {
-          await navigator.clipboard.writeText(link);
-          button.textContent = "Copied";
-          setTimeout(() => {
-            button.textContent = "Copy link";
-          }, 1500);
-        } catch {
-        }
-        return;
-      }
-      if (act === "delete") {
-        this._confirmId = id;
-        this.render();
-        return;
-      }
-      if (act === "cancel-delete") {
-        this._confirmId = null;
-        this.render();
-        return;
-      }
-      if (act === "revoke") {
-        await this._run(id, () => this.client.preparedRevoke(id), "Revoked. Its link no longer works; Send again gives it a new one.");
-      } else if (act === "resend") {
-        const campaign = this.$(`[data-camp="${id}"]`)?.value || null;
-        await this._run(id, () => this.client.preparedResend(id, campaign), "Sent again with a new link. Copy it from the listing; the old link no longer works.");
-      } else if (act === "confirm-delete") {
-        this._confirmId = null;
-        await this._run(id, () => this.client.preparedDelete(id), "Deleted.", { deletedId: id });
-      }
-    }
-    async _run(id, fn, okMsg, opts = {}) {
-      this._busyId = id;
-      this._msg = null;
-      this.render();
-      try {
-        const r = await fn();
-        this._rows = preparedApplyResult(this._rows, r, opts);
-        this._msg = okMsg;
-        this._msgWarn = false;
-      } catch (err) {
-        this._msg = err?.message || "That did not go through. Nothing was changed; try again.";
-        this._msgWarn = true;
-      }
-      this._busyId = null;
-      this.render();
-    }
-  };
-  define("gbti-prepared-listings", GbtiPreparedListings);
-
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS17 = `
+  var CSS16 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -15971,7 +15693,7 @@ ${barWidthCss(s)}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -15979,7 +15701,7 @@ ${barWidthCss(s)}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS17) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -16000,7 +15722,7 @@ ${barWidthCss(s)}`;
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS17) + `
+      this.set(this.css(CSS16) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <div class="add">
@@ -16012,9 +15734,7 @@ ${barWidthCss(s)}`;
       </div>
       <ul class="list">${rows || '<li class="c muted">No coupons yet.</li>'}</ul>
       ${this._invitesHtml()}
-      ${typeof this.client.preparedList === "function" ? "<div data-prepared-slot></div>" : ""}
     `);
-      this.$("[data-prepared-slot]")?.append(Object.assign(this._prepEl ||= document.createElement("gbti-prepared-listings"), { coupons: this._coupons }));
       this.$("[data-add]")?.addEventListener("click", () => this._add());
       this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.toggle)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
@@ -16122,6 +15842,408 @@ ${barWidthCss(s)}`;
     }
   };
   define("gbti-coupon-manager", GbtiCouponManager);
+
+  // client-ui/src/prepared-listings-core.mjs
+  var PREPARED_SITE_BASE = "https://gbti.network";
+  var PREPARE_NEW_HREF = "/workbench/#new=project&prepare=1";
+  function preparedEditHref(id) {
+    return isListingId(id) ? `/workbench/#prepare=${id}` : null;
+  }
+  var PREPARED_STATE_LABELS = Object.freeze({
+    [LISTING_STATE.prepared]: "Prepared",
+    [LISTING_STATE.publishing]: "Publishing",
+    [LISTING_STATE.claimed]: "Claimed",
+    [LISTING_STATE.revoked]: "Revoked",
+    [LISTING_STATE.unknown]: "Unreadable"
+  });
+  function preparedLoadPlan({ status = null, loadedFor = null, client = null } = {}) {
+    const available = typeof client?.preparedList === "function";
+    if (!available) return { available, reset: false, load: false };
+    const reset = loadedFor !== client;
+    const st2 = reset ? "idle" : status || "idle";
+    return { available, reset, load: st2 === "idle" };
+  }
+  function preparedRowState(row) {
+    const s = row && typeof row === "object" ? String(row.state || "") : "";
+    return Object.prototype.hasOwnProperty.call(PREPARED_STATE_LABELS, s) && !row.corrupt ? s : LISTING_STATE.unknown;
+  }
+  function preparedStateLabel(row) {
+    return PREPARED_STATE_LABELS[preparedRowState(row)];
+  }
+  var PREPARED_ACTION = Object.freeze({
+    copy: "copy",
+    edit: "edit",
+    revoke: "revoke",
+    resend: "resend",
+    remove: "delete",
+    view: "view",
+    // sow-481: the superadmin sent the link, and the undo for pressing that by mistake. Copy link is NOT one of
+    // these and never marks anything: the owner chose two separate actions (2026-10-26).
+    markSent: "mark-sent",
+    unmarkSent: "unmark-sent"
+  });
+  function preparedIsSent(row) {
+    return !!row && typeof row === "object" && (Boolean(row.sentAt) || row.sentAtLaunch === true);
+  }
+  var PREPARED_LANE = Object.freeze({ ready: "ready", sent: "sent", landed: "landed", unreadable: "unreadable" });
+  function preparedLane(row) {
+    switch (preparedRowState(row)) {
+      case LISTING_STATE.prepared:
+        return preparedIsSent(row) ? PREPARED_LANE.sent : PREPARED_LANE.ready;
+      case LISTING_STATE.revoked:
+        return PREPARED_LANE.ready;
+      case LISTING_STATE.publishing:
+      case LISTING_STATE.claimed:
+        return PREPARED_LANE.landed;
+      default:
+        return PREPARED_LANE.unreadable;
+    }
+  }
+  function preparedLanes(rows) {
+    const out = { ready: [], revoked: [], sent: [], landed: [], unreadable: [] };
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const lane = preparedLane(row);
+      if (lane === PREPARED_LANE.ready && preparedRowState(row) === LISTING_STATE.revoked) out.revoked.push(row);
+      else out[lane].push(row);
+    }
+    return { ready: [...out.ready, ...out.revoked], sent: out.sent, landed: out.landed, unreadable: out.unreadable };
+  }
+  function preparedLaneSummary(lanes) {
+    const n = (k) => Array.isArray(lanes?.[k]) ? lanes[k].length : 0;
+    const parts = [`${n("ready")} ready to send`, `${n("sent")} sent and waiting`, `${n("landed")} landed`];
+    if (n("unreadable")) parts.push(`${n("unreadable")} unreadable`);
+    return parts.join(" · ");
+  }
+  var DAY_MS = 24 * 60 * 60 * 1e3;
+  var days = (n) => `${n} ${n === 1 ? "day" : "days"}`;
+  function preparedWaited(row, now = /* @__PURE__ */ new Date()) {
+    if (preparedLane(row) !== PREPARED_LANE.sent) return "";
+    const nowMs = (now instanceof Date ? now : new Date(now)).getTime();
+    const launch = !row.sentAt && row.sentAtLaunch === true;
+    const from = Date.parse(String(launch ? row.createdAt ?? "" : row.sentAt));
+    if (!Number.isFinite(from) || !Number.isFinite(nowMs)) return "";
+    let elapsed = nowMs;
+    elapsed -= from;
+    const n = Math.max(0, Math.floor(elapsed / DAY_MS));
+    if (launch) return n === 0 ? "Prepared today" : `${days(n)} since prepared`;
+    return n === 0 ? "Sent today" : `Waiting ${days(n)}`;
+  }
+  function preparedActions(row) {
+    const st2 = preparedRowState(row);
+    if (!isListingId(row?.id)) return [];
+    const hasCode = typeof row.code === "string" && row.code.length > 0;
+    switch (st2) {
+      case LISTING_STATE.prepared: {
+        const sent = preparedIsSent(row);
+        return [
+          ...hasCode ? [PREPARED_ACTION.copy] : [],
+          ...!sent && hasCode ? [PREPARED_ACTION.markSent] : [],
+          PREPARED_ACTION.edit,
+          PREPARED_ACTION.revoke,
+          ...sent ? [PREPARED_ACTION.unmarkSent] : [],
+          PREPARED_ACTION.remove
+        ];
+      }
+      case LISTING_STATE.revoked:
+        return [PREPARED_ACTION.edit, PREPARED_ACTION.resend, PREPARED_ACTION.remove];
+      case LISTING_STATE.publishing:
+        return hasCode ? [PREPARED_ACTION.copy] : [];
+      case LISTING_STATE.claimed:
+        return [...projectUrl(PREPARED_SITE_BASE, row.slug) ? [PREPARED_ACTION.view] : [], PREPARED_ACTION.remove];
+      default:
+        return [];
+    }
+  }
+  function preparedLinkFor(row, siteBase = PREPARED_SITE_BASE) {
+    if (!preparedActions(row).includes(PREPARED_ACTION.copy)) return null;
+    return claimLink(siteBase, row.code);
+  }
+  function preparedProjectHref(row, siteBase = PREPARED_SITE_BASE) {
+    if (preparedRowState(row) !== LISTING_STATE.claimed) return null;
+    return projectUrl(siteBase, row.slug);
+  }
+  var day = (v2) => typeof v2 === "string" && v2.length >= 10 ? v2.slice(0, 10) : "";
+  var at2 = (login) => login ? `@${String(login).replace(/^@/, "")}` : "";
+  function preparedRowMeta(row) {
+    if (!row || typeof row !== "object" || preparedRowState(row) === LISTING_STATE.unknown) return [];
+    const out = [];
+    if (row.recipientName) out.push(`For ${row.recipientName}`);
+    out.push(row.bound ? row.boundLogin ? `Tied to ${at2(row.boundLogin)}` : "Tied to one GitHub account" : "Open to whoever claims it first");
+    if (row.campaign) out.push(`Campaign ${row.campaign}`);
+    if (row.createdAt) out.push(`Prepared ${day(row.createdAt)}${row.preparedByLogin ? ` by ${at2(row.preparedByLogin)}` : ""}`);
+    const st2 = preparedRowState(row);
+    if (st2 === LISTING_STATE.prepared && row.sentAt) out.push(`Sent ${day(row.sentAt)}${row.sentByLogin ? ` by ${at2(row.sentByLogin)}` : ""}`);
+    else if (st2 === LISTING_STATE.prepared && row.sentAtLaunch === true) out.push("Counted as sent at launch");
+    if (st2 === LISTING_STATE.revoked && row.revokedAt) out.push(`Revoked ${day(row.revokedAt)}`);
+    if (st2 === LISTING_STATE.publishing) out.push(row.prNumber ? `Pull request #${row.prNumber} is open` : "Opening the pull request");
+    if (st2 === LISTING_STATE.claimed) out.push(`Claimed${row.claimedAt ? ` ${day(row.claimedAt)}` : ""}${row.claimedLogin ? ` by ${at2(row.claimedLogin)}` : ""}`);
+    if (row.redeemedByLogin && st2 !== LISTING_STATE.claimed) out.push(`Free year taken by ${at2(row.redeemedByLogin)}`);
+    const prior = Array.isArray(row.priorCodes) ? row.priorCodes.length : 0;
+    if (prior) out.push(`Sent again ${prior === 1 ? "once" : `${prior} times`}; earlier links no longer work`);
+    return out;
+  }
+  function preparedDeleteConfirm(row) {
+    const who = row?.recipientName ? ` for ${row.recipientName}` : "";
+    const claimed = preparedRowState(row) === LISTING_STATE.claimed;
+    return claimed ? `Delete the record of this claimed listing${who}? The published project stays where it is.` : `Delete this prepared listing${who}? The project and its images are removed and its invitation link stops working. This cannot be undone.`;
+  }
+  function preparedResendCampaigns(coupons, row) {
+    const active = (Array.isArray(coupons) ? coupons : []).filter((c) => c && c.active !== false && c.code).map((c) => String(c.code).toUpperCase());
+    const unique = [...new Set(active)];
+    const own = String(row?.campaign || "").toUpperCase();
+    return unique.includes(own) ? [own, ...unique.filter((c) => c !== own)] : unique;
+  }
+  function preparedApplyResult(rows, result, { deletedId = null } = {}) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (deletedId && result?.deleted === true) return list.filter((r) => r?.id !== deletedId);
+    const next = result?.listing;
+    if (!next || !isListingId(next.id)) return list;
+    const i = list.findIndex((r) => r?.id === next.id);
+    return i < 0 ? [next, ...list] : list.map((r, k) => k === i ? next : r);
+  }
+
+  // client-ui/src/elements/gbti-prepared-listings.mjs
+  var CSS17 = `
+  :host { display:block; }
+  [hidden] { display:none !important; }
+  .pl-head { display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; margin:0 0 16px; }
+  .pl-sum { font-size:13px; color:var(--muted); flex:1 1 260px; }
+  .pl-msg { font-size:13px; color:var(--accent); margin:0 0 14px; }
+  .pl-msg.warn { color:var(--danger); }
+  .pl-lanes { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap:20px; align-items:start; }
+  .pl-lane { display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .pl-lane-h { display:flex; align-items:center; gap:9px; margin:0; font-family:var(--font-body); font-size:12.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+  .pl-count { font-family:var(--font-mono, monospace); font-size:11px; font-weight:500; letter-spacing:0; border-radius:999px; padding:1px 8px; background:var(--hover); color:var(--fg); }
+  .pl-count.go { background:var(--green-tint); color:var(--accent); }
+  .pl-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:13px 15px; min-width:0; }
+  .pl-card.accent { border-left:3px solid var(--brand); border-radius:0 10px 10px 0; }
+  .pl-card.busy { opacity:.55; pointer-events:none; }
+  .pl-top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .pl-title { font-weight:600; font-size:15px; color:var(--fg); overflow-wrap:anywhere; }
+  .pl-st { font-family:var(--font-mono, monospace); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; border:1px solid var(--line-2); border-radius:999px; padding:2px 8px; color:var(--muted); white-space:nowrap; }
+  .pl-st.ready, .pl-st.claimed { background:var(--green-tint); border-color:transparent; color:var(--accent); }
+  .pl-st.sent, .pl-st.publishing { background:var(--hover); border-color:transparent; color:var(--fg); }
+  .pl-st.unknown { color:var(--danger); border-color:var(--danger); }
+  .pl-meta { margin:5px 0 0; font-size:12.5px; color:var(--fg-mute); display:flex; flex-wrap:wrap; gap:4px 12px; }
+  .pl-waited { color:var(--fg); }
+  .pl-note { margin:7px 0 0; font-size:12.5px; color:var(--fg-mute); }
+  .pl-link { display:flex; align-items:center; gap:8px; margin-top:9px; flex-wrap:wrap; }
+  .pl-link input { flex:1 1 260px; width:auto; min-width:0; font-family:var(--font-mono, monospace); font-size:12px; padding:6px 9px; }
+  .pl-acts { display:flex; align-items:flex-start; gap:7px; margin-top:11px; flex-wrap:wrap; }
+  .pl-acts select { width:auto; min-width:0; font-size:12.5px; padding:5px 8px; }
+  .pl-btn { display:inline-flex; align-items:center; border:1px solid var(--line-2); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-size:12.5px; font-weight:500; padding:5px 11px; cursor:pointer; text-decoration:none; }
+  .pl-btn:hover { background:var(--hover); border-color:var(--line-2); color:var(--fg); }
+  .pl-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-btn[disabled] { opacity:.55; cursor:default; }
+  .pl-btn.pl-go { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:600; }
+  .pl-btn.pl-go:hover { background:var(--accent); border-color:var(--fg); color:var(--on-accent); }
+  .pl-btn.pl-quiet { border-color:transparent; background:transparent; color:var(--fg-mute); padding:5px 7px; }
+  .pl-btn.pl-quiet:hover { background:var(--hover); border-color:transparent; color:var(--fg); }
+  .pl-btn.pl-danger { color:var(--danger); }
+  .pl-btn.pl-danger:hover { background:var(--hover); border-color:var(--danger); color:var(--danger); }
+  .pl-more { display:inline-block; }
+  .pl-more > summary { list-style:none; display:inline-flex; align-items:center; border:1px solid var(--line-2); background:var(--panel); color:var(--fg); border-radius:8px; font-size:12.5px; padding:5px 10px; cursor:pointer; user-select:none; }
+  .pl-more > summary::-webkit-details-marker { display:none; }
+  .pl-more > summary:hover { background:var(--hover); }
+  .pl-more > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-more[open] > summary { background:var(--hover); }
+  .pl-menu { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+  .pl-new { display:inline-flex; align-items:center; border:1px solid var(--line-2); background:var(--panel); color:var(--fg); border-radius:8px; font-weight:600; font-size:13px; padding:6px 12px; text-decoration:none; }
+  .pl-new:hover { background:var(--hover); border-color:var(--line-2); color:var(--fg); }
+  .pl-new:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-confirm { margin-top:10px; padding:9px 11px; border:1px solid var(--danger); border-radius:8px; font-size:13px; color:var(--fg); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pl-confirm span { flex:1 1 220px; }
+  .pl-empty { border:1px dashed var(--line-2); border-radius:10px; padding:18px; text-align:center; color:var(--fg-mute); font-size:13px; }
+  .pl-empty a { color:var(--accent); }
+  .pl-strip { margin-top:22px; padding-top:16px; border-top:1px solid var(--line); }
+  .pl-strip .pl-lane-h { margin-bottom:10px; }
+  .pl-strip-list { display:flex; flex-direction:column; gap:10px; }
+  .pl-strip .pl-card { padding:10px 14px; }
+  .pl-strip .pl-acts { margin-top:8px; }
+  .pl-bad { margin-top:22px; }
+`;
+  var GbtiPreparedListings = class extends GbtiElement {
+    async load() {
+      const client = this.client;
+      this._loadedFor = client;
+      this._status = "loading";
+      const ask = (fn) => Promise.resolve().then(fn).catch(() => null);
+      const [list, pool] = await Promise.all([
+        ask(() => client.preparedList()),
+        // The registry feeds Send again only. A failure here leaves the lanes readable and says so on a revoked card.
+        ask(() => typeof client.couponPool === "function" ? client.couponPool() : null)
+      ]);
+      if (client !== this.client) return;
+      const rows = Array.isArray(list?.listings) ? list.listings : null;
+      this._couponList = Array.isArray(pool?.coupons) ? pool.coupons : null;
+      this._rows = rows;
+      this._status = rows ? "ready" : "failed";
+      this.render();
+    }
+    render() {
+      const plan = preparedLoadPlan({ status: this._status, loadedFor: this._loadedFor, client: this.client });
+      if (!plan.available) {
+        this.set("");
+        return;
+      }
+      if (plan.reset) {
+        this._status = "idle";
+        this._rows = null;
+        this._confirmId = null;
+        this._linkId = null;
+      }
+      if (plan.load) this.load();
+      const newLinkHtml = `<a class="pl-new" href="${esc2(PREPARE_NEW_HREF)}">Prepare a new one</a>`;
+      const msg = this._msg ? `<p class="pl-msg${this._msgWarn ? " warn" : ""}" role="status">${esc2(this._msg)}</p>` : "";
+      if (this._status !== "ready") {
+        const failed = this._status === "failed";
+        const body = failed ? `<div class="pl-card accent"><div class="pl-title">The invitations did not load.</div><p class="pl-note">Nothing was changed. It waits to be asked again rather than retrying on its own.</p><div class="pl-acts"><button type="button" class="pl-btn" data-retry>Try again</button></div></div>` : '<p class="pl-sum">Loading the invitations...</p>';
+        this.set(this.css(CSS17) + `<div class="pl-head"><span class="pl-sum"></span>${newLinkHtml}</div>` + msg + body);
+        if (failed) this.$("[data-retry]")?.addEventListener("click", () => {
+          this._status = "idle";
+          this._msg = null;
+          this.render();
+        });
+        return;
+      }
+      const lanes = preparedLanes(this._rows);
+      const head = `<div class="pl-head"><span class="pl-sum">${esc2(preparedLaneSummary(lanes))}</span>${newLinkHtml}</div>`;
+      if (!(this._rows || []).length) {
+        this.set(this.css(CSS17) + head + msg + `<div class="pl-empty">No invitations yet. <a href="${esc2(PREPARE_NEW_HREF)}">Prepare one</a> and it waits here until you send it.</div>`);
+        return;
+      }
+      const laneHtml = (key, title, countClass, rows, empty) => `<section class="pl-lane" aria-label="${esc2(title)}">
+      <h3 class="pl-lane-h">${esc2(title)} <span class="pl-count${countClass}">${esc2(rows.length)}</span></h3>
+      ${rows.length ? rows.map((r) => this._cardHtml(r, key)).join("") : `<div class="pl-empty">${esc2(empty)}</div>`}
+    </section>`;
+      const lanesHtml = `<div class="pl-lanes">
+      ${laneHtml("ready", "Ready to send", " go", lanes.ready, "Nothing waiting to be sent.")}
+      ${laneHtml("sent", "Sent and waiting", "", lanes.sent, "Nothing sent is waiting on a reply.")}
+    </div>`;
+      const landedHtml = lanes.landed.length ? `<section class="pl-strip" aria-label="Landed">
+      <h3 class="pl-lane-h">Landed <span class="pl-count">${esc2(lanes.landed.length)}</span></h3>
+      <div class="pl-strip-list">${lanes.landed.map((r) => this._cardHtml(r, "landed")).join("")}</div>
+    </section>` : "";
+      const badHtml = lanes.unreadable.length ? `<section class="pl-strip pl-bad" aria-label="Unreadable">
+      <h3 class="pl-lane-h">Could not be read <span class="pl-count">${esc2(lanes.unreadable.length)}</span></h3>
+      <p class="pl-note">These records are left exactly as they are. Nothing here acts on them.</p>
+      <div class="pl-strip-list">${lanes.unreadable.map((r) => this._cardHtml(r, "unreadable")).join("")}</div>
+    </section>` : "";
+      this.set(this.css(CSS17) + head + msg + lanesHtml + landedHtml + badHtml);
+      this._wire();
+    }
+    _cardHtml(row, lane) {
+      const id = String(row?.id || "");
+      const st2 = preparedRowState(row);
+      const acts = preparedActions(row);
+      const has = (a) => acts.includes(a);
+      const title = row?.title || row?.slug || (id ? "Listing " + id : "Untitled project");
+      const pillClass = lane === "ready" && st2 === "prepared" ? "ready" : lane === "sent" ? "sent" : st2;
+      const pill = lane === "sent" ? "Sent" : lane === "ready" && st2 === "prepared" ? "Ready" : preparedStateLabel(row);
+      const waited = preparedWaited(row);
+      const metaHtml = preparedRowMeta(row).map((m) => `<span>${esc2(m)}</span>`).join("") + (waited ? `<span class="pl-waited">${esc2(waited)}</span>` : "");
+      const btn = (act, label, cls = "") => `<button type="button" class="pl-btn${cls}" data-act="${esc2(act)}" data-id="${esc2(id)}">${esc2(label)}</button>`;
+      const shown = [];
+      const more = [];
+      if (has(PREPARED_ACTION.copy)) shown.push(btn("copy", "Copy link"));
+      if (has(PREPARED_ACTION.markSent)) shown.push(btn("mark-sent", "Mark sent", " pl-go"));
+      if (has(PREPARED_ACTION.view)) shown.push(`<a class="pl-btn" href="${esc2(preparedProjectHref(row))}" target="_blank" rel="noopener">View project</a>`);
+      if (has(PREPARED_ACTION.resend)) {
+        const camps = preparedResendCampaigns(this._couponList, row);
+        const optsHtml = camps.map((c) => `<option value="${esc2(c)}">${esc2(c)}</option>`).join("");
+        if (camps.length) shown.push(`<select data-camp="${esc2(id)}" aria-label="Campaign for the new link for ${esc2(title)}">${optsHtml}</select>${btn("resend", "Send again")}`);
+        else shown.push(`<span class="pl-note">${esc2(this._couponList ? "No active campaign to send it again with." : "The campaigns did not load. Reload the page to send it again.")}</span>`);
+      }
+      if (has(PREPARED_ACTION.edit)) shown.push(`<a class="pl-btn" href="${esc2(preparedEditHref(id))}">Edit</a>`);
+      if (has(PREPARED_ACTION.unmarkSent)) shown.push(btn("unmark-sent", "Not sent yet", " pl-quiet"));
+      if (has(PREPARED_ACTION.revoke)) more.push(btn("revoke", "Revoke"));
+      if (has(PREPARED_ACTION.remove)) more.push(btn("delete", st2 === "claimed" ? "Delete the record" : "Delete", " pl-danger"));
+      const moreHtml = more.length ? `<details class="pl-more"${this._openId === id ? " open" : ""} data-more="${esc2(id)}"><summary aria-label="More actions for ${esc2(title)}">&middot;&middot;&middot;</summary><div class="pl-menu">${more.join("")}</div></details>` : "";
+      const link = this._linkId === id ? preparedLinkFor(row) : null;
+      const linkHtml = link ? `<div class="pl-link"><input readonly value="${esc2(link)}" aria-label="Invitation link for ${esc2(title)}" /></div>` : "";
+      const noteHtml = st2 === "publishing" ? '<p class="pl-note">Edit, revoke and delete wait until the pull request merges or closes. Only the link can be copied.</p>' : st2 === "revoked" ? '<p class="pl-note">There is no link to copy until it is sent again under a live campaign.</p>' : "";
+      const confirmHtml = this._confirmId === id && has(PREPARED_ACTION.remove) ? `<div class="pl-confirm"><span>${esc2(preparedDeleteConfirm(row))}</span>${btn("confirm-delete", "Delete for good", " pl-danger")}${btn("cancel-delete", "Keep it")}</div>` : "";
+      const accent = lane === "ready" && st2 === "prepared" ? " accent" : "";
+      return `<article class="pl-card${accent}${this._busyId === id ? " busy" : ""}" data-id="${esc2(id)}">
+      <div class="pl-top"><span class="pl-title">${esc2(title)}</span><span class="pl-st ${esc2(pillClass)}">${esc2(pill)}</span></div>
+      ${metaHtml ? `<p class="pl-meta">${metaHtml}</p>` : ""}
+      ${noteHtml}
+      ${shown.length || moreHtml ? `<div class="pl-acts">${shown.join("")}${moreHtml}</div>` : ""}
+      ${linkHtml}
+      ${confirmHtml}
+    </article>`;
+    }
+    _wire() {
+      this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._act(b.dataset.act, b.dataset.id, b)));
+      this.$$("[data-more]").forEach((d) => d.addEventListener("toggle", () => {
+        if (d.open) this._openId = d.dataset.more;
+        else if (this._openId === d.dataset.more) this._openId = null;
+      }));
+    }
+    _row(id) {
+      return (this._rows || []).find((r) => r?.id === id) || null;
+    }
+    async _act(act, id, button) {
+      const row = this._row(id);
+      if (!row) return;
+      if (act === "copy") {
+        const link = preparedLinkFor(row);
+        if (!link) return;
+        try {
+          await navigator.clipboard.writeText(link);
+          button.textContent = "Copied";
+          setTimeout(() => {
+            button.textContent = "Copy link";
+          }, 1500);
+        } catch {
+          this._linkId = id;
+          this.render();
+        }
+        return;
+      }
+      if (act === "delete") {
+        this._confirmId = id;
+        this.render();
+        return;
+      }
+      if (act === "cancel-delete") {
+        this._confirmId = null;
+        this.render();
+        return;
+      }
+      if (act === "mark-sent") {
+        await this._run(id, () => this.client.preparedMarkSent(id), "Marked sent. It now waits under Sent and waiting.");
+      } else if (act === "unmark-sent") {
+        await this._run(id, () => this.client.preparedUnmarkSent(id), "Moved back to Ready to send.");
+      } else if (act === "revoke") {
+        await this._run(id, () => this.client.preparedRevoke(id), "Revoked. Its link no longer works; Send again gives it a new one.");
+      } else if (act === "resend") {
+        const campaign = this.$(`[data-camp="${id}"]`)?.value || null;
+        await this._run(id, () => this.client.preparedResend(id, campaign), "A new link is ready and the row is back in Ready to send. The old link no longer works.");
+      } else if (act === "confirm-delete") {
+        this._confirmId = null;
+        await this._run(id, () => this.client.preparedDelete(id), "Deleted.", { deletedId: id });
+      }
+    }
+    async _run(id, fn, okMsg, opts = {}) {
+      this._busyId = id;
+      this._msg = null;
+      this.render();
+      try {
+        const r = await fn();
+        this._rows = preparedApplyResult(this._rows, r, opts);
+        this._msg = okMsg;
+        this._msgWarn = false;
+        if (this._openId === id) this._openId = null;
+      } catch (err) {
+        this._msg = err?.message || "That did not go through. Nothing was changed; try again.";
+        this._msgWarn = true;
+      }
+      this._busyId = null;
+      this.render();
+    }
+  };
+  define("gbti-prepared-listings", GbtiPreparedListings);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
   var CSS18 = `
@@ -17261,11 +17383,11 @@ ${SKILL_BOX_CSS}`;
   }
   var WINDOWS = Object.freeze([7, 30]);
   var day2 = (now, n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
-  function windowFor(store2, path, days, now = /* @__PURE__ */ new Date()) {
+  function windowFor(store2, path, days2, now = /* @__PURE__ */ new Date()) {
     const coverage = new Set(Array.isArray(store2?.coverage) ? store2.coverage : []);
     const rows = store2?.clicks?.[path] || {};
-    const out = { days, clicks: 0, crawlers: 0, other: 0, measured: 0, unmeasured: 0, list: [] };
-    for (let n = 1; n <= days; n += 1) {
+    const out = { days: days2, clicks: 0, crawlers: 0, other: 0, measured: 0, unmeasured: 0, list: [] };
+    for (let n = 1; n <= days2; n += 1) {
       const d = day2(now, n);
       if (!coverage.has(d)) {
         out.unmeasured += 1;
@@ -17281,13 +17403,13 @@ ${SKILL_BOX_CSS}`;
     }
     return out;
   }
-  function cardClicksLine(cta, clicks, now = /* @__PURE__ */ new Date(), days = 30) {
+  function cardClicksLine(cta, clicks, now = /* @__PURE__ */ new Date(), days2 = 30) {
     const path = typeof cta?.trackedPath === "string" ? cta.trackedPath.trim() : "";
     if (!path) return null;
-    const w2 = windowFor(clicks, path, days, now);
+    const w2 = windowFor(clicks, path, days2, now);
     if (!w2.measured) return `${path} · not measured yet`;
-    const gap = w2.unmeasured ? `, ${w2.unmeasured} of ${days} days not measured` : "";
-    return `${path} · ${w2.clicks} click${w2.clicks === 1 ? "" : "s"} in ${days} days${gap}`;
+    const gap = w2.unmeasured ? `, ${w2.unmeasured} of ${days2} days not measured` : "";
+    return `${path} · ${w2.clicks} click${w2.clicks === 1 ? "" : "s"} in ${days2} days${gap}`;
   }
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
@@ -31358,7 +31480,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/membership-expiry.mjs
-  var DAY_MS = 24 * 60 * 60 * 1e3;
+  var DAY_MS2 = 24 * 60 * 60 * 1e3;
   var EXPIRY_POPUP_START_DAYS = 28;
   var EXPIRY_SNOOZE_DAYS = 7;
   var EXPIRY_FINAL_STRETCH_DAYS = 7;
@@ -31367,11 +31489,11 @@ ${BLOCKED_PILL_CSS}
     const end = until instanceof Date ? until.getTime() : new Date(until).getTime();
     if (!Number.isFinite(end) || Number.isNaN(end)) return { show: false, daysLeft: null };
     if (now >= end) return { show: false, daysLeft: null };
-    const daysLeft = Math.ceil((end - now) / DAY_MS);
+    const daysLeft = Math.ceil((end - now) / DAY_MS2);
     if (daysLeft > EXPIRY_POPUP_START_DAYS) return { show: false, daysLeft };
     const cooldownDays = daysLeft <= EXPIRY_FINAL_STRETCH_DAYS ? 1 : EXPIRY_SNOOZE_DAYS;
     const dismissed = Number(dismissedAt);
-    if (Number.isFinite(dismissed) && dismissed > 0 && now - dismissed < cooldownDays * DAY_MS) {
+    if (Number.isFinite(dismissed) && dismissed > 0 && now - dismissed < cooldownDays * DAY_MS2) {
       return { show: false, daysLeft };
     }
     return { show: true, daysLeft };
@@ -31387,7 +31509,7 @@ ${BLOCKED_PILL_CSS}
         d.setHours(0, 0, 0, 0);
         return d.getTime();
       };
-      calDays = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+      calDays = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS2);
     }
     const headline = calDays <= 0 ? "Your complimentary membership ends today" : calDays === 1 ? "Your complimentary membership ends tomorrow" : `Your complimentary membership ends in ${calDays} days`;
     return { headline, dateLabel, count: Math.max(0, calDays) };

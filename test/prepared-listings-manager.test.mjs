@@ -1,7 +1,8 @@
 // sow-427 E5: the superadmin's PREPARED LISTINGS manager. The pure rules (client-ui/src/prepared-listings-core.mjs),
 // the website adapter (src/lib/workbench-prepared.ts, transpiled with esbuild so the real methods are called), and
-// the hook lines that mount <gbti-prepared-listings> inside the coupon manager. The element itself needs a DOM, so it
-// is held by source pins here and by its load decision, which lives in the core so the retry guard is tested for real.
+// the element. The element itself needs a DOM, so it is held by source pins here and by its load decision, which
+// lives in the core so the retry guard is tested for real. sow-481 moved it to its own Invitations tab and gave it
+// lanes and a sent state; those rules, the tab and the Worker ops are in test/prepared-sent.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -47,8 +48,8 @@ test('every listing state has a label, and anything unrecognised or corrupt read
 });
 
 test('the actions each state offers are exactly the ones the Worker accepts', () => {
-  const { copy, edit, revoke, resend, remove, view } = PREPARED_ACTION;
-  assert.deepEqual(preparedActions(row()), [copy, edit, revoke, remove]);
+  const { copy, edit, revoke, resend, remove, view, markSent } = PREPARED_ACTION;
+  assert.deepEqual(preparedActions(row()), [copy, markSent, edit, revoke, remove], 'sow-481: an unsent link can be marked sent');
   assert.deepEqual(preparedActions(row({ state: 'revoked' })), [edit, resend, remove], 'a revoked link is dead: nothing to copy, Send again instead');
   assert.deepEqual(preparedActions(row({ state: 'publishing', prNumber: 12 })), [copy], 'the Worker refuses edit, revoke and delete while a claim publishes');
   assert.deepEqual(preparedActions(row({ state: 'claimed', claimedAt: '2026-10-02T00:00:00.000Z' })), [view, remove]);
@@ -151,7 +152,7 @@ test('the adapter attaches get, image and save for everyone, and the manager met
   const noop = async () => ({});
   assert.deepEqual(Object.keys(preparedMethods({ workerGet: noop, workerPost: noop })).sort(), ['preparedGet', 'preparedImage', 'preparedSave']);
   assert.deepEqual(Object.keys(preparedMethods({ workerGet: noop, workerPost: noop, isSuperadmin: true })).sort(),
-    ['preparedDelete', 'preparedGet', 'preparedImage', 'preparedList', 'preparedResend', 'preparedRevoke', 'preparedSave']);
+    ['preparedDelete', 'preparedGet', 'preparedImage', 'preparedList', 'preparedMarkSent', 'preparedResend', 'preparedRevoke', 'preparedSave', 'preparedUnmarkSent']);
 });
 
 test('each adapter method calls the one prepared route with the op the Worker expects', async () => {
@@ -169,6 +170,8 @@ test('each adapter method calls the one prepared route with the op the Worker ex
   await m.preparedResend(ID, 'FALL');
   await m.preparedResend(ID);
   await m.preparedDelete(ID);
+  await m.preparedMarkSent(ID);
+  await m.preparedUnmarkSent(ID);
   assert.equal(PREPARED_ROUTE, '/membership/admin/prepared');
   assert.deepEqual(calls, [
     ['GET', '/membership/admin/prepared'],
@@ -178,6 +181,8 @@ test('each adapter method calls the one prepared route with the op the Worker ex
     ['POST', '/membership/admin/prepared', { op: 'resend', id: ID, campaign: 'FALL' }],
     ['POST', '/membership/admin/prepared', { op: 'resend', id: ID }],
     ['POST', '/membership/admin/prepared', { op: 'delete', id: ID }],
+    ['POST', '/membership/admin/prepared', { op: 'mark-sent', id: ID }],
+    ['POST', '/membership/admin/prepared', { op: 'unmark-sent', id: ID }],
   ]);
 });
 
@@ -203,14 +208,12 @@ test('workbench-client spreads the prepared methods with one line, beside the ot
   assert.equal(src.split('\n').filter((l) => l.includes('sow-427')).length, 2, 'hook lines only: the prepared methods live in workbench-prepared.ts');
 });
 
-// ---- the coupon manager hook and the element -------------------------------------------------------------------
+// ---- the coupon manager and the element ---------------------------------------------------------------------------
 
-test('the coupon manager mounts the listings only for a client with preparedList, and keeps one instance', () => {
+test('sow-481: the coupon manager no longer mounts the listings; they have their own tab', () => {
   const src = read('client-ui/src/elements/gbti-coupon-manager.mjs');
-  assert.match(src, /import '\.\/gbti-prepared-listings\.mjs';/);
-  assert.match(src, /\$\{typeof this\.client\.preparedList === 'function' \? '<div data-prepared-slot><\/div>' : ''\}/);
-  assert.match(src, /this\._prepEl \|\|= document\.createElement\('gbti-prepared-listings'\)/, 'kept, so a coupon action never reloads the listings');
-  assert.match(src, /\{ coupons: this\._coupons \}/, 'the registry it already read feeds Send again');
+  assert.doesNotMatch(src, /gbti-prepared-listings/);
+  assert.match(read('src/pages/admin.astro'), /<gbti-prepared-listings><\/gbti-prepared-listings>/);
 });
 
 test('the plain invite list hides every prepared invitation', () => {
@@ -228,18 +231,31 @@ test('the element: every button class names its own hover background, anchors dr
     assert.match(css, new RegExp(`\\.${c}:hover \\{[^}]*background:`), `.${c}:hover sets its own background`);
     assert.match(css, new RegExp(`\\.${c} \\{[^}]*text-decoration:none`), `.${c} is worn by an anchor, so it drops the underline`);
   }
+  // sow-481: the modifiers change the colours, so each restates its own hover too, or the base hover repaints it.
+  for (const m of src.matchAll(/class="pl-btn\$\{cls\}"|btn\('[a-z-]+', '[^']+', ' (pl-[a-z]+)'\)/g)) {
+    if (!m[1]) continue;
+    assert.match(css, new RegExp(`\\.pl-btn\\.${m[1]}:hover \\{[^}]*background:`), `.pl-btn.${m[1]}:hover sets its own background`);
+  }
+  assert.match(css, /\.pl-more > summary:hover \{[^}]*background:/, 'the more-actions toggle is not a button, and still gets a hover');
   assert.match(css, /\[hidden\] \{ display:none !important; \}/);
   assert.match(css, /\.pl-acts select \{ width:auto;/, 'BASE_CSS stretches a select to 100%');
 });
 
 test('the element escapes every value it renders from a row', () => {
   const src = read('client-ui/src/elements/gbti-prepared-listings.mjs');
-  const rowHtml = src.slice(src.indexOf('  _rowHtml(row) {'), src.indexOf('  _wire() {'));
-  assert.ok(rowHtml.length > 500, 'the row renderer moved; this assertion measures nothing');
-  for (const m of rowHtml.matchAll(/\$\{([^}]+)\}/g)) {
-    const expr = m[1].trim();
-    const safe = /^esc\(/.test(expr) || /^(meta|link \?|parts|confirm|opts|btn\(|this\._busyId|camps\.length|acts\.includes)/.test(expr) || /^(act|extra)$/.test(expr);
-    assert.ok(safe, `unescaped interpolation in the row: \${${expr}}`);
+  // sow-481: the card renderer and the lanes around it. Every interpolation is esc(), a markup string this file
+  // built from esc() parts (a name ending in Html, or a join of them), or a fixed class fragment.
+  const cardHtml = src.slice(src.indexOf('  _cardHtml(row, lane) {'), src.indexOf('  _wire() {'));
+  const lanes = src.slice(src.indexOf('    const lanes = preparedLanes(this._rows);'), src.indexOf('  _cardHtml(row, lane) {'));
+  assert.ok(cardHtml.length > 1500 && lanes.length > 800, 'the renderers moved; this assertion measures nothing');
+  for (const block of [cardHtml, lanes]) {
+    for (const m of block.matchAll(/\$\{([^}]+)\}/g)) {
+      const expr = m[1].trim();
+      const safe = /^esc\(/.test(expr)
+        || /^[a-zA-Z]+Html( \?|$)/.test(expr)
+        || /^(shown\.(length|join)|more\.join|btn\(|this\._busyId|this\._openId|accent|cls|countClass|msg|head|rows\.length \?|lanes\.(landed|unreadable)\.(length|map)|laneHtml\(|metaHtml \?)/.test(expr);
+      assert.ok(safe, `unescaped interpolation: \${${expr}}`);
+    }
   }
 });
 

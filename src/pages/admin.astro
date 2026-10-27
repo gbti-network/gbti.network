@@ -27,6 +27,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="quotes" data-min="admin" aria-selected="false" hidden>Splash quotes</button>
           <button type="button" role="tab" data-tab="news-sources" data-min="admin" aria-selected="false" hidden>News sources</button>
           <button type="button" role="tab" data-tab="coupons" data-min="admin" aria-selected="false" hidden>Coupons</button>
+          <button type="button" role="tab" data-tab="invitations" data-min="superadmin" aria-selected="false" hidden>Invitations</button>{/* sow-481 */}
           <button type="button" role="tab" data-tab="categories" data-min="admin" aria-selected="false" hidden>Categories</button>
           <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
@@ -55,6 +56,12 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         <div class="adm-card" data-panel="coupons" hidden>
           <h2 class="h2">Coupons</h2>
           <gbti-coupon-manager></gbti-coupon-manager>
+        </div>
+        {/* sow-481: the prepared listings (invitations) left the Coupons tab for their own. SUPERADMIN: the tab carries
+            data-min="superadmin" and the module is imported in the superadmin block below, so an admin sees neither. */}
+        <div class="adm-card" data-panel="invitations" hidden>
+          <h2 class="h2">Invitations</h2>
+          <gbti-prepared-listings></gbti-prepared-listings>
         </div>
         {/* sow-161 A: the two managers the owner asked for on the website. They carry their OWN headers (a chead /
             an explorer header), so no card <h2> here, matching the extension admin. The category->Discord-channel
@@ -173,6 +180,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         await import('../../client-ui/src/elements/gbti-cta-manager.mjs'); // sow-281: the CTA registry manager
         await import('../../client-ui/src/elements/gbti-digest-manager.mjs'); // sow-266: the digest pitch + sponsor slot
         await import('../../client-ui/src/elements/gbti-skill-install-manager.mjs'); // sow-109: the install steps per tool
+        await import('../../client-ui/src/elements/gbti-prepared-listings.mjs'); // sow-481: the Invitations tab
       }
       setupTabs(rank);
     }

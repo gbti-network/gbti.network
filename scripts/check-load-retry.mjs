@@ -53,7 +53,7 @@ for (const rel of ADMIN_PAGES) {
   for (const m of fs.readFileSync(file, 'utf8').matchAll(/<(gbti-[a-z0-9-]+)[\s>]/g)) tags.add(m[1]);
 }
 // A floor, so a markup change that hides the tags from the pattern fails here instead of passing on a short list.
-for (const must of ['gbti-channel-map-manager', 'gbti-quote-manager', 'gbti-coupon-manager']) {
+for (const must of ['gbti-channel-map-manager', 'gbti-quote-manager', 'gbti-coupon-manager', 'gbti-prepared-listings']) {
   if (!tags.has(must)) die(`expected <${must}> on an admin page and did not find it; the section census is broken`);
 }
 const TAGS = [...tags].sort();
@@ -88,6 +88,8 @@ const HARNESS = `
     contentChannelPool: { channels: [] }, moderationFlagPool: { lists: { political: [] } },
     syndicationTemplatePool: { templates: {} }, newsEngagementSettings: { settings: null }, syndicationSettings: { settings: null },
     syndicationQueue: { pending: [{ id: 'a', title: 'An item', source: 'post', enqueuedAt: 1 }] },
+    preparedList: { listings: [{ id: 'ABCDEFGHJKMNPQRS', state: 'prepared', title: 'A listing', code: 'SPRINGABCDEFGHJK' }] },
+    couponPool: { coupons: [] },
   };
   window.__stub = (mode) => {
     const st = { calls: 0, by: {}, mode };
@@ -230,7 +232,8 @@ async function tracker() {
 // ---- D: controls and the first-load race ---------------------------------------------------------------------------
 
 async function controls() {
-  for (const [tag, method, loadedSel] of [['gbti-channel-map-manager', 'contentChannelPool', '.subnav'], ['gbti-syndication-tracker', 'syndicationQueue', 'table']]) {
+  // sow-481: the Invitations section left the coupon manager for its own admin tab, so it is driven here directly.
+  for (const [tag, method, loadedSel] of [['gbti-channel-map-manager', 'contentChannelPool', '.subnav'], ['gbti-syndication-tracker', 'syndicationQueue', 'table'], ['gbti-prepared-listings', 'preparedList', '.pl-lanes']]) {
     for (const lateClient of [false, true]) {
       const r = await withPage((page) => page.evaluate(async ({ tag, method, loadedSel, lateClient }) => {
         const { st, client } = window.__stub('healthy');

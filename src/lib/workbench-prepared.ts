@@ -53,5 +53,7 @@ export function preparedMethods({ workerGet, workerPost, isSuperadmin = false }:
     preparedRevoke(id: string) { return workerPost(PREPARED_ROUTE, { op: 'revoke', id }); },
     preparedResend(id: string, campaign?: string | null) { return workerPost(PREPARED_ROUTE, { op: 'resend', id, ...(campaign ? { campaign } : {}) }); },
     preparedDelete(id: string) { return workerPost(PREPARED_ROUTE, { op: 'delete', id }); },
+    preparedMarkSent(id: string) { return workerPost(PREPARED_ROUTE, { op: 'mark-sent', id }); }, // sow-481
+    preparedUnmarkSent(id: string) { return workerPost(PREPARED_ROUTE, { op: 'unmark-sent', id }); }, // sow-481: the undo
   };
 }
