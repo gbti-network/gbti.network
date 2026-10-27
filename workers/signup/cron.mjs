@@ -6,6 +6,7 @@ import { createStripeClient } from '../../clients/stripe.mjs';
 import { sweepPreparedClaims } from './prepared-claim-sweep.mjs'; // sow-427: finalize claims nobody is watching
 import { warmSharesFeed } from './membership-shares.mjs'; // 2026-10-23: no member's Shares tab waits on a cold list
 import { sweepOwedWelcomes } from './welcome-mail-send.mjs'; // sow-478: welcome anyone whose email was never sent
+import { queueNewsletterPosts } from './newsletter-social.mjs'; // sow-484: the weekly issue reaches the Social Queue
 import { drainSyndication } from './syndication-drain.mjs';
 import { ingest } from './news/src/ingest.mjs'; // UnifiedWorker: the hourly news RSS fetch + AI classify (was the gbti-news worker)
 import { backfillImages } from './news/src/backfill.mjs'; // UnifiedWorker: the :30 og:image backfill
@@ -151,7 +152,12 @@ async function drainFiveMinute(env) {
   let welcomeMail;
   try { welcomeMail = await sweepOwedWelcomes(env); } catch (e) { welcomeMail = { error: String(e?.message ?? e) }; }
 
-  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared, shares, welcomeMail };
+  // sow-484: once this week's issue has gone out, queue its web edition for the Social Queue (once per issue). After
+  // drainMail, so the first delivery this tick counts. Fail-soft: it never touches the drains above.
+  let newsletter;
+  try { newsletter = await queueNewsletterPosts(env); } catch (e) { newsletter = { error: String(e?.message ?? e) }; }
+
+  return { syndication: settle(syndication), mail: settle(mail), welcome, report, prepared, shares, welcomeMail, newsletter };
 }
 
 // Shared by both Tuesday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still

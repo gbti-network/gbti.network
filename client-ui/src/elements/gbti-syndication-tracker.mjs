@@ -73,7 +73,7 @@ const CACHE_FRESH_MS = 30_000;
 let QUEUE_TRIED_AT = 0;
 let QUEUE_REFRESH_FAILED = false;
 
-const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
+const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', newsletter: 'Newsletter' }; // sow-484: the weekly issue
 const STATUSES = ['pending', 'approved', 'sent', 'failed', 'cancelled'];
 
 class GbtiSyndicationTracker extends GbtiElement {

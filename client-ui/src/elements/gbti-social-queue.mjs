@@ -26,7 +26,7 @@ import { composeUrl, assistCopiesText } from '../social-composer.mjs'; // sow-17
 const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', linkedin: 'LinkedIn', bluesky: 'Bluesky', substack: 'Substack' };
 const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', hashnode: 'hashnode', dailydev: 'dailydev', linkedin: 'linkedin', bluesky: 'bluesky', substack: 'substack' };
 // sow-171: 'news' rows are the posts a superadmin made by hand from the news reader's share panel (Manual done).
-const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', news: 'News' };
+const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', news: 'News', newsletter: 'Newsletter' }; // sow-484: the weekly issue
 const PAGE_SIZE = 12;
 const fmtDate = (ms) => { try { return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
 

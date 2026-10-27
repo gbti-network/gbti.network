@@ -214,7 +214,7 @@ const TILE_CHANNELS = [
 
 // SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
 // and the per-channel delay inputs.
-const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
+const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', newsletter: 'Newsletter' }; // sow-484
 const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn', substack: 'Substack' };
 const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual' }; // sow-313 dropped `popular` with its engine
 const TMPL_TYPES = [
@@ -222,6 +222,7 @@ const TMPL_TYPES = [
   { key: 'post', nm: 'Post', df: 'article' },
   { key: 'project', nm: 'Project', df: 'project' },
   { key: 'prompt', nm: 'Prompt', df: 'prompt' },
+  { key: 'newsletter', nm: 'Newsletter', df: 'weekly issue' }, // sow-484
 ];
 const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}',
   // Hashtag tokens (category + free-form tags as #Hashtags) and the per-channel member handle tokens (each
@@ -243,7 +244,7 @@ const SYND_TABS = [
 const SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
 const SYND_SUB_KEY = 'gbti-synd-sub';
 // The template keys a channel's working copy tracks (the four content types + the Reddit/dev.to sub-templates).
-const TMPL_KEYS = ['share', 'post', 'project', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub']; // SOW-138: *-body = the public crosspost body
+const TMPL_KEYS = ['share', 'post', 'project', 'prompt', 'newsletter', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub']; // SOW-138: *-body = the public crosspost body
 
 class GbtiChannelMapManager extends GbtiElement {
   connectedCallback() { super.connectedCallback?.(); }

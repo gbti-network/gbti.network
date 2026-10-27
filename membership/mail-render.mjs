@@ -586,6 +586,20 @@ function itemText(sectionKey, it, links) {
 }
 
 /**
+ * sow-484: the issue's subject line and preheader summary, built exactly as renderIssue builds them, for the Social
+ * Queue post that links to the web edition. Shared rather than copied, so a post cannot describe an issue
+ * differently from the email it announces.
+ */
+export function issueHeadline(issue) {
+  const counts = issue?.counts || null;
+  const firstIssue = Boolean(issue?.launchNote);
+  return {
+    subject: computedSubject(counts, coverageWeek(issue?.generatedAt)) || 'The GBTI Network weekly digest',
+    summary: counts ? countsSummary(counts, firstIssue) : emptySummary(firstIssue),
+  };
+}
+
+/**
  * Render the frozen issue into { subject, html, text }. Reads only the render-ready `layout` (ordering + the
  * filled-before-empty split owned by the composition core), `counts` and `generatedAt` for the subject and
  * preheader, `launchNote` for the first-issue clause, and ctx.
@@ -619,9 +633,10 @@ export function renderIssue(issue, ctx = {}) {
   const links = { siteUrl, campaign: str(issue?.issueId).trim(), clickBase: web ? '' : safeUrl(ctx.clickBase) };
   const track = (url, placement) => trackUrl(url, links, placement);
   const webUrl = web ? '' : webEditionUrl(ctx.webBase, links.campaign);
-  const subject = str(ctx.subject).trim() || computedSubject(counts, range) || 'The GBTI Network weekly digest';
+  const headline = issueHeadline(issue); // sow-484: the same subject and summary the Social Queue post carries
+  const subject = str(ctx.subject).trim() || headline.subject;
 
-  const summary = counts ? countsSummary(counts, firstIssue) : emptySummary(firstIssue);
+  const summary = headline.summary;
   const preheaderText = escapeHtml(summary);
   const preheader = `<span style="display:none;font-size:1px;color:${p.pageBg};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${preheaderText}</span>`;
 

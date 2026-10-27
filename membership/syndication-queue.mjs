@@ -23,7 +23,9 @@ import { canonicalType } from './content-types.mjs';
 
 // sow-196: canonicalize before the membership check. A record or request carrying the retired `product`
 // type name would otherwise be rejected or dropped here rather than resolved to `project`.
-export const QUEUE_TYPES = new Set(['share', 'post', 'project', 'prompt']);
+// sow-484: `newsletter` is the weekly issue's public web edition, enqueued by workers/signup/newsletter-social.mjs
+// once the issue has gone out. It is the one type that is not a repository file.
+export const QUEUE_TYPES = new Set(['share', 'post', 'project', 'prompt', 'newsletter']);
 // SOW-058 (approval model): 'pending' = enqueued, AWAITING superadmin approval (never posts on its own);
 // 'approved' = a superadmin approved it, so the drain will post it on the next tick; then 'sent' / 'failed';
 // 'cancelled' = rejected (from pending) or cancelled before send (from approved). When require_approval is off

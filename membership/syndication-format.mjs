@@ -3,7 +3,7 @@
 // text is sanitized so a crafted title cannot fire a mass mention from the brand account, and each channel's
 // character cap is enforced. No IO; fully unit-tested.
 
-const TYPE_LABEL = { post: 'article', project: 'project', prompt: 'prompt', share: 'link' };
+const TYPE_LABEL = { post: 'article', project: 'project', prompt: 'prompt', share: 'link', newsletter: 'newsletter' };
 
 /** The link host without www (for a lead line when there is no title). */
 export function hostOf(u) {

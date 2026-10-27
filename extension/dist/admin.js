@@ -19318,7 +19318,7 @@ ${SKILL_BOX_CSS}`;
   var CACHE_FRESH_MS = 3e4;
   var QUEUE_TRIED_AT = 0;
   var QUEUE_REFRESH_FAILED = false;
-  var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
+  var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", newsletter: "Newsletter" };
   var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
@@ -19531,12 +19531,12 @@ ${SKILL_BOX_CSS}`;
   function channelCapability(name) {
     return CHANNEL_CAPABILITY[name] ?? "building";
   }
-  var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
+  var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt", "newsletter"]);
   var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
   var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
   var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
   function defaultAutoMode(type) {
-    return type === "share" ? "off" : "on";
+    return type === "share" || type === "newsletter" ? "off" : "on";
   }
   var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
   var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
@@ -19550,7 +19550,7 @@ ${SKILL_BOX_CSS}`;
     comment_autopost: true
     // one comment posts immediately (deliberate engagement)
   });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "newsletter", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
@@ -19559,12 +19559,14 @@ ${SKILL_BOX_CSS}`;
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
+  var DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit
     post: DEFAULT_FORMAT,
     project: DEFAULT_FORMAT,
     prompt: DEFAULT_FORMAT,
+    newsletter: DEFAULT_NEWSLETTER_FORMAT,
     "reddit-body": DEFAULT_REDDIT_BODY,
     "reddit-comment": DEFAULT_REDDIT_COMMENT,
     "devto-intro": DEFAULT_DEVTO_INTRO,
@@ -19858,14 +19860,16 @@ ${SKILL_BOX_CSS}`;
     { id: "bluesky", name: "Bluesky", sub: "", icon: "cb-bsky", cls: "br-bsky" },
     { id: "substack", name: "Substack", sub: "Manual", icon: "cb-substack", cls: "br-substack" }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
-  var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
+  var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", newsletter: "Newsletter" };
   var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn", substack: "Substack" };
   var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
     { key: "project", nm: "Project", df: "project" },
-    { key: "prompt", nm: "Prompt", df: "prompt" }
+    { key: "prompt", nm: "Prompt", df: "prompt" },
+    { key: "newsletter", nm: "Newsletter", df: "weekly issue" }
+    // sow-484
   ];
   var VARS = [
     "{memberdiscord}",
@@ -19898,7 +19902,7 @@ ${SKILL_BOX_CSS}`;
   ];
   var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
   var SYND_SUB_KEY = "gbti-synd-sub";
-  var TMPL_KEYS = ["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub"];
+  var TMPL_KEYS = ["share", "post", "project", "prompt", "newsletter", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub"];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -30849,7 +30853,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-social-queue.mjs
   var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky", substack: "Substack" };
   var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky", substack: "substack" };
-  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", news: "News" };
+  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", news: "News", newsletter: "Newsletter" };
   var PAGE_SIZE = 12;
   var fmtDate2 = (ms) => {
     try {

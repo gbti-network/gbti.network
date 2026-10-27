@@ -121,7 +121,7 @@ export function channelAllowedFor(item, channel) {
 // on/off/popular per (type, channel) for every channel they see in the UI, including X (manual-assist). The
 // `auto` subset drives the drain's adapter posts + the per-channel delay; a `manual` channel that is `on`
 // enqueues a Social Queue task instead. `building` channels (no adapter, e.g. LinkedIn) are excluded.
-export const AUTO_TYPES = Object.freeze(['share', 'post', 'project', 'prompt']);
+export const AUTO_TYPES = Object.freeze(['share', 'post', 'project', 'prompt', 'newsletter']); // sow-484: the weekly issue
 export const AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === 'auto'));
 export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== 'building'));
 // The per-cell auto-share mode. `off` = never; `on` = On-Automatic (auto-enqueue at publish; the adapter
@@ -134,8 +134,10 @@ export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapab
 // superadmin sets a cell to it and that content then never syndicates, with nothing anywhere saying why. A
 // stored `popular` now coerces to the type default. The live config carried no such cell.
 export const AUTO_MODES = Object.freeze(['off', 'on', 'on-manual']);
-/** The fail-closed default cell for a type: shares OFF (the owner ask), every other type ON (today's behavior). */
-export function defaultAutoMode(type) { return type === 'share' ? 'off' : 'on'; }
+/** The fail-closed default cell for a type: shares OFF (the owner ask), every other type ON (today's behavior).
+ *  sow-484: the newsletter is OFF too, so a channel nobody chose never posts it (an issue has no repo file for
+ *  dev.to, no category for Discord by category, and no featured Discord channel). */
+export function defaultAutoMode(type) { return type === 'share' || type === 'newsletter' ? 'off' : 'on'; }
 
 // SOW-087: how a share's topic category is suggested at compose time. `ai` = Workers AI with a keyword
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
@@ -156,7 +158,7 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'project', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-body', 'hashnode-footer', 'hashnode-stub']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'project', 'prompt', 'newsletter', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-body', 'hashnode-footer', 'hashnode-stub']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // sow-180: a SHARE is somebody else's link, so its default is CONTENT-first with NO member credit (unlike the
@@ -208,11 +210,15 @@ const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or project deve
 // The token carries its own "From u/name:" label and its own quotes, so a note-less item renders NOTHING
 // rather than a dangling label over an empty quote. That specific defect has now happened twice here.
 const DEFAULT_REDDIT_COMMENT = '{author-note-attributed}';
+// sow-484 (owner-approved plan, 2026-10-27): the weekly issue, credited to nobody. {short-description} is the
+// email's own preheader ("4 articles, 2 projects and 3 news picks from the network this week.").
+export const DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT, // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,
   project: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
+  newsletter: DEFAULT_NEWSLETTER_FORMAT,
   'reddit-body': DEFAULT_REDDIT_BODY,
   'reddit-comment': DEFAULT_REDDIT_COMMENT,
   'devto-intro': DEFAULT_DEVTO_INTRO,

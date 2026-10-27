@@ -263,7 +263,7 @@ test('the page client calls the share route and passes a chosen Discord channel'
 
 test('the Social Queue labels a news row and opens the shared composer addresses', () => {
   const src = read('client-ui/src/elements/gbti-social-queue.mjs');
-  assert.match(src, /const SRC_LABEL = \{ share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', news: 'News' \};/);
+  assert.match(src, /const SRC_LABEL = \{ share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt', news: 'News', newsletter: 'Newsletter' \};/);
   assert.match(src, /import \{ composeUrl, assistCopiesText \} from '\.\.\/social-composer\.mjs';/);
   assert.doesNotMatch(src, /const composeUrl = /, 'one copy of the composer addresses');
 });

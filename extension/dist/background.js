@@ -21425,12 +21425,12 @@ var CHANNEL_CAPABILITY = Object.freeze({
 function channelCapability(name) {
   return CHANNEL_CAPABILITY[name] ?? "building";
 }
-var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
+var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt", "newsletter"]);
 var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
 var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
 var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
 function defaultAutoMode(type) {
-  return type === "share" ? "off" : "on";
+  return type === "share" || type === "newsletter" ? "off" : "on";
 }
 var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
 var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
@@ -21444,7 +21444,7 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "newsletter", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
@@ -21453,12 +21453,14 @@ var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supp
 var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
+var DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT,
   // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,
   project: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
+  newsletter: DEFAULT_NEWSLETTER_FORMAT,
   "reddit-body": DEFAULT_REDDIT_BODY,
   "reddit-comment": DEFAULT_REDDIT_COMMENT,
   "devto-intro": DEFAULT_DEVTO_INTRO,
