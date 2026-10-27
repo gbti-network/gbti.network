@@ -2401,6 +2401,7 @@ ${String(body ?? "")}`;
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
   .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
+  .ce.ce-code:focus { background:var(--ink); } /* a code block keeps its dark surface while edited, or its light text sits on white */
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
   .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:24px; line-height:1.25; padding:10px 0 3px; }
@@ -2528,6 +2529,334 @@ ${listStyleProseCss(".doc-blocks")}
     .blk:focus-within > .blk-tools { display:flex; }
   }
 `;
+
+  // client/src/content-blocks.mjs
+  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+  var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  function parsePercent(v2) {
+    const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return n >= 0 && n <= 100 ? n : null;
+  }
+  var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+  function keyValue(line) {
+    const i = line.indexOf(":");
+    if (i <= 0) return { k: null, v: line };
+    return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
+  }
+  function parseTags(body) {
+    return { tags: lines(body) };
+  }
+  function parseBar(body) {
+    const out = { label: "", value: null, raw: "", note: "", unknown: [] };
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "label") out.label = v2;
+      else if (key === "value") {
+        out.raw = v2;
+        out.value = parsePercent(v2);
+      } else if (key === "note") out.note = v2;
+      else out.unknown.push(l);
+    }
+    return out;
+  }
+  function parseFacts(body) {
+    const rows = [];
+    const bad = [];
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      if (!k) {
+        bad.push(l);
+        continue;
+      }
+      const m = v2.match(/^(.*?)\s*\{bar\}\s*$/);
+      const value = m ? m[1].trim() : v2;
+      rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
+    }
+    return { rows, bad };
+  }
+  function parseStats(body) {
+    let caption = "";
+    const stats = [];
+    const bad = [];
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      if (k && k.toLowerCase() === "caption") {
+        caption = v2;
+        continue;
+      }
+      if (!k || !v2) {
+        bad.push(l);
+        continue;
+      }
+      stats.push({ value: k, label: v2 });
+    }
+    return { caption, stats, bad };
+  }
+  function parseButton(body) {
+    const ls = lines(body);
+    let label = ls[0] ?? "";
+    let url = ls[1] ?? "";
+    if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
+    return { label, url: safeUrl(url), rawUrl: url };
+  }
+  var REVEAL_MAX_PARTS = 6;
+  var REVEAL_DEFAULT_LABEL = "Show more";
+  function parseWeights(v2) {
+    const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const out = [];
+    for (const p of parts) {
+      const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
+      if (!m || !m[1].trim()) return null;
+      out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
+    }
+    return out;
+  }
+  function parseReveal(body, meta = "") {
+    const src = String(body ?? "").split("\n");
+    const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
+    const head = cut < 0 ? [] : src.slice(0, cut);
+    const rest = cut < 0 ? src : src.slice(cut + 1);
+    const out = { label: String(meta ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
+    for (const l of head.map((x) => x.trim()).filter(Boolean)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "weights") {
+        out.weightsRaw = v2;
+        out.weights = parseWeights(v2);
+      } else if (key === "note") out.note = v2;
+      else out.unknown.push(l);
+    }
+    return out;
+  }
+  var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  function revealBodyHtml(md) {
+    const out = [];
+    let para = [];
+    let list = [];
+    let blank2 = false;
+    const flush = () => {
+      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
+      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
+      para = [];
+      list = [];
+    };
+    for (const raw of String(md).split("\n")) {
+      const l = raw.trim();
+      if (!l) {
+        if (list.length) blank2 = true;
+        else flush();
+        continue;
+      }
+      if (list.length && /^\s{2,}\S/.test(raw)) {
+        const it2 = list[list.length - 1];
+        if (blank2) it2.sub.push("");
+        it2.sub.push(raw.replace(/^\s{2,4}/, ""));
+        blank2 = false;
+        continue;
+      }
+      if (blank2) {
+        flush();
+        blank2 = false;
+      }
+      const item = l.match(/^[-*]\s+(.*)$/);
+      if (item) {
+        if (para.length) flush();
+        list.push({ text: item[1], sub: [] });
+        continue;
+      }
+      if (list.length) flush();
+      para.push(l);
+    }
+    flush();
+    return out.join("");
+  }
+  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+  var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+  var AUDIO_STYLES = ["bar", "card"];
+  var AUDIO_DEFAULT_LABEL = "Listen";
+  function parseAudio(body, meta = "") {
+    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "length") out.length = v2;
+      else if (key === "style") {
+        if (AUDIO_STYLES.includes(v2.toLowerCase())) out.style = v2.toLowerCase();
+        else out.badStyle = v2;
+      } else if (key === "src") {
+        const m = v2.match(AUDIO_SRC_RE);
+        if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
+        else out.bad.push(v2);
+      } else out.unknown.push(l);
+    }
+    return out;
+  }
+  function setAudioStyle(body, style) {
+    const kept = String(body ?? "").split("\n").filter((l) => !/^\s*style\s*:/i.test(l));
+    return style === "card" ? ["style: card", ...kept].join("\n") : kept.join("\n");
+  }
+  function renderAudio(body, meta, origin = "") {
+    const a = parseAudio(body, meta);
+    if (!a.sources.length) return null;
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
+  }
+  function weightWidths(weights) {
+    const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
+    const ws = weights.map((w2) => Math.round(100 * w2.n / total));
+    ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
+    return ws;
+  }
+  function renderReveal(body, meta) {
+    const r = parseReveal(body, meta);
+    if (!r.body && !r.weights && !r.note) return null;
+    const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
+    let top = "";
+    if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
+      const ws = weightWidths(r.weights);
+      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
+    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
+    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
+    if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
+    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+  }
+  function renderDataBlock(name, body, meta = "", opts = {}) {
+    if (name === "reveal") return renderReveal(body, meta);
+    if (name === "audio") return renderAudio(body, meta, opts.origin || "");
+    if (name === "tags") {
+      const { tags } = parseTags(body);
+      if (!tags.length) return null;
+      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
+    }
+    if (name === "bar") {
+      const b = parseBar(body);
+      if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
+      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
+    }
+    if (name === "facts") {
+      const { rows } = parseFacts(body);
+      if (!rows.length) return null;
+      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
+    }
+    if (name === "button") {
+      const b = parseButton(body);
+      if (!b.label) return null;
+      const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
+      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
+    }
+    if (name === "stats") {
+      const s = parseStats(body);
+      if (!s.stats.length) return null;
+      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
+    }
+    return null;
+  }
+  function barWidthCss(scope = "") {
+    let css = "";
+    for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
+    return css;
+  }
+  var DIRECTORY_STYLES = ["youtube"];
+  function sortListPlaceholder(meta = "") {
+    const style = String(meta ?? "").trim();
+    return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
+  }
+  var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
+  function dataBlocksCss(scope, t) {
+    const s = scope;
+    return `${s} .gbti-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 .9em}
+${s} .gbti-tag{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid ${t.line2};color:${t.soft};font-family:${t.mono};font-size:12px;font-weight:500;line-height:1.2}
+${s} .gbti-tag-primary{background:${t.greenTint};color:${t.green700};border-color:${t.greenBorder}}
+${s} .gbti-bar{margin:1.1em 0 .9em}
+${s} .gbti-bar-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+${s} .gbti-bar-label{font-size:14px;color:${t.soft}}
+${s} .gbti-bar-value{font-family:${t.mono};font-weight:600;font-size:16px;color:${t.fg}}
+${s} .gbti-bar-track{display:block;height:10px;margin-top:6px;border-radius:4px;overflow:hidden;background:${t.rest}}
+${s} .gbti-bar-fill{display:block;height:100%;background:${t.green};box-shadow:2px 0 0 ${t.surface}}
+${s} .gbti-bar-note{margin-top:10px;font-family:${t.mono};font-size:13px;line-height:1.5;color:${t.mute}}
+${s} .gbti-facts{margin:1em 0;border-top:1px solid ${t.line}}
+${s} .gbti-fact{display:grid;grid-template-columns:minmax(90px,30%) minmax(0,1fr);gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid ${t.line}}
+${s} .gbti-fact dt{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute};margin:0}
+${s} .gbti-fact dd{margin:0;display:flex;align-items:center;gap:10px;font-size:15px;color:${t.fg}}
+${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
+${s} .gbti-button-row{margin:1em 0}
+${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
+${s} a.gbti-button:hover{background:${t.greenTint}}
+${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
+${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
+${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
+${s} .gbti-stats{margin:1em 0}
+${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
+${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
+${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
+${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
+${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
+${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
+${s} .gbti-reveal{margin:1.2em 0;padding:16px;border:1px solid ${t.line};border-radius:10px}
+${s} .gbti-reveal-weights{display:flex;gap:2px;height:14px;margin:0 0 12px}
+${s} .gbti-reveal-seg{display:block;flex:0 1 auto;min-width:4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:first-child{border-radius:4px 0 0 4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:last-child{border-radius:0 4px 4px 0}
+${s} .gbti-reveal-seg-1{background:#0f6f40}
+${s} .gbti-reveal-seg-2{background:#1f9e5f}
+${s} .gbti-reveal-seg-3{background:#4fbf86}
+${s} .gbti-reveal-seg-4{background:#93d9b4}
+${s} .gbti-reveal-seg-5{background:#c4ebd5}
+${s} .gbti-reveal-seg-6{background:#0b4f2e}
+${s} .gbti-reveal-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px;margin:0 0 12px;font-size:.9em}
+${s} .gbti-reveal-key{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow-wrap:normal}
+${s} .gbti-reveal-swatch{flex:none;width:10px;height:10px;border-radius:3px}
+${s} .gbti-reveal-name{font-weight:700;color:${t.fg}}
+${s} .gbti-reveal-pct{font-family:${t.mono};font-size:.85em;color:${t.soft}}
+${s} .gbti-reveal-note{margin:0 0 4px;font-size:.9em;color:${t.soft}}
+${s} .gbti-reveal-note strong{color:${t.fg}}
+${s} .gbti-reveal-more{margin:0}
+${s} .gbti-reveal-toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;list-style:none;font-size:.9em;font-weight:700;color:${t.green700}}
+${s} .gbti-reveal-toggle::-webkit-details-marker{display:none}
+${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
+${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
+${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:.9em}
+${s} .gbti-reveal-body p{margin:8px 0 12px}
+${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
+${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-audio{margin:1.2em 0}
+${s} > .gbti-audio:first-child{margin-top:14px}
+${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
+${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
+${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
+${s} .gbti-audio-card{display:flex;flex-direction:column;gap:12px;padding:14px 18px;border:1px solid ${t.line};border-radius:12px;background:${t.card};box-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04)}
+${s} .gbti-audio-card .gbti-audio-head{flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+${s} .gbti-audio-card .gbti-audio-label{font-size:16px}
+${s} .gbti-audio-card .gbti-audio-player{margin-top:0}
+${s} .gbti-audio-card[data-enhanced] .gbti-audio-player{display:none}
+${s} .gbti-audio-row{display:flex;align-items:center;gap:16px;min-width:0}
+${s} button.gbti-audio-play{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:0;padding:0;border:0;border-radius:999px;background:#1f9e5f;color:#fff;box-shadow:0 6px 16px rgba(31,158,95,.28);cursor:pointer}
+${s} button.gbti-audio-play:hover{background:#178a51;color:#fff}
+${s} button.gbti-audio-play:focus-visible{outline:2px solid ${t.green};outline-offset:3px}
+${s} .gbti-audio-play svg{display:block;width:22px;height:22px}
+${s} .gbti-audio-progress{display:flex;align-items:center;gap:10px}
+${s} .gbti-audio-progress[hidden]{display:none}
+${s} input.gbti-audio-seek{flex:1;min-width:0;width:auto;height:20px;margin:0;padding:0;border:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+${s} input.gbti-audio-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,${t.green700} var(--p,0%),${t.line2} var(--p,0%))}
+${s} input.gbti-audio-seek::-moz-range-track{height:4px;border-radius:2px;background:${t.line2}}
+${s} input.gbti-audio-seek::-moz-range-progress{height:4px;border-radius:2px;background:${t.green700}}
+${s} input.gbti-audio-seek::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek:hover::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
+${barWidthCss(s)}`;
+  }
 
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
@@ -2775,8 +3104,11 @@ ${listStyleProseCss(".doc-blocks")}
           const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
           return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
-        case "code":
-          return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
+        case "code": {
+          const audioStyle = /^audio(\s|$)/.test(b.lang || "") ? parseAudio(b.code || "").style : null;
+          const bar = audioStyle ? `<div class="cvar"><span class="cvar-lab">${svg("gear")} Player style</span>${AUDIO_STYLES.map((x) => `<button type="button" class="${x === audioStyle ? "on" : ""}" data-astyle="${b._id}" data-aval="${x}">${x}</button>`).join("")}</div>` : "";
+          return bar + `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
+        }
         case "list": {
           const items = Array.isArray(b.items) && b.items.length ? b.items : [""];
           return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs: `class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}"` });
@@ -2902,6 +3234,15 @@ ${listStyleProseCss(".doc-blocks")}
         const b = this._byId(el.dataset.cvar);
         if (b) {
           b.variant = el.dataset.cval;
+          this._render();
+          this._focusBlock(b._id);
+          this._change();
+        }
+      }));
+      this.$$("[data-astyle]").forEach((el) => el.addEventListener("click", () => {
+        const b = this._byId(el.dataset.astyle);
+        if (b) {
+          b.code = setAudioStyle(b.code || "", el.dataset.aval);
           this._render();
           this._focusBlock(b._id);
           this._change();
@@ -4294,302 +4635,6 @@ ${listStyleProseCss(".doc-blocks")}
   var AUDIO_EMBED_HEIGHT = 120;
   function isPortraitEmbed(src) {
     return /tiktok\.com\/embed\//.test(String(src || ""));
-  }
-
-  // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
-  var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-  function parsePercent(v2) {
-    const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    return n >= 0 && n <= 100 ? n : null;
-  }
-  var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
-  function keyValue(line) {
-    const i = line.indexOf(":");
-    if (i <= 0) return { k: null, v: line };
-    return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
-  }
-  function parseTags(body) {
-    return { tags: lines(body) };
-  }
-  function parseBar(body) {
-    const out = { label: "", value: null, raw: "", note: "", unknown: [] };
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "label") out.label = v2;
-      else if (key === "value") {
-        out.raw = v2;
-        out.value = parsePercent(v2);
-      } else if (key === "note") out.note = v2;
-      else out.unknown.push(l);
-    }
-    return out;
-  }
-  function parseFacts(body) {
-    const rows = [];
-    const bad = [];
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      if (!k) {
-        bad.push(l);
-        continue;
-      }
-      const m = v2.match(/^(.*?)\s*\{bar\}\s*$/);
-      const value = m ? m[1].trim() : v2;
-      rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
-    }
-    return { rows, bad };
-  }
-  function parseStats(body) {
-    let caption = "";
-    const stats = [];
-    const bad = [];
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      if (k && k.toLowerCase() === "caption") {
-        caption = v2;
-        continue;
-      }
-      if (!k || !v2) {
-        bad.push(l);
-        continue;
-      }
-      stats.push({ value: k, label: v2 });
-    }
-    return { caption, stats, bad };
-  }
-  function parseButton(body) {
-    const ls = lines(body);
-    let label = ls[0] ?? "";
-    let url = ls[1] ?? "";
-    if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
-    return { label, url: safeUrl(url), rawUrl: url };
-  }
-  var REVEAL_MAX_PARTS = 6;
-  var REVEAL_DEFAULT_LABEL = "Show more";
-  function parseWeights(v2) {
-    const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-    if (!parts.length) return null;
-    const out = [];
-    for (const p of parts) {
-      const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
-      if (!m || !m[1].trim()) return null;
-      out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
-    }
-    return out;
-  }
-  function parseReveal(body, meta = "") {
-    const src = String(body ?? "").split("\n");
-    const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
-    const head = cut < 0 ? [] : src.slice(0, cut);
-    const rest = cut < 0 ? src : src.slice(cut + 1);
-    const out = { label: String(meta ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
-    for (const l of head.map((x) => x.trim()).filter(Boolean)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "weights") {
-        out.weightsRaw = v2;
-        out.weights = parseWeights(v2);
-      } else if (key === "note") out.note = v2;
-      else out.unknown.push(l);
-    }
-    return out;
-  }
-  var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  function revealBodyHtml(md) {
-    const out = [];
-    let para = [];
-    let list = [];
-    let blank2 = false;
-    const flush = () => {
-      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
-      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
-      para = [];
-      list = [];
-    };
-    for (const raw of String(md).split("\n")) {
-      const l = raw.trim();
-      if (!l) {
-        if (list.length) blank2 = true;
-        else flush();
-        continue;
-      }
-      if (list.length && /^\s{2,}\S/.test(raw)) {
-        const it2 = list[list.length - 1];
-        if (blank2) it2.sub.push("");
-        it2.sub.push(raw.replace(/^\s{2,4}/, ""));
-        blank2 = false;
-        continue;
-      }
-      if (blank2) {
-        flush();
-        blank2 = false;
-      }
-      const item = l.match(/^[-*]\s+(.*)$/);
-      if (item) {
-        if (para.length) flush();
-        list.push({ text: item[1], sub: [] });
-        continue;
-      }
-      if (list.length) flush();
-      para.push(l);
-    }
-    flush();
-    return out.join("");
-  }
-  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
-  var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
-  var AUDIO_DEFAULT_LABEL = "Listen";
-  function parseAudio(body, meta = "") {
-    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "length") out.length = v2;
-      else if (key === "src") {
-        const m = v2.match(AUDIO_SRC_RE);
-        if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
-        else out.bad.push(v2);
-      } else out.unknown.push(l);
-    }
-    return out;
-  }
-  function renderAudio(body, meta, origin = "") {
-    const a = parseAudio(body, meta);
-    if (!a.sources.length) return null;
-    return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
-  }
-  function weightWidths(weights) {
-    const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
-    const ws = weights.map((w2) => Math.round(100 * w2.n / total));
-    ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
-    return ws;
-  }
-  function renderReveal(body, meta) {
-    const r = parseReveal(body, meta);
-    if (!r.body && !r.weights && !r.note) return null;
-    const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
-    let top = "";
-    if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
-      const ws = weightWidths(r.weights);
-      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
-    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
-    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
-    if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
-    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
-  }
-  function renderDataBlock(name, body, meta = "", opts = {}) {
-    if (name === "reveal") return renderReveal(body, meta);
-    if (name === "audio") return renderAudio(body, meta, opts.origin || "");
-    if (name === "tags") {
-      const { tags } = parseTags(body);
-      if (!tags.length) return null;
-      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
-    }
-    if (name === "bar") {
-      const b = parseBar(body);
-      if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
-      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
-    }
-    if (name === "facts") {
-      const { rows } = parseFacts(body);
-      if (!rows.length) return null;
-      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
-    }
-    if (name === "button") {
-      const b = parseButton(body);
-      if (!b.label) return null;
-      const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
-      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
-    }
-    if (name === "stats") {
-      const s = parseStats(body);
-      if (!s.stats.length) return null;
-      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
-    }
-    return null;
-  }
-  function barWidthCss(scope = "") {
-    let css = "";
-    for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
-    return css;
-  }
-  var DIRECTORY_STYLES = ["youtube"];
-  function sortListPlaceholder(meta = "") {
-    const style = String(meta ?? "").trim();
-    return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
-  }
-  var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
-  function dataBlocksCss(scope, t) {
-    const s = scope;
-    return `${s} .gbti-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 .9em}
-${s} .gbti-tag{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid ${t.line2};color:${t.soft};font-family:${t.mono};font-size:12px;font-weight:500;line-height:1.2}
-${s} .gbti-tag-primary{background:${t.greenTint};color:${t.green700};border-color:${t.greenBorder}}
-${s} .gbti-bar{margin:1.1em 0 .9em}
-${s} .gbti-bar-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-${s} .gbti-bar-label{font-size:14px;color:${t.soft}}
-${s} .gbti-bar-value{font-family:${t.mono};font-weight:600;font-size:16px;color:${t.fg}}
-${s} .gbti-bar-track{display:block;height:10px;margin-top:6px;border-radius:4px;overflow:hidden;background:${t.rest}}
-${s} .gbti-bar-fill{display:block;height:100%;background:${t.green};box-shadow:2px 0 0 ${t.surface}}
-${s} .gbti-bar-note{margin-top:10px;font-family:${t.mono};font-size:13px;line-height:1.5;color:${t.mute}}
-${s} .gbti-facts{margin:1em 0;border-top:1px solid ${t.line}}
-${s} .gbti-fact{display:grid;grid-template-columns:minmax(90px,30%) minmax(0,1fr);gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid ${t.line}}
-${s} .gbti-fact dt{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute};margin:0}
-${s} .gbti-fact dd{margin:0;display:flex;align-items:center;gap:10px;font-size:15px;color:${t.fg}}
-${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
-${s} .gbti-button-row{margin:1em 0}
-${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
-${s} a.gbti-button:hover{background:${t.greenTint}}
-${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
-${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
-${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
-${s} .gbti-stats{margin:1em 0}
-${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
-${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
-${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
-${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
-${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
-${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
-${s} .gbti-reveal{margin:1.2em 0;padding:16px;border:1px solid ${t.line};border-radius:10px}
-${s} .gbti-reveal-weights{display:flex;gap:2px;height:14px;margin:0 0 12px}
-${s} .gbti-reveal-seg{display:block;flex:0 1 auto;min-width:4px}
-${s} .gbti-reveal-weights .gbti-reveal-seg:first-child{border-radius:4px 0 0 4px}
-${s} .gbti-reveal-weights .gbti-reveal-seg:last-child{border-radius:0 4px 4px 0}
-${s} .gbti-reveal-seg-1{background:#0f6f40}
-${s} .gbti-reveal-seg-2{background:#1f9e5f}
-${s} .gbti-reveal-seg-3{background:#4fbf86}
-${s} .gbti-reveal-seg-4{background:#93d9b4}
-${s} .gbti-reveal-seg-5{background:#c4ebd5}
-${s} .gbti-reveal-seg-6{background:#0b4f2e}
-${s} .gbti-reveal-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px;margin:0 0 12px;font-size:.9em}
-${s} .gbti-reveal-key{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow-wrap:normal}
-${s} .gbti-reveal-swatch{flex:none;width:10px;height:10px;border-radius:3px}
-${s} .gbti-reveal-name{font-weight:700;color:${t.fg}}
-${s} .gbti-reveal-pct{font-family:${t.mono};font-size:.85em;color:${t.soft}}
-${s} .gbti-reveal-note{margin:0 0 4px;font-size:.9em;color:${t.soft}}
-${s} .gbti-reveal-note strong{color:${t.fg}}
-${s} .gbti-reveal-more{margin:0}
-${s} .gbti-reveal-toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;list-style:none;font-size:.9em;font-weight:700;color:${t.green700}}
-${s} .gbti-reveal-toggle::-webkit-details-marker{display:none}
-${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
-${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
-${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
-${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
-${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:.9em}
-${s} .gbti-reveal-body p{margin:8px 0 12px}
-${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
-${s} .gbti-reveal-body ul{margin:0 0 12px}
-${s} .gbti-audio{margin:1.2em 0}
-${s} > .gbti-audio:first-child{margin-top:14px}
-${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
-${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
-${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
-${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
-${barWidthCss(s)}`;
   }
 
   // client/src/markdown.mjs
@@ -28696,6 +28741,98 @@ ${BLOCKED_PILL_CSS}
     };
   }
 
+  // client/src/audio-card.mjs
+  var SKIP_SECONDS = 10;
+  var ARROWS = ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"];
+  function formatTime(sec) {
+    const n = Number.isFinite(sec) && sec > 0 ? Math.floor(sec) : 0;
+    const h = Math.floor(n / 3600);
+    const m = Math.floor(n % 3600 / 60);
+    const ss = String(n % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+  }
+  function skipTo(current, key, duration) {
+    const step = { ArrowRight: SKIP_SECONDS, ArrowUp: SKIP_SECONDS, ArrowLeft: -SKIP_SECONDS, ArrowDown: -SKIP_SECONDS }[key] ?? 0;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+    return Math.min(end, Math.max(0, (Number(current) || 0) + step));
+  }
+  var positionText = (current, duration) => `${formatTime(current)} of ${formatTime(duration)}`;
+  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>';
+  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>';
+  function enhanceAudioCards(root) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll(".gbti-audio-card").forEach((card) => {
+      const audio = card.querySelector("audio");
+      const head = card.querySelector(".gbti-audio-head");
+      if (!audio || !head || card.dataset.enhanced) return;
+      card.dataset.enhanced = "1";
+      const label = card.querySelector(".gbti-audio-label")?.textContent || "the recording";
+      const doc = card.ownerDocument;
+      const el = (tag, cls) => Object.assign(doc.createElement(tag), { className: cls });
+      const row = el("div", "gbti-audio-row");
+      const btn = el("button", "gbti-audio-play");
+      btn.type = "button";
+      card.insertBefore(row, head);
+      row.append(btn, head);
+      const progress = el("div", "gbti-audio-progress");
+      progress.hidden = true;
+      const seek = el("input", "gbti-audio-seek");
+      Object.assign(seek, { type: "range", min: "0", max: "0", step: "any", value: "0" });
+      seek.setAttribute("aria-label", "Playback position");
+      const time = el("span", "gbti-audio-time");
+      progress.append(seek, time);
+      card.insertBefore(progress, audio);
+      audio.removeAttribute("controls");
+      let dragging = false;
+      const show = (pos2) => {
+        const d = audio.duration;
+        const known = Number.isFinite(d) && d > 0;
+        seek.style.setProperty("--p", `${known ? Math.min(100, pos2 / d * 100) : 0}%`);
+        seek.setAttribute("aria-valuetext", positionText(pos2, d));
+        time.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
+      };
+      const sync = () => {
+        const d = audio.duration;
+        if (Number.isFinite(d) && d > 0) seek.max = String(d);
+        if (dragging) return;
+        seek.value = String(audio.currentTime);
+        show(audio.currentTime);
+      };
+      const paint = () => {
+        const playing = !audio.paused && !audio.ended;
+        btn.innerHTML = playing ? PAUSE : PLAY;
+        btn.setAttribute("aria-label", `${playing ? "Pause" : "Play"}: ${label}`);
+      };
+      btn.addEventListener("click", () => {
+        if (audio.paused || audio.ended) audio.play()?.catch?.(() => {
+        });
+        else audio.pause();
+      });
+      audio.addEventListener("play", () => {
+        progress.hidden = false;
+        paint();
+        sync();
+      });
+      audio.addEventListener("pause", paint);
+      audio.addEventListener("ended", paint);
+      for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) audio.addEventListener(ev, sync);
+      seek.addEventListener("input", () => {
+        dragging = true;
+        show(Number(seek.value));
+      });
+      seek.addEventListener("change", () => {
+        dragging = false;
+        audio.currentTime = Number(seek.value);
+      });
+      seek.addEventListener("keydown", (e) => {
+        if (!ARROWS.includes(e.key)) return;
+        e.preventDefault();
+        audio.currentTime = skipTo(audio.currentTime, e.key, audio.duration);
+      });
+      paint();
+    });
+  }
+
   // client-ui/src/members-index.mjs
   var SITE21 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -29064,7 +29201,7 @@ ${BLOCKED_PILL_CSS}
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
-  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
+  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", card: "var(--panel)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */
@@ -29450,6 +29587,7 @@ ${BLOCKED_PILL_CSS}
       } });
       if (resolved) {
         this._enhanceCode();
+        enhanceAudioCards(this.root);
         this._wireFollow(it2);
         this._wireCopyAll();
         this._wireFootnotes();

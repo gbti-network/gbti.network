@@ -7,7 +7,7 @@ import { dataBlocksCss } from '../../../client/src/content-blocks.mjs';
 const blocksCss = dataBlocksCss('.prose-gbti', {
   fg: 'var(--fg)', soft: 'var(--fg-soft)', mute: 'var(--fg-mute)', line: 'var(--line)', line2: 'var(--line-2)', rest: 'var(--line-2)',
   green: 'var(--green)', green700: 'var(--green-700)', green700Solid: '#0f6f40', greenTint: 'var(--green-tint)',
-  greenBorder: 'color-mix(in srgb, var(--green) 40%, transparent)', surface: 'var(--paper-2)', mono: 'var(--f-mono)',
+  greenBorder: 'color-mix(in srgb, var(--green) 40%, transparent)', surface: 'var(--paper-2)', card: 'var(--paper)', mono: 'var(--f-mono)',
 });
 ---
 <style is:inline set:html={blocksCss}></style>
@@ -243,6 +243,8 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
 <script>
   // sow-452: a ```directory block becomes a sort bar over the entries after it.
   import { enhanceSortList } from '../../lib/sort-list.mjs';
+  // An ```audio block in the card style gets its play button and progress line (client/src/audio-card.mjs).
+  import { enhanceAudioCards } from '../../../client/src/audio-card.mjs';
   // sow-470: article tables get their numeric columns aligned, their overflow fade, and (only where the table
   // earns it) column sorting. The table itself is already styled and already scrolls without this.
   import { enhanceTables } from '../../lib/table-enhance.mjs';
@@ -255,6 +257,7 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
     if (html) wrap.outerHTML = html;
   });
   document.querySelectorAll('.prose-gbti').forEach((el) => enhanceSortList(el));
+  document.querySelectorAll('.prose-gbti').forEach((el) => enhanceAudioCards(el));
   document.querySelectorAll('.prose-gbti').forEach((el) => enhanceTables(el));
 
   // Code cards: upgrade every fenced code block in rendered prose into a card with a language tag + a

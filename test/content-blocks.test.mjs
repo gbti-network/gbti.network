@@ -101,7 +101,7 @@ test('styles: 101 width classes and every class the HTML uses', () => {
   assert.match(w, /\.x \.gbti-bar-w-0\{width:0%\}/);
   assert.match(w, /\.x \.gbti-bar-w-100\{width:100%\}/);
   assert.equal((w.match(/gbti-bar-w-/g) || []).length, 101);
-  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', green700Solid: 'h2', greenTint: 'i', greenBorder: 'j', surface: 'k', mono: 'm' });
+  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', green700Solid: 'h2', greenTint: 'i', greenBorder: 'j', surface: 'k', card: 'n', mono: 'm' });
   for (const c of ['gbti-tags', 'gbti-tag', 'gbti-tag-primary', 'gbti-bar', 'gbti-bar-head', 'gbti-bar-label', 'gbti-bar-value', 'gbti-bar-track', 'gbti-bar-fill', 'gbti-bar-note', 'gbti-facts', 'gbti-fact', 'gbti-bar-mini', 'gbti-button-row', 'gbti-button', 'gbti-button-primary', 'gbti-stats', 'gbti-stats-caption', 'gbti-stats-row', 'gbti-stat', 'gbti-stat-value', 'gbti-stat-label']) {
     assert.ok(css.includes(`.${c}`), `no rule for ${c}`);
   }

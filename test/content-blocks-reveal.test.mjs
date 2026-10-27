@@ -112,7 +112,7 @@ test('the doc editor keeps the block on a round trip', () => {
 });
 
 test('styles: a rule for every reveal class, and the open state swaps the label', () => {
-  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', green700Solid: 'h2', greenTint: 'i', greenBorder: 'j', surface: 'k', mono: 'm' });
+  const css = dataBlocksCss('.p', { fg: 'a', soft: 'b', mute: 'c', line: 'd', line2: 'e', rest: 'f', green: 'g', green700: 'h', green700Solid: 'h2', greenTint: 'i', greenBorder: 'j', surface: 'k', card: 'n', mono: 'm' });
   for (const c of ['gbti-reveal', 'gbti-reveal-weights', 'gbti-reveal-seg', 'gbti-reveal-seg-1', 'gbti-reveal-seg-6', 'gbti-reveal-legend', 'gbti-reveal-key', 'gbti-reveal-swatch', 'gbti-reveal-name', 'gbti-reveal-pct', 'gbti-reveal-note', 'gbti-reveal-more', 'gbti-reveal-toggle', 'gbti-reveal-chev', 'gbti-reveal-show', 'gbti-reveal-hide', 'gbti-reveal-body']) {
     assert.ok(css.includes(`.${c}`), `no rule for ${c}`);
   }

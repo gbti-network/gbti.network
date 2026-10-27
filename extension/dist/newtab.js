@@ -5674,14 +5674,18 @@ ${String(lines2[i]).trimStart()}`;
   }
   var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
   var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+  var AUDIO_STYLES = ["bar", "card"];
   var AUDIO_DEFAULT_LABEL = "Listen";
   function parseAudio(body, meta = "") {
-    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
     for (const l of lines(body)) {
       const { k, v: v2 } = keyValue(l);
       const key = (k || "").toLowerCase();
       if (key === "length") out.length = v2;
-      else if (key === "src") {
+      else if (key === "style") {
+        if (AUDIO_STYLES.includes(v2.toLowerCase())) out.style = v2.toLowerCase();
+        else out.badStyle = v2;
+      } else if (key === "src") {
         const m = v2.match(AUDIO_SRC_RE);
         if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
         else out.bad.push(v2);
@@ -5689,10 +5693,14 @@ ${String(lines2[i]).trimStart()}`;
     }
     return out;
   }
+  function setAudioStyle(body, style) {
+    const kept = String(body ?? "").split("\n").filter((l) => !/^\s*style\s*:/i.test(l));
+    return style === "card" ? ["style: card", ...kept].join("\n") : kept.join("\n");
+  }
   function renderAudio(body, meta, origin = "") {
     const a = parseAudio(body, meta);
     if (!a.sources.length) return null;
-    return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
   }
   function weightWidths(weights) {
     const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
@@ -5820,6 +5828,30 @@ ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 1
 ${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
 ${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
 ${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
+${s} .gbti-audio-card{display:flex;flex-direction:column;gap:12px;padding:14px 18px;border:1px solid ${t.line};border-radius:12px;background:${t.card};box-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04)}
+${s} .gbti-audio-card .gbti-audio-head{flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+${s} .gbti-audio-card .gbti-audio-label{font-size:16px}
+${s} .gbti-audio-card .gbti-audio-player{margin-top:0}
+${s} .gbti-audio-card[data-enhanced] .gbti-audio-player{display:none}
+${s} .gbti-audio-row{display:flex;align-items:center;gap:16px;min-width:0}
+${s} button.gbti-audio-play{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:0;padding:0;border:0;border-radius:999px;background:#1f9e5f;color:#fff;box-shadow:0 6px 16px rgba(31,158,95,.28);cursor:pointer}
+${s} button.gbti-audio-play:hover{background:#178a51;color:#fff}
+${s} button.gbti-audio-play:focus-visible{outline:2px solid ${t.green};outline-offset:3px}
+${s} .gbti-audio-play svg{display:block;width:22px;height:22px}
+${s} .gbti-audio-progress{display:flex;align-items:center;gap:10px}
+${s} .gbti-audio-progress[hidden]{display:none}
+${s} input.gbti-audio-seek{flex:1;min-width:0;width:auto;height:20px;margin:0;padding:0;border:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+${s} input.gbti-audio-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,${t.green700} var(--p,0%),${t.line2} var(--p,0%))}
+${s} input.gbti-audio-seek::-moz-range-track{height:4px;border-radius:2px;background:${t.line2}}
+${s} input.gbti-audio-seek::-moz-range-progress{height:4px;border-radius:2px;background:${t.green700}}
+${s} input.gbti-audio-seek::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek:hover::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
 ${barWidthCss(s)}`;
   }
 
@@ -11492,6 +11524,7 @@ ${String(body ?? "")}`;
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
   .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
+  .ce.ce-code:focus { background:var(--ink); } /* a code block keeps its dark surface while edited, or its light text sits on white */
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
   .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:24px; line-height:1.25; padding:10px 0 3px; }
@@ -11866,8 +11899,11 @@ ${listStyleProseCss(".doc-blocks")}
           const bar = `<div class="cvar"><span class="cvar-lab">${svg3("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
           return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg3("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
-        case "code":
-          return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
+        case "code": {
+          const audioStyle = /^audio(\s|$)/.test(b.lang || "") ? parseAudio(b.code || "").style : null;
+          const bar = audioStyle ? `<div class="cvar"><span class="cvar-lab">${svg3("gear")} Player style</span>${AUDIO_STYLES.map((x) => `<button type="button" class="${x === audioStyle ? "on" : ""}" data-astyle="${b._id}" data-aval="${x}">${x}</button>`).join("")}</div>` : "";
+          return bar + `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
+        }
         case "list": {
           const items = Array.isArray(b.items) && b.items.length ? b.items : [""];
           return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs: `class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}"` });
@@ -11993,6 +12029,15 @@ ${listStyleProseCss(".doc-blocks")}
         const b = this._byId(el.dataset.cvar);
         if (b) {
           b.variant = el.dataset.cval;
+          this._render();
+          this._focusBlock(b._id);
+          this._change();
+        }
+      }));
+      this.$$("[data-astyle]").forEach((el) => el.addEventListener("click", () => {
+        const b = this._byId(el.dataset.astyle);
+        if (b) {
+          b.code = setAudioStyle(b.code || "", el.dataset.aval);
           this._render();
           this._focusBlock(b._id);
           this._change();
@@ -31172,6 +31217,98 @@ ${BLOCKED_PILL_CSS}
     };
   }
 
+  // client/src/audio-card.mjs
+  var SKIP_SECONDS = 10;
+  var ARROWS = ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"];
+  function formatTime(sec) {
+    const n = Number.isFinite(sec) && sec > 0 ? Math.floor(sec) : 0;
+    const h = Math.floor(n / 3600);
+    const m = Math.floor(n % 3600 / 60);
+    const ss = String(n % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+  }
+  function skipTo(current, key, duration) {
+    const step = { ArrowRight: SKIP_SECONDS, ArrowUp: SKIP_SECONDS, ArrowLeft: -SKIP_SECONDS, ArrowDown: -SKIP_SECONDS }[key] ?? 0;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+    return Math.min(end, Math.max(0, (Number(current) || 0) + step));
+  }
+  var positionText = (current, duration) => `${formatTime(current)} of ${formatTime(duration)}`;
+  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>';
+  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>';
+  function enhanceAudioCards(root) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll(".gbti-audio-card").forEach((card) => {
+      const audio = card.querySelector("audio");
+      const head = card.querySelector(".gbti-audio-head");
+      if (!audio || !head || card.dataset.enhanced) return;
+      card.dataset.enhanced = "1";
+      const label = card.querySelector(".gbti-audio-label")?.textContent || "the recording";
+      const doc = card.ownerDocument;
+      const el = (tag, cls) => Object.assign(doc.createElement(tag), { className: cls });
+      const row = el("div", "gbti-audio-row");
+      const btn = el("button", "gbti-audio-play");
+      btn.type = "button";
+      card.insertBefore(row, head);
+      row.append(btn, head);
+      const progress = el("div", "gbti-audio-progress");
+      progress.hidden = true;
+      const seek = el("input", "gbti-audio-seek");
+      Object.assign(seek, { type: "range", min: "0", max: "0", step: "any", value: "0" });
+      seek.setAttribute("aria-label", "Playback position");
+      const time = el("span", "gbti-audio-time");
+      progress.append(seek, time);
+      card.insertBefore(progress, audio);
+      audio.removeAttribute("controls");
+      let dragging = false;
+      const show = (pos2) => {
+        const d = audio.duration;
+        const known = Number.isFinite(d) && d > 0;
+        seek.style.setProperty("--p", `${known ? Math.min(100, pos2 / d * 100) : 0}%`);
+        seek.setAttribute("aria-valuetext", positionText(pos2, d));
+        time.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
+      };
+      const sync = () => {
+        const d = audio.duration;
+        if (Number.isFinite(d) && d > 0) seek.max = String(d);
+        if (dragging) return;
+        seek.value = String(audio.currentTime);
+        show(audio.currentTime);
+      };
+      const paint = () => {
+        const playing = !audio.paused && !audio.ended;
+        btn.innerHTML = playing ? PAUSE : PLAY;
+        btn.setAttribute("aria-label", `${playing ? "Pause" : "Play"}: ${label}`);
+      };
+      btn.addEventListener("click", () => {
+        if (audio.paused || audio.ended) audio.play()?.catch?.(() => {
+        });
+        else audio.pause();
+      });
+      audio.addEventListener("play", () => {
+        progress.hidden = false;
+        paint();
+        sync();
+      });
+      audio.addEventListener("pause", paint);
+      audio.addEventListener("ended", paint);
+      for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) audio.addEventListener(ev, sync);
+      seek.addEventListener("input", () => {
+        dragging = true;
+        show(Number(seek.value));
+      });
+      seek.addEventListener("change", () => {
+        dragging = false;
+        audio.currentTime = Number(seek.value);
+      });
+      seek.addEventListener("keydown", (e) => {
+        if (!ARROWS.includes(e.key)) return;
+        e.preventDefault();
+        audio.currentTime = skipTo(audio.currentTime, e.key, audio.duration);
+      });
+      paint();
+    });
+  }
+
   // client-ui/src/members-index.mjs
   var SITE24 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -31540,7 +31677,7 @@ ${BLOCKED_PILL_CSS}
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
-  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
+  ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", card: "var(--panel)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */
@@ -31926,6 +32063,7 @@ ${BLOCKED_PILL_CSS}
       } });
       if (resolved) {
         this._enhanceCode();
+        enhanceAudioCards(this.root);
         this._wireFollow(it2);
         this._wireCopyAll();
         this._wireFootnotes();

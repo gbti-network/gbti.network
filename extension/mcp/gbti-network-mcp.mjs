@@ -18692,14 +18692,18 @@ function parseReveal(body, meta3 = "") {
 }
 var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+var AUDIO_STYLES = ["bar", "card"];
 var AUDIO_DEFAULT_LABEL = "Listen";
 function parseAudio(body, meta3 = "") {
-  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
   for (const l of lines(body)) {
     const { k, v } = keyValue(l);
     const key = (k || "").toLowerCase();
     if (key === "length") out.length = v;
-    else if (key === "src") {
+    else if (key === "style") {
+      if (AUDIO_STYLES.includes(v.toLowerCase())) out.style = v.toLowerCase();
+      else out.badStyle = v;
+    } else if (key === "src") {
       const m = v.match(AUDIO_SRC_RE);
       if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] });
       else out.bad.push(v);
@@ -18763,7 +18767,8 @@ function checkComponentBlocks(md) {
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
       for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
       if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
-      for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
+      if (a.badStyle) warn(`audio style "${a.badStyle}" is not known; use bar or card (it shows as bar)`);
+      for (const u of a.unknown) warn(`audio line "${u}" is not src:, length: or style:`);
     }
     if (name === "reveal") {
       const r = parseReveal(text, meta3);
@@ -20454,8 +20459,9 @@ ${F}`,
   {
     name: "audio",
     kind: "fence",
-    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus in an .ogg file first, then an MP3 copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play.",
+    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus in an .ogg file first, then an MP3 copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play. Add a style: card line for the card look (a green play button beside the label, then a progress line once it plays); without it the block shows the browser bar. In the WorkBench the Player style buttons above the block set it.",
     syntax: `${F}audio <label...>
+style: card (optional)
 length: <how long>
 src: /media/podcasts/<name>.ogg
 src: /media/podcasts/<name>.mp3
@@ -20465,7 +20471,7 @@ length: 22 minutes
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ${F}`,
-    renders: "Site, preview and reader: the label, the length, then the player. Cross-posts: the label as a link to the MP3 file, with the length."
+    renders: "Site, preview and reader: the label, the length, then the player (or the card with its play button). Cross-posts: the label as a link to the MP3 file, with the length."
   },
   {
     name: "image layout",

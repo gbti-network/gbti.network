@@ -16,6 +16,7 @@
 //     the page from the start either way, and a dynamic import beside a static one only earns a build warning.
 import { initToc, initCarousel, slugifyHeading } from './pd-enhance.mjs';
 import { enhanceSortList } from './sort-list.mjs';
+import { enhanceAudioCards } from '../../client/src/audio-card.mjs'; // an ```audio card's play button and progress line
 import {
   normalizeGallery, hasCaptions, resolveGalleryStyle, buildToc,
   repoUrl as findRepo, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHeroForType, iconForUrl,
@@ -411,6 +412,7 @@ export async function initWorkbenchPreview() {
     }
     bodyEl.innerHTML = draft.__html || '';
     enhanceSortList(bodyEl); // sow-452: a ```directory block gets its sort bar here too
+    enhanceAudioCards(bodyEl); // the podcast card, as on the article page
   };
 
   // Contents rail. The published page reuses the ids Astro generated at build; the client-side renderer

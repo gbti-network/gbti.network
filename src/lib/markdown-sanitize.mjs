@@ -50,7 +50,7 @@ export const sanitizeSchema = {
   tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption', 'audio', 'source'])], // figure: a captioned image; audio: the ```audio block
   attributes: {
     ...defaultSchema.attributes,
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist(-youtube)?$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row|stats|stats-caption|stats-row|stat|reveal|reveal-weights|reveal-legend|reveal-note|reveal-body|audio|audio-head)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
+    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$|^embed-lightbox$|^md-tweet$|^sortlist(-youtube)?$|^gbti-(tags|bar|bar-head|bar-note|fact|button-row|stats|stats-caption|stats-row|stat|reveal|reveal-weights|reveal-legend|reveal-note|reveal-body|audio|audio-card|audio-head)$/]], // sow-261: a comment's tweet block; sow-452: a sortable list
     iframe: [['src'], 'loading', 'allowFullScreen', 'title', 'allow', 'sandbox'],
     // sow-453: ```button adds one class. The default schema already lists a className rule for footnote links, and a
     // second className entry is ignored, so the two are merged into one rule.

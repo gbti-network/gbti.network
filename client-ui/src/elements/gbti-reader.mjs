@@ -19,7 +19,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { sourceCardModel } from '../../../client/src/share-source.mjs'; // sow-222: the shared source-card decision
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
-import { dataBlocksCss } from '../../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button
+import { dataBlocksCss } from '../../../client/src/content-blocks.mjs';
+import { enhanceAudioCards } from '../../../client/src/audio-card.mjs'; // an ```audio card's play button and progress line // sow-453: tags, bar, facts, button
 import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
@@ -188,7 +189,7 @@ const CSS = `
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
-  ${dataBlocksCss('.body', { fg: 'var(--fg)', soft: 'var(--muted)', mute: 'var(--muted)', line: 'var(--line)', line2: 'var(--line)', rest: 'var(--line)', green: 'var(--accent)', green700: 'var(--accent)', green700Solid: '#0f6f40', greenTint: 'rgba(31,158,95,.12)', greenBorder: 'rgba(31,158,95,.4)', surface: 'var(--bg, transparent)', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace' })}
+  ${dataBlocksCss('.body', { fg: 'var(--fg)', soft: 'var(--muted)', mute: 'var(--muted)', line: 'var(--line)', line2: 'var(--line)', rest: 'var(--line)', green: 'var(--accent)', green700: 'var(--accent)', green700Solid: '#0f6f40', greenTint: 'rgba(31,158,95,.12)', greenBorder: 'rgba(31,158,95,.4)', surface: 'var(--bg, transparent)', card: 'var(--panel)', mono: 'ui-monospace, SFMono-Regular, Menlo, monospace' })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */
@@ -677,7 +678,7 @@ class GbtiReader extends GbtiElement {
     if (proj) wireProjectView(this.root, proj);
     // An inline style, not [hidden]: the cover's own display rule outranks [hidden] inside a shadow root.
     if (tweet) wireTweets(this.root, { onReady: () => { const c = this.$('img.cover'); if (c) c.style.display = 'none'; } });
-    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); if (this._skill) wireSkillPage(this.root); }
+    if (resolved) { this._enhanceCode(); enhanceAudioCards(this.root); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); if (this._skill) wireSkillPage(this.root); }
   }
 
   // GFM footnote anchors live inside this shadow root, where the browser's own fragment navigation cannot

@@ -25,6 +25,7 @@ author: atwellpub
 ---
 
 ```audio Listen to the podcast version
+style: card
 length: 22 minutes
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3

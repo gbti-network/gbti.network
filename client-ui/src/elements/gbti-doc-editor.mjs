@@ -19,6 +19,7 @@ import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* e
 import { imageLayoutButtonsHtml } from '../image-layout-ui.mjs'; // Natural | Full width, Left | Center | Right, Wrap text
 import { DOC_EDITOR_CSS as CSS } from '../doc-editor-css.mjs'; // sow-327: the stylesheet, split out at the 900-line cap
 import { applyImageLayoutAction, normalizeImageLayout } from '../../../client/src/image-attrs.mjs'; // what one of those clicks means
+import { AUDIO_STYLES, parseAudio, setAudioStyle } from '../../../client/src/content-blocks.mjs'; // the podcast block's Player style
 
 let UID = 0;
 const withId = (b) => { if (b && !b._id) b._id = ++UID; return b; };
@@ -239,9 +240,13 @@ class GbtiDocEditor extends GbtiElement {
         const bar = `<div class="cvar"><span class="cvar-lab">${svg('gear')} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? 'on' : ''}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join('')}</div>`;
         return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg('info')}</span>${this._ce('', 'text', b, 'Callout text')}</div></div>`;
       }
-      case 'code':
-        return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
+      case 'code': {
+        // An ```audio block (the podcast player) gets the callout's style bar: Bar (the default) or Card (owner, 2026-10-26).
+        const audioStyle = /^audio(\s|$)/.test(b.lang || '') ? parseAudio(b.code || '').style : null;
+        const bar = audioStyle ? `<div class="cvar"><span class="cvar-lab">${svg('gear')} Player style</span>${AUDIO_STYLES.map((x) => `<button type="button" class="${x === audioStyle ? 'on' : ''}" data-astyle="${b._id}" data-aval="${x}">${x}</button>`).join('')}</div>` : '';
+        return bar + `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
           + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
+      }
       case 'list': {
         // Nested lists render nested (children inside their parent's <li>); the outermost tag is the editable host.
         // Tab / Shift+Tab move the item under the caret (see _wire).
@@ -366,6 +371,10 @@ class GbtiDocEditor extends GbtiElement {
     this.$$('[data-cvar]').forEach((el) => el.addEventListener('click', () => {
       const b = this._byId(el.dataset.cvar);
       if (b) { b.variant = el.dataset.cval; this._render(); this._focusBlock(b._id); this._change(); }
+    }));
+    this.$$('[data-astyle]').forEach((el) => el.addEventListener('click', () => {
+      const b = this._byId(el.dataset.astyle);
+      if (b) { b.code = setAudioStyle(b.code || '', el.dataset.aval); this._render(); this._focusBlock(b._id); this._change(); }
     }));
     // SOW-169: table structure controls. Each mutates the model then re-renders (structural, so caret loss is fine).
     const tblCols = (b) => Math.max(1, (Array.isArray(b.head) ? b.head.length : 1));

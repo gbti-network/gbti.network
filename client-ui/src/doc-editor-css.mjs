@@ -53,6 +53,7 @@ export const DOC_EDITOR_CSS = `
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
   .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
+  .ce.ce-code:focus { background:var(--ink); } /* a code block keeps its dark surface while edited, or its light text sits on white */
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
   .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:24px; line-height:1.25; padding:10px 0 3px; }

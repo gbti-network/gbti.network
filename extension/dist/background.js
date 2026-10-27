@@ -18422,14 +18422,18 @@ function revealBodyHtml(md) {
 }
 var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+var AUDIO_STYLES = ["bar", "card"];
 var AUDIO_DEFAULT_LABEL = "Listen";
 function parseAudio(body, meta3 = "") {
-  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", sources: [], bad: [], unknown: [] };
+  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
   for (const l of lines(body)) {
     const { k, v } = keyValue(l);
     const key = (k || "").toLowerCase();
     if (key === "length") out.length = v;
-    else if (key === "src") {
+    else if (key === "style") {
+      if (AUDIO_STYLES.includes(v.toLowerCase())) out.style = v.toLowerCase();
+      else out.badStyle = v;
+    } else if (key === "src") {
       const m = v.match(AUDIO_SRC_RE);
       if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] });
       else out.bad.push(v);
@@ -18440,7 +18444,7 @@ function parseAudio(body, meta3 = "") {
 function renderAudio(body, meta3, origin = "") {
   const a = parseAudio(body, meta3);
   if (!a.sources.length) return null;
-  return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc2(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc2(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + a.sources.map((x) => `<source src="${esc2(origin + x.src)}" type="${esc2(x.type)}">`).join("") + "</audio></div>";
+  return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc2(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc2(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + a.sources.map((x) => `<source src="${esc2(origin + x.src)}" type="${esc2(x.type)}">`).join("") + "</audio></div>";
 }
 function weightWidths(weights) {
   const total = weights.reduce((a, w) => a + w.n, 0) || 1;

@@ -177,15 +177,21 @@ function revealBodyHtml(md) {
 // 2026-10-26), so Chrome could not read the recording's length and a reader could not skip ahead.
 export const AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 export const AUDIO_TYPES = { ogg: 'audio/ogg; codecs=opus', mp3: 'audio/mpeg' };
+// The two looks (owner, 2026-10-26): bar (option A, the default) and card (option B: a green play button beside the
+// label, then a progress line once it plays; client/src/audio-card.mjs draws it). A `style: card` line picks the card.
+export const AUDIO_STYLES = ['bar', 'card'];
 const AUDIO_DEFAULT_LABEL = 'Listen';
 const SITE_ORIGIN = 'https://gbti.network';
 
 export function parseAudio(body, meta = '') {
-  const out = { label: String(meta ?? '').trim() || AUDIO_DEFAULT_LABEL, length: '', sources: [], bad: [], unknown: [] };
+  const out = { label: String(meta ?? '').trim() || AUDIO_DEFAULT_LABEL, length: '', style: 'bar', badStyle: '', sources: [], bad: [], unknown: [] };
   for (const l of lines(body)) {
     const { k, v } = keyValue(l);
     const key = (k || '').toLowerCase();
     if (key === 'length') out.length = v;
+    else if (key === 'style') {
+      if (AUDIO_STYLES.includes(v.toLowerCase())) out.style = v.toLowerCase(); else out.badStyle = v;
+    }
     else if (key === 'src') {
       const m = v.match(AUDIO_SRC_RE);
       if (m) out.sources.push({ src: v, type: AUDIO_TYPES[m[1]] }); else out.bad.push(v);
@@ -194,12 +200,19 @@ export function parseAudio(body, meta = '') {
   return out;
 }
 
+/** The block body with its style set (the WorkBench's Player style buttons). The bar is the default, so choosing it
+ *  removes the line rather than writing one; the card's line goes first. */
+export function setAudioStyle(body, style) {
+  const kept = String(body ?? '').split('\n').filter((l) => !/^\s*style\s*:/i.test(l));
+  return style === 'card' ? ['style: card', ...kept].join('\n') : kept.join('\n');
+}
+
 // origin: '' on the site, where a /media/ path is the page's own; the extension reader runs on chrome-extension://,
 // so markdown.mjs passes the site origin and the files still come from gbti.network.
 function renderAudio(body, meta, origin = '') {
   const a = parseAudio(body, meta);
   if (!a.sources.length) return null;
-  return `<div class="gbti-audio"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
+  return `<div class="gbti-audio${a.style === 'card' ? ' gbti-audio-card' : ''}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
     + (a.length ? ` <span class="gbti-audio-length">${esc(a.length)}</span>` : '') + '</div>'
     + `<audio class="gbti-audio-player" controls preload="none" aria-label="${esc(a.label)}">`
     + a.sources.map((x) => `<source src="${esc(origin + x.src)}" type="${esc(x.type)}">`).join('') + '</audio></div>';
@@ -375,7 +388,8 @@ export function checkComponentBlocks(md) {
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
       for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
       if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
-      for (const u of a.unknown) warn(`audio line "${u}" is not src: or length:`);
+      if (a.badStyle) warn(`audio style "${a.badStyle}" is not known; use bar or card (it shows as bar)`);
+      for (const u of a.unknown) warn(`audio line "${u}" is not src:, length: or style:`);
     }
     if (name === 'reveal') {
       const r = parseReveal(text, meta);
@@ -461,5 +475,29 @@ ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 1
 ${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
 ${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
 ${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
+${s} .gbti-audio-card{display:flex;flex-direction:column;gap:12px;padding:14px 18px;border:1px solid ${t.line};border-radius:12px;background:${t.card};box-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04)}
+${s} .gbti-audio-card .gbti-audio-head{flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+${s} .gbti-audio-card .gbti-audio-label{font-size:16px}
+${s} .gbti-audio-card .gbti-audio-player{margin-top:0}
+${s} .gbti-audio-card[data-enhanced] .gbti-audio-player{display:none}
+${s} .gbti-audio-row{display:flex;align-items:center;gap:16px;min-width:0}
+${s} button.gbti-audio-play{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:0;padding:0;border:0;border-radius:999px;background:#1f9e5f;color:#fff;box-shadow:0 6px 16px rgba(31,158,95,.28);cursor:pointer}
+${s} button.gbti-audio-play:hover{background:#178a51;color:#fff}
+${s} button.gbti-audio-play:focus-visible{outline:2px solid ${t.green};outline-offset:3px}
+${s} .gbti-audio-play svg{display:block;width:22px;height:22px}
+${s} .gbti-audio-progress{display:flex;align-items:center;gap:10px}
+${s} .gbti-audio-progress[hidden]{display:none}
+${s} input.gbti-audio-seek{flex:1;min-width:0;width:auto;height:20px;margin:0;padding:0;border:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+${s} input.gbti-audio-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,${t.green700} var(--p,0%),${t.line2} var(--p,0%))}
+${s} input.gbti-audio-seek::-moz-range-track{height:4px;border-radius:2px;background:${t.line2}}
+${s} input.gbti-audio-seek::-moz-range-progress{height:4px;border-radius:2px;background:${t.green700}}
+${s} input.gbti-audio-seek::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek:hover::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
 ${barWidthCss(s)}`;
 }
