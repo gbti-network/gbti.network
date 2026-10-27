@@ -3034,8 +3034,8 @@ ${barWidthCss(s)}`;
       const seek = el("input", "gbti-audio-seek");
       Object.assign(seek, { type: "range", min: "0", max: "0", step: "any", value: "0" });
       seek.setAttribute("aria-label", "Playback position");
-      const time = el("span", "gbti-audio-time");
-      progress.append(seek, time);
+      const time3 = el("span", "gbti-audio-time");
+      progress.append(seek, time3);
       card.insertBefore(progress, audio);
       audio.removeAttribute("controls");
       let dragging = false;
@@ -3044,7 +3044,7 @@ ${barWidthCss(s)}`;
         const known = Number.isFinite(d) && d > 0;
         seek.style.setProperty("--p", `${known ? Math.min(100, pos2 / d * 100) : 0}%`);
         seek.setAttribute("aria-valuetext", positionText(pos2, d));
-        time.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
+        time3.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
       };
       const sync = () => {
         const d = audio.duration;
@@ -4882,7 +4882,9 @@ ${listStyleProseCss(".doc-blocks")}
   function followPublishedItem(editing, res) {
     if (!editing) return editing ?? null;
     const path = typeof res?.path === "string" && res.path ? res.path : editing.path;
-    return { ...editing, path, staged: false, authorTarget: null };
+    const base = typeof res?.base === "string" ? res.base : null;
+    const replaced = typeof res?.replaced === "string" ? res.replaced : editing.base ?? null;
+    return { ...editing, path, staged: false, authorTarget: null, base, prevBase: base ? replaced : null, behind: null, draftKey: null };
   }
 
   // client-ui/src/editor-core.mjs
@@ -8779,7 +8781,10 @@ ${listStyleProseCss(".doc-blocks")}
         /* sow-327: the banner becomes a column (text, then the answer) while keeping its icon at the left. */
         .pubinfo .pi-body { flex:1; min-width:0; }
         .pi-link { font:inherit; font-weight:700; color:var(--s-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-        .pi-link:hover { color:var(--s-green-fg); }
+        .pi-link:hover { color:var(--s-green-fg); background:none; } /* BASE_CSS button:hover (0,1,1) outranks .pi-link's own background:none, and filled the link green */
+        /* sow-482: the behind and refused-publish banners carry two buttons; long labels wrap rather than overflow a phone */
+        .pi-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .pi-acts .ebtn { white-space:normal; text-align:left; font-size:13px; padding:7px 13px; }
         .chg { margin-top:9px; border-top:1px solid var(--s-tint-2); padding-top:9px; }
         .chg[hidden] { display:none; }
         .chg ol { margin:0; padding-left:20px; }
@@ -10282,18 +10287,94 @@ ${listStyleProseCss(".doc-blocks")}
     items.push(...blockChanges(live.body, d.body));
     return { isNew: false, metaUnread, items, blockCount: parseBlocks(d.body ?? "").length };
   }
-  function changeLabel(item) {
+  function changeLabel(item, { newer = false } = {}) {
     if (!item) return "";
-    if (item.kind === "field") return `${item.label} changed`;
-    if (item.kind === "note") return `${item.label} changed`;
+    if (item.kind === "field" || item.kind === "note") return newer ? `${item.label} differs` : `${item.label} changed`;
     const noun = blockNoun(item.type);
-    if (item.op === "coarse") return "The body changed substantially";
-    if (item.op === "added") return `${noun} added`;
-    if (item.op === "removed") return `${noun} removed`;
-    return `${noun} edited`;
+    if (item.op === "coarse") return newer ? "The body differs substantially" : "The body changed substantially";
+    if (item.op === "added") return newer ? `${noun} only in this version` : `${noun} added`;
+    if (item.op === "removed") return newer ? `${noun} only in the published version` : `${noun} removed`;
+    return newer ? `${noun} differs` : `${noun} edited`;
+  }
+
+  // client/src/content-base.mjs
+  var HEX = /^[0-9a-f]{16}$/;
+  var baseOf = (v2) => typeof v2 === "string" && HEX.test(v2) ? v2 : null;
+  var time = (v2) => {
+    const t = Date.parse(String(v2 ?? ""));
+    return Number.isFinite(t) ? t : null;
+  };
+  function draftBehind({ base, savedAt, committedBase, lastAt } = {}) {
+    if (baseOf(base) && baseOf(committedBase)) return base !== committedBase;
+    const saved = time(savedAt);
+    const changed = time(lastAt);
+    return saved != null && changed != null && changed > saved;
+  }
+
+  // client-ui/src/draft-behind.mjs
+  var BEHIND_BASE = "0000000000000000";
+  var NOUN = { post: "article", project: "project", product: "project", prompt: "prompt" };
+  var itemNoun = (type) => NOUN[type] || "item";
+  var time2 = (v2) => {
+    const t = Date.parse(String(v2 ?? ""));
+    return Number.isFinite(t) ? t : null;
+  };
+  function fmtWhen(value) {
+    const t = time2(value);
+    if (t == null) return "";
+    try {
+      return new Date(t).toLocaleString(void 0, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  }
+  function behindMessage({ publishedAt, savedAt, type } = {}, fmt = fmtWhen) {
+    const noun = itemNoun(type);
+    const pub = time2(publishedAt);
+    const saved = time2(savedAt);
+    const tail = "This draft does not have those changes.";
+    if (pub != null && saved != null && pub > saved) return `The published ${noun} changed on ${fmt(publishedAt)}, after this draft was saved on ${fmt(savedAt)}. ${tail}`;
+    if (pub != null) return `The published ${noun} changed on ${fmt(publishedAt)}, after this draft was started. ${tail}`;
+    return `The published ${noun} changed after this draft was started. ${tail}`;
+  }
+  var staleMessage = (type) => `The published ${itemNoun(type)} changed after you opened this. Publishing now would replace those changes.`;
+  var forceConfirmMessage = (type) => `Publish anyway? The changes made to the published ${itemNoun(type)} since you opened this are replaced.`;
+  var staleDraftRowMessage = (type) => `The published ${itemNoun(type)} changed after this draft was saved, so it was not published. Open the draft to see what changed.`;
+  async function openPublishedInto(ws, { discard = false } = {}) {
+    const e = ws?._editing;
+    if (!e?.path) return;
+    try {
+      if (discard && e.draftKey) await ws.client.discardDraft(e.draftKey);
+      ws._drafts = null;
+      ws._overview = null;
+      const full = await ws.client.getContentItem({ path: e.path });
+      ws._editing = { type: e.type, frontmatter: full.frontmatter, body: full.body, path: e.path, skillFile: typeof full.skillFile === "string" ? full.skillFile : null, base: typeof full.base === "string" ? full.base : null };
+      ws._writeHash(`#tab=${encodeURIComponent(ws._tab)}&edit=${encodeURIComponent(e.path)}`);
+      ws.render();
+    } catch (err) {
+      ws.$?.("gbti-content-editor")?.showProblem?.(err?.message || "Could not open the published version. Reload the page and try again.");
+    }
+  }
+  async function checkDraftBehind(client, full, d) {
+    let base = baseOf(full?.base);
+    const path = full?.path || d?.path || "";
+    if (!path || d?.store === "repo" || typeof client?.getContentItem !== "function") return { behind: null, base };
+    const [committed, stats] = await Promise.all([
+      Promise.resolve().then(() => client.getContentItem({ path })).catch(() => null),
+      typeof client.itemStats === "function" ? Promise.resolve().then(() => client.itemStats({ path })).catch(() => null) : null
+    ]);
+    if (!committed) return { behind: null, base };
+    const committedBase = baseOf(committed.base);
+    const lastAt = typeof stats?.lastAt === "string" ? stats.lastAt : null;
+    const savedAt = typeof full?.savedAt === "string" ? full.savedAt : null;
+    if (draftBehind({ base, savedAt, committedBase, lastAt })) return { behind: { publishedAt: lastAt, savedAt }, base: base || BEHIND_BASE };
+    if (!base && lastAt && savedAt) base = committedBase;
+    return { behind: null, base };
   }
 
   // client-ui/src/elements/editor-actions.mjs
+  var stagedBannerHtml = () => `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>`;
+  var behindBannerHtml = ({ publishedAt, savedAt, type } = {}) => `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>${esc2(behindMessage({ publishedAt, savedAt, type }))} <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="pi-acts"><button type="button" class="ebtn ebtn-primary" id="behinddiscard">Discard this draft and open the published version</button><button type="button" class="ebtn" id="behindkeep">Keep editing the draft</button></div><div class="chg" id="changedlist" hidden></div></div></div>`;
   var withEditorActions = (Base2) => class extends Base2 {
     out(html, cls = "muted") {
       const o = this.$("#out");
@@ -10439,18 +10520,22 @@ ${listStyleProseCss(".doc-blocks")}
       if (!res.items.length) {
         return unread || '<p class="chg-msg">Nothing differs from the live version right now. The saved draft matches what is published.</p>';
       }
-      const row = (was, now) => `<span class="chg-v"><i>was</i> ${esc2(was)}</span><span class="chg-v"><i>now</i> ${esc2(now)}</span>`;
+      const newerSide = Boolean(this._behind || this._stale);
+      const [wasW, nowW] = newerSide ? ["published", "here"] : ["was", "now"];
+      const label = (it2) => changeLabel(it2, { newer: newerSide });
+      const row = (was, now) => `<span class="chg-v"><i>${wasW}</i> ${esc2(was)}</span><span class="chg-v"><i>${nowW}</i> ${esc2(now)}</span>`;
       const li = res.items.map((it2) => {
-        const head = it2.kind === "block" && Number.isInteger(it2.index) && it2.op !== "removed" ? `<button type="button" class="chg-jump" data-jump="${it2.index}">${esc2(changeLabel(it2))}</button>` : `<span class="chg-h">${esc2(changeLabel(it2))}</span>`;
+        const head = it2.kind === "block" && Number.isInteger(it2.index) && it2.op !== "removed" ? `<button type="button" class="chg-jump" data-jump="${it2.index}">${esc2(label(it2))}</button>` : `<span class="chg-h">${esc2(label(it2))}</span>`;
         if (it2.kind === "field" || it2.kind === "note") return `<li>${head}${row(formatValue(it2.was), formatValue(it2.now))}</li>`;
-        if (it2.op === "coarse") return `<li>${head}<span class="chg-v">${esc2(it2.was)} live, ${esc2(it2.now)} in this draft</span></li>`;
+        if (it2.op === "coarse") return `<li>${head}<span class="chg-v">${esc2(it2.was)} live, ${esc2(it2.now)} in this ${this.staged ? "draft" : "editor"}</span></li>`;
         if (it2.op === "added") return `<li>${head}<span class="chg-v">${esc2(snippet(it2.now))}</span></li>`;
-        if (it2.op === "removed") return `<li>${head}<span class="chg-v"><i>was</i> ${esc2(snippet(it2.was))}</span></li>`;
+        if (it2.op === "removed") return `<li>${head}<span class="chg-v"><i>${wasW}</i> ${esc2(snippet(it2.was))}</span></li>`;
         return `<li>${head}${row(snippet(it2.was), snippet(it2.now))}</li>`;
       }).join("");
-      return `${unread}<ol>${li}</ol>`;
+      const newer = newerSide ? `<p class="chg-msg">The published version is newer than this ${this.staged ? "draft" : "editor"}. Publishing would undo each difference below.</p>` : "";
+      return `${unread}${newer}<ol>${li}</ol>`;
     }
-    async doPublish() {
+    async doPublish({ force = false } = {}) {
       this._bannerClear();
       const restore = this._btnBusy("#publish", "Publishing…");
       this._setChip("Publishing…", "busy");
@@ -10481,11 +10566,21 @@ ${listStyleProseCss(".doc-blocks")}
           input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
         const authorTarget = authorTargetFor(this.$("#ownerSelect")?.value, this._ownerSelInitial);
-        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, authorTarget, ...skillFile !== void 0 ? { skillFile } : {} });
+        const bases = [this._base, this._prevBase].filter((b) => typeof b === "string");
+        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, ...bases.length ? { bases } : {}, ...force ? { force: true } : {}, authorTarget, ...skillFile !== void 0 ? { skillFile } : {} });
         this._setChip(`${CHECK3} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
         this.staged = false;
+        if (typeof res?.base === "string") {
+          this._prevBase = typeof res.replaced === "string" ? res.replaced : this._base;
+          this._base = res.base;
+        } else {
+          this._base = null;
+          this._prevBase = null;
+        }
+        this._behind = null;
+        this._stale = false;
         if (this.preset?.input) this.preset.input.status = "published";
         const liveEl = this.$("[data-livelabel]");
         if (liveEl) liveEl.textContent = "Live";
@@ -10516,6 +10611,10 @@ ${listStyleProseCss(".doc-blocks")}
         this.emit("gbti-published", res);
       } catch (err) {
         this._setChip("");
+        if (err?.code === "published-changed") {
+          this._staleRefusal();
+          return;
+        }
         const h = failHint(err);
         const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
         this._banner(esc2(msg), "danger");
@@ -10523,6 +10622,54 @@ ${listStyleProseCss(".doc-blocks")}
       } finally {
         restore();
       }
+    }
+    // sow-482: the behind banner's buttons. "Keep editing" hides the warning for this visit only: the banner becomes the
+    // plain staged one, swapped in place, and the next open shows the warning again while the draft is still behind.
+    _wireBehindActions() {
+      this.$("#behinddiscard")?.addEventListener("click", () => this._openPublishedVersion());
+      this.$("#behindkeep")?.addEventListener("click", () => {
+        this._behindHidden = true;
+        const pb = this.$("#pubbanner");
+        if (!pb) return;
+        const t = document.createElement("template");
+        t.innerHTML = stagedBannerHtml();
+        pb.replaceWith(t.content.firstElementChild);
+        this._changesOpen = false;
+        this.$("#whatchanged")?.addEventListener("click", () => this._toggleChanges());
+      });
+    }
+    /** Leave this edit for the published version. The workspace does the loading; a staged draft is discarded first. */
+    _openPublishedVersion() {
+      const q2 = this.staged ? "Discard this draft and open the published version? The saved draft is deleted." : "Open the published version? Changes in this editor that are not published are lost.";
+      if (typeof confirm === "function" && !confirm(q2)) return;
+      this.emit("gbti-open-published", { discard: Boolean(this.staged) });
+    }
+    /** A failure reported from outside the editor (the workspace's load of the published version). */
+    showProblem(msg) {
+      this._banner(esc2(msg), "danger");
+      this.out(esc2(msg), "danger");
+    }
+    // sow-482: the publish stopped because the published version is not the one this edit began from. Red, beside the
+    // comparison, with the author's two ways on: write over it anyway, or start again from the published version.
+    _staleRefusal() {
+      this._stale = true;
+      const msg = staleMessage(this.type);
+      const open = this.staged ? "Discard this draft and open the published version" : "Open the published version";
+      const pb = this.$("#pubbanner");
+      if (pb) {
+        pb.classList.remove("warn");
+        pb.classList.add("danger");
+        pb.innerHTML = `${INFO}<div class="pi-body"><span>${esc2(msg)} <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="pi-acts"><button type="button" class="ebtn" id="pubanyway">Publish anyway</button><button type="button" class="ebtn" id="openpub">${open}</button></div><div class="chg" id="changedlist" hidden></div></div>`;
+        pb.hidden = false;
+        this._changesOpen = false;
+        pb.querySelector("#whatchanged")?.addEventListener("click", () => this._toggleChanges());
+        pb.querySelector("#pubanyway")?.addEventListener("click", () => {
+          if (typeof confirm === "function" && !confirm(forceConfirmMessage(this.type))) return;
+          this.doPublish({ force: true });
+        });
+        pb.querySelector("#openpub")?.addEventListener("click", () => this._openPublishedVersion());
+      }
+      this.out(esc2(msg), "danger");
     }
     // SOW-112 QA: put a message in the top banner slot. cls '' = info (green), 'warn' = amber, 'danger' = red.
     /** Hide the publish banner and drop its severity. Paired with _banner, which never un-hides on its own. */
@@ -10628,8 +10775,10 @@ ${listStyleProseCss(".doc-blocks")}
           // SOW-112 v2: a changed permalink stages on the item's own branch
           ...typeof authorNote === "string" ? { authorNote } : {},
           ...authorTarget !== void 0 ? { authorTarget } : {},
-          ...skillFile !== void 0 ? { skillFile } : {}
+          ...skillFile !== void 0 ? { skillFile } : {},
           // sow-109: a skill's SKILL.md is kept with the draft
+          // sow-482: the version the draft began from, never advanced by a save, so a draft that is behind stays behind.
+          ...this._base ? { base: this._base } : {}
         });
         this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
         this._setChip(`${CHECK3} Draft saved`, "ok");
@@ -10708,7 +10857,7 @@ ${listStyleProseCss(".doc-blocks")}
     skipClientRender() {
       return this._dirty === true;
     }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null, base = null, prevBase = null, behind = null, prepared = null } = {}) {
       this.type = type || this.type;
       this._prepared = preparedFromLoad(prepared);
       this._prepStash = null;
@@ -10722,6 +10871,10 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._landingPath !== path) this._landingPath = null;
       this._heldImages = null;
       this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
+      this._base = typeof base === "string" ? base : null;
+      this._prevBase = typeof prevBase === "string" ? prevBase : null;
+      this._behind = behind && typeof behind === "object" ? behind : null;
+      this._behindHidden = false;
       if (this.isConnected) this.render();
     }
     async render() {
@@ -10855,7 +11008,9 @@ ${listStyleProseCss(".doc-blocks")}
         // every staged draft, including one that has never been published: there is nothing to compare that
         // against, and the panel says exactly that ("all N blocks of it are new") rather than listing every
         // block as an addition.
-        `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
+        // sow-482: a draft the published article has moved past takes the same slot with its own words, so the one
+        // amber banner says the thing most worth knowing.
+        `${this._behind && !this._behindHidden ? behindBannerHtml({ ...this._behind, type: this.type }) : this.staged ? stagedBannerHtml() : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc2(this.type)}</span>
            <span class="edhead-sp"></span>
@@ -10951,6 +11106,7 @@ ${listStyleProseCss(".doc-blocks")}
       this.on("#publish", "click", () => this.doPublish());
       this._changesOpen = false;
       this.on("#whatchanged", "click", () => this._toggleChanges());
+      this._wireBehindActions();
       this._dirty = false;
       if (!this._dirtyRootWired) {
         this._dirtyRootWired = true;
@@ -26949,7 +27105,7 @@ ${link}` : ""}`;
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, base: e.base ?? null, prevBase: e.prevBase ?? null, behind: e.behind ?? null, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
         const notes = [];
         if (e.staged) notes.push("You are editing your saved draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
@@ -26961,6 +27117,7 @@ ${link}` : ""}`;
           this._onPublished(e.type);
         });
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
+        ed?.addEventListener("gbti-open-published", (ev) => openPublishedInto(this, ev?.detail));
         ed?.addEventListener("gbti-prepared-change", (ev) => preparedChanged(this, ev.detail));
         return;
       }
@@ -27272,7 +27429,7 @@ ${link}` : ""}`;
           return;
         }
         const full = await this.client.getContentItem({ path });
-        this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === "string" ? full.skillFile : null };
+        this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === "string" ? full.skillFile : null, base: typeof full.base === "string" ? full.base : null };
         this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
         this.render();
       } catch {
@@ -27292,7 +27449,8 @@ ${link}` : ""}`;
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null };
+        const { behind, base } = await checkDraftBehind(this.client, full, d);
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null, base, behind, draftKey: d.store === "repo" ? null : { type: d.type, slug: d.slug } };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v2 = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
@@ -27323,7 +27481,7 @@ ${link}` : ""}`;
           btn.disabled = false;
           btn.textContent = "Publish";
         }
-        this._draftMsg = err?.message || "Could not publish this draft.";
+        this._draftMsg = err?.code === "published-changed" ? staleDraftRowMessage(d.type) : err?.message || "Could not publish this draft.";
         this.render();
       }
     }
@@ -28913,7 +29071,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var fmtWhen = (v2) => {
+  var fmtWhen2 = (v2) => {
     try {
       const d = new Date(v2);
       return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -29113,11 +29271,11 @@ ${BLOCKED_PILL_CSS}
     _postedLine(ch) {
       if (ch === "discord") {
         const at3 = this._status?.discord?.postedAt;
-        return this._posted("discord") ? `<p class="note">Posted to Discord${at3 ? ` on ${esc2(fmtWhen(at3))}` : ""}.</p>` : "";
+        return this._posted("discord") ? `<p class="note">Posted to Discord${at3 ? ` on ${esc2(fmtWhen2(at3))}` : ""}.</p>` : "";
       }
       const rec = this._status?.channels?.[ch];
       if (!rec) return "";
-      const when = rec.doneAt ? ` on ${esc2(fmtWhen(rec.doneAt))}` : "";
+      const when = rec.doneAt ? ` on ${esc2(fmtWhen2(rec.doneAt))}` : "";
       return `<p class="note">Marked done${rec.doneBy ? ` by ${esc2(rec.doneBy)}` : ""}${when}. You can still post it again.</p>`;
     }
     render() {

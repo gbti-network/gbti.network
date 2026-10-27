@@ -284,7 +284,10 @@ export const CONTENT_EDITOR_CSS = `
         /* sow-327: the banner becomes a column (text, then the answer) while keeping its icon at the left. */
         .pubinfo .pi-body { flex:1; min-width:0; }
         .pi-link { font:inherit; font-weight:700; color:var(--s-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-        .pi-link:hover { color:var(--s-green-fg); }
+        .pi-link:hover { color:var(--s-green-fg); background:none; } /* BASE_CSS button:hover (0,1,1) outranks .pi-link's own background:none, and filled the link green */
+        /* sow-482: the behind and refused-publish banners carry two buttons; long labels wrap rather than overflow a phone */
+        .pi-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .pi-acts .ebtn { white-space:normal; text-align:left; font-size:13px; padding:7px 13px; }
         .chg { margin-top:9px; border-top:1px solid var(--s-tint-2); padding-top:9px; }
         .chg[hidden] { display:none; }
         .chg ol { margin:0; padding-left:20px; }

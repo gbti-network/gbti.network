@@ -703,9 +703,16 @@ export function pageWindow(total, page = 0, per = WORKSPACE_PAGE_SIZE) {
  * gives the item a new path, and the WorkBench writes that path into the page address, so a reload reopens the
  * item where it now lives instead of failing on the old path and dropping back to the list. The author move is
  * used up and the item is no longer a staged draft. Returns a new object; the input is not changed.
+ *
+ * sow-482: the version the publish committed becomes the editor's base, and the one it replaced (`res.replaced`, the
+ * version on main when it went through) stays accepted until the merge lands, so a second publish from the same editor is not refused by its own first. The draft it
+ * published is gone, so it is no longer behind anything. A host that returns no base drops both: no check rather
+ * than a false refusal.
  */
 export function followPublishedItem(editing, res) {
   if (!editing) return editing ?? null;
   const path = typeof res?.path === 'string' && res.path ? res.path : editing.path;
-  return { ...editing, path, staged: false, authorTarget: null };
+  const base = typeof res?.base === 'string' ? res.base : null;
+  const replaced = typeof res?.replaced === 'string' ? res.replaced : (editing.base ?? null);
+  return { ...editing, path, staged: false, authorTarget: null, base, prevBase: base ? replaced : null, behind: null, draftKey: null };
 }

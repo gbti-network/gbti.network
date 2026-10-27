@@ -160,6 +160,10 @@ export function draftRecordForEditor(rec, login) {
     authorNote: typeof rec?.authorNote === 'string' ? rec.authorNote : null,
     authorTarget: rec?.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
     skillFile: typeof rec?.skillFile === 'string' ? rec.skillFile : null, // sow-109: a skill's SKILL.md text
+    // sow-482: the published version the draft started from, and when it was last saved, so the WorkBench can tell
+    // whether the article has moved past it.
+    base: typeof rec?.base === 'string' ? rec.base : null,
+    savedAt: typeof rec?.updatedAt === 'string' ? rec.updatedAt : null,
   };
 }
 

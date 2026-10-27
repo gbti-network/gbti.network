@@ -192,9 +192,9 @@ test('the website publisher runs the same rule, before encrypting, and carries t
   assert.ok(at < w.indexOf('const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });'), 'a refusal costs no encryption');
   assert.match(w, /if \(skillPlan\.refusal\) throw new WorkbenchClientError\('invalid-content', skillPlan\.refusal\);/);
   assert.match(w, /files\.push\(\.\.\.skillPlan\.files\);/);
-  assert.match(w, /async function publish\(\{ type, input = \{\}, body = '', authorNote, path, scope, authorTarget, skillFile \}: any\)/);
+  assert.match(w, /async function publish\(\{ type, input = \{\}, body = '', authorNote, path, scope, authorTarget, skillFile, bases, force = false \}: any\)/);
   assert.match(w, /const skill = await skillFileBeside\(path, frontmatter, readOwnFile, decryptEnc\);/, 'read-back (decrypted for a members-only skill), so repo drafts get it too');
-  assert.match(w, /async saveDraft\(\{ type, input = \{\}, body = '', path, authorNote, authorTarget, skillFile \}: any\)[\s\S]{0,1400}\.\.\.\(typeof skillFile === 'string' \? \{ skillFile \} : \{\}\),/);
+  assert.match(w, /async saveDraft\(\{ type, input = \{\}, body = '', path, authorNote, authorTarget, skillFile, base \}: any\)[\s\S]{0,1400}\.\.\.\(typeof skillFile === 'string' \? \{ skillFile \} : \{\}\),/);
   assert.match(w, /\.\.\.\(typeof rec\.skillFile === 'string' \? \{ skillFile: rec\.skillFile \} : \{\}\), \/\/ sow-109: the skill file publishes with it/);
 });
 

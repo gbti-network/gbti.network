@@ -197,8 +197,10 @@ test('the live file is read on click, never on render', () => {
     'the editor holds no copy of the committed file, so the comparison needs a read');
   assert.match(fn, /catch \{/, 'a failed read must not leave the author staring at "Comparing..."');
   const calls = e.split('\n').filter((l) => l.includes('this._toggleChanges()'));
-  assert.equal(calls.length, 1, 'opening the panel is an explicit action, so it may have exactly one caller');
-  assert.match(calls[0], /'#whatchanged', 'click'/, 'and that caller is the button');
+  // sow-482: the behind banner and the refused-publish banner each carry their own "See what changed" button, wired
+  // when that banner is swapped in. Still only ever a click on that button.
+  assert.equal(calls.length, 3, 'opening the panel is an explicit action: the render wiring and the two swapped-in banners');
+  for (const c of calls) assert.match(c, /'#whatchanged'(, |\)\?\.addEventListener\()'click'/, `every caller is the button: ${c.trim()}`);
 });
 
 test('the list asks the body editor to highlight, rather than reaching into its shadow root', () => {
@@ -213,7 +215,7 @@ test('the list asks the body editor to highlight, rather than reaching into its 
 
 test('a removed block offers no jump, because there is nothing to jump to', () => {
   const e = contentEditorSource();
-  const fn = e.slice(e.indexOf('_changesHtml(res)'), e.indexOf('async doPublish()'));
+  const fn = e.slice(e.indexOf('_changesHtml(res)'), e.indexOf('async doPublish('));
   assert.match(fn, /it\.op !== 'removed'/);
 });
 

@@ -10,6 +10,16 @@ import { publishChanges, changeLabel, formatValue, snippet } from '../publish-di
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
 import { INFO, CHECK } from './editor-icons.mjs';
 import { landingPath, waitForLanding } from '../editor-core.mjs'; // sow-477: a second publish waits for this editor's move to land
+import { behindMessage, staleMessage, forceConfirmMessage } from '../draft-behind.mjs'; // sow-482: a draft or a tab the published version moved past
+
+// sow-327: the amber banner of a staged draft. Shared by render() and by "Keep editing the draft", which swaps the
+// behind banner for this one in place (a full render would throw away edits typed since the load).
+export const stagedBannerHtml = () => `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>`;
+
+// sow-482: the same slot when the published version changed after this draft began (owner, 2026-10-27: reuse the
+// current banner). The discard is the primary action because it is the safe one: the published version has work the
+// draft does not, and publishing the draft would remove it.
+export const behindBannerHtml = ({ publishedAt, savedAt, type } = {}) => `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>${esc(behindMessage({ publishedAt, savedAt, type }))} <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="pi-acts"><button type="button" class="ebtn ebtn-primary" id="behinddiscard">Discard this draft and open the published version</button><button type="button" class="ebtn" id="behindkeep">Keep editing the draft</button></div><div class="chg" id="changedlist" hidden></div></div></div>`;
 
 export const withEditorActions = (Base) => class extends Base {
   out(html, cls = 'muted') {
@@ -152,21 +162,27 @@ export const withEditorActions = (Base) => class extends Base {
     if (!res.items.length) {
       return unread || '<p class="chg-msg">Nothing differs from the live version right now. The saved draft matches what is published.</p>';
     }
-    const row = (was, now) => `<span class="chg-v"><i>was</i> ${esc(was)}</span><span class="chg-v"><i>now</i> ${esc(now)}</span>`;
+    // sow-482: when the published version is the newer side, the list says so first and names each side by what it
+    // is, so a block the draft lacks reads as only in the published version, not as one the author removed.
+    const newerSide = Boolean(this._behind || this._stale);
+    const [wasW, nowW] = newerSide ? ['published', 'here'] : ['was', 'now'];
+    const label = (it) => changeLabel(it, { newer: newerSide });
+    const row = (was, now) => `<span class="chg-v"><i>${wasW}</i> ${esc(was)}</span><span class="chg-v"><i>${nowW}</i> ${esc(now)}</span>`;
     const li = res.items.map((it) => {
       const head = it.kind === 'block' && Number.isInteger(it.index) && it.op !== 'removed'
-        ? `<button type="button" class="chg-jump" data-jump="${it.index}">${esc(changeLabel(it))}</button>`
-        : `<span class="chg-h">${esc(changeLabel(it))}</span>`;
+        ? `<button type="button" class="chg-jump" data-jump="${it.index}">${esc(label(it))}</button>`
+        : `<span class="chg-h">${esc(label(it))}</span>`;
       if (it.kind === 'field' || it.kind === 'note') return `<li>${head}${row(formatValue(it.was), formatValue(it.now))}</li>`;
-      if (it.op === 'coarse') return `<li>${head}<span class="chg-v">${esc(it.was)} live, ${esc(it.now)} in this draft</span></li>`;
+      if (it.op === 'coarse') return `<li>${head}<span class="chg-v">${esc(it.was)} live, ${esc(it.now)} in this ${this.staged ? 'draft' : 'editor'}</span></li>`;
       if (it.op === 'added') return `<li>${head}<span class="chg-v">${esc(snippet(it.now))}</span></li>`;
-      if (it.op === 'removed') return `<li>${head}<span class="chg-v"><i>was</i> ${esc(snippet(it.was))}</span></li>`;
+      if (it.op === 'removed') return `<li>${head}<span class="chg-v"><i>${wasW}</i> ${esc(snippet(it.was))}</span></li>`;
       return `<li>${head}${row(snippet(it.was), snippet(it.now))}</li>`;
     }).join('');
-    return `${unread}<ol>${li}</ol>`;
+    const newer = newerSide ? `<p class="chg-msg">The published version is newer than this ${this.staged ? 'draft' : 'editor'}. Publishing would undo each difference below.</p>` : '';
+    return `${unread}${newer}<ol>${li}</ol>`;
   }
 
-  async doPublish() {
+  async doPublish({ force = false } = {}) {
     // sow-454 (defect 6, reported by a member 2026-10-13): a validation failure leaves its red banner on
     // screen, and this method never cleared it, so fixing the fields and pressing Publish again showed
     // "Publishing…" under the OLD error. Clearing on entry is the only correct moment: the success and
@@ -220,7 +236,10 @@ export const withEditorActions = (Base) => class extends Base {
       // rendered value is right, and when it was not (see authorSelectValue) an untouched control moved a live
       // item into members/gbtilabs on publish. An untouched control now moves nothing, whatever it displays.
       const authorTarget = authorTargetFor(this.$('#ownerSelect')?.value, this._ownerSelInitial);
-      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, authorTarget, ...(skillFile !== undefined ? { skillFile } : {}) });
+      // sow-482: the versions this publish may replace. The client refuses with 'published-changed' when main holds
+      // another; `force` is the author's "Publish anyway".
+      const bases = [this._base, this._prevBase].filter((b) => typeof b === 'string');
+      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, ...(bases.length ? { bases } : {}), ...(force ? { force: true } : {}), authorTarget, ...(skillFile !== undefined ? { skillFile } : {}) });
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
       // sow-326: this content is no longer a staged draft, and the flag has to say so IN THIS SESSION as well
@@ -229,6 +248,12 @@ export const withEditorActions = (Base) => class extends Base {
       // the "Staged draft . not published" label came straight back on the next repaint of an editor that had
       // just published successfully. The workspace clears its copy on the gbti-published event.
       this.staged = false;
+      // sow-482: this publish is now the version the editor stands on; the one it replaced (on main when it went
+      // through, which after "Publish anyway" is not the one this editor opened) stays accepted until the merge lands. A host that returns no base drops both (no check rather than a false refusal), as the workspace
+      // does in followPublishedItem. The draft is gone, so nothing is behind any more.
+      if (typeof res?.base === 'string') { this._prevBase = typeof res.replaced === 'string' ? res.replaced : this._base; this._base = res.base; } else { this._base = null; this._prevBase = null; }
+      this._behind = null;
+      this._stale = false;
       // sow-454 (reported by a member 2026-10-13): the toolbar said "Published" while the line under the
       // title still read "Draft", so a member who had just published could not tell whether it worked.
       // liveLabel is computed in render() from preset.input.status, which a publish never updated, so the
@@ -269,6 +294,7 @@ export const withEditorActions = (Base) => class extends Base {
       this.emit('gbti-published', res);
     } catch (err) {
       this._setChip('');
+      if (err?.code === 'published-changed') { this._staleRefusal(); return; } // sow-482
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
       const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
       // SOW-112 QA: the failure must be unmissable — the banner slot goes danger (the bottom status line was
@@ -278,6 +304,62 @@ export const withEditorActions = (Base) => class extends Base {
     } finally {
       restore();
     }
+  }
+
+  // sow-482: the behind banner's buttons. "Keep editing" hides the warning for this visit only: the banner becomes the
+  // plain staged one, swapped in place, and the next open shows the warning again while the draft is still behind.
+  _wireBehindActions() {
+    this.$('#behinddiscard')?.addEventListener('click', () => this._openPublishedVersion());
+    this.$('#behindkeep')?.addEventListener('click', () => {
+      this._behindHidden = true;
+      const pb = this.$('#pubbanner');
+      if (!pb) return;
+      // The banner is a direct child of the shadow root, where outerHTML cannot be set (it throws), so the new one is
+      // parsed in a template and swapped in.
+      const t = document.createElement('template');
+      t.innerHTML = stagedBannerHtml();
+      pb.replaceWith(t.content.firstElementChild);
+      this._changesOpen = false;
+      this.$('#whatchanged')?.addEventListener('click', () => this._toggleChanges());
+    });
+  }
+
+  /** Leave this edit for the published version. The workspace does the loading; a staged draft is discarded first. */
+  _openPublishedVersion() {
+    const q = this.staged
+      ? 'Discard this draft and open the published version? The saved draft is deleted.'
+      : 'Open the published version? Changes in this editor that are not published are lost.';
+    if (typeof confirm === 'function' && !confirm(q)) return;
+    this.emit('gbti-open-published', { discard: Boolean(this.staged) });
+  }
+
+  /** A failure reported from outside the editor (the workspace's load of the published version). */
+  showProblem(msg) {
+    this._banner(esc(msg), 'danger');
+    this.out(esc(msg), 'danger');
+  }
+
+  // sow-482: the publish stopped because the published version is not the one this edit began from. Red, beside the
+  // comparison, with the author's two ways on: write over it anyway, or start again from the published version.
+  _staleRefusal() {
+    this._stale = true;
+    const msg = staleMessage(this.type);
+    const open = this.staged ? 'Discard this draft and open the published version' : 'Open the published version';
+    const pb = this.$('#pubbanner');
+    if (pb) {
+      pb.classList.remove('warn');
+      pb.classList.add('danger');
+      pb.innerHTML = `${INFO}<div class="pi-body"><span>${esc(msg)} <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="pi-acts"><button type="button" class="ebtn" id="pubanyway">Publish anyway</button><button type="button" class="ebtn" id="openpub">${open}</button></div><div class="chg" id="changedlist" hidden></div></div>`;
+      pb.hidden = false;
+      this._changesOpen = false;
+      pb.querySelector('#whatchanged')?.addEventListener('click', () => this._toggleChanges());
+      pb.querySelector('#pubanyway')?.addEventListener('click', () => {
+        if (typeof confirm === 'function' && !confirm(forceConfirmMessage(this.type))) return; // see forceConfirmMessage
+        this.doPublish({ force: true });
+      });
+      pb.querySelector('#openpub')?.addEventListener('click', () => this._openPublishedVersion());
+    }
+    this.out(esc(msg), 'danger');
   }
 
   // SOW-112 QA: put a message in the top banner slot. cls '' = info (green), 'warn' = amber, 'danger' = red.
@@ -394,6 +476,8 @@ export const withEditorActions = (Base) => class extends Base {
         ...(typeof authorNote === 'string' ? { authorNote } : {}),
         ...(authorTarget !== undefined ? { authorTarget } : {}),
         ...(skillFile !== undefined ? { skillFile } : {}), // sow-109: a skill's SKILL.md is kept with the draft
+        // sow-482: the version the draft began from, never advanced by a save, so a draft that is behind stays behind.
+        ...(this._base ? { base: this._base } : {}),
       });
       this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
       this._setChip(`${CHECK} Draft saved`, 'ok');

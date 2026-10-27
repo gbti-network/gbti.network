@@ -29,7 +29,7 @@ import { CONTENT_EDITOR_CSS } from './content-editor-css.mjs';
 import { withEditorFields } from './editor-fields.mjs';
 import { withEditorRows } from './editor-rows.mjs';
 import { withEditorMedia } from './editor-media.mjs';
-import { withEditorActions } from './editor-actions.mjs';
+import { withEditorActions, stagedBannerHtml, behindBannerHtml } from './editor-actions.mjs';
 
 // SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
 // the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the project Video section.
@@ -114,7 +114,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
   // real author input, so a late client still re-renders an editor nobody has touched.
   skipClientRender() { return this._dirty === true; }
 
-  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null, skillFile = null, prepared = null } = {}) {
+  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null, skillFile = null, base = null, prevBase = null, behind = null, prepared = null } = {}) {
     this.type = type || this.type;
     this._prepared = preparedFromLoad(prepared); this._prepStash = null; // sow-427: per load, like _slugVal below
     // sow-326: `authorNote` travels with the draft now. readDraft has always returned it and BOTH hops between
@@ -136,6 +136,13 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     // The PENDING author reassignment carried by a saved draft. Set per load, exactly like _slugVal above, so
     // a value left over from a previously-open item can never be attributed to this one.
     this._pendingAuthorTarget = authorTarget && typeof authorTarget === 'object' ? authorTarget : null;
+    // sow-482: the published version this edit began from (sent with a save and checked by a publish), the one an
+    // earlier publish from here replaced (still accepted until its merge lands), and whether a saved draft is behind
+    // the published article. Per load, like the fields above. "Keep editing" hides the warning for this visit only.
+    this._base = typeof base === 'string' ? base : null;
+    this._prevBase = typeof prevBase === 'string' ? prevBase : null;
+    this._behind = behind && typeof behind === 'object' ? behind : null;
+    this._behindHidden = false;
     if (this.isConnected) this.render();
   }
 
@@ -314,8 +321,12 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
         // every staged draft, including one that has never been published: there is nothing to compare that
         // against, and the panel says exactly that ("all N blocks of it are new") rather than listing every
         // block as an addition.
-        `${this.staged
-          ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>`
+        // sow-482: a draft the published article has moved past takes the same slot with its own words, so the one
+        // amber banner says the thing most worth knowing.
+        `${this._behind && !this._behindHidden
+          ? behindBannerHtml({ ...this._behind, type: this.type })
+          : this.staged
+          ? stagedBannerHtml()
           : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
@@ -414,6 +425,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     // answer is only interesting when the author asks for it.
     this._changesOpen = false;
     this.on('#whatchanged', 'click', () => this._toggleChanges());
+    this._wireBehindActions(); // sow-482: the behind banner's two buttons
     // SOW-062 P6: the Publish button shows ONLY when there is something to publish -- the item is unpublished (it was
     // rendered visible above) OR it has local edits since load. Reset the dirty flag for the freshly-loaded content,
     // then mark dirty on any edit. The root-level input/change listeners persist (this.root is stable); the element

@@ -17,6 +17,8 @@ const SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
 // picker's `member:<login>` value carries, so a value that round-trips through the store is one the picker
 // can render back without re-parsing it differently than it was written.
 const LOGIN_RE = /^[a-z0-9][a-z0-9-]{0,38}$/;
+// sow-482: the published version a draft started from (client/src/content-base.mjs contentBase).
+const BASE_RE = /^[0-9a-f]{16}$/;
 
 /**
  * Normalize a pending author reassignment, or null.
@@ -63,7 +65,7 @@ function utf8Bytes(s) {
 
 /**
  * Upsert one draft record. The record is the editor's restore state: { type, slug, pendingSlug?, path,
- * frontmatter, body, authorNote?, authorTarget?, skillFile?, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws
+ * frontmatter, body, authorNote?, authorTarget?, skillFile?, base?, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws
  * DraftError on any violation (the handler maps it to a 400).
  */
 export function applyDraftPut(state, draft, { now = () => new Date().toISOString() } = {}) {
@@ -99,6 +101,12 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
   const skillFile = type !== 'prompt' ? null
     : typeof d.skillFile === 'string' ? d.skillFile
     : (typeof prev?.skillFile === 'string' ? prev.skillFile : null);
+  // sow-482: the published version this draft started from, so the WorkBench can say when the article has moved past
+  // it. On the authorNote terms: an ABSENT base keeps what is stored, because the WorkBench preview (src/lib/preview-edit.ts)
+  // saves too and knows nothing of it. The editor sends the base it was OPENED with, never the newest one, so a save
+  // never advances it and a draft that is behind stays behind until it is discarded or published (owner, 2026-10-27).
+  // A malformed value is dropped rather than refused: it is a hint, and a bad one must not block saving a draft.
+  const base = d.base !== undefined ? (BASE_RE.test(String(d.base ?? '')) ? String(d.base) : null) : (prev?.base ?? null);
   const record = {
     type, slug, pendingSlug,
     path: typeof d.path === 'string' ? d.path : null,
@@ -107,6 +115,7 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
     ...(authorNote != null ? { authorNote } : {}),
     ...(authorTarget != null ? { authorTarget } : {}),
     ...(skillFile ? { skillFile } : {}),
+    ...(base ? { base } : {}),
     updatedAt: now(),
   };
   if (utf8Bytes(JSON.stringify(record)) > DRAFT_MAX_BYTES) throw new DraftError(`a draft may not exceed ${DRAFT_MAX_BYTES} bytes`);

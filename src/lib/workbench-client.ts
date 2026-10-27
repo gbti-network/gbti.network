@@ -44,6 +44,7 @@ import { TYPE_LABEL, hostedItemId, createPublish } from './workbench-client-publ
 import { adminMethods } from './workbench-client-admin'; // the admin, channel-map, invite and editorial methods
 import { preparedMethods } from './workbench-prepared'; // sow-427: prepared project listings (Worker-gated superadmin route)
 import { createAudioStaging } from './workbench-client-audio'; // sow-483: the podcast block's staged recordings
+import { contentBase } from '../../client/src/content-base.mjs'; // sow-482: the published version a draft started from
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
 const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
@@ -186,12 +187,13 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     if (text == null) throw err('not-found', 'could not load that item');
     const { frontmatter, body } = parseContentFile(text);
     const skill = await skillFileBeside(path, frontmatter, readOwnFile, decryptEnc); // sow-109: the editor opens the file it publishes back (decrypted for a members-only skill)
+    const base = await contentBase(text); // sow-482: the published version this read is, so a draft can tell when it falls behind
     const enc = (frontmatter as any)?.encryptedBody;
-    if (!enc) return { path, frontmatter, body, ...skill };
+    if (!enc) return { path, frontmatter, body, base, ...skill };
     let memberText: string;
     try { memberText = await decryptEnc(enc); }
     catch { throw err('locked', 'could not load the members-only section of this item; refresh and try again'); }
-    return { path, frontmatter, body: reassembleMemberBody(frontmatter, body, memberText), ...skill };
+    return { path, frontmatter, body: reassembleMemberBody(frontmatter, body, memberText), base, ...skill };
   }
 
 
@@ -388,7 +390,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
       const r = await workerGet('/membership/author/targets');
       return { members: Array.isArray(r?.members) ? r.members : [] };
     },
-    async saveDraft({ type, input = {}, body = '', path, authorNote, authorTarget, skillFile }: any) {
+    async saveDraft({ type, input = {}, body = '', path, authorNote, authorTarget, skillFile, base }: any) {
       // A members-only draft is allowed: its plain body stays in the private, erasable KV draft store (SOW-157),
       // never git; publishDraft() encrypts it at publish time. So no members refusal here.
       const slug = String((input && input.slug) || '');
@@ -405,6 +407,8 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
           ...(authorTarget !== undefined ? { authorTarget } : {}),
           // sow-109: a skill's own file, on the authorNote terms (absent keeps the stored one).
           ...(typeof skillFile === 'string' ? { skillFile } : {}),
+          // sow-482: the published version the draft started from, on the same terms (absent keeps the stored one).
+          ...(typeof base === 'string' ? { base } : {}),
         },
       });
       return { state: 'staged' };
@@ -460,6 +464,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
         // exists to remove, so it must be forwarded on EVERY publish path, not only the editor's.
         ...(rec.authorTarget && typeof rec.authorTarget === 'object' ? { authorTarget: rec.authorTarget } : {}),
         ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}), // sow-109: the skill file publishes with it
+        ...(typeof rec.base === 'string' ? { bases: [rec.base] } : {}), // sow-482: refused if the article moved past the draft
       });
       await discardDraft({ type, slug }).catch(() => {}); // best-effort: the draft is now a submitted PR
       return { prNumber: res.prNumber, prUrl: res.prUrl };

@@ -12,6 +12,7 @@ import { planMemberFiles, AUTHOR_NOTE_TYPES, planPublishImageFiles, resolvePubli
 import { WorkbenchClientError, err } from './workbench-client-transport';
 import { staleEncDeletes } from '../../client/src/member-content.mjs'; // sow-458: members-only to public drops the old .enc
 import { planPublishAudio } from '../../client/src/audio-publish.mjs'; // sow-483: the podcast block's recordings
+import { contentBase, publishBaseProblem } from '../../client/src/content-base.mjs'; // sow-482: never write over a newer published version unasked
 
 const TYPE_LABEL: Record<string, string> = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
 
@@ -78,7 +79,7 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
   // author -- the shared editor's Author field only ever sends this for a superadmin and only when it differs
   // from the loaded item's current home (gbti-content-editor.mjs). It generalizes the rename machinery above: a
   // MOVE is now "the resolved path changed", for a slug reason, an author reason, or both, in one hosted PR.
-  async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget, skillFile }: any) {
+  async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget, skillFile, bases, force = false }: any) {
     // Both triggers below (a house path, or an explicit authorTarget) are only reachable through UI already
     // gated to role==='superadmin' (workspace-data.mjs _canScope, the editor's Author field) -- the Worker
     // independently re-verifies the caller is superadmin (authorizeSuperadmin) before accepting the write, so
@@ -99,8 +100,18 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
     // gated body image reads as new every publish. That costs one lookup that resolves to skip; it is not a
     // correctness gap, and reading the .enc would mean decrypting it just to save a round-trip.
     let oldBody: string | null = null;
+    let replaced: string | null = null; // sow-482: the version on main this publish writes over
     if (origin) {
       const oldText = await readOwnFile(origin.oldPath);
+      // sow-482: the check that would have stopped #874 (2026-10-26), where a tab opened before the podcast block was
+      // added published over it. `bases` are the versions this edit may replace (the one it began from, and the one
+      // its own last publish committed); when main holds anything else the article changed underneath it, so stop
+      // BEFORE writing and let the author choose. `force` is that choice ("Publish anyway").
+      if (oldText != null) {
+        replaced = await contentBase(oldText);
+        const problem = publishBaseProblem({ bases, committedBase: replaced, force });
+        if (problem) throw err('published-changed', problem);
+      }
       if (oldText != null) {
         try {
           const parsed = parseContentFile(oldText);
@@ -303,7 +314,14 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
       if (!staleSlug) continue;
       try { await workerPost('/membership/drafts', { op: 'delete', type, slug: staleSlug }); } catch { /* see above */ }
     }
+    // sow-482: the version this publish committed, which the editor takes as its new starting point, and the one it
+    // replaced, which main can go on showing until the merge lands. After "Publish anyway" that is not the version the
+    // editor opened, so the editor needs it from here or its next publish would be refused by its own first.
+    const committedIndex = files.find((f) => f.path === built.path && typeof f.content === 'string');
+    const base = committedIndex ? await contentBase(committedIndex.content as string) : null;
     return {
+      base,
+      replaced,
       prNumber: res.number, prUrl: res.html_url, branch: res.branch, updated: !!res.already, hosted: true,
       encrypted: Boolean(plan?.encPath),
       // sow-183: the item's CURRENT canonical path after this publish (unchanged for a plain edit; the new

@@ -68,7 +68,7 @@ test('the npm and extension host clears the record too, or it resurrects what th
 
 test('a successful publish clears the staged flag on the editor', () => {
   const s = contentEditorSource();
-  const pub = s.slice(s.indexOf('async doPublish()'), s.indexOf('} catch (err) {', s.indexOf('async doPublish()')));
+  const pub = s.slice(s.indexOf('async doPublish('), s.indexOf('} catch (err) {', s.indexOf('async doPublish(')));
   assert.ok(pub.includes('this.staged = false'),
     'load() is the only other writer, so without this the banner returns on the next repaint of an editor that just published');
 });

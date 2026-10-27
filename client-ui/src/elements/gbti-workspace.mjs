@@ -21,6 +21,7 @@ import './gbti-profile-editor.mjs'; // sow-346: the Profile tab
 import { openPreparedInto, preparedChanged } from '../prepared-editor.mjs'; // sow-427: prepared mode lives there, not here
 import { WORKSPACE_CSS as CSS } from './workspace-css.mjs'; // the stylesheet, split out at the 900-line limit
 import { withWorkspaceData } from './workspace-data.mjs'; // the loaders and caches, split out at the 900-line limit
+import { checkDraftBehind, staleDraftRowMessage, openPublishedInto } from '../draft-behind.mjs'; // sow-482: a draft the article moved past
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -234,7 +235,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta.
       // SOW-145: an EDIT carries a house/ path the editor infers scope from; a NEW item has no path, so the
       // current workspace scope decides (a superadmin in House scope creates house content).
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, base: e.base ?? null, prevBase: e.prevBase ?? null, behind: e.behind ?? null, prepared: e.prepared ?? null, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-482: the version it started from, and whether the article moved past it // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
       // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
       const notes = [];
       if (e.staged) notes.push('You are editing your saved draft. It is not live until you Publish.');
@@ -255,6 +256,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
         this._onPublished(e.type);
       });
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
+      ed?.addEventListener('gbti-open-published', (ev) => openPublishedInto(this, ev?.detail)); // sow-482
       ed?.addEventListener('gbti-prepared-change', (ev) => preparedChanged(this, ev.detail)); // sow-427: survives the next repaint; a saved listing's hash reopens it
       return;
     }
@@ -632,7 +634,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       const staged = (this._drafts || []).find((d) => d.path === path);
       if (staged) { this._openDraft(staged); return; }
       const full = await this.client.getContentItem({ path });
-      this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null }; // sow-109
+      this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null, base: typeof full.base === 'string' ? full.base : null }; // sow-109 // sow-482: the version this edit begins from
       this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
       this.render();
     } catch { /* could not load: stay on the list */ }
@@ -658,7 +660,8 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       // choice reads as having been silently discarded.
       // sow-326: authorNote is carried onto the editing state. readDraft returns it; this object used to drop
       // it, which is where a saved from-the-author note disappeared between the store and the editor.
-      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null };
+      const { behind, base } = await checkDraftBehind(this.client, full, d); // sow-482: draftKey is what "Discard this draft" removes
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null, base, behind, draftKey: d.store === 'repo' ? null : { type: d.type, slug: d.slug } };
       this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
       // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
       // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.
@@ -682,7 +685,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       await this._onPublished(d.type); // clears _drafts + overview + prs and refreshes the visible tab
     } catch (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Publish'; }
-      this._draftMsg = err?.message || 'Could not publish this draft.';
+      this._draftMsg = err?.code === 'published-changed' ? staleDraftRowMessage(d.type) : (err?.message || 'Could not publish this draft.'); // sow-482: the editor, not the list, offers "Publish anyway"
       this.render();
     }
   }

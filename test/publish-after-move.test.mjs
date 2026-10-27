@@ -89,7 +89,8 @@ test('the defaults cover the measured landing time with room to spare', () => {
 test('followPublishedItem takes the new path, drops the used author move and the staged flag', () => {
   const editing = { type: 'post', path: G, staged: true, authorTarget: { scope: 'member', username: 'atwellpub' }, frontmatter: { title: 't' } };
   const next = followPublishedItem(editing, { path: A, reassigned: {} });
-  assert.deepEqual(next, { type: 'post', path: A, staged: false, authorTarget: null, frontmatter: { title: 't' } });
+  // sow-482: no base came back, so no version check is carried either (base, prevBase), and nothing is behind.
+  assert.deepEqual(next, { type: 'post', path: A, staged: false, authorTarget: null, frontmatter: { title: 't' }, base: null, prevBase: null, behind: null, draftKey: null });
   assert.equal(editing.path, G, 'the input is not changed');
   assert.equal(editing.staged, true);
   assert.deepEqual(editing.authorTarget, { scope: 'member', username: 'atwellpub' });
@@ -107,7 +108,7 @@ test('followPublishedItem keeps the path when the publish returned none, or the 
 
 const doPublish = () => {
   const s = src('client-ui/src/elements/editor-actions.mjs');
-  const at = s.indexOf('async doPublish()');
+  const at = s.indexOf('async doPublish(');
   return s.slice(at, s.indexOf('} catch (err) {', at));
 };
 

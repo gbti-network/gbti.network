@@ -236,14 +236,17 @@ export function publishChanges({ live, draft, liveNote, draftNote, reassign } = 
   return { isNew: false, metaUnread, items, blockCount: parseBlocks(d.body ?? '').length };
 }
 
-/** The one-line heading for an entry. Numbering is the list's job, not this function's. */
-export function changeLabel(item) {
+/**
+ * The one-line heading for an entry. Numbering is the list's job, not this function's.
+ * sow-482: `newer` says the published side is the newer one (a draft or a tab it moved past). "Added" and "removed"
+ * would then name the wrong author: a block the draft lacks was added to the published version, not removed here.
+ */
+export function changeLabel(item, { newer = false } = {}) {
   if (!item) return '';
-  if (item.kind === 'field') return `${item.label} changed`;
-  if (item.kind === 'note') return `${item.label} changed`;
+  if (item.kind === 'field' || item.kind === 'note') return newer ? `${item.label} differs` : `${item.label} changed`;
   const noun = blockNoun(item.type);
-  if (item.op === 'coarse') return 'The body changed substantially';
-  if (item.op === 'added') return `${noun} added`;
-  if (item.op === 'removed') return `${noun} removed`;
-  return `${noun} edited`;
+  if (item.op === 'coarse') return newer ? 'The body differs substantially' : 'The body changed substantially';
+  if (item.op === 'added') return newer ? `${noun} only in this version` : `${noun} added`;
+  if (item.op === 'removed') return newer ? `${noun} only in the published version` : `${noun} removed`;
+  return newer ? `${noun} differs` : `${noun} edited`;
 }

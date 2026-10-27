@@ -124,7 +124,7 @@ test('Remove and Reuse drop a picture still waiting to upload', () => {
 
 test('Publish uploads held pictures and checks required images before it gathers; Save draft uploads them too', () => {
   const src = contentEditorSource();
-  const pub = src.slice(src.indexOf('async doPublish()'), src.indexOf('async doPublish()') + 2500);
+  const pub = src.slice(src.indexOf('async doPublish('), src.indexOf('async doPublish(') + 2500);
   const flush = pub.indexOf('await this._flushHeldImages();');
   const check = pub.indexOf('this._missingImagesMessage()');
   const gather = pub.indexOf('this.gather()');
