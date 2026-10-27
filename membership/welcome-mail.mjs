@@ -192,17 +192,19 @@ const para = (t, text, size = 13.5) => `<p style="margin:0;font-family:${FONT};f
 const cell = (inner, padding) => `<tr><td style="padding:${padding}">${inner}</td></tr>`;
 
 /**
- * The heading with the GBTI mark to its left, centred on it in its own cell so a heading that wraps on a phone keeps
- * the mark beside it rather than above. Black on the light card; the white mark on the dark variant.
+ * The heading with the GBTI mark in the top right corner of the same row (owner, 2026-10-27, picked over top center
+ * on the design canvas: "right is best"). The heading cell comes first, so it is still the first thing read; both
+ * cells align to the top, so a heading that wraps on a phone keeps the mark level with its first line. Black on the
+ * light card; the white mark on the dark variant.
  */
 function headingHtml(t, base, theme, heading) {
   const logo = `${base}/brand/logo/mark-${theme === 'dark' ? 'white' : 'ink'}-96.png`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%"><tr>`
-    + `<td width="34" valign="middle" style="width:34px;padding-right:12px;line-height:0">`
-    + `<img src="${escapeHtml(logo)}" width="34" height="34" alt="GBTI Network" style="display:block;border:0;width:34px;height:34px">`
-    + `</td><td valign="middle">`
+    + `<td valign="top" style="padding:2px 16px 0 0">`
     + `<h1 style="margin:0;font-family:${DISPLAY};font-size:23px;font-weight:700;color:${t.ink};`
     + `mso-line-height-rule:exactly;line-height:29px">${escapeHtml(heading)}</h1>`
+    + `</td><td width="34" valign="top" align="right" style="width:34px;line-height:0">`
+    + `<img src="${escapeHtml(logo)}" width="34" height="34" alt="GBTI Network" style="display:block;border:0;width:34px;height:34px">`
     + `</td></tr></table>`;
 }
 
@@ -287,15 +289,31 @@ const DISCORD_COPY = 'Come join us inside the private Discord for all GBTI Netwo
   + ' to claim your invite.';
 
 /**
- * One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. The
- * number is one large digit (owner, 2026-10-27: "very large single digit steps", replacing the small 02, 03), in
- * black (owner, the same day), or the card's ink on the dark variant.
+ * The step numbers step down a little in shade and weight (owner, 2026-10-27: "slightly variating the colors of the
+ * numbers and their bolding"): black and bold first, then the ink, then progressively softer and regular. Trebuchet,
+ * the heading face, has only a regular and a bold, so the weights are those two and nothing in between, which would
+ * render as one of them anyway. The shade follows the ROW, not the number: a paid email lists from 2 (Discord has its
+ * own block above), and keying on the number would never show the black one. Past the last entry a row keeps the
+ * last shade.
  */
-function stepHtml(t, step, n) {
+const NUMBER_SHADES = {
+  light: ['#000000', '#232029', '#35313d', '#4a4653', '#5d5966'],
+  dark: ['#ffffff', '#f3f2f0', '#dedbe2', '#bdbac4', '#a7a3ae'],
+};
+const NUMBER_WEIGHTS = [700, 700, 400, 400, 400];
+
+/**
+ * One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. The
+ * number is one large digit (owner, 2026-10-27: "very large single digit steps", replacing the small 02, 03), shaded
+ * by its row (`row`, 0 for the first listed) through NUMBER_SHADES.
+ */
+function stepHtml(t, step, n, row = 0) {
   const why = STEP_WHY[step.key] ?? trim(step.sub);
+  const shades = NUMBER_SHADES[t === PALETTES.dark ? 'dark' : 'light'];
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%">`
-    + `<tr><td width="40" valign="middle" style="width:40px;font-family:${DISPLAY};font-size:32px;font-weight:700;`
-    + `color:${t === PALETTES.dark ? t.ink : '#000000'};mso-line-height-rule:exactly;line-height:36px">${String(n)}</td>`
+    + `<tr><td width="40" valign="middle" style="width:40px;font-family:${DISPLAY};font-size:32px;`
+    + `font-weight:${NUMBER_WEIGHTS[Math.min(row, NUMBER_WEIGHTS.length - 1)]};color:${shades[Math.min(row, shades.length - 1)]};`
+    + `mso-line-height-rule:exactly;line-height:36px">${String(n)}</td>`
     + `<td valign="middle" style="font-family:${FONT};font-size:13.5px;color:${t.ink};mso-line-height-rule:exactly;`
     + `line-height:19px"><strong style="font-weight:700">${escapeHtml(trim(step.title))}.</strong>`
     + (why ? ` ${escapeHtml(why)}` : '')
@@ -419,7 +437,8 @@ export function welcomeMail({
     discord ? cell(discordHtml(t, base), '12px 26px 0') : '',
     cell(`<div style="font-family:${FONT};font-size:12.5px;color:${t.inkSoft};mso-line-height-rule:exactly;`
       + `line-height:19px">${escapeHtml(stepsLead)}</div>`, '16px 26px 0'),
-    ...listed.map((s, i) => cell(stepHtml(t, s, offset + i + 1), '8px 26px 0')),
+    // 18px between steps (owner, 2026-10-27: "even more spacing for the steps"; was 8px).
+    ...listed.map((s, i) => cell(stepHtml(t, s, offset + i + 1, i), '18px 26px 0')),
     cell(buttonHtml(t, welcomeUrl, 'Complete Onboarding'), '20px 26px 0'),
     cell(`<div style="font-family:${FONT};font-size:11.5px;color:${t.meta};text-align:center;`
       + `mso-line-height-rule:exactly;line-height:17px">${escapeHtml(ctaNote)}</div>`, '9px 26px 0'),

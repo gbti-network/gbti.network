@@ -185,17 +185,17 @@ test('the writing rules hold in what a member actually reads', () => {
   }
 });
 
-test('there is no masthead: no GBTI NETWORK eyebrow, the mark sits beside the heading, and the email opens on it (owner, 2026-10-27)', () => {
+test('there is no masthead: no GBTI NETWORK eyebrow, the mark sits top right of the heading row, and the email opens on the heading (owner, 2026-10-27)', () => {
   for (const [label, rec] of [['claimer', CLAIMER], ['free account', FREE], ['dark', { ...CLAIMER, theme: 'dark' }]]) {
     const { html } = welcomeMail(rec);
     assert.doesNotMatch(html, /GBTI NETWORK/, `${label}: no eyebrow (the footer's "joined GBTI Network" is mixed case)`);
-    // The mark is the one image before the heading, in the heading's own row, centred on it.
-    const row = html.slice(html.lastIndexOf('<tr>', html.indexOf('<h1')), html.indexOf('</h1>'));
+    // The mark follows the heading in the heading's own row, in a right-aligned cell, both cells top aligned.
+    const row = html.slice(html.lastIndexOf('<tr>', html.indexOf('<h1')), html.indexOf('</table>', html.indexOf('<h1')));
     const mark = rec.theme === 'dark' ? 'white' : 'ink';
-    assert.match(row, new RegExp(`<td width="34" valign="middle"[^>]*><img src="https://gbti\\.network/brand/logo/mark-${mark}-96\\.png" width="34" height="34" alt="GBTI Network"`),
-      `${label}: the ${mark} mark, left of the heading`);
-    assert.match(row, /<\/td><td valign="middle"><h1/, `${label}: the heading is centred against it`);
-    assert.equal((html.slice(0, html.indexOf('<h1')).match(/<img /g) || []).length, 1, `${label}: no other image above the heading`);
+    assert.match(row, /^<tr><td valign="top"[^>]*><h1/, `${label}: the heading cell comes first, top aligned`);
+    assert.match(row, new RegExp(`</h1></td><td width="34" valign="top" align="right"[^>]*><img src="https://gbti\\.network/brand/logo/mark-${mark}-96\\.png" width="34" height="34" alt="GBTI Network"`),
+      `${label}: the ${mark} mark, top right of the heading`);
+    assert.equal((html.slice(0, html.indexOf('<h1')).match(/<img /g) || []).length, 0, `${label}: no image above or before the heading`);
     assert.match(html, /You are receiving this because you joined GBTI Network\./, `${label}: the footer still names the network`);
     // Everything before the heading, less the hidden preheader, must be markup with no visible text in it.
     const before = html.slice(html.indexOf('<body'), html.indexOf('<h1')).replace(/<div style="display:none[^"]*">[^<]*<\/div>/, '');
@@ -213,8 +213,25 @@ test('the step numbers are single large digits, never the old zero-padded 02', (
   const step = html.match(/<td width="40" valign="middle" style="([^"]*)">2<\/td>/);
   assert.ok(step, 'step 2 has its own number cell');
   assert.match(step[1], /font-size:32px/, 'large');
-  assert.match(step[1], /color:#000000/, 'black (owner, 2026-10-27)');
-  assert.match(step[1], /font-weight:700/);
+  const rows = html.match(/<tr><td style="padding:[^"]*"><table[^>]*><tr><td width="40" valign="middle"/g) || [];
+  assert.ok(rows.length >= 3, `${rows.length} step rows; this measures nothing below three`);
+  for (const r of rows) assert.match(r, /padding:18px 26px 0/, '18px between steps (owner, 2026-10-27: "even more spacing")');
+});
+
+test('the step numbers step down in shade and weight, black and bold first (owner, 2026-10-27)', () => {
+  const cells = (html) => [...html.matchAll(/<td width="40" valign="middle" style="([^"]*)">(\d)<\/td>/g)]
+    .map(([, style, n]) => ({ n: Number(n), color: style.match(/color:(#[0-9a-f]{6})/)[1], weight: Number(style.match(/font-weight:(\d+)/)[1]) }));
+  const light = cells(welcomeMail(CLAIMER).html);
+  assert.ok(light.length >= 3, `${light.length} numbered steps; this measures nothing below three`);
+  assert.equal(light[0].n, 2, 'a paid email lists from 2, Discord having its own block, so this is the case that matters');
+  assert.deepEqual([light[0].color, light[0].weight], ['#000000', 700], 'the first LISTED number is black and bold, whatever its digit');
+  assert.deepEqual(cells(welcomeMail(FREE).html)[0], { n: 1, color: '#000000', weight: 700 }, 'and a free email from 1 the same');
+  assert.equal(new Set(light.map((c) => c.color)).size, light.length, 'every number has its own shade');
+  assert.ok(light.some((c) => c.weight === 400), 'the later numbers are regular weight');
+  for (const c of light) assert.ok([400, 700].includes(c.weight), `step ${c.n}: Trebuchet has only 400 and 700, got ${c.weight}`);
+  const dark = cells(welcomeMail({ ...CLAIMER, theme: 'dark' }).html);
+  assert.equal(dark[0].color, '#ffffff', 'the dark variant starts at white');
+  assert.ok(!dark.some((c) => c.color === '#000000'), 'no black number on the dark card');
 });
 
 test('the Discord block carries the Discord tile to the left of its words, and only where Discord is offered', () => {
