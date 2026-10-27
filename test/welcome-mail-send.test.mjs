@@ -171,7 +171,7 @@ test('a claimer\'s receipt names the item and links to the page it published to'
     githubId: ID, email: 'm@example.test', name: 'Sean', status: 'paid',
     item: { type: 'prompt', title: 'Pedro Monkey Puppet Portrait', slug: 'pedro-monkey-puppet-portrait', folder: 'sbalger75', image: './images/result.jpg', creditTo: 'atwellpub' },
   }, { kv, now: NOW, ...box });
-  assert.equal(box.sent[0].subject, 'Your prompt is live on GBTI Network');
+  assert.equal(box.sent[0].subject, 'Your prompt is live on GBTI Network \u2022 COMPLETE ONBOARDING INSIDE');
   assert.match(box.sent[0].html, /https:\/\/gbti\.network\/prompts\/pedro-monkey-puppet-portrait\//);
   assert.doesNotMatch(box.sent[0].html, /\/projects\/pedro-monkey-puppet-portrait/, 'a prompt is not addressed as a project');
 });

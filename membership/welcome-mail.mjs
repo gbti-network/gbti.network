@@ -91,6 +91,16 @@ const STEP_WHY = Object.freeze({
 const COUNT_WORDS = Object.freeze(['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven']);
 const countWord = (n) => COUNT_WORDS[n] ?? String(n);
 
+/** What every welcome subject ends with: the one thing the email asks for. The bullet is U+2022, not a dash. */
+export const SUBJECT_TASK = ' \u2022 COMPLETE ONBOARDING INSIDE';
+/** The receipt cover's cell. Near square, so a 16:10 cover is cropped to the middle rather than shrunk. */
+const COVER_W = 120;
+const COVER_H = 104;
+/** Only an address made of these characters is placed inside url(''); coverUrl only ever builds such addresses. */
+const COVER_URL_RE = /^https:\/\/[A-Za-z0-9._~\/@-]+$/;
+/** The Discord tile (scripts/build-mail-discord-tile.mjs), served from the site. */
+const DISCORD_TILE_PATH = '/brand/social/discord-tile.png';
+
 const FONT = 'Arial,Helvetica,sans-serif';
 const DISPLAY = "'Trebuchet MS',Verdana,sans-serif";
 const MONO = "'Courier New',monospace";
@@ -196,18 +206,29 @@ function receiptHtml(t, item) {
       ? `<div style="padding-top:6px"><a href="${escapeHtml(item.url)}" style="font-family:${FONT};font-size:12.5px;`
         + `font-weight:700;color:${t.accent};text-decoration:underline">View your page</a></div>`
       : '');
-  // The cover is a nested two-cell table rather than a floated image: Outlook honours neither float nor
-  // flexbox, and the card must still read correctly with images blocked, which is most clients by default.
-  const inner = item.coverUrl
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%"><tr>`
-      + `<td width="84" valign="top" style="width:84px;line-height:0">`
-      + `<img src="${escapeHtml(item.coverUrl)}" width="84" alt="${escapeHtml(item.title || '')}"`
-      + ` style="display:block;width:84px;max-width:84px;height:auto;border:1px solid ${t.cardBorder};border-radius:6px">`
-      + `</td><td width="13" style="width:13px">&nbsp;</td><td valign="top">${body}</td></tr></table>`
-    : body;
+  // THE COVER RUNS THE CARD'S FULL HEIGHT (owner, 2026-10-27). A table row gives every cell the same height, so a
+  // background image sized to `cover` on the first cell fills it from the card's top edge to its bottom edge,
+  // cropped to fit, however tall the text beside it runs. Covers are 16:10 and the cell is near square, which is
+  // exactly the crop an <img> cannot make in email: Gmail ignores object-fit.
+  //
+  // The bulletproof-background pattern, because support is uneven: the style for Apple Mail, Gmail, Outlook.com
+  // and Yahoo; the `background` attribute for a Gmail that drops the style (caniemail lists its support as partial);
+  // and a plain image inside an Outlook-only comment, since Outlook on Windows draws no CSS background at all. The
+  // `height` attribute keeps a short card from squashing the picture. The URL is checked against a strict
+  // character set before it goes inside url(''), so nothing in it can close the quotes.
+  const cover = COVER_URL_RE.test(item.coverUrl || '') ? item.coverUrl : '';
+  const textCell = `<td valign="middle" style="padding:12px 14px">${body}</td>`;
+  const inner = cover
+    ? `<td width="${COVER_W}" height="${COVER_H}" valign="top" background="${cover}" bgcolor="${t.hairline}"`
+      + ` style="width:${COVER_W}px;min-width:${COVER_W}px;height:${COVER_H}px;background-color:${t.hairline};`
+      + `background-image:url('${cover}');background-size:cover;background-position:center;`
+      + `border-radius:7px 0 0 7px;line-height:0;font-size:0">`
+      + `<!--[if mso]><img src="${cover}" width="${COVER_W}" alt="" style="display:block"><![endif]-->&nbsp;</td>`
+      + textCell
+    : textCell;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"`
     + ` style="width:100%;background-color:${t.panelBg};border:1px solid ${t.cardBorder};border-radius:8px">`
-    + `<tr><td style="padding:11px">${inner}</td></tr></table>`;
+    + `<tr>${inner}</tr></table>`;
 }
 
 /** The free account's card, in the receipt's slot: what the account already carries, with nothing to unlock. */
@@ -228,28 +249,37 @@ function perksHtml(t, feedUrl) {
 }
 
 /** The Discord block: its own panel, and the one step that is the product rather than a setting. */
-function discordHtml(t) {
-  // A coloured left border never gets a border radius on that side (owner, 2026-10-23).
+function discordHtml(t, base) {
+  // A coloured left border never gets a border radius on that side (owner, 2026-10-23). The Discord tile sits to the
+  // left of the words (owner, 2026-10-27), in its own cell so it never wraps under them.
+  const tile = `${base}${DISCORD_TILE_PATH}`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"`
     + ` style="width:100%;background-color:${t.pillBg};border:1px solid ${t.pillBorder};`
     + `border-left:3px solid ${t.accent};border-radius:0 8px 8px 0">`
-    + `<tr><td style="padding:14px 16px">`
+    + `<tr><td width="40" valign="top" style="width:40px;padding:15px 0 14px 16px;line-height:0">`
+    + `<img src="${escapeHtml(tile)}" width="40" height="40" alt="Discord" style="display:block;border:0;width:40px;height:40px">`
+    + `</td><td valign="top" style="padding:14px 16px 14px 14px">`
     + `<div style="font-family:${DISPLAY};font-size:16px;font-weight:700;color:${t.accent};`
     + `mso-line-height-rule:exactly;line-height:21px">Join the Discord</div>`
     + `<p style="margin:6px 0 0 0;font-family:${FONT};font-size:13px;color:${t.inkSoft};`
-    + `mso-line-height-rule:exactly;line-height:19px">The community is the actual product. Weekly sessions, and`
-    + ` somewhere to ask a question and get an answer from a person. Your membership covers it, so it is open to`
-    + ` you now.</p>`
+    + `mso-line-height-rule:exactly;line-height:19px">${escapeHtml(DISCORD_COPY)}</p>`
     + `</td></tr></table>`;
 }
 
-/** One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. */
+/** The Discord block's words, shared by the html and the text body so the two cannot say different things. */
+const DISCORD_COPY = 'The community is the product. Weekly sessions, and somewhere to ask a question and get an answer'
+  + ' from a person. Your membership covers it, so you can join now.';
+
+/**
+ * One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. The
+ * number is one large digit (owner, 2026-10-27: "very large single digit steps", replacing the small 02, 03).
+ */
 function stepHtml(t, step, n) {
   const why = STEP_WHY[step.key] ?? trim(step.sub);
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%">`
-    + `<tr><td width="26" valign="top" style="width:26px;font-family:${MONO};font-size:11px;font-weight:700;`
-    + `color:${t.accent};mso-line-height-rule:exactly;line-height:19px">${String(n).padStart(2, '0')}</td>`
-    + `<td valign="top" style="font-family:${FONT};font-size:13.5px;color:${t.ink};mso-line-height-rule:exactly;`
+    + `<tr><td width="40" valign="middle" style="width:40px;font-family:${DISPLAY};font-size:32px;font-weight:700;`
+    + `color:${t.accent};mso-line-height-rule:exactly;line-height:36px">${String(n)}</td>`
+    + `<td valign="middle" style="font-family:${FONT};font-size:13.5px;color:${t.ink};mso-line-height-rule:exactly;`
     + `line-height:19px"><strong style="font-weight:700">${escapeHtml(trim(step.title))}.</strong>`
     + (why ? ` ${escapeHtml(why)}` : '')
     + `</td></tr></table>`;
@@ -340,7 +370,8 @@ export function welcomeMail({
     : null;
   const noun = published ? ITEM_NOUNS[published.type] : '';
 
-  const subject = published ? `Your ${noun} is live on GBTI Network` : 'Welcome to GBTI Network';
+  // The subject names the task as well as the news (owner, 2026-10-27).
+  const subject = `${published ? `Your ${noun} is live on GBTI Network` : 'Welcome to GBTI Network'}${SUBJECT_TASK}`;
   const heading = published
     ? (first ? `Your ${noun} is live, ${first}.` : `Your ${noun} is live.`)
     : (first ? `Welcome, ${first}. Here is what you can do.` : 'Welcome. Here is what you can do.');
@@ -362,11 +393,11 @@ export function welcomeMail({
     cell(published ? receiptHtml(t, published) : perksHtml(t, feedUrl), '0 26px'),
     published ? cell(para(t, ownership), '16px 26px 0') : '',
     cell(`<div style="height:1px;background-color:${t.hairline};font-size:0;line-height:0">&nbsp;</div>`, '20px 26px 0'),
-    cell(eyebrow(t, discord ? 'NEXT, THE PART THAT IS NOT AUTOMATIC' : 'NEXT, TO MAKE IT YOURS'), '18px 26px 0'),
-    discord ? cell(discordHtml(t), '12px 26px 0') : '',
+    cell(eyebrow(t, discord ? 'NEXT, FINISH YOUR SETUP' : 'NEXT, SET UP YOUR FEED'), '18px 26px 0'),
+    discord ? cell(discordHtml(t, base), '12px 26px 0') : '',
     cell(`<div style="font-family:${FONT};font-size:12.5px;color:${t.inkSoft};mso-line-height-rule:exactly;`
       + `line-height:19px">${escapeHtml(stepsLead)}</div>`, '16px 26px 0'),
-    ...listed.map((s, i) => cell(stepHtml(t, s, offset + i + 1), '10px 26px 0')),
+    ...listed.map((s, i) => cell(stepHtml(t, s, offset + i + 1), '8px 26px 0')),
     cell(buttonHtml(t, welcomeUrl, 'Complete Onboarding'), '20px 26px 0'),
     cell(`<div style="font-family:${FONT};font-size:11.5px;color:${t.meta};text-align:center;`
       + `mso-line-height-rule:exactly;line-height:17px">${escapeHtml(ctaNote)}</div>`, '9px 26px 0'),
@@ -413,12 +444,12 @@ export function welcomeMail({
     ...(discord
       ? [
         'JOIN THE DISCORD',
-        'The community is the actual product. Weekly sessions, and somewhere to ask a question and get an answer from a person. Your membership covers it, so it is open to you now.',
+        DISCORD_COPY,
         '',
       ]
       : []),
     stepsLead,
-    ...listed.map((s, i) => `${String(offset + i + 1).padStart(2, '0')}  ${trim(s.title)}. ${STEP_WHY[s.key] ?? trim(s.sub)}`),
+    ...listed.map((s, i) => `${offset + i + 1}. ${trim(s.title)}. ${STEP_WHY[s.key] ?? trim(s.sub)}`),
     '',
     `Complete onboarding: ${welcomeUrl}`,
     '',

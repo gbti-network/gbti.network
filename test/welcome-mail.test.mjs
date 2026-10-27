@@ -30,7 +30,7 @@ const FREE = { name: 'Dana', status: 'none' };
 
 test('a paid claimer gets the receipt, the Discord block and every step the wizard would show', () => {
   const { subject, text, html } = welcomeMail(CLAIMER);
-  assert.equal(subject, 'Your prompt is live on GBTI Network');
+  assert.equal(subject, 'Your prompt is live on GBTI Network \u2022 COMPLETE ONBOARDING INSIDE');
   assert.match(html, /Your prompt is live, Sean\./);
   // The receipt, with the item, its credit and a link to the page it actually published to.
   assert.match(html, /PROMPT &#183; PUBLISHED|PROMPT · PUBLISHED/);
@@ -41,8 +41,9 @@ test('a paid claimer gets the receipt, the Discord block and every step the wiza
   // Discord is its own block and NOT a numbered row, and the button names the task rather than the first step.
   assert.match(html, /Join the Discord/);
   assert.match(html, /Complete Onboarding/);
-  assert.doesNotMatch(html, /01<\/td>/, 'Discord keeps number one and is not listed, so the rows start at 02');
-  for (const n of ['02', '03', '04', '05']) assert.match(html, new RegExp(`>${n}</td>`));
+  assert.doesNotMatch(html, />1<\/td>/, 'Discord keeps number one and is not listed, so the rows start at 2');
+  for (const n of ['2', '3', '4', '5']) assert.match(html, new RegExp(`>${n}</td>`));
+  for (const n of ['2', '3', '4', '5']) assert.match(text, new RegExp(`^${n}\\. `, 'm'), `the text body numbers step ${n} the same way`);
   // The step titles are the wizard's own, so the two surfaces cannot word the same step differently.
   for (const s of onboardingStepsFor({ discordAvailable: true, canPublish: true })) {
     if (s.key === 'discord') continue;
@@ -54,14 +55,14 @@ test('a paid claimer gets the receipt, the Discord block and every step the wiza
 
 test('a free account gets no receipt, no Discord block and three steps, and is never shown the locked door', () => {
   const { subject, text, html } = welcomeMail(FREE);
-  assert.equal(subject, 'Welcome to GBTI Network');
+  assert.equal(subject, 'Welcome to GBTI Network \u2022 COMPLETE ONBOARDING INSIDE');
   assert.match(html, /Welcome, Dana\. Here is what you can do\./);
   assert.doesNotMatch(html, /PUBLISHED/, 'nothing was published, so there is no receipt');
   assert.doesNotMatch(html, /Join the Discord/, 'a free account may not join it, so it is never offered');
   assert.doesNotMatch(html, /Add your social handles/, 'publishing is paid, so the handles step is not theirs');
   assert.match(html, /Complete Onboarding/, 'the same label works for both tiers');
-  for (const n of ['01', '02', '03']) assert.match(html, new RegExp(`>${n}</td>`));
-  assert.doesNotMatch(html, />04</, 'three steps, not five');
+  for (const n of ['1', '2', '3']) assert.match(html, new RegExp(`>${n}</td>`));
+  assert.doesNotMatch(html, />4</, 'three steps, not five');
   // The membership case is made ONCE, at the foot, as a statement rather than a step.
   assert.match(html, /come with a paid membership/);
   assert.match(text, /come with a paid membership/);
@@ -98,7 +99,7 @@ test('an unread membership is offered the whole list, exactly as the wizard does
   const html = welcomeMail({ name: 'Pat', status: 'unknown' }).html;
   assert.match(html, /Join the Discord/);
   assert.match(html, /Add your social handles/);
-  assert.match(html, />05</, 'hiding a step on a failed read is the direction that loses a paying member work');
+  assert.match(html, />5</, 'hiding a step on a failed read is the direction that loses a paying member work');
 });
 
 test('every preparable type has a public route, so no invitation can produce a dead link', () => {
@@ -195,4 +196,49 @@ test('there is no masthead: no logo and no GBTI NETWORK eyebrow, and the email o
     assert.ok(html.indexOf('<h1') > 0, `${label}: the heading moved; this assertion measures nothing`);
     assert.equal(before.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim(), '', `${label}: the heading is the first thing read`);
   }
+});
+
+
+// ---- the 2026-10-27 revision: the owner's notes on the first test email -----------------------------------------
+
+test('the step numbers are single large digits, never the old zero-padded 02', () => {
+  const { html } = welcomeMail(CLAIMER);
+  assert.doesNotMatch(html, />0[1-9]</, 'no zero-padded number anywhere');
+  const step = html.match(/<td width="40" valign="middle" style="([^"]*)">2<\/td>/);
+  assert.ok(step, 'step 2 has its own number cell');
+  assert.match(step[1], /font-size:32px/, 'large');
+  assert.match(step[1], /font-weight:700/);
+});
+
+test('the Discord block carries the Discord tile to the left of its words, and only where Discord is offered', () => {
+  const { html } = welcomeMail(CLAIMER);
+  const block = html.slice(html.lastIndexOf('<table', html.indexOf('Join the Discord')), html.indexOf('Join the Discord'));
+  assert.match(block, /<img src="https:\/\/gbti\.network\/brand\/social\/discord-tile\.png" width="40" height="40" alt="Discord"/, 'the tile comes before the heading, in the same block');
+  assert.doesNotMatch(welcomeMail(FREE).html, /discord-tile/, 'a free account is not offered Discord, so no tile');
+  assert.match(html, /The community is the product\. Weekly sessions/);
+  assert.doesNotMatch(html, /actual product|open to you now/, 'the 2026-10-27 copy edit');
+  const tile = fs.readFileSync(path.join(HERE, '..', 'public/brand/social/discord-tile.png'));
+  assert.equal(tile.subarray(1, 4).toString(), 'PNG', 'the tile the email names is a PNG the site serves');
+  assert.equal(tile.readUInt32BE(16), 96, '96 wide, for a 40px slot');
+  assert.equal(tile.readUInt32BE(20), 96);
+});
+
+test('the cover fills the receipt card top to bottom, with a fallback for each client that ignores the style', () => {
+  const { html } = welcomeMail(CLAIMER);
+  const url = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main/members/sbalger75/prompts/pedro-monkey-puppet-portrait/images/result.jpg';
+  const cell = html.match(/<td width="(\d+)" height="(\d+)" valign="top" background="([^"]+)"[^>]*style="([^"]*)">/);
+  assert.ok(cell, 'the cover is the background of the first cell, so the row gives it the card height');
+  assert.equal(cell[3], url, 'the background attribute, for a Gmail that drops the style');
+  assert.match(cell[4], new RegExp(`background-image:url\\('${url.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}'\\)`));
+  assert.match(cell[4], /background-size:cover/, 'cropped to fill, never squashed');
+  assert.match(cell[4], /border-radius:7px 0 0 7px/, 'flush with the card on its left');
+  assert.match(html, /<!--\[if mso\]><img src="[^"]+result\.jpg"/, 'Outlook on Windows draws no CSS background, so it gets the image');
+  assert.doesNotMatch(html, /<img src="https:\/\/cdn\.jsdelivr[^>]*height:auto/, 'the old shrunken thumbnail is gone');
+});
+
+test('a folder that could break out of url() never becomes a cover address (coverUrl refuses it; COVER_URL_RE is a second gate)', () => {
+  const html = welcomeMail({ ...CLAIMER, item: { ...CLAIMER.item, folder: "x'),url(evil" } }).html;
+  assert.doesNotMatch(html, /evil/, 'coverUrl already refuses that folder');
+  assert.doesNotMatch(html, /background-image/, 'no cover, no background');
+  assert.match(html, /Pedro Monkey Puppet Portrait/, 'the card still reads without its picture');
 });
