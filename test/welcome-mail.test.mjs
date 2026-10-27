@@ -207,6 +207,7 @@ test('the step numbers are single large digits, never the old zero-padded 02', (
   const step = html.match(/<td width="40" valign="middle" style="([^"]*)">2<\/td>/);
   assert.ok(step, 'step 2 has its own number cell');
   assert.match(step[1], /font-size:32px/, 'large');
+  assert.match(step[1], /color:#000000/, 'black (owner, 2026-10-27)');
   assert.match(step[1], /font-weight:700/);
 });
 
@@ -243,15 +244,16 @@ test('a folder that could break out of url() never becomes a cover address (cove
   assert.match(html, /Pedro Monkey Puppet Portrait/, 'the card still reads without its picture');
 });
 
-test('the Complete Onboarding button is black with a 2px radius, and inverts on the dark card (owner, 2026-10-27)', () => {
+test('the Complete Onboarding button is black with a 6px radius, and inverts on the dark card (owner, 2026-10-27)', () => {
   const cellOf = (html) => html.match(/<td align="center" bgcolor="([^"]+)" style="([^"]*)"><a href="[^"]+\/welcome\/" style="([^"]*)">Complete Onboarding<\/a>/);
   const light = cellOf(welcomeMail(CLAIMER).html);
   assert.ok(light, 'the button cell is where it was');
   assert.equal(light[1], '#000000');
-  assert.match(light[2], /background-color:#000000;border-radius:2px/);
+  assert.match(light[2], /background-color:#000000;border-radius:6px/);
+  assert.match(light[3], /padding:18px 20px/, 'taller than the first 14px');
   assert.match(light[3], /color:#ffffff/);
   const dark = cellOf(welcomeMail({ ...CLAIMER, theme: 'dark' }).html);
   assert.notEqual(dark[1], '#000000', 'a black button would vanish on the dark card');
   assert.match(dark[3], /color:#000000/);
-  assert.match(cellOf(welcomeMail(FREE).html)[2], /border-radius:2px/, 'the free account gets the same button');
+  assert.match(cellOf(welcomeMail(FREE).html)[2], /border-radius:6px/, 'the free account gets the same button');
 });

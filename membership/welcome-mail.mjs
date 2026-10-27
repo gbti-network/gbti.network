@@ -273,13 +273,14 @@ const DISCORD_COPY = 'Come join us inside the private Discord for all GBTI Netwo
 
 /**
  * One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. The
- * number is one large digit (owner, 2026-10-27: "very large single digit steps", replacing the small 02, 03).
+ * number is one large digit (owner, 2026-10-27: "very large single digit steps", replacing the small 02, 03), in
+ * black (owner, the same day), or the card's ink on the dark variant.
  */
 function stepHtml(t, step, n) {
   const why = STEP_WHY[step.key] ?? trim(step.sub);
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%">`
     + `<tr><td width="40" valign="middle" style="width:40px;font-family:${DISPLAY};font-size:32px;font-weight:700;`
-    + `color:${t.accent};mso-line-height-rule:exactly;line-height:36px">${String(n)}</td>`
+    + `color:${t === PALETTES.dark ? t.ink : '#000000'};mso-line-height-rule:exactly;line-height:36px">${String(n)}</td>`
     + `<td valign="middle" style="font-family:${FONT};font-size:13.5px;color:${t.ink};mso-line-height-rule:exactly;`
     + `line-height:19px"><strong style="font-weight:700">${escapeHtml(trim(step.title))}.</strong>`
     + (why ? ` ${escapeHtml(why)}` : '')
@@ -287,7 +288,7 @@ function stepHtml(t, step, n) {
 }
 
 /**
- * The one button. Black with a 2px radius (owner, 2026-10-27), in the light palette the email ships with. The dark
+ * The one button. Black with a 6px radius and 18px of height padding (owner, 2026-10-27), in the light palette the email ships with. The dark
  * variant inverts it, because a black button on the dark card would disappear.
  */
 function buttonHtml(t, url, label) {
@@ -295,8 +296,8 @@ function buttonHtml(t, url, label) {
   const bg = dark ? t.ink : '#000000';
   const fg = dark ? '#000000' : '#ffffff';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%">`
-    + `<tr><td align="center" bgcolor="${bg}" style="background-color:${bg};border-radius:2px">`
-    + `<a href="${escapeHtml(url)}" style="display:block;padding:14px 20px;font-family:${FONT};font-size:15px;`
+    + `<tr><td align="center" bgcolor="${bg}" style="background-color:${bg};border-radius:6px">`
+    + `<a href="${escapeHtml(url)}" style="display:block;padding:18px 20px;font-family:${FONT};font-size:15px;`
     + `font-weight:700;color:${fg};text-decoration:none;mso-line-height-rule:exactly;line-height:20px">`
     + `${escapeHtml(label)}</a></td></tr></table>`;
 }
