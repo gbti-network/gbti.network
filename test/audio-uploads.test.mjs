@@ -21,7 +21,8 @@ import {
 } from '../membership/draft-audio.mjs';
 import { stagedAudioName, AUDIO_MAX_BYTES } from '../client/src/audio-block-edit.mjs';
 import { handleDraftAudio, eraseMemberDraftAudio, readStagedAudioBase64 } from '../workers/signup/membership-draft-audio.mjs';
-import { resolveAudioEntries, readMainBase64 } from '../workers/signup/hosted-audio.mjs';
+import { checkAudioEntries, resolveAudioEntry, readMainBase64 } from '../workers/signup/hosted-audio.mjs';
+import { commitHostedFiles } from '../workers/signup/hosted-commit.mjs';
 import { validateHostedRequest, audioPathProblem, HOSTED_MAX_AUDIO_FILES } from '../membership/hosted-author.mjs';
 import { planPublishAudio } from '../client/src/audio-publish.mjs';
 import { AUDIO_SRC_RE, audioBaseFor, audioServedPath, audioUploadNames, renderDataBlock, dataBlockToMarkdown } from '../client/src/content-blocks.mjs';
@@ -159,31 +160,49 @@ test('the publish wall: a recording by reference, in the item\'s own audio/ fold
   assert.equal(audioPathProblem('prompts/p1/audio/a_b-c.ogg'), null);
 });
 
-test('the Worker reads each reference: the caller\'s own staged copy, or main through the blob API for a moved item', async () => {
+test('the Worker checks every reference first, then reads each recording only as its own file is written', async () => {
   const kv = fakeKv();
-  kv.m.set(draftAudioKey(GID, ITEM, 'talk.mp3'), { value: MP3(10), opts: {} });
+  kv.m.set(draftAudioKey(GID, ITEM, 'talk.mp3'), { value: MP3(10), opts: { metadata: { bytes: 10 } } });
   const calls = [];
-  const fetchImpl = async (url) => {
-    calls.push(String(url));
-    if (/\/contents\//.test(url)) return new Response(JSON.stringify({ sha: 'abc', size: 20971520, encoding: 'none', content: '' }), { status: 200 });
+  const gh = async (url, init = {}) => {
+    calls.push(`${init.method || 'GET'} ${url}`);
+    if (/\/contents\/.*old\.mp3\?ref=main$/.test(url)) return new Response(JSON.stringify({ sha: 'abc', size: 20971520, encoding: 'none', content: '' }), { status: 200 });
     if (/\/git\/blobs\/abc$/.test(url)) return new Response(JSON.stringify({ encoding: 'base64', content: 'SUQz\nBAAA' }), { status: 200 });
+    if (/\/git\/ref\/heads\/main$/.test(url)) return new Response(JSON.stringify({ object: { sha: 'm1' } }), { status: 200 });
+    if (/\/git\/refs$/.test(url)) return new Response('{}', { status: 201 });
+    if (/\/pulls$/.test(url)) return new Response(JSON.stringify({ number: 7, html_url: 'u' }), { status: 201 });
+    if (init.method === 'PUT') return new Response('{}', { status: 201 });
     return new Response('{}', { status: 404 });
   };
+  const deps = { kv, githubId: GID, fetchImpl: gh, instToken: 't', upstream: 'gbti-network/gbti.network' };
   const files = [
     { path: 'members/atwellpub/posts/crystal-ball/index.md', content: 'x' },
     { path: 'members/atwellpub/posts/crystal-ball/audio/talk.mp3', stagedAudio: { item: ITEM, name: 'talk.mp3' } },
     { path: 'members/atwellpub/posts/new/audio/old.mp3', copyFrom: 'members/atwellpub/posts/crystal-ball/audio/old.mp3' },
   ];
-  const r = await resolveAudioEntries({ files, kv, githubId: GID, fetchImpl, instToken: 't', upstream: 'gbti-network/gbti.network' });
-  assert.equal(r.ok, true);
-  assert.deepEqual(r.files[0], files[0], 'everything else passes through');
-  assert.deepEqual(r.files[1], { path: files[1].path, contentBase64: Buffer.from(MP3(10)).toString('base64') });
-  assert.deepEqual(r.files[2], { path: files[2].path, contentBase64: 'SUQzBAAA' }, 'the blob, whitespace removed');
-  assert.ok(calls.some((u) => u.endsWith('/contents/members/atwellpub/posts/crystal-ball/audio/old.mp3?ref=main')));
-  const missing = await resolveAudioEntries({ files: [files[1]], kv: fakeKv(), githubId: GID, fetchImpl, instToken: 't', upstream: 'x/y' });
-  assert.deepEqual([missing.ok, missing.status, /no longer staged/.test(missing.message)], [false, 409, true]);
-  const other = await resolveAudioEntries({ files: [files[1]], kv, githubId: '99', fetchImpl, instToken: 't', upstream: 'x/y' });
-  assert.equal(other.ok, false, 'the key comes from the verified caller, so a reference to someone else\'s copy finds nothing');
+  assert.deepEqual(await checkAudioEntries({ files, ...deps }), { ok: true });
+  assert.ok(!calls.some((c) => /blobs/.test(c)), 'the check reads no bytes');
+  const missing = await checkAudioEntries({ files: [files[1]], ...deps, kv: fakeKv() });
+  assert.deepEqual([missing.ok, missing.status, /talk\.mp3 is no longer staged/.test(missing.message)], [false, 409, true]);
+  assert.equal((await checkAudioEntries({ files: [files[1]], ...deps, githubId: '99' })).ok, false, 'the key comes from the verified caller');
+  const gone = await checkAudioEntries({ files: [{ ...files[2], copyFrom: 'members/atwellpub/posts/x/audio/none.mp3' }], ...deps });
+  assert.match(gone.message, /could not be found where the item used to be/);
+  assert.deepEqual(await resolveAudioEntry(files[0], deps), files[0], 'everything else passes through');
+  assert.deepEqual(await resolveAudioEntry(files[1], deps), { path: files[1].path, contentBase64: Buffer.from(MP3(10)).toString('base64') });
+  assert.deepEqual(await resolveAudioEntry(files[2], deps), { path: files[2].path, contentBase64: 'SUQzBAAA' }, 'the blob, whitespace removed');
+  // The commit loop resolves each entry just before writing it: one recording in memory at a time.
+  const order = [];
+  const committed = await commitHostedFiles({ ...deps, branch: 'hosted/42/post-crystal-ball', files, title: 't', body: 'b',
+    resolveFile: async (f) => { order.push(`resolve ${f.path.split('/').pop()}`); calls.push(`RESOLVE ${f.path}`); return resolveAudioEntry(f, deps); } });
+  assert.equal(committed.ok, true);
+  const puts = calls.filter((c) => c.startsWith('PUT'));
+  assert.equal(puts.length, 3);
+  assert.deepEqual(order, ['resolve index.md', 'resolve talk.mp3', 'resolve old.mp3']);
+  const writes = calls.filter((c) => /^(RESOLVE|PUT) /.test(c)).map((c) => `${c.split(' ')[0]} ${c.split('/').pop()}`);
+  assert.deepEqual(writes, ['RESOLVE index.md', 'PUT index.md', 'RESOLVE talk.mp3', 'PUT talk.mp3', 'RESOLVE old.mp3', 'PUT old.mp3'],
+    'each recording is read just before its own write, never all up front');
+  const failed = await commitHostedFiles({ ...deps, branch: 'b', files: [files[1]], title: 't', body: 'b', resolveFile: async () => null });
+  assert.deepEqual([failed.ok, failed.error, failed.message], [false, 'git_failed', `could not read ${files[1].path}`]);
   const small = async () => new Response(JSON.stringify({ sha: 's', encoding: 'base64', content: 'T2dn\nUw==' }), { status: 200 });
   assert.equal(await readMainBase64({ fetchImpl: small, instToken: 't', upstream: 'x/y', path: 'a' }), 'T2dnUw==', 'under 1 MB the contents call carries it');
   assert.equal(await readMainBase64({ fetchImpl: async () => new Response('{}', { status: 404 }), instToken: 't', upstream: 'x/y', path: 'a' }), null);
@@ -293,8 +312,8 @@ test('the wiring: the served route, the site policy, the WorkBench preview and t
   assert.match(publish, /\{ body, visibility: effInput\.visibility, builtPath: built\.path, oldPath: origin\?\.oldPath, moved, itemTokens \}/);
   assert.match(publish, /for \(const c of audioPlan\.cleanup\) await deleteStagedAudio\(c\.name, c\.item\);/);
   const worker = read('workers/signup/membership-author.mjs');
-  assert.match(worker, /const audio = await resolveAudioEntries\(\{ files: payload\.files, kv, githubId, fetchImpl, instToken, upstream \}\);/);
-  assert.match(worker, /commitHostedFiles\(\{ fetchImpl, instToken, upstream, branch, files: audio\.files, title, body \}\)/);
+  assert.match(worker, /const audio = await checkAudioEntries\(\{ files: payload\.files, \.\.\.audioDeps \}\);\s*if \(!audio\.ok\) return/);
+  assert.match(worker, /commitHostedFiles\(\{ fetchImpl, instToken, upstream, branch, files: payload\.files, title, body, resolveFile: \(f\) => resolveAudioEntry\(f, audioDeps\) \}\)/);
   assert.match(read('workers/signup/member-routes.mjs'), /corsHeaders\(request, env, \{ credentials: true, methods: 'GET, PUT, DELETE, OPTIONS' \}\)/);
   assert.match(read('src/lib/workbench-client-audio.ts'), /if \(csrf\) xhr\.setRequestHeader\('X-GBTI-CSRF', csrf\);/, 'a cookie PUT clears the CSRF gate');
   // Owner, 2026-10-27: every PAID member can upload. The tests above inject the authorizer, so the default is pinned here.

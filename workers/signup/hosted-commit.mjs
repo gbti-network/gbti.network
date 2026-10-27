@@ -116,7 +116,7 @@ export async function applyFile(fetchImpl, instToken, upstream, branch, f, attem
  *
  * `branch` must come from hostedBranchFor with the VERIFIED account number: the gate reads the author from it.
  */
-export async function commitHostedFiles({ fetchImpl, instToken, upstream, branch, files, title, body }) {
+export async function commitHostedFiles({ fetchImpl, instToken, upstream, branch, files, title, body, resolveFile = null }) {
   const gitFailed = (message) => ({ ok: false, status: 502, error: 'git_failed', message });
 
   // Fresh-base the branch on live main (create, or force-reset if it exists): each request carries the
@@ -138,7 +138,12 @@ export async function commitHostedFiles({ fetchImpl, instToken, upstream, branch
   }
 
   // Apply each file via the contents API on the branch. One retry on a 409 (concurrent sha race).
-  for (const f of files) {
+  // sow-483: `resolveFile` turns an entry into the one written (a recording named by reference gets its bytes) at the
+  // moment it is written, so only one recording is ever held in memory: two 20 MB recordings resolved up front, plus a
+  // request body each, would approach the Worker's 128 MB.
+  for (const entry of files) {
+    const f = resolveFile ? await resolveFile(entry) : entry;
+    if (!f) return gitFailed(`could not read ${entry.path}`);
     const applied = await applyFile(fetchImpl, instToken, upstream, branch, f);
     if (!applied.ok) return gitFailed(`could not write ${f.path}`);
   }
