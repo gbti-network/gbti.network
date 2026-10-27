@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-27T02:45:37.664Z'
+updatedAt: '2026-10-27T02:46:09.025Z'
 type: post
 author: atwellpub
 ---
@@ -31,7 +31,7 @@ src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ```
 
-*A Strategic Vision for the Next Generation of Digital Agencies;*  First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then shared on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>*.  *The podcast version above was generated through Notebook LLM to help better introduce the paper to readers before a deeper technical dive. If you are pressed on time, I advise starting above and then later visiting the paper in full.*
+*A Strategic Vision for the Next Generation of Digital Agencies;*  First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then shared on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>*.  *The podcast version was generated through Notebook LLM to help better introduce the paper to readers before a deeper technical dive. If you are pressed on time, I advise starting above and then later visiting the paper in full.*
 
 ## Executive Summary
 
