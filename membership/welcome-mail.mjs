@@ -92,7 +92,7 @@ const COUNT_WORDS = Object.freeze(['no', 'one', 'two', 'three', 'four', 'five', 
 const countWord = (n) => COUNT_WORDS[n] ?? String(n);
 
 /** What every welcome subject ends with: the one thing the email asks for. The bullet is U+2022, not a dash. */
-export const SUBJECT_TASK = ' \u2022 COMPLETE ONBOARDING INSIDE';
+export const SUBJECT_TASK = ' \u2022 COMPLETE ONBOARDING';
 /** The receipt cover's cell. Near square, so a 16:10 cover is cropped to the middle rather than shrunk. */
 const COVER_W = 120;
 const COVER_H = 104;
@@ -267,8 +267,9 @@ function discordHtml(t, base) {
 }
 
 /** The Discord block's words, shared by the html and the text body so the two cannot say different things. */
-const DISCORD_COPY = 'The community is the product. Weekly sessions, and somewhere to ask a question and get an answer'
-  + ' from a person. Your membership covers it, so you can join now.';
+// Owner's wording, 2026-10-27.
+const DISCORD_COPY = 'Come join us inside the private Discord for all GBTI Network members. Complete onboarding below'
+  + ' to claim your invite.';
 
 /**
  * One numbered step row. `n` is its position in the WHOLE offered list, so the email and the wizard agree. The

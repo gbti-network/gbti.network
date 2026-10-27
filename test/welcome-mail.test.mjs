@@ -30,7 +30,7 @@ const FREE = { name: 'Dana', status: 'none' };
 
 test('a paid claimer gets the receipt, the Discord block and every step the wizard would show', () => {
   const { subject, text, html } = welcomeMail(CLAIMER);
-  assert.equal(subject, 'Your prompt is live on GBTI Network \u2022 COMPLETE ONBOARDING INSIDE');
+  assert.equal(subject, 'Your prompt is live on GBTI Network \u2022 COMPLETE ONBOARDING');
   assert.match(html, /Your prompt is live, Sean\./);
   // The receipt, with the item, its credit and a link to the page it actually published to.
   assert.match(html, /PROMPT &#183; PUBLISHED|PROMPT · PUBLISHED/);
@@ -55,7 +55,7 @@ test('a paid claimer gets the receipt, the Discord block and every step the wiza
 
 test('a free account gets no receipt, no Discord block and three steps, and is never shown the locked door', () => {
   const { subject, text, html } = welcomeMail(FREE);
-  assert.equal(subject, 'Welcome to GBTI Network \u2022 COMPLETE ONBOARDING INSIDE');
+  assert.equal(subject, 'Welcome to GBTI Network \u2022 COMPLETE ONBOARDING');
   assert.match(html, /Welcome, Dana\. Here is what you can do\./);
   assert.doesNotMatch(html, /PUBLISHED/, 'nothing was published, so there is no receipt');
   assert.doesNotMatch(html, /Join the Discord/, 'a free account may not join it, so it is never offered');
@@ -215,8 +215,8 @@ test('the Discord block carries the Discord tile to the left of its words, and o
   const block = html.slice(html.lastIndexOf('<table', html.indexOf('Join the Discord')), html.indexOf('Join the Discord'));
   assert.match(block, /<img src="https:\/\/gbti\.network\/brand\/social\/discord-tile\.png" width="40" height="40" alt="Discord"/, 'the tile comes before the heading, in the same block');
   assert.doesNotMatch(welcomeMail(FREE).html, /discord-tile/, 'a free account is not offered Discord, so no tile');
-  assert.match(html, /The community is the product\. Weekly sessions/);
-  assert.doesNotMatch(html, /actual product|open to you now/, 'the 2026-10-27 copy edit');
+  assert.match(html, /Come join us inside the private Discord for all GBTI Network members\. Complete onboarding below to claim your invite\./);
+  assert.doesNotMatch(html, /actual product|open to you now|The community is the product/, 'the owner\'s 2026-10-27 wording replaced it');
   const tile = fs.readFileSync(path.join(HERE, '..', 'public/brand/social/discord-tile.png'));
   assert.equal(tile.subarray(1, 4).toString(), 'PNG', 'the tile the email names is a PNG the site serves');
   assert.equal(tile.readUInt32BE(16), 96, '96 wide, for a 40px slot');
