@@ -9,6 +9,7 @@
 // numbering of its internal constants (CSS25 became CSS24 and so on), because one module entered the graph.
 import { IMAGE_LAYOUT_ROW_CSS } from './image-layout-ui.mjs';
 import { listStyleProseCss } from './list-style-ui.mjs'; // sow-322: the list marker styles, on the block's own tag
+import { AUDIO_BLOCK_CSS } from './audio-block-ui.mjs'; // sow-483: the podcast block's form
 
 export const DOC_EDITOR_CSS = `
   /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
@@ -110,6 +111,7 @@ ${listStyleProseCss('.doc-blocks')}
   .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
   .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
   .up-st { font-size:12px; color:var(--s-fg-mute); }
+  ${AUDIO_BLOCK_CSS}
   /* members-only section divider + the tinted region after it */
   .mem-div { display:flex; align-items:center; gap:8px; margin:16px 0 8px; color:var(--s-green); font-weight:700; font-size:13px; }
   .mem-div::after { content:""; flex:1; height:1.5px; background:linear-gradient(to right, var(--s-green), transparent); }

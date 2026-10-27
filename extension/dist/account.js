@@ -1151,7 +1151,8 @@ ${String(lines2[i]).trimStart()}`;
         return MEMBERS_MARKER;
       case "heading":
         return `${"#".repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ""}`;
-      case "code": {
+      case "code":
+      case "audio": {
         const code = b.code ?? "";
         const runs = code.match(/^`{3,}/gm) || [];
         const fence = "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
@@ -1224,6 +1225,7 @@ ${String(lines2[i]).trimStart()}`;
         i++;
         if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
         else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim(), ...info[1] === "lightbox" ? { lightbox: true } : {} });
+        else if (info[0] === "audio") blocks2.push({ type: "audio", lang, code: code.join("\n") });
         else blocks2.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
@@ -1314,6 +1316,8 @@ ${String(lines2[i]).trimStart()}`;
         return { type: "callout", variant: "note", text: "" };
       case "members":
         return { type: "members" };
+      case "audio":
+        return { type: "audio", lang: "audio", code: "" };
       default:
         return { type: "paragraph", text: "" };
     }
@@ -2357,179 +2361,6 @@ ${String(body ?? "")}`;
     return out;
   }
 
-  // client-ui/src/doc-editor-css.mjs
-  var DOC_EDITOR_CSS = `
-  /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
-     (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
-     40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
-  :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
-  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
-  /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
-  .blk { position:relative; padding:2px 0; margin:2px 0; }
-  /* sow-327: where the change list lands you. Amber to match the staged-draft banner the list opens from,
-     and an animation rather than a held class so nothing has to remember to clean it up on a re-render. */
-  .blk-flash { border-radius:8px; animation: blkflash 1.8s ease-out 1; }
-  @keyframes blkflash {
-    0%, 55% { background:color-mix(in srgb, var(--s-amber, #d9a13c) 30%, transparent); box-shadow:0 0 0 4px color-mix(in srgb, var(--s-amber, #d9a13c) 30%, transparent); }
-    100% { background:transparent; box-shadow:0 0 0 4px transparent; }
-  }
-  @media (prefers-reduced-motion: reduce) { .blk-flash { animation-duration:.01s; outline:2px solid var(--s-amber, #d9a13c); } }
-  /* sow-328: THE BRIDGE, and without it the toolbar cannot be reached with a mouse at all.
-     The toolbar is absolutely positioned into the gutter, which is PADDING on .doc-blocks, so it sits
-     entirely outside .blk's own box with a dead strip between the two (a 142px offset against a 134px
-     toolbar leaves 8px, measured in a browser, not inferred). Crossing that strip drops :hover, which sets
-     the toolbar to pointer-events:none before the pointer arrives, and a non-hit-testable element cannot
-     restore the hover it needs: landing squarely on the toolbar still read opacity 0. So it vanished every
-     single time it was approached. Only :focus-within saved the text blocks, by keeping it up after a click
-     into the prose, which is why this read as an image-block problem.
-     This invisible child makes the gutter beside a block part of that block's own hover region, so the whole
-     column is a valid approach path. It is a ::before rather than ::after so the toolbar, later in DOM
-     order, still paints and hit-tests above it and keeps its clicks. */
-  .blk::before { content:''; position:absolute; top:0; right:calc(var(--blk-gutter) * -1); width:var(--blk-gutter); height:100%; }
-  .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
-    background:var(--s-surface); border:1px solid var(--s-line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08);
-    opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:2; }
-  .blk:hover > .blk-tools, .blk:focus-within > .blk-tools { opacity:1; pointer-events:auto; }
-  .bt { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px;
-    background:transparent; color:var(--s-fg-mute); cursor:pointer; padding:0; }
-  .bt:hover { background:var(--s-surface-2); color:var(--s-fg); }
-  .bt.danger:hover { color:#d2453f; }
-  .bt svg { width:16px; height:16px; }
-  .grip { cursor:grab; } .grip:active { cursor:grabbing; }
-  .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
-  /* the editing surfaces: borderless, "document" feel */
-  .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
-  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
-  .ce:focus { background:transparent; }
-  .ce.ce-code:focus { background:var(--ink); } /* a code block keeps its dark surface while edited, or its light text sits on white */
-  .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
-  .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
-  .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:24px; line-height:1.25; padding:10px 0 3px; }
-  .ce-h3 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:19.5px; line-height:1.3; padding:8px 0 2px; }
-  .ce-q { border-left:3px solid var(--s-green); padding-left:20px; color:var(--s-fg-soft); font-size:18px; line-height:1.55; font-style:italic; margin:6px 0; }
-  .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13.5px; line-height:1.6; color:#e6e4ee; background:var(--ink); border:1.5px solid var(--s-line-2); border-radius:8px; padding:13px 16px; margin:8px 0; }
-  .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
-  .ce-list li { padding:1px 0; }
-  .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
-  /* sow-322: scoped to .doc-blocks rather than .ce-list because the list block's ROOT tag carries the class
-     (ul.ce.ce-list.list-square) and a .ce-list-scoped rule could only reach the nested lists. */
-${listStyleProseCss(".doc-blocks")}
-  /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
-  .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
-  .ce strong, .ce b { font-weight:700; }
-  .ce em, .ce i { font-style:italic; }
-  .ce s, .ce del { text-decoration:line-through; opacity:.8; }
-  .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
-  /* sow-355: a footnote reference is a chip, not text the author types into; it reads back as [^id]. */
-  .md-fnchip { font-family:var(--font-mono, ui-monospace, monospace); font-size:.68em; line-height:1; color:var(--s-green-fg); background:var(--s-surface-2); border:1px solid var(--s-line-2); border-radius:4px; padding:1px 4px; margin:0 1px; vertical-align:super; user-select:all; cursor:default; }
-  /* callout */
-  .cwrap { margin:8px 0; }
-  .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
-  .cvar-lab { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono,monospace); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--s-fg-mute); padding-right:6px; border-right:1.5px solid var(--s-line-2); white-space:nowrap; }
-  .cvar-lab svg { width:13px; height:13px; }
-  .cvar button { font:inherit; font-size:11px; font-weight:600; padding:3px 9px; border-radius:7px; border:0; background:transparent; color:var(--s-fg-soft); cursor:pointer; text-transform:capitalize; }
-  .cvar button.on { background:var(--s-green); color:#fff; }
-  .callout { display:flex; gap:13px; padding:15px 17px; border-radius:8px; border:1.5px solid var(--s-tint-2); background:var(--s-tint); margin:0; }
-  .callout .cicon { width:24px; height:24px; flex:none; display:flex; align-items:center; justify-content:center; margin-top:1px; }
-  .callout .cicon svg { width:21px; height:21px; }
-  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; flex:1; }
-  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info .cicon { color:#3f74c9; }
-  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note .cicon { color:var(--s-green-fg); }
-  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning .cicon { color:#c9892b; }
-  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip .cicon { color:#7a5cc0; }
-  .co-lang { font:inherit; font-size:12px; color:var(--s-fg-mute); background:transparent; border:0; padding:0 0 4px; }
-  /* void cards (image / embed) */
-  .card { border:1.5px solid var(--s-line); border-radius:12px; padding:12px; background:var(--s-surface); display:flex; flex-direction:column; gap:8px; }
-  .card-h { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--s-fg-mute); } .card-h svg { width:18px; height:18px; }
-  .card input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--bg, var(--s-surface)); color:var(--s-fg); }
-  .card-prev { max-width:100%; border-radius:8px; border:1px solid var(--s-line); }
-  /* SOW-062 P6: image drop-zone placeholder (striped) + the preview frame */
-  .imgframe { border:1.5px solid var(--s-line-2); border-radius:9px; overflow:hidden; background:var(--s-surface-2); }
-  .imgframe img { width:100%; display:block; }
-  .imgframe figcaption { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-fg-mute); background:var(--s-tint); padding:4px 8px; }
-  .imgph { aspect-ratio:16/8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; color:var(--s-fg-mute); cursor:pointer;
-    background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); transition:color .14s ease, box-shadow .14s ease; }
-  .imgph:hover { color:var(--s-green-fg); }
-  .imgph.drag { color:var(--s-green-fg); background:var(--s-tint); box-shadow:inset 0 0 0 2px var(--s-green); }
-  .imgph svg { width:30px; height:30px; opacity:.55; }
-  .imgph-t { font-family:var(--font-mono,monospace); font-size:12px; }
-  .up { display:flex; align-items:center; gap:10px; }
-  ${IMAGE_LAYOUT_ROW_CSS}
-  .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
-  .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
-  .up-st { font-size:12px; color:var(--s-fg-mute); }
-  /* members-only section divider + the tinted region after it */
-  .mem-div { display:flex; align-items:center; gap:8px; margin:16px 0 8px; color:var(--s-green); font-weight:700; font-size:13px; }
-  .mem-div::after { content:""; flex:1; height:1.5px; background:linear-gradient(to right, var(--s-green), transparent); }
-  .mem-div svg { width:16px; height:16px; }
-  .mem-div .rm { margin-left:auto; }
-  .blk.in-members { border-left:2px solid var(--green-tint-2, rgba(31,158,95,.35)); padding-left:12px; margin-left:2px; }
-  /* add row */
-  .add-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
-  .add-btn { display:inline-flex; align-items:center; gap:7px; font:inherit; font-weight:600; font-size:13.5px; padding:9px 14px;
-    border:1.5px dashed var(--s-line); border-radius:10px; background:transparent; color:var(--s-fg-mute); cursor:pointer; }
-  .add-btn:hover { border-color:var(--s-green); color:var(--s-green); }
-  .add-btn svg { width:16px; height:16px; }
-  .add-menu { position:relative; }
-  .add-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:5; min-width:268px; background:var(--s-surface); border:1.5px solid var(--s-line);
-    border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:6px; }
-  /* SOW-062 5c-2: the slash menu (in-shadow popover). sow-235: the selection toolbar + link panel styles
-     moved to selection-toolbar.mjs, which injects them into this shadow root. */
-  .slash-pop { position:absolute; z-index:20; background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.2); }
-  .slash-pop { min-width:268px; max-height:300px; overflow:auto; padding:5px; }
-  /* sow-165 Q36: the image reuse grid, sized so a member scans thumbnails rather than filenames. */
-  .media-pop { min-width:330px; width:330px; max-height:340px; padding:8px; }
-  .media-q { width:100%; box-sizing:border-box; margin:0 0 8px; padding:6px 9px; font:inherit; font-size:12.5px; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); color:var(--s-fg); }
-  .media-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:7px; }
-  .media-cell { display:flex; flex-direction:column; gap:3px; padding:0; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); cursor:pointer; overflow:hidden; text-align:left; }
-  .media-cell:hover, .media-cell:focus-visible { border-color:var(--s-accent); }
-  .media-cell img { width:100%; height:62px; object-fit:cover; display:block; background:var(--s-line); }
-  .media-cell span { padding:3px 5px 5px; font-size:10.5px; line-height:1.25; color:var(--s-mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .media-load { padding:14px 8px; font-size:12.5px; color:var(--s-mute); text-align:center; }
-  /* SOW-062 P6: rich palette rows (icon box + name + description), shared by the add-block + slash menus */
-  .mi { display:flex; align-items:center; gap:11px; padding:8px 9px; border-radius:8px; cursor:pointer; }
-  .mi:hover, .mi.on { background:var(--s-surface-2); }
-  .mi-ic { width:32px; height:32px; flex:none; border-radius:7px; border:1.5px solid var(--s-line); background:var(--s-surface); display:flex; align-items:center; justify-content:center; color:var(--s-fg-soft); }
-  .mi.on .mi-ic { border-color:var(--s-green); color:var(--s-green-fg); background:var(--s-tint); }
-  .mi-ic svg { width:18px; height:18px; }
-  .mi-tx { display:flex; flex-direction:column; min-width:0; }
-  .mi-nm { font-weight:600; font-size:14px; }
-  .mi-ds { font-size:11.5px; color:var(--s-fg-mute); margin-top:1px; }
-  /* SOW-169: the editable table block */
-  .tbl-card { padding:12px; }
-  .tbl-scroll { overflow-x:auto; }
-  .tbl { border-collapse:collapse; width:100%; font-size:14px; }
-  .tbl th, .tbl td { border:1px solid var(--s-line); padding:0; vertical-align:top; }
-  .tbl th { background:var(--s-surface-2); }
-  .tbl .corner { border:0; background:transparent; width:0; }
-  .tbl td.row-ctl { border:0; background:transparent; width:28px; text-align:center; }
-  .tbl .tc { min-width:80px; padding:7px 9px; outline:none; color:var(--s-fg); }
-  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#6c6976); }
-  .tbl th .th-ctl { display:flex; gap:2px; justify-content:flex-end; padding:2px 4px; border-top:1px dashed var(--s-line); }
-  .tbtn { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 4px; border:1px solid var(--s-line); border-radius:5px; background:var(--s-surface); color:var(--s-fg-soft); font-size:11px; font-weight:700; cursor:pointer; }
-  .tbtn svg { width:12px; height:12px; }
-  .tbtn:hover { border-color:var(--s-green); color:var(--s-green); }
-  .tbtn.del:hover { border-color:#d9534f; color:#d9534f; }
-  .tbl-ctl { display:flex; gap:8px; margin-top:10px; }
-  .tbl-ctl .tadd { display:inline-flex; align-items:center; gap:5px; font:inherit; font-size:12.5px; font-weight:600; border:1px solid var(--s-line); border-radius:7px; background:var(--s-surface); color:var(--s-fg); padding:5px 11px; cursor:pointer; }
-  .tbl-ctl .tadd svg { width:13px; height:13px; }
-  .tbl-ctl .tadd:hover { border-color:var(--s-green); color:var(--s-green); }
-  /* sow-169, found at phone width on 2026-09-08: the gutter is a HOVER affordance and a phone has neither hover nor
-     the room. At 241px of document it left every block 99px wide, so a paragraph wrapped one word per line and a
-     table showed one column. Below 560px of the editor's own width there is no gutter and no paragraph
-     right-padding; a block's toolbar flows in at the TOP of the block while the block is focused (a tap focuses
-     it) instead of floating beside it, pushing the text down rather than covering it. Wide layouts keep the
-     measured 142px column. */
-  @container (max-width: 560px) {
-    .doc-blocks { padding-right:0; }
-    /* No gutter here, so the bridge would hang off the right edge and push the page sideways. */
-    .blk::before { content:none; }
-    .ce-p { padding-right:0; }
-    .blk-tools { position:static; display:none; width:max-content; margin:0 0 6px auto; opacity:1; }
-    .blk:focus-within > .blk-tools { display:flex; }
-  }
-`;
-
   // client/src/audio-embed.mjs
   var AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
   var PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
@@ -2607,6 +2438,29 @@ ${listStyleProseCss(".doc-blocks")}
       return { provider, kind: episode ? "episode" : "show", page: `https://podcasts.apple.com/${pathPart}`, src: `https://embed.podcasts.apple.com/${pathPart}`, height: episode ? 175 : 450 };
     }
     return null;
+  }
+  var KNOWN_HOSTS = [
+    [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
+    [/(^|\.)vimeo\.com$/, "Vimeo"],
+    [/(^|\.)tiktok\.com$/, "TikTok"],
+    [/(^|\.)mixcloud\.com$/, "Mixcloud"],
+    [/(^|\.)soundcloud\.com$/, "SoundCloud"],
+    [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
+    [/(^|\.)apple\.com$/, "Apple"]
+  ];
+  function embedProblem(provider, raw) {
+    const name = PROVIDER_NAMES[provider] || "this service";
+    const wants = { soundcloud: "a SoundCloud track or playlist link", spotify: "a Spotify episode or show link", apple: "an Apple Podcasts episode or show link" }[provider] || "a link";
+    const u = parse(raw);
+    if (!u) return `"${String(raw ?? "").trim()}" is not a web address. Paste ${wants}.`;
+    const host = u.hostname.toLowerCase();
+    if (/^on\.soundcloud\.com$|^spotify\.link$|^spoti\.fi$/.test(host)) return `This is a short link. Open it, then copy the full ${name} address from the page.`;
+    const known = KNOWN_HOSTS.find(([re]) => re.test(host.replace(/^(www|m)\./, "")));
+    if (known && known[1] !== name && !(provider === "apple" && known[1] === "Apple")) {
+      const video = ["YouTube", "Vimeo", "TikTok"].includes(known[1]) ? ", or add the video with a Video block" : "";
+      return `This is a ${known[1]} link. Paste ${wants}${video}.`;
+    }
+    return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
   }
 
   // client/src/content-blocks.mjs
@@ -3009,6 +2863,544 @@ ${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
 ${barWidthCss(s)}`;
   }
 
+  // client/src/audio-block-edit.mjs
+  var AUDIO_SOURCES = ["upload", ...AUDIO_PROVIDERS];
+  var SOURCE_NAMES = { upload: "Upload", ...PROVIDER_NAMES };
+  var SOURCE_KEYS = ["src", ...AUDIO_PROVIDERS];
+  var keyFor = (kind2) => kind2 === "upload" ? "src" : kind2;
+  var AUDIO_MAX_BYTES = 20 * 1024 * 1024;
+  var AUDIO_EXTS = ["mp3", "ogg", "opus"];
+  var LINE_ORDER = ["style", "length", ...SOURCE_KEYS, "link", "link-label"];
+  var keyOf = (line) => {
+    const i = String(line).indexOf(":");
+    return i > 0 ? line.slice(0, i).trim().toLowerCase() : null;
+  };
+  var valueOf = (line) => String(line).slice(String(line).indexOf(":") + 1).trim();
+  function audioLabelOf(lang) {
+    return String(lang ?? "").replace(/^audio(\s+|$)/, "");
+  }
+  function setAudioLabel(lang, label) {
+    const v2 = String(label ?? "").replace(/\s+/g, " ").trim();
+    if (v2 === audioLabelOf(lang).replace(/\s+/g, " ").trim()) return String(lang ?? "") || "audio";
+    return v2 ? `audio ${v2}` : "audio";
+  }
+  function audioLineValue(body, key) {
+    const k = String(key).toLowerCase();
+    const line = String(body ?? "").split("\n").find((l) => keyOf(l) === k);
+    return line === void 0 ? "" : valueOf(line);
+  }
+  function setAudioLine(body, key, value) {
+    const k = String(key).toLowerCase();
+    const v2 = String(value ?? "").replace(/\s*\n\s*/g, " ").trim();
+    const lines2 = String(body ?? "") === "" ? [] : String(body).split("\n");
+    const first = lines2.findIndex((l) => keyOf(l) === k);
+    const out = [];
+    lines2.forEach((l, i) => {
+      if (keyOf(l) !== k) out.push(l);
+      else if (i === first && v2) out.push(valueOf(l) === v2 ? l : `${k}: ${v2}`);
+    });
+    if (first < 0 && v2) {
+      const rank = LINE_ORDER.indexOf(k);
+      const at3 = out.findIndex((l) => LINE_ORDER.indexOf(keyOf(l)) > rank);
+      out.splice(at3 < 0 ? out.length : at3, 0, `${k}: ${v2}`);
+    }
+    return out.join("\n");
+  }
+  function audioSourceOf(body) {
+    for (const l of String(body ?? "").split("\n")) {
+      const k = keyOf(l);
+      if (SOURCE_KEYS.includes(k)) return { kind: k === "src" ? "upload" : k, value: valueOf(l) };
+    }
+    return null;
+  }
+  function setAudioSource(body, kind2, value) {
+    const key = keyFor(kind2);
+    let out = setAudioLine(body, key, value);
+    for (const k of SOURCE_KEYS) if (k !== key) out = setAudioLine(out, k, "");
+    return out;
+  }
+  function audioLinkNote(provider, value) {
+    const v2 = String(value ?? "").trim();
+    if (!v2) return null;
+    const e = audioEmbed(provider, v2);
+    if (!e) return { ok: false, text: embedProblem(provider, v2) };
+    const name = PROVIDER_NAMES[provider];
+    const where = provider === "apple" ? "the Apple Podcasts player" : `${name}'s own player`;
+    return { ok: true, text: `${/^[AEIOU]/.test(name) ? "An" : "A"} ${name} ${e.kind}. It plays in ${where}.`, page: e.page };
+  }
+  function formatBytes(n) {
+    const b = Math.max(0, Number(n) || 0);
+    if (b < 1024 * 1024) return `${Math.max(1, Math.round(b / 1024))} KB`;
+    const mb = b / (1024 * 1024);
+    return `${mb < 100 ? mb.toFixed(1).replace(/\.0$/, "") : Math.round(mb)} MB`;
+  }
+  var OTHER_FORMATS = {
+    wav: "a WAV",
+    m4a: "an M4A",
+    m4b: "an M4B",
+    aac: "an AAC",
+    flac: "a FLAC",
+    aif: "an AIFF",
+    aiff: "an AIFF",
+    wma: "a WMA",
+    webm: "a WebM",
+    mp4: "an MP4",
+    mov: "a QuickTime",
+    amr: "an AMR"
+  };
+  var audioExt = (name) => ((/\.([A-Za-z0-9]+)$/.exec(String(name ?? "")) || [])[1] || "").toLowerCase();
+  function audioFileProblem({ name, size } = {}) {
+    const ext = audioExt(name);
+    const okFormat = AUDIO_EXTS.includes(ext);
+    const tooBig = Number(size) > AUDIO_MAX_BYTES;
+    if (okFormat && !tooBig) return null;
+    const file = String(name ?? "") || "This file";
+    const what = OTHER_FORMATS[ext] ? `is ${OTHER_FORMATS[ext]} recording` : "is a kind of file the player cannot play";
+    const title = tooBig ? `This file is ${formatBytes(size)}. The limit is 20 MB.` : "The player takes MP3 or Ogg files.";
+    const rest = okFormat ? " can be exported again at a lower bitrate, such as 64 kbps for speech. Then choose it again." : ` ${what}. Export it as MP3, then choose it again.`;
+    return { title, name: file, rest };
+  }
+
+  // client-ui/src/audio-block-ui.mjs
+  var icon = (paths, w2 = 1.8) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="${w2}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  var AUDIO_ICON_PATHS = '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>';
+  var NOTE = icon(AUDIO_ICON_PATHS);
+  var UPLOAD = icon('<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>');
+  var CHECK = icon('<path d="M5 12l5 5 9-10"/>', 2.2);
+  var ALERT = icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>', 2);
+  var PLUS = icon('<path d="M12 5v14M5 12h14"/>', 2);
+  var PASTE = {
+    soundcloud: "Paste a SoundCloud track or playlist link",
+    spotify: "Paste a Spotify episode or show link",
+    apple: "Paste an Apple Podcasts episode or show link"
+  };
+  var WEB_ADDRESS = "Paste a full web address, starting with https://.";
+  var isWebAddress = (v2) => /^https?:\/\/\S+$/i.test(String(v2 ?? "").trim());
+  function audioSourceKind(b) {
+    const s = audioSourceOf(b.code);
+    return s ? s.kind : AUDIO_SOURCES.includes(b._src) ? b._src : "upload";
+  }
+  var lab = (text2, forId) => `<label class="ab-lab" for="${forId}">${text2}</label>`;
+  var seg = (name, items, on, attr2, id) => `<div class="ab-seg" role="group" aria-label="${name}">${items.map(([k, words]) => `<button type="button" ${attr2}="${k}" data-id="${id}" aria-pressed="${k === on}">${words}</button>`).join("")}</div>`;
+  function uploadField(b, a) {
+    const id = b._id;
+    const pick = `<input type="file" accept=".mp3,.ogg,.opus,audio/mpeg,audio/ogg" hidden data-ab-file="${id}" />`;
+    const p = b._file?.problem;
+    if (p) {
+      return `<div class="ab-alert" role="alert">${ALERT}<div><p class="ab-alert-t">${esc2(p.title)}</p><p class="ab-alert-d"><span class="ab-mono">${esc2(p.name)}</span>${esc2(p.rest)}</p></div></div><button type="button" class="ab-btn ab-self" data-ab-pick="${id}">Choose another file</button>${pick}`;
+    }
+    const src = audioSourceOf(b.code)?.value || "";
+    if (src) {
+      const name = src.split("/").pop();
+      const ok = a.sources.length > 0;
+      const meta = ok ? `${audioExt(name).toUpperCase()} · published on gbti.network` : "This path cannot be played. Choose the file again.";
+      return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc2(name)}</span><span class="ab-file-m${ok ? "" : " ab-bad-t"}">${esc2(meta)}</span></div><button type="button" class="ab-btn" data-ab-pick="${id}">Replace</button><button type="button" class="ab-btn" data-ab-remove="${id}">Remove</button></div><p class="ab-hint">MP3 or Ogg, up to 20 MB. It is published with the article and played from gbti.network.</p>${pick}`;
+    }
+    const waiting = b._file?.waiting;
+    return `<button type="button" class="ab-drop" data-ab-drop="${id}">${UPLOAD}<span class="ab-mono">Drop an MP3 or Ogg file here, or click to choose one</span></button>` + (waiting ? `<p class="ab-hint ab-wait" role="status">Uploads arrive in the next update. Choose <span class="ab-mono">${esc2(waiting.name)}</span> again once it lands.</p>` : '<p class="ab-hint">Up to 20 MB, roughly an hour of speech as MP3.</p>') + pick;
+  }
+  function providerField(b, kind2) {
+    const id = b._id;
+    const value = audioSourceOf(b.code)?.value || "";
+    const note = audioLinkNote(kind2, value);
+    const state = note ? note.ok ? " ab-ok" : " ab-bad" : "";
+    return `<div class="ab-f"><input id="ab-sv-${id}" class="ab-in${state}" data-ab="source" data-kind="${kind2}" data-id="${id}" value="${esc2(value)}" aria-label="${esc2(SOURCE_NAMES[kind2])} link" placeholder="${esc2(PASTE[kind2])}" aria-describedby="ab-note-${id}"${note && !note.ok ? ' aria-invalid="true"' : ""} /><p class="ab-note${note ? note.ok ? " ab-ok-t" : " ab-bad-t" : ""}" id="ab-note-${id}" data-ab-note="${id}">${noteHtml(note)}</p></div>`;
+  }
+  var noteHtml = (note) => note ? `${note.ok ? CHECK : ALERT}<span>${esc2(note.text)}</span>` : "";
+  function linkOut(b, a) {
+    const id = b._id;
+    const raw = audioLineValue(b.code, "link");
+    const words = audioLineValue(b.code, "link-label");
+    if (!raw && !words && !b._linkOpen) return `<button type="button" class="ab-add" data-ab-linkopen="${id}">${PLUS} Add a link out</button>`;
+    const bad = raw && !isWebAddress(raw);
+    return `<div class="ab-out"><span class="ab-lab" id="ab-out-${id}">Link out, optional</span><div class="ab-two"><input class="ab-in${bad ? " ab-bad" : ""}" data-ab="link" data-id="${id}" value="${esc2(raw)}" aria-label="Link out address" placeholder="https://" aria-describedby="ab-lnote-${id}"${bad ? ' aria-invalid="true"' : ""} /><input class="ab-in" data-ab="link-label" data-id="${id}" value="${esc2(words)}" aria-label="Link out words" placeholder="${esc2(a.link ? audioLinkLabel(a.link, "") : "Words, such as Listen on Spotify")}" /></div><p class="ab-note ab-bad-t" id="ab-lnote-${id}" data-ab-lnote="${id}">${bad ? `${ALERT}<span>${WEB_ADDRESS}</span>` : ""}</p></div>`;
+  }
+  function audioBlockHtml(b) {
+    const id = b._id;
+    const a = parseAudio(b.code || "", audioLabelOf(b.lang));
+    const kind2 = audioSourceKind(b);
+    return `<section class="card ab" aria-label="Podcast player block"><div class="card-h">${NOTE} Podcast player</div><div class="ab-two"><div class="ab-f">${lab("Label", `ab-l-${id}`)}<input id="ab-l-${id}" class="ab-in" data-ab="label" data-id="${id}" value="${esc2(audioLabelOf(b.lang))}" placeholder="Label, such as Listen to the podcast version" /></div><div class="ab-f">${lab("Length", `ab-n-${id}`)}<input id="ab-n-${id}" class="ab-in" data-ab="length" data-id="${id}" value="${esc2(audioLineValue(b.code, "length"))}" placeholder="Length, such as 22 minutes" /></div></div><div class="ab-f"><span class="ab-lab">Source</span>${seg("Source", AUDIO_SOURCES.map((k) => [k, SOURCE_NAMES[k]]), kind2, "data-ab-src", id)}</div>` + (kind2 === "upload" ? uploadField(b, a) : providerField(b, kind2)) + (kind2 === "upload" && audioSourceOf(b.code) ? `<div class="ab-row"><span class="ab-lab">Player style</span>${seg("Player style", AUDIO_STYLES.map((s) => [s, s === "bar" ? "Bar" : "Card"]), a.style, "data-ab-style", id)}</div>` : "") + linkOut(b, a) + "</section>";
+  }
+  function switchAudioSource(b, next) {
+    const cur = audioSourceKind(b);
+    if (cur === next || !AUDIO_SOURCES.includes(next)) return false;
+    const stash = b._stash ||= {};
+    const link = audioLineValue(b.code, "link");
+    const auto = link && link === b._autoLink;
+    stash[cur] = { value: audioSourceOf(b.code)?.value || "", style: cur === "upload" ? audioLineValue(b.code, "style") : "", link: auto ? link : "" };
+    let code = setAudioSource(b.code, next, stash[next]?.value || "");
+    if (auto) {
+      code = setAudioLine(code, "link", "");
+      b._autoLink = null;
+    }
+    if (stash[next]?.link && !audioLineValue(code, "link")) {
+      code = setAudioLine(code, "link", stash[next].link);
+      b._autoLink = stash[next].link;
+    }
+    code = setAudioLine(code, "style", next === "upload" ? stash.upload?.style || "" : "");
+    b.code = code;
+    b._src = next;
+    b._file = null;
+    return true;
+  }
+  function setAudioProviderLink(b, kind2, value) {
+    b.code = setAudioSource(b.code, kind2, value);
+    const note = audioLinkNote(kind2, value);
+    const link = audioLineValue(b.code, "link");
+    if (note?.ok && (!link || link === b._autoLink) && link !== note.page) {
+      b.code = setAudioLine(b.code, "link", note.page);
+      b._autoLink = note.page;
+      return { note, linkChanged: true };
+    }
+    return { note, linkChanged: false };
+  }
+  function wireAudioBlocks(root, ctx) {
+    const all = (sel) => Array.from(root.querySelectorAll(sel));
+    const redraw = (b, focusSel) => {
+      ctx.render();
+      ctx.change();
+      if (focusSel) ctx.focus(focusSel);
+    };
+    for (const btn of all(".ab button")) btn.addEventListener("mousedown", (e) => e.preventDefault());
+    for (const el of all("input[data-ab]")) {
+      el.addEventListener("input", () => {
+        const b = ctx.byId(el.dataset.id);
+        if (!b) return;
+        const v2 = el.value;
+        const f = el.dataset.ab;
+        if (f === "label") b.lang = setAudioLabel(b.lang, v2);
+        else if (f === "length") b.code = setAudioLine(b.code, "length", v2);
+        else if (f === "link-label") b.code = setAudioLine(b.code, "link-label", v2);
+        else if (f === "link") {
+          b.code = setAudioLine(b.code, "link", v2);
+          b._autoLink = null;
+          const bad = v2.trim() && !isWebAddress(v2);
+          el.classList.toggle("ab-bad", !!bad);
+          if (bad) el.setAttribute("aria-invalid", "true");
+          else el.removeAttribute("aria-invalid");
+          const n = root.querySelector(`[data-ab-lnote="${b._id}"]`);
+          if (n) n.innerHTML = bad ? `${ALERT}<span>${WEB_ADDRESS}</span>` : "";
+          const words = root.querySelector(`input[data-ab="link-label"][data-id="${b._id}"]`);
+          if (words) words.placeholder = isWebAddress(v2) ? audioLinkLabel(v2.trim(), "") : "Words, such as Listen on Spotify";
+        } else if (f === "source") {
+          const { note, linkChanged } = setAudioProviderLink(b, el.dataset.kind, v2);
+          if (linkChanged) {
+            b._linkOpen = true;
+            redraw(b, `#ab-sv-${b._id}`);
+            return;
+          }
+          el.classList.toggle("ab-ok", !!note?.ok);
+          el.classList.toggle("ab-bad", !!note && !note.ok);
+          if (note && !note.ok) el.setAttribute("aria-invalid", "true");
+          else el.removeAttribute("aria-invalid");
+          const n = root.querySelector(`[data-ab-note="${b._id}"]`);
+          if (n) {
+            n.className = `ab-note${note ? note.ok ? " ab-ok-t" : " ab-bad-t" : ""}`;
+            n.innerHTML = noteHtml(note);
+          }
+        }
+        ctx.change();
+      });
+    }
+    for (const btn of all("[data-ab-src]")) btn.addEventListener("click", () => {
+      const b = ctx.byId(btn.dataset.id);
+      if (b && switchAudioSource(b, btn.dataset.abSrc)) redraw(b, `[data-ab-src="${btn.dataset.abSrc}"][data-id="${b._id}"]`);
+    });
+    for (const btn of all("[data-ab-style]")) btn.addEventListener("click", () => {
+      const b = ctx.byId(btn.dataset.id);
+      if (b) {
+        b.code = setAudioStyle(b.code, btn.dataset.abStyle);
+        redraw(b, `[data-ab-style="${btn.dataset.abStyle}"][data-id="${b._id}"]`);
+      }
+    });
+    for (const btn of all("[data-ab-linkopen]")) btn.addEventListener("click", () => {
+      const b = ctx.byId(btn.dataset.abLinkopen);
+      if (b) {
+        b._linkOpen = true;
+        ctx.render();
+        ctx.focus(`input[data-ab="link"][data-id="${b._id}"]`);
+      }
+    });
+    for (const btn of all("[data-ab-remove]")) btn.addEventListener("click", () => {
+      const b = ctx.byId(btn.dataset.abRemove);
+      if (b) {
+        b.code = setAudioSource(b.code, "upload", "");
+        b._file = null;
+        redraw(b, `[data-ab-drop="${b._id}"]`);
+      }
+    });
+    const take = (b, file) => {
+      if (!b || !file) return;
+      const problem = audioFileProblem({ name: file.name, size: file.size });
+      if (problem) {
+        b._file = { problem };
+        ctx.render();
+        ctx.focus(`[data-ab-pick="${b._id}"]`);
+        return;
+      }
+      if (typeof ctx.stageAudio === "function") {
+        ctx.stageAudio(b, file);
+        return;
+      }
+      b._file = { waiting: { name: file.name } };
+      ctx.render();
+    };
+    for (const input of all("input[data-ab-file]")) input.addEventListener("change", () => take(ctx.byId(input.dataset.abFile), input.files?.[0]));
+    const openPicker = (id) => root.querySelector(`input[data-ab-file="${id}"]`)?.click();
+    for (const btn of all("[data-ab-pick]")) btn.addEventListener("click", () => openPicker(btn.dataset.abPick));
+    for (const zone of all("[data-ab-drop]")) {
+      zone.addEventListener("click", () => openPicker(zone.dataset.abDrop));
+      zone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add("drag");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove("drag");
+        take(ctx.byId(zone.dataset.abDrop), e.dataTransfer?.files?.[0]);
+      });
+    }
+  }
+  var AUDIO_BLOCK_CSS = `
+  .ab { gap:12px; padding:14px; }
+  .ab .ab-two { display:grid; grid-template-columns:3fr 2fr; gap:10px; }
+  .ab .ab-f { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .ab .ab-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .ab .ab-lab { display:block; margin:0; font-family:var(--font-mono,monospace); font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--s-fg-mute); }
+  .ab input.ab-in { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); }
+  .ab input.ab-in:focus { outline:none; border-color:var(--s-green); box-shadow:0 0 0 3px var(--s-sel); }
+  .ab input.ab-in.ab-ok { border-color:var(--s-green); }
+  .ab input.ab-in.ab-bad { border-color:#c0392b; }
+  .ab .ab-seg { display:inline-flex; align-self:flex-start; gap:4px; padding:4px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:8px; }
+  .ab .ab-seg button { font:inherit; font-size:12px; font-weight:600; padding:5px 11px; border:0; border-radius:6px; background:transparent; color:var(--s-fg-soft); cursor:pointer; }
+  .ab .ab-seg button:hover { background:var(--s-surface-3); color:var(--s-fg); }
+  .ab .ab-seg button[aria-pressed="true"] { background:#0f6f40; color:#fff; }
+  .ab .ab-seg button:focus-visible, .ab .ab-btn:focus-visible, .ab .ab-drop:focus-visible, .ab .ab-add:focus-visible { outline:2px solid var(--s-green); outline-offset:2px; }
+  .ab .ab-drop { height:108px; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; font:inherit; border:1.5px dashed var(--s-line-2); border-radius:9px; background:var(--s-surface-2); color:var(--s-fg-soft); cursor:pointer; padding:0 12px; }
+  .ab .ab-drop:hover, .ab .ab-drop.drag { color:var(--s-green-fg); border-color:var(--s-green); background:var(--s-tint); }
+  .ab .ab-drop svg { width:26px; height:26px; }
+  .ab .ab-mono { font-family:var(--font-mono,monospace); font-size:12px; }
+  .ab .ab-hint, .ab .ab-note { margin:-4px 0 0; font-size:12px; line-height:1.45; color:var(--s-fg-mute); }
+  .ab .ab-note { margin:0; display:flex; align-items:flex-start; gap:6px; font-size:12.5px; }
+  .ab .ab-note:empty { display:none; }
+  .ab .ab-note svg { flex:none; width:15px; height:15px; margin-top:1px; }
+  .ab .ab-ok-t { color:var(--s-green-fg); }
+  .ab .ab-bad-t { color:#b03224; }
+  .ab .ab-wait { color:var(--s-fg-soft); }
+  .ab .ab-file { display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; }
+  .ab .ab-file-ic { flex:none; width:34px; height:34px; border-radius:8px; background:var(--s-tint); color:var(--s-green-fg); display:flex; align-items:center; justify-content:center; }
+  .ab .ab-file-ic svg { width:18px; height:18px; }
+  .ab .ab-file-tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .ab .ab-file-n { font-size:12.5px; font-weight:500; color:var(--s-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ab .ab-file-m { font-size:12px; color:var(--s-fg-mute); }
+  .ab .ab-btn { flex:none; font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
+  .ab .ab-btn:hover { border-color:var(--s-green); color:var(--s-green-fg); background:var(--s-surface); }
+  .ab .ab-self { align-self:flex-start; }
+  .ab .ab-alert { display:flex; align-items:flex-start; gap:12px; padding:12px; background:#fdf0ee; border:1.5px solid #f0c4bd; border-radius:9px; }
+  .ab .ab-alert > svg { flex:none; width:18px; height:18px; margin-top:1px; color:#b03224; }
+  .ab .ab-alert p { margin:0; }
+  .ab .ab-alert-t { font-size:13.5px; font-weight:600; color:#8f2318; }
+  .ab .ab-alert p.ab-alert-d { margin-top:4px; font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
+  .ab .ab-out { display:flex; flex-direction:column; gap:6px; padding-top:12px; border-top:1.5px solid var(--s-surface-3); }
+  .ab .ab-add { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:13px; font-weight:600; padding:6px 2px; border:0; background:transparent; color:var(--s-green-fg); cursor:pointer; }
+  .ab .ab-add:hover { background:transparent; text-decoration:underline; text-underline-offset:3px; }
+  .ab .ab-add svg { width:14px; height:14px; }
+  :host-context([data-theme="dark"]) .ab .ab-seg button[aria-pressed="true"] { background:var(--s-green); color:#10120f; }
+  :host-context([data-theme="dark"]) .ab input.ab-in { background:var(--s-surface-2); border-color:var(--s-line-2); }
+  :host-context([data-theme="dark"]) .ab input.ab-in.ab-ok { border-color:var(--s-green); }
+  :host-context([data-theme="dark"]) .ab input.ab-in.ab-bad { border-color:#e0735f; }
+  :host-context([data-theme="dark"]) .ab .ab-bad-t { color:#f0a59a; }
+  :host-context([data-theme="dark"]) .ab .ab-alert { background:rgba(224,90,72,.12); border-color:rgba(224,90,72,.38); }
+  :host-context([data-theme="dark"]) .ab .ab-alert > svg { color:#f08a7c; }
+  :host-context([data-theme="dark"]) .ab .ab-alert-t { color:#f0a59a; }
+  /* A phone (the editor's own width): Label and Length stacked, the Source a two by two grid with 40px targets. */
+  @container (max-width: 560px) {
+    .ab .ab-two { grid-template-columns:1fr; }
+    .ab .ab-seg { display:grid; grid-template-columns:1fr 1fr; align-self:stretch; }
+    .ab .ab-seg button { min-height:40px; font-size:13px; }
+    .ab input.ab-in { font-size:15px; padding:10px; }
+    .ab .ab-file { flex-wrap:wrap; }
+    .ab .ab-file-tx { flex-basis:calc(100% - 46px); }
+  }
+`;
+
+  // client-ui/src/doc-editor-css.mjs
+  var DOC_EDITOR_CSS = `
+  /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
+     (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
+     40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
+  :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
+  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
+  /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
+  .blk { position:relative; padding:2px 0; margin:2px 0; }
+  /* sow-327: where the change list lands you. Amber to match the staged-draft banner the list opens from,
+     and an animation rather than a held class so nothing has to remember to clean it up on a re-render. */
+  .blk-flash { border-radius:8px; animation: blkflash 1.8s ease-out 1; }
+  @keyframes blkflash {
+    0%, 55% { background:color-mix(in srgb, var(--s-amber, #d9a13c) 30%, transparent); box-shadow:0 0 0 4px color-mix(in srgb, var(--s-amber, #d9a13c) 30%, transparent); }
+    100% { background:transparent; box-shadow:0 0 0 4px transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) { .blk-flash { animation-duration:.01s; outline:2px solid var(--s-amber, #d9a13c); } }
+  /* sow-328: THE BRIDGE, and without it the toolbar cannot be reached with a mouse at all.
+     The toolbar is absolutely positioned into the gutter, which is PADDING on .doc-blocks, so it sits
+     entirely outside .blk's own box with a dead strip between the two (a 142px offset against a 134px
+     toolbar leaves 8px, measured in a browser, not inferred). Crossing that strip drops :hover, which sets
+     the toolbar to pointer-events:none before the pointer arrives, and a non-hit-testable element cannot
+     restore the hover it needs: landing squarely on the toolbar still read opacity 0. So it vanished every
+     single time it was approached. Only :focus-within saved the text blocks, by keeping it up after a click
+     into the prose, which is why this read as an image-block problem.
+     This invisible child makes the gutter beside a block part of that block's own hover region, so the whole
+     column is a valid approach path. It is a ::before rather than ::after so the toolbar, later in DOM
+     order, still paints and hit-tests above it and keeps its clicks. */
+  .blk::before { content:''; position:absolute; top:0; right:calc(var(--blk-gutter) * -1); width:var(--blk-gutter); height:100%; }
+  .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
+    background:var(--s-surface); border:1px solid var(--s-line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:2; }
+  .blk:hover > .blk-tools, .blk:focus-within > .blk-tools { opacity:1; pointer-events:auto; }
+  .bt { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px;
+    background:transparent; color:var(--s-fg-mute); cursor:pointer; padding:0; }
+  .bt:hover { background:var(--s-surface-2); color:var(--s-fg); }
+  .bt.danger:hover { color:#d2453f; }
+  .bt svg { width:16px; height:16px; }
+  .grip { cursor:grab; } .grip:active { cursor:grabbing; }
+  .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
+  /* the editing surfaces: borderless, "document" feel */
+  .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
+  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
+  .ce:focus { background:transparent; }
+  .ce.ce-code:focus { background:var(--ink); } /* a code block keeps its dark surface while edited, or its light text sits on white */
+  .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
+  .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
+  .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:24px; line-height:1.25; padding:10px 0 3px; }
+  .ce-h3 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:19.5px; line-height:1.3; padding:8px 0 2px; }
+  .ce-q { border-left:3px solid var(--s-green); padding-left:20px; color:var(--s-fg-soft); font-size:18px; line-height:1.55; font-style:italic; margin:6px 0; }
+  .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13.5px; line-height:1.6; color:#e6e4ee; background:var(--ink); border:1.5px solid var(--s-line-2); border-radius:8px; padding:13px 16px; margin:8px 0; }
+  .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
+  .ce-list li { padding:1px 0; }
+  .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
+  /* sow-322: scoped to .doc-blocks rather than .ce-list because the list block's ROOT tag carries the class
+     (ul.ce.ce-list.list-square) and a .ce-list-scoped rule could only reach the nested lists. */
+${listStyleProseCss(".doc-blocks")}
+  /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
+  .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
+  .ce strong, .ce b { font-weight:700; }
+  .ce em, .ce i { font-style:italic; }
+  .ce s, .ce del { text-decoration:line-through; opacity:.8; }
+  .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
+  /* sow-355: a footnote reference is a chip, not text the author types into; it reads back as [^id]. */
+  .md-fnchip { font-family:var(--font-mono, ui-monospace, monospace); font-size:.68em; line-height:1; color:var(--s-green-fg); background:var(--s-surface-2); border:1px solid var(--s-line-2); border-radius:4px; padding:1px 4px; margin:0 1px; vertical-align:super; user-select:all; cursor:default; }
+  /* callout */
+  .cwrap { margin:8px 0; }
+  .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
+  .cvar-lab { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono,monospace); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--s-fg-mute); padding-right:6px; border-right:1.5px solid var(--s-line-2); white-space:nowrap; }
+  .cvar-lab svg { width:13px; height:13px; }
+  .cvar button { font:inherit; font-size:11px; font-weight:600; padding:3px 9px; border-radius:7px; border:0; background:transparent; color:var(--s-fg-soft); cursor:pointer; text-transform:capitalize; }
+  .cvar button.on { background:var(--s-green); color:#fff; }
+  .callout { display:flex; gap:13px; padding:15px 17px; border-radius:8px; border:1.5px solid var(--s-tint-2); background:var(--s-tint); margin:0; }
+  .callout .cicon { width:24px; height:24px; flex:none; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .callout .cicon svg { width:21px; height:21px; }
+  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; flex:1; }
+  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info .cicon { color:#3f74c9; }
+  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note .cicon { color:var(--s-green-fg); }
+  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning .cicon { color:#c9892b; }
+  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip .cicon { color:#7a5cc0; }
+  .co-lang { font:inherit; font-size:12px; color:var(--s-fg-mute); background:transparent; border:0; padding:0 0 4px; }
+  /* void cards (image / embed) */
+  .card { border:1.5px solid var(--s-line); border-radius:12px; padding:12px; background:var(--s-surface); display:flex; flex-direction:column; gap:8px; }
+  .card-h { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--s-fg-mute); } .card-h svg { width:18px; height:18px; }
+  .card input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--bg, var(--s-surface)); color:var(--s-fg); }
+  .card-prev { max-width:100%; border-radius:8px; border:1px solid var(--s-line); }
+  /* SOW-062 P6: image drop-zone placeholder (striped) + the preview frame */
+  .imgframe { border:1.5px solid var(--s-line-2); border-radius:9px; overflow:hidden; background:var(--s-surface-2); }
+  .imgframe img { width:100%; display:block; }
+  .imgframe figcaption { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-fg-mute); background:var(--s-tint); padding:4px 8px; }
+  .imgph { aspect-ratio:16/8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; color:var(--s-fg-mute); cursor:pointer;
+    background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); transition:color .14s ease, box-shadow .14s ease; }
+  .imgph:hover { color:var(--s-green-fg); }
+  .imgph.drag { color:var(--s-green-fg); background:var(--s-tint); box-shadow:inset 0 0 0 2px var(--s-green); }
+  .imgph svg { width:30px; height:30px; opacity:.55; }
+  .imgph-t { font-family:var(--font-mono,monospace); font-size:12px; }
+  .up { display:flex; align-items:center; gap:10px; }
+  ${IMAGE_LAYOUT_ROW_CSS}
+  .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
+  .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
+  .up-st { font-size:12px; color:var(--s-fg-mute); }
+  ${AUDIO_BLOCK_CSS}
+  /* members-only section divider + the tinted region after it */
+  .mem-div { display:flex; align-items:center; gap:8px; margin:16px 0 8px; color:var(--s-green); font-weight:700; font-size:13px; }
+  .mem-div::after { content:""; flex:1; height:1.5px; background:linear-gradient(to right, var(--s-green), transparent); }
+  .mem-div svg { width:16px; height:16px; }
+  .mem-div .rm { margin-left:auto; }
+  .blk.in-members { border-left:2px solid var(--green-tint-2, rgba(31,158,95,.35)); padding-left:12px; margin-left:2px; }
+  /* add row */
+  .add-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
+  .add-btn { display:inline-flex; align-items:center; gap:7px; font:inherit; font-weight:600; font-size:13.5px; padding:9px 14px;
+    border:1.5px dashed var(--s-line); border-radius:10px; background:transparent; color:var(--s-fg-mute); cursor:pointer; }
+  .add-btn:hover { border-color:var(--s-green); color:var(--s-green); }
+  .add-btn svg { width:16px; height:16px; }
+  .add-menu { position:relative; }
+  .add-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:5; min-width:268px; background:var(--s-surface); border:1.5px solid var(--s-line);
+    border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:6px; }
+  /* SOW-062 5c-2: the slash menu (in-shadow popover). sow-235: the selection toolbar + link panel styles
+     moved to selection-toolbar.mjs, which injects them into this shadow root. */
+  .slash-pop { position:absolute; z-index:20; background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.2); }
+  .slash-pop { min-width:268px; max-height:300px; overflow:auto; padding:5px; }
+  /* sow-165 Q36: the image reuse grid, sized so a member scans thumbnails rather than filenames. */
+  .media-pop { min-width:330px; width:330px; max-height:340px; padding:8px; }
+  .media-q { width:100%; box-sizing:border-box; margin:0 0 8px; padding:6px 9px; font:inherit; font-size:12.5px; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); color:var(--s-fg); }
+  .media-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:7px; }
+  .media-cell { display:flex; flex-direction:column; gap:3px; padding:0; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); cursor:pointer; overflow:hidden; text-align:left; }
+  .media-cell:hover, .media-cell:focus-visible { border-color:var(--s-accent); }
+  .media-cell img { width:100%; height:62px; object-fit:cover; display:block; background:var(--s-line); }
+  .media-cell span { padding:3px 5px 5px; font-size:10.5px; line-height:1.25; color:var(--s-mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .media-load { padding:14px 8px; font-size:12.5px; color:var(--s-mute); text-align:center; }
+  /* SOW-062 P6: rich palette rows (icon box + name + description), shared by the add-block + slash menus */
+  .mi { display:flex; align-items:center; gap:11px; padding:8px 9px; border-radius:8px; cursor:pointer; }
+  .mi:hover, .mi.on { background:var(--s-surface-2); }
+  .mi-ic { width:32px; height:32px; flex:none; border-radius:7px; border:1.5px solid var(--s-line); background:var(--s-surface); display:flex; align-items:center; justify-content:center; color:var(--s-fg-soft); }
+  .mi.on .mi-ic { border-color:var(--s-green); color:var(--s-green-fg); background:var(--s-tint); }
+  .mi-ic svg { width:18px; height:18px; }
+  .mi-tx { display:flex; flex-direction:column; min-width:0; }
+  .mi-nm { font-weight:600; font-size:14px; }
+  .mi-ds { font-size:11.5px; color:var(--s-fg-mute); margin-top:1px; }
+  /* SOW-169: the editable table block */
+  .tbl-card { padding:12px; }
+  .tbl-scroll { overflow-x:auto; }
+  .tbl { border-collapse:collapse; width:100%; font-size:14px; }
+  .tbl th, .tbl td { border:1px solid var(--s-line); padding:0; vertical-align:top; }
+  .tbl th { background:var(--s-surface-2); }
+  .tbl .corner { border:0; background:transparent; width:0; }
+  .tbl td.row-ctl { border:0; background:transparent; width:28px; text-align:center; }
+  .tbl .tc { min-width:80px; padding:7px 9px; outline:none; color:var(--s-fg); }
+  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#6c6976); }
+  .tbl th .th-ctl { display:flex; gap:2px; justify-content:flex-end; padding:2px 4px; border-top:1px dashed var(--s-line); }
+  .tbtn { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 4px; border:1px solid var(--s-line); border-radius:5px; background:var(--s-surface); color:var(--s-fg-soft); font-size:11px; font-weight:700; cursor:pointer; }
+  .tbtn svg { width:12px; height:12px; }
+  .tbtn:hover { border-color:var(--s-green); color:var(--s-green); }
+  .tbtn.del:hover { border-color:#d9534f; color:#d9534f; }
+  .tbl-ctl { display:flex; gap:8px; margin-top:10px; }
+  .tbl-ctl .tadd { display:inline-flex; align-items:center; gap:5px; font:inherit; font-size:12.5px; font-weight:600; border:1px solid var(--s-line); border-radius:7px; background:var(--s-surface); color:var(--s-fg); padding:5px 11px; cursor:pointer; }
+  .tbl-ctl .tadd svg { width:13px; height:13px; }
+  .tbl-ctl .tadd:hover { border-color:var(--s-green); color:var(--s-green); }
+  /* sow-169, found at phone width on 2026-09-08: the gutter is a HOVER affordance and a phone has neither hover nor
+     the room. At 241px of document it left every block 99px wide, so a paragraph wrapped one word per line and a
+     table showed one column. Below 560px of the editor's own width there is no gutter and no paragraph
+     right-padding; a block's toolbar flows in at the TOP of the block while the block is focused (a tap focuses
+     it) instead of floating beside it, pushing the text down rather than covering it. Wide layouts keep the
+     measured 142px column. */
+  @container (max-width: 560px) {
+    .doc-blocks { padding-right:0; }
+    /* No gutter here, so the bridge would hang off the right edge and push the page sideways. */
+    .blk::before { content:none; }
+    .ce-p { padding-right:0; }
+    .blk-tools { position:static; display:none; width:max-content; margin:0 0 6px auto; opacity:1; }
+    .blk:focus-within > .blk-tools { display:flex; }
+  }
+`;
+
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
   var withId = (b) => {
@@ -3027,7 +3419,9 @@ ${barWidthCss(s)}`;
     { key: "ol", label: "Numbered list", type: "list", ordered: true, icon: "listol", desc: "An ordered list" },
     { key: "table", label: "Table", icon: "table", desc: "Rows and columns" },
     { key: "image", label: "Image", icon: "img", desc: "Upload or embed a picture" },
-    { key: "embed", label: "Video / embed", icon: "video", desc: "YouTube or Vimeo" }
+    { key: "embed", label: "Video / embed", icon: "video", desc: "YouTube or Vimeo" },
+    { key: "audio", label: "Podcast player", icon: "audio", desc: "A recording, or SoundCloud, Spotify or Apple" }
+    // sow-483
   ];
   var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc2(c.label)}</span><span class="mi-ds">${esc2(c.desc)}</span></span></div>`;
   var convertKey = (b) => b.type === "heading" ? `h${Math.min(3, Math.max(1, b.level || 2))}` : b.type === "list" ? b.ordered ? "ol" : "ul" : b.type;
@@ -3049,6 +3443,7 @@ ${barWidthCss(s)}`;
     img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     gear: '<path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.86-1.43-1.8-3.12-2.2.88a7 7 0 0 0-1.73-1l-.33-2.33h-3.6l-.33 2.33a7 7 0 0 0-1.73 1l-2.2-.88-1.8 3.12L7.1 11c-.05.33-.08.66-.08 1s.03.67.08 1l-1.86 1.43 1.8 3.12 2.2-.88c.52.4 1.1.74 1.73 1l.33 2.33h3.6l.33-2.33a7 7 0 0 0 1.73-1l2.2.88 1.8-3.12L19.4 13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+    audio: `<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${AUDIO_ICON_PATHS}</g>`,
     info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>',
     // SOW-062 P6: block-palette glyphs for the rich slash / add-block menu rows (from the hi-fi sprite).
     text: '<path d="M5 6h14M5 6v1.5M19 6v1.5M12 6v13M9.5 19h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -3255,10 +3650,11 @@ ${barWidthCss(s)}`;
           const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
           return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
+        case "audio":
+          return audioBlockHtml(b);
+        // sow-483: the podcast block's form (client-ui/src/audio-block-ui.mjs)
         case "code": {
-          const audioStyle = /^audio(\s|$)/.test(b.lang || "") ? parseAudio(b.code || "").style : null;
-          const bar = audioStyle ? `<div class="cvar"><span class="cvar-lab">${svg("gear")} Player style</span>${AUDIO_STYLES.map((x) => `<button type="button" class="${x === audioStyle ? "on" : ""}" data-astyle="${b._id}" data-aval="${x}">${x}</button>`).join("")}</div>` : "";
-          return bar + `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
+          return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
         }
         case "list": {
           const items = Array.isArray(b.items) && b.items.length ? b.items : [""];
@@ -3390,15 +3786,17 @@ ${barWidthCss(s)}`;
           this._change();
         }
       }));
-      this.$$("[data-astyle]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.astyle);
-        if (b) {
-          b.code = setAudioStyle(b.code || "", el.dataset.aval);
-          this._render();
-          this._focusBlock(b._id);
-          this._change();
+      wireAudioBlocks(this.root, { byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
+        const el = this.$(sel);
+        el?.focus();
+        if (el && typeof el.setSelectionRange === "function" && el.type !== "file") {
+          const n = el.value.length;
+          try {
+            el.setSelectionRange(n, n);
+          } catch {
+          }
         }
-      }));
+      } });
       const tblCols = (b) => Math.max(1, Array.isArray(b.head) ? b.head.length : 1);
       const tblNorm = (b) => {
         const c = tblCols(b);
@@ -3860,6 +4258,14 @@ ${barWidthCss(s)}`;
       if (cur.text != null && "text" in next) next.text = cur.text;
       if (cur.text != null && next.type === "code") next.code = cur.text;
       if (cur.text != null && next.type === "list") next.items = String(cur.text).split("\n");
+      if (cur.type === "audio" && next.type === "code") {
+        next.lang = cur.lang;
+        next.code = cur.code;
+      }
+      if (cur.type === "code" && next.type === "audio" && /^audio(\s|$)/.test(cur.lang || "")) {
+        next.lang = cur.lang;
+        next.code = cur.code;
+      }
       this._blocks[i] = next;
       this._closeConvert();
       this._render();
@@ -4770,9 +5176,9 @@ ${barWidthCss(s)}`;
     }
     if (u.protocol !== "https:" && u.protocol !== "http:") return null;
     if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
-    const seg = u.pathname.split("/").filter(Boolean);
-    if (seg.length !== 2) return null;
-    const [account, mix] = seg;
+    const seg2 = u.pathname.split("/").filter(Boolean);
+    if (seg2.length !== 2) return null;
+    const [account, mix] = seg2;
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
     if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
     return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
@@ -6467,7 +6873,7 @@ ${barWidthCss(s)}`;
     if (!p.length) return list;
     return list.filter((it2) => {
       const cats = Array.isArray(it2 && it2.categories) ? it2.categories : [];
-      return p.every((seg, i) => cats[i] === seg);
+      return p.every((seg2, i) => cats[i] === seg2);
     });
   }
 
@@ -6589,7 +6995,7 @@ ${barWidthCss(s)}`;
       key: n.path.join("/"),
       label: n.label,
       depth: n.level,
-      crumbs: n.path.slice(0, -1).map((seg, i) => labelOf.get(n.path.slice(0, i + 1).join("/")) || seg)
+      crumbs: n.path.slice(0, -1).map((seg2, i) => labelOf.get(n.path.slice(0, i + 1).join("/")) || seg2)
     }));
   }
   function highlightParts(label, query) {
@@ -6683,7 +7089,7 @@ ${barWidthCss(s)}`;
   }
   var svg3 = (body, cls) => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
   var CARET = svg3('<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>', "caret");
-  var CHECK = svg3('<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>', "ck");
+  var CHECK2 = svg3('<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>', "ck");
   var SEARCH = svg3('<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>', "si");
   var WARN = svg3('<path d="M12 3 2 20h20L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>', "warn");
   var MONO = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
@@ -6875,7 +7281,7 @@ ${barWidthCss(s)}`;
         const p = highlightParts(r.label, r.muted ? "" : q2);
         const cls = `opt${sel ? " sel" : ""}${r.muted ? " muted" : ""}${tree && r.depth === 0 ? " top" : ""}`;
         const pad = tree ? 12 + r.depth * 20 : r.depth ? 20 : 12;
-        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc2(p.pre)}${p.mid ? `<mark>${esc2(p.mid)}</mark>` : ""}${esc2(p.post)}</span>${r.ambiguous && r.crumbs?.length ? `<span class="cpath">${esc2(r.crumbs.join(PATH_SEP))}</span>` : ""}${sel ? CHECK : ""}</div>`;
+        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc2(p.pre)}${p.mid ? `<mark>${esc2(p.mid)}</mark>` : ""}${esc2(p.post)}</span>${r.ambiguous && r.crumbs?.length ? `<span class="cpath">${esc2(r.crumbs.join(PATH_SEP))}</span>` : ""}${sel ? CHECK2 : ""}</div>`;
       }).join("") + (inSec ? "</div>" : "");
       list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
       this._paintActive(true);
@@ -7781,12 +8187,12 @@ ${barWidthCss(s)}`;
   var BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S2} stroke-width="1.8" stroke-linejoin="round"/>`);
   var COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S2} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S2} stroke-width="1.7" stroke-linecap="round"/>`);
   var CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
-  var PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S2} stroke-width="2" stroke-linecap="round"/>`);
+  var PLUS2 = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S2} stroke-width="2" stroke-linecap="round"/>`);
   var TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S2} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`);
   var VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S2} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S2} stroke-width="1.7" stroke-linejoin="round"/>`);
   var CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S2} stroke-width="1.8" stroke-linejoin="round"/>`);
   var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S2} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S2} stroke-width="1.8" stroke-linecap="round"/>`);
-  var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var CHECK3 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
 
   // client-ui/src/elements/editor-cheatsheet.mjs
@@ -8799,7 +9205,7 @@ ${barWidthCss(s)}`;
       const rows = links.map((l, i) => this._linkRowHtml(l, i)).join("");
       return `<label>Links <span class="hint">· buttons on the project page</span></label>
       <div class="linkrows" data-links>${rows}</div>
-      <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
+      <button class="ebtn addrow" type="button" data-addlink>${PLUS2} Add link</button>
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc2(JSON.stringify(links))}" />`;
     }
     // sow-454 (defect 1, reported by a member 2026-10-13): the type was a free-text input backed by a
@@ -8912,7 +9318,7 @@ ${barWidthCss(s)}`;
       <div class="galactions">
         <button class="ebtn" type="button" data-galupload>${IMG} Upload screenshots</button>
         <button class="ebtn" type="button" data-galreuse>Reuse</button>
-        <button class="ebtn addrow" type="button" data-addshot>${PLUS} Add by path</button>
+        <button class="ebtn addrow" type="button" data-addshot>${PLUS2} Add by path</button>
         <span class="up-st" data-gal-st></span>
       </div>
       <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-galfile />
@@ -9530,7 +9936,8 @@ ${barWidthCss(s)}`;
     image: "Image",
     embed: "Embed",
     callout: "Callout",
-    members: "Members-only divider"
+    members: "Members-only divider",
+    audio: "Podcast player"
   };
   var blockNoun = (type) => BLOCK_NOUNS[type] || "Block";
   function normalize(v2) {
@@ -9878,7 +10285,7 @@ ${barWidthCss(s)}`;
         }
         const authorTarget = authorTargetFor(this.$("#ownerSelect")?.value, this._ownerSelInitial);
         const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, authorTarget, ...skillFile !== void 0 ? { skillFile } : {} });
-        this._setChip(`${CHECK2} Published`, "ok");
+        this._setChip(`${CHECK3} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
         this.staged = false;
@@ -10028,7 +10435,7 @@ ${barWidthCss(s)}`;
           // sow-109: a skill's SKILL.md is kept with the draft
         });
         this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
-        this._setChip(`${CHECK2} Draft saved`, "ok");
+        this._setChip(`${CHECK3} Draft saved`, "ok");
         if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc2(res.renamed.from)}</b> becomes <b>${esc2(res.renamed.to)}</b> when you publish. The old link will redirect.`);
         this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft saved privately with the pending permalink change (${esc2(res.renamed.from)} to ${esc2(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft saved privately. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
@@ -10953,14 +11360,14 @@ ${barWidthCss(s)}`;
       const theme = currentTheme();
       const glass = currentGlass();
       const glow = currentGlow();
-      const seg = (name, options, active) => `<div class="seg">` + options.map(([v2, lbl]) => `<button type="button" class="segbtn${v2 === active ? " on" : ""}" data-set-${name}="${v2}">${esc2(lbl)}</button>`).join("") + `</div>`;
+      const seg2 = (name, options, active) => `<div class="seg">` + options.map(([v2, lbl]) => `<button type="button" class="segbtn${v2 === active ? " on" : ""}" data-set-${name}="${v2}">${esc2(lbl)}</button>`).join("") + `</div>`;
       const slider = (key, label, desc, val) => `<div class="row"><div class="rl"><div class="t">${label}</div><div class="d">${desc}</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${val}" data-set-${key} aria-label="${label}" /><span class="rngval" data-${key}-val>${val}%</span></div></div>`;
       const glassRow = layout === "glass" ? slider("glass", "Surface opacity", "How opaque the frosted glass panels are. Lower is more see-through.", glass) + slider("glow", "Color highlight intensity", "How vivid the colorful backdrop glow is. Lower is calmer; 0 turns the colors off.", glow) : "";
       return `<section class="sec">
       <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Layout</div><div class="d">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</div></div><div class="rc">${seg("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div></div>
-        <div class="row"><div class="rl"><div class="t">Theme</div><div class="d">Light, dark, or follow your system.</div></div><div class="rc">${seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div></div>
+        <div class="row"><div class="rl"><div class="t">Layout</div><div class="d">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</div></div><div class="rc">${seg2("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div></div>
+        <div class="row"><div class="rl"><div class="t">Theme</div><div class="d">Light, dark, or follow your system.</div></div><div class="rc">${seg2("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div></div>
         ${glassRow}
       </div>
     </section>`;
@@ -15013,7 +15420,7 @@ ${barWidthCss(s)}`;
     merge: '<path d="M6 3v6a4 4 0 0 0 4 4h8"/><path d="m15 10 3 3-3 3"/><path d="M6 21v-4"/>',
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
-  var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
+  var icon2 = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
   var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
@@ -15268,9 +15675,9 @@ ${barWidthCss(s)}`;
         <div class="dhead"><div class="dtag">${esc2(sel.tag)}</div>
           <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? "" : "s"}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? "" : "s"}` : ""}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? "" : "s"}` : ""}${sel.project ? ` · ${sel.project} product${sel.project === 1 ? "" : "s"}` : ""}</div></div>
         <div class="dactions">
-          <button type="button" id="act-rename" title="Rename this tag everywhere">${icon("pencil")} Rename</button>
-          <button type="button" id="act-merge" title="Merge this tag into another">${icon("merge")} Merge</button>
-          <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
+          <button type="button" id="act-rename" title="Rename this tag everywhere">${icon2("pencil")} Rename</button>
+          <button type="button" id="act-merge" title="Merge this tag into another">${icon2("merge")} Merge</button>
+          <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon2("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
         <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE9}${esc2(i.url || "")}" target="_blank" rel="noopener">
@@ -16314,13 +16721,13 @@ ${barWidthCss(s)}`;
       const moreHtml = more.length ? `<details class="pl-more"${this._openId === id ? " open" : ""} data-more="${esc2(id)}"><summary aria-label="More actions for ${esc2(title)}">&middot;&middot;&middot;</summary><div class="pl-menu">${more.join("")}</div></details>` : "";
       const link = this._linkId === id ? preparedLinkFor(row) : null;
       const linkHtml = link ? `<div class="pl-link"><input readonly value="${esc2(link)}" aria-label="Invitation link for ${esc2(title)}" /></div>` : "";
-      const noteHtml = st2 === "publishing" ? '<p class="pl-note">Edit, revoke and delete wait until the pull request merges or closes. Only the link can be copied.</p>' : st2 === "revoked" ? '<p class="pl-note">There is no link to copy until it is sent again under a live campaign.</p>' : "";
+      const noteHtml2 = st2 === "publishing" ? '<p class="pl-note">Edit, revoke and delete wait until the pull request merges or closes. Only the link can be copied.</p>' : st2 === "revoked" ? '<p class="pl-note">There is no link to copy until it is sent again under a live campaign.</p>' : "";
       const confirmHtml = this._confirmId === id && has(PREPARED_ACTION.remove) ? `<div class="pl-confirm"><span>${esc2(preparedDeleteConfirm(row))}</span>${btn("confirm-delete", "Delete for good", " pl-danger")}${btn("cancel-delete", "Keep it")}</div>` : "";
       const accent = lane === "ready" && st2 === "prepared" ? " accent" : "";
       return `<article class="pl-card${accent}${this._busyId === id ? " busy" : ""}" data-id="${esc2(id)}">
       <div class="pl-top"><span class="pl-title">${esc2(title)}</span><span class="pl-st ${esc2(pillClass)}">${esc2(pill)}</span></div>
       ${metaHtml ? `<p class="pl-meta">${metaHtml}</p>` : ""}
-      ${noteHtml}
+      ${noteHtml2}
       ${shown.length || moreHtml ? `<div class="pl-acts">${shown.join("")}${moreHtml}</div>` : ""}
       ${linkHtml}
       ${confirmHtml}
@@ -17060,7 +17467,7 @@ ${barWidthCss(s)}`;
     "ico-copy": '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
     "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
   };
-  var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
+  var icon3 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
   var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc5(r.text)}</code>` : esc5(r.text)).join("");
   var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
   function sharedFolderNote(tab, tabs, field2 = "folder") {
@@ -17082,15 +17489,15 @@ ${barWidthCss(s)}`;
     const tabId = (t) => `skill-tab-${t.key}`;
     const panelId = (t) => `skill-panel-${t.key}`;
     const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc5(t.key)}">${esc5(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc5(tabs[0].label)}</p>`;
-    const download = fileHref ? `<a class="skill-btn" href="${esc5(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
-    const makeFolder = (text2, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ""}><p class="skill-step-t">${text2}</p><div class="${s.cmd}"><code>${esc5(cmd)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc5(cmd)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc5(shared)}</p>` : "") + `</div>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc5(fileHref)}" download="SKILL.md">${icon3("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const makeFolder = (text2, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ""}><p class="skill-step-t">${text2}</p><div class="${s.cmd}"><code>${esc5(cmd)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc5(cmd)}">${icon3("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc5(shared)}</p>` : "") + `</div>`;
     const scopeSwitch = (t) => `<div class="${s.toolsRow} ${s.scope}"><span id="skill-scope-l-${esc5(t.key)}" class="skill-tools-label">Install for</span><div class="${s.tools}" role="radiogroup" aria-labelledby="skill-scope-l-${esc5(t.key)}"><button type="button" role="radio" aria-checked="true" tabindex="0" data-skill-scope="all">All projects</button><button type="button" role="radio" aria-checked="false" tabindex="-1" data-skill-scope="project">This project</button></div></div>`;
     const panels = tabs.map((t, i) => {
       const project = typeof t.localFolder === "string" && t.localFolder && t.localMkdir;
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc5(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `>` + (project ? scopeSwitch(t) : "") + `<ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span>` + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? "all" : "") + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, "localFolder"), "project") : "") + `</li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol></div>`;
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc5(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `>` + (project ? scopeSwitch(t) : "") + `<ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span>` + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? "all" : "") + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, "localFolder"), "project") : "") + `</li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon3("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol></div>`;
     }).join("");
     const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc5(also)}</p>` : "") + `</section>`;
+    return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon3("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc5(also)}</p>` : "") + `</section>`;
   }
   function wireSkillPage(root = document, storage = globalThis.localStorage) {
     const box = root.querySelector("[data-skill-install]");
@@ -17839,17 +18246,17 @@ ${SKILL_BOX_CSS}`;
     });
     return problems;
   }
-  function iconProblems(icon3, where = "icon") {
-    if (!isMap(icon3)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
+  function iconProblems(icon4, where = "icon") {
+    if (!isMap(icon4)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
     const problems = [];
-    for (const k of Object.keys(icon3)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
-    if (typeof icon3.name !== "string" || !NAME_RE.test(icon3.name) || icon3.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
-    if (typeof icon3.set !== "string" || !SET_RE.test(icon3.set) || icon3.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
-    if (typeof icon3.viewBox !== "string" || !VIEWBOX.test(icon3.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
+    for (const k of Object.keys(icon4)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
+    if (typeof icon4.name !== "string" || !NAME_RE.test(icon4.name) || icon4.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
+    if (typeof icon4.set !== "string" || !SET_RE.test(icon4.set) || icon4.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
+    if (typeof icon4.viewBox !== "string" || !VIEWBOX.test(icon4.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
     const budget = { nodes: 0, total: 0 };
-    problems.push(...attrProblems(icon3.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
-    if (!Array.isArray(icon3.shapes) || icon3.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
-    else problems.push(...shapeProblems(icon3.shapes, `${where}.shapes`, 1, budget));
+    problems.push(...attrProblems(icon4.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
+    if (!Array.isArray(icon4.shapes) || icon4.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
+    else problems.push(...shapeProblems(icon4.shapes, `${where}.shapes`, 1, budget));
     if (budget.nodes > ICON_LIMITS.nodes) problems.push(`${where}: too many shapes (max ${ICON_LIMITS.nodes})`);
     if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
     return problems;
@@ -17863,10 +18270,10 @@ ${SKILL_BOX_CSS}`;
       return `<${s.tag}${attrString(s.attrs)}>${inner}</${s.tag}>`;
     }).join("");
   }
-  function iconSvg(icon3, className = "") {
-    if (iconProblems(icon3).length) return "";
+  function iconSvg(icon4, className = "") {
+    if (iconProblems(icon4).length) return "";
     const cls = className ? ` class="${escAttr5(className)}"` : "";
-    return `<svg${cls} viewBox="${escAttr5(icon3.viewBox)}"${attrString(icon3.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon3.shapes)}</svg>`;
+    return `<svg${cls} viewBox="${escAttr5(icon4.viewBox)}"${attrString(icon4.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon4.shapes)}</svg>`;
   }
 
   // membership/cta-card-render.mjs
@@ -18541,11 +18948,11 @@ ${SKILL_BOX_CSS}`;
     return cardPreview(card, { image, dark: st2.pvDark, phone: st2.pvPhone });
   }
   function previewAside(st2) {
-    const seg = (on, act, text2) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text2}</button>`;
+    const seg2 = (on, act, text2) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text2}</button>`;
     return `<aside class="ed-prev">
     <div class="pv-bar"><h4>Preview</h4>
-      <div class="segs">${seg(!st2.pvDark, "pv-light", "Light")}${seg(st2.pvDark, "pv-dark", "Dark")}</div>
-      <div class="segs">${seg(!st2.pvPhone, "pv-side", "Sidebar")}${seg(st2.pvPhone, "pv-phone", "Phone")}</div>
+      <div class="segs">${seg2(!st2.pvDark, "pv-light", "Light")}${seg2(st2.pvDark, "pv-dark", "Dark")}</div>
+      <div class="segs">${seg2(!st2.pvPhone, "pv-side", "Sidebar")}${seg2(st2.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st2.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st2)}</div>
     <p class="pv-note" data-region="pvnote">${esc7(previewNote(st2.d))}</p>
@@ -19356,9 +19763,9 @@ ${SKILL_BOX_CSS}`;
           this._searchIcons();
           return;
         case "icon": {
-          const icon3 = st2.icons.results[Number(b.dataset.i)];
-          if (!icon3) return;
-          st2.d.icon = icon3;
+          const icon4 = st2.icons.results[Number(b.dataset.i)];
+          if (!icon4) return;
+          st2.d.icon = icon4;
           st2.pickerOpen = false;
           break;
         }
@@ -22515,7 +22922,9 @@ ${BLOCKED_PILL_CSS}
         // any list inside it) show exactly as they will publish. A callout keeps the quote look, with the published
         // callout's line breaks: every line its own, so a blank line stays a blank line.
         case "quote":
+        case "audio":
           return renderMarkdown(serializeBlocks([b]));
+        // sow-483: the podcast block, as the published note draws it
         case "callout":
           return `<blockquote>${String(b.text || "").split("\n").map((l) => inlineMdToHtml(l)).join("<br>")}</blockquote>`;
         case "code":
@@ -24503,7 +24912,7 @@ ${link}` : ""}`;
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
-  var CHECK3 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHECK4 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
@@ -24632,7 +25041,7 @@ ${link}` : ""}`;
         const on = all.filter((t) => sel.has(t.key)).length;
         return on ? `${on} of ${all.length}` : `${all.length}`;
       };
-      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc2(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${sel.has(t.key) ? CHECK3 : ""}${esc2(t.label)}</button>`).join("");
+      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc2(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${sel.has(t.key) ? CHECK4 : ""}${esc2(t.label)}</button>`).join("");
       list.className = `list ${this._busy ? "busy" : ""}`;
       list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<div class="gh"><h4 class="grp">${esc2(g.group)}</h4><span class="tally">${tally(g.group)}</span></div>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : '<p class="muted">No topic matches that filter.</p>';
       const cnt = this.$("[data-cnt]");
@@ -25507,12 +25916,12 @@ ${link}` : ""}`;
     </section>`;
     }
     _presence(m) {
-      const seg = (key, on) => `<div class="seg"><button type="button" class="segbtn${on ? "" : " on"}" data-toggle="${key}" data-val="off">Off</button><button type="button" class="segbtn${on ? " on" : ""}" data-toggle="${key}" data-val="on">On</button></div>`;
+      const seg2 = (key, on) => `<div class="seg"><button type="button" class="segbtn${on ? "" : " on"}" data-toggle="${key}" data-val="off">Off</button><button type="button" class="segbtn${on ? " on" : ""}" data-toggle="${key}" data-val="on">On</button></div>`;
       return `<section class="sec">
       <div class="sec-h"><h3>Presence</h3><p>Where you show up on the network.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Available for hire</div><div class="d">Shows a "for hire" chip on your directory card.</div></div><div class="rc">${seg("forHire", m.forHire)}</div></div>
-        <div class="row"><div class="rl"><div class="t">List in the member directory</div><div class="d">Include your profile in the public members grid at /members/.</div></div><div class="rc">${seg("directory", m.directory)}</div></div>
+        <div class="row"><div class="rl"><div class="t">Available for hire</div><div class="d">Shows a "for hire" chip on your directory card.</div></div><div class="rc">${seg2("forHire", m.forHire)}</div></div>
+        <div class="row"><div class="rl"><div class="t">List in the member directory</div><div class="d">Include your profile in the public members grid at /members/.</div></div><div class="rc">${seg2("directory", m.directory)}</div></div>
       </div>
     </section>`;
     }
@@ -27012,7 +27421,7 @@ ${link}` : ""}`;
   var LEGACY_SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
   var BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-  var CHECK4 = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+  var CHECK5 = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
   function loadLegacySeen() {
     try {
       return JSON.parse(readLegacy(LEGACY_SEEN_KEY)) || {};
@@ -27277,7 +27686,7 @@ ${link}` : ""}`;
     }
     _clrBtn() {
       if (this._clearFlash === "busy") return `<button class="clr" type="button" disabled aria-busy="true"><span class="spin"></span>Marking...</button>`;
-      if (this._clearFlash === "done") return `<button class="clr done" type="button" disabled>${CHECK4}All marked read</button>`;
+      if (this._clearFlash === "done") return `<button class="clr done" type="button" disabled>${CHECK5}All marked read</button>`;
       return `<button class="clr" type="button" data-clear>Mark all read</button>`;
     }
     render() {
@@ -28469,8 +28878,8 @@ ${BLOCKED_PILL_CSS}
     }
     _linkChoice() {
       const host = hostOf4(this._story?.link) || "the publication";
-      const seg = (v2, text2) => `<button type="button" class="seg" role="radio" data-link="${v2}" aria-checked="${this._linkTo === v2}">${esc2(text2)}</button>`;
-      return `<div class="linkto" role="radiogroup" aria-labelledby="ns-linkto"><span class="lab" id="ns-linkto">Link to</span>` + seg("source", `The article on ${host}`) + seg("gbti", "Our news page on gbti.network") + "</div>";
+      const seg2 = (v2, text2) => `<button type="button" class="seg" role="radio" data-link="${v2}" aria-checked="${this._linkTo === v2}">${esc2(text2)}</button>`;
+      return `<div class="linkto" role="radiogroup" aria-labelledby="ns-linkto"><span class="lab" id="ns-linkto">Link to</span>` + seg2("source", `The article on ${host}`) + seg2("gbti", "Our news page on gbti.network") + "</div>";
     }
     _counter(ch, text2) {
       const limit = channelLimit(ch);
@@ -28932,7 +29341,7 @@ ${BLOCKED_PILL_CSS}
     const u = parse2(rawUrl);
     if (!u) return null;
     const host = hostOf5(u);
-    const seg = u.pathname.split("/").filter(Boolean);
+    const seg2 = u.pathname.split("/").filter(Boolean);
     const stamped = typeof stored?.creatorName === "string" && stored.creatorName.trim() ? stored.creatorName.trim() : "";
     const made = (platform, url, handle = "") => url ? { url, name: stamped || handle || "", platform, label: PLATFORMS[platform].label, verb: PLATFORMS[platform].verb } : null;
     if (host === "youtube.com" || host === "music.youtube.com" || host === "youtu.be") {
@@ -28942,52 +29351,52 @@ ${BLOCKED_PILL_CSS}
       return made("vimeo", storedCreator(stored?.creatorUrl, "vimeo"));
     }
     if (host === "x.com" || host === "twitter.com") {
-      if (seg.length >= 3 && seg[1] === "status" && HANDLE_RE.test(seg[0]) && !X_RESERVED.has(seg[0].toLowerCase())) {
-        return made("x", `https://x.com/${seg[0]}`, `@${seg[0]}`);
+      if (seg2.length >= 3 && seg2[1] === "status" && HANDLE_RE.test(seg2[0]) && !X_RESERVED.has(seg2[0].toLowerCase())) {
+        return made("x", `https://x.com/${seg2[0]}`, `@${seg2[0]}`);
       }
       return null;
     }
     if (host === "bsky.app") {
-      if (seg.length >= 2 && seg[0] === "profile" && /^[A-Za-z0-9][A-Za-z0-9.:-]{0,79}$/.test(seg[1])) {
-        return made("bluesky", `https://bsky.app/profile/${seg[1]}`, `@${seg[1]}`);
+      if (seg2.length >= 2 && seg2[0] === "profile" && /^[A-Za-z0-9][A-Za-z0-9.:-]{0,79}$/.test(seg2[1])) {
+        return made("bluesky", `https://bsky.app/profile/${seg2[1]}`, `@${seg2[1]}`);
       }
       return null;
     }
     if (host.endsWith(".substack.com")) {
       const sub = host.slice(0, -".substack.com".length);
       if (SUBSTACK_RESERVED.has(sub)) {
-        if (seg.length >= 2 && seg[0] === "pub" && HANDLE_RE.test(seg[1])) {
-          return made("substack", `https://${seg[1].toLowerCase()}.substack.com/`, `${seg[1].toLowerCase()}.substack.com`);
+        if (seg2.length >= 2 && seg2[0] === "pub" && HANDLE_RE.test(seg2[1])) {
+          return made("substack", `https://${seg2[1].toLowerCase()}.substack.com/`, `${seg2[1].toLowerCase()}.substack.com`);
         }
         return null;
       }
       return made("substack", `https://${host}/`, host);
     }
     if (host === "mixcloud.com") {
-      if (seg.length >= 2 && HANDLE_RE.test(seg[0])) return made("mixcloud", `https://www.mixcloud.com/${seg[0]}/`, seg[0]);
+      if (seg2.length >= 2 && HANDLE_RE.test(seg2[0])) return made("mixcloud", `https://www.mixcloud.com/${seg2[0]}/`, seg2[0]);
       return null;
     }
     if (host === "github.com") {
-      if (seg.length >= 2 && HANDLE_RE.test(seg[0]) && !GITHUB_RESERVED.has(seg[0].toLowerCase())) {
-        return made("github", `https://github.com/${seg[0]}`, seg[0]);
+      if (seg2.length >= 2 && HANDLE_RE.test(seg2[0]) && !GITHUB_RESERVED.has(seg2[0].toLowerCase())) {
+        return made("github", `https://github.com/${seg2[0]}`, seg2[0]);
       }
       return null;
     }
     if (host === "dev.to") {
-      if (seg.length >= 2 && HANDLE_RE.test(seg[0])) return made("devto", `https://dev.to/${seg[0]}`, `@${seg[0]}`);
+      if (seg2.length >= 2 && HANDLE_RE.test(seg2[0])) return made("devto", `https://dev.to/${seg2[0]}`, `@${seg2[0]}`);
       return null;
     }
     if (host === "medium.com") {
-      if (seg.length >= 2 && seg[0].startsWith("@") && HANDLE_RE.test(seg[0].slice(1))) {
-        return made("medium", `https://medium.com/${seg[0]}`, seg[0]);
+      if (seg2.length >= 2 && seg2[0].startsWith("@") && HANDLE_RE.test(seg2[0].slice(1))) {
+        return made("medium", `https://medium.com/${seg2[0]}`, seg2[0]);
       }
       return null;
     }
     if (host.endsWith(".medium.com")) {
       return made("medium", `https://${host}/`, host);
     }
-    if (seg.length === 2 && seg[0].startsWith("@") && DIGITS_RE.test(seg[1])) {
-      const handle = seg[0].slice(1);
+    if (seg2.length === 2 && seg2[0].startsWith("@") && DIGITS_RE.test(seg2[1])) {
+      const handle = seg2[0].slice(1);
       const local = handle.split("@")[0];
       if (HANDLE_RE.test(local)) return made("mastodon", `https://${host}/@${handle}`, `@${handle}`);
     }
@@ -29175,7 +29584,7 @@ ${BLOCKED_PILL_CSS}
     const labels = strings(it2.categoryLabels);
     const eyebrow = labels.length ? labels[labels.length - 1] : "";
     const pitch = str6(fm.shortDescription) || str6(it2.description) || str6(it2.excerpt);
-    const icon3 = asset(fm.iconLarge) || asset(fm.icon) || asset(it2.thumbCard) || asset(it2.thumb);
+    const icon4 = asset(fm.iconLarge) || asset(fm.icon) || asset(it2.thumbCard) || asset(it2.thumb);
     const pricing = PRICING_LABELS[str6(fm.pricing)] || "";
     const platforms = strings(fm.platforms);
     const links = Array.isArray(fm.links) ? fm.links.filter((l) => l && typeof l === "object") : [];
@@ -29201,7 +29610,7 @@ ${BLOCKED_PILL_CSS}
       title,
       eyebrow,
       pitch,
-      icon: icon3,
+      icon: icon4,
       pricing,
       platforms,
       repo,
@@ -29281,8 +29690,8 @@ ${BLOCKED_PILL_CSS}
     return `<a class="${cls}" href="${esc2(v2.href)}" target="_blank" rel="noopener nofollow">${ICON2[v2.kind] || ICON2.link}${esc2(v2.label)}</a>`;
   }
   function projectHeroHtml(m, fallbackTitle = "") {
-    const icon3 = m.icon ? `<img class="pv-icon" src="${esc2(m.icon)}" alt="" width="104" height="104">` : '<span class="pv-icon" aria-hidden="true"></span>';
-    return `<section class="pv-hero">${icon3}<div>` + (m.eyebrow ? `<div class="pv-eyebrow">${esc2(m.eyebrow)}</div>` : "") + `<h1>${esc2(m.title || fallbackTitle || "")}</h1>` + (m.pitch ? `<p class="pv-pitch">${esc2(m.pitch)}</p>` : "") + "</div></section>";
+    const icon4 = m.icon ? `<img class="pv-icon" src="${esc2(m.icon)}" alt="" width="104" height="104">` : '<span class="pv-icon" aria-hidden="true"></span>';
+    return `<section class="pv-hero">${icon4}<div>` + (m.eyebrow ? `<div class="pv-eyebrow">${esc2(m.eyebrow)}</div>` : "") + `<h1>${esc2(m.title || fallbackTitle || "")}</h1>` + (m.pitch ? `<p class="pv-pitch">${esc2(m.pitch)}</p>` : "") + "</div></section>";
   }
   function projectBarHtml(m) {
     if (!m.hasBar) return "";
@@ -31973,8 +32382,8 @@ ${BLOCKED_PILL_CSS}
   function markHtml(item, icons = {}) {
     const m = !item.custom && BRAND_MARKS[item.id];
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
-    const icon3 = icons[item.id];
-    if (typeof icon3 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon3)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon3}" alt="" /></span>`;
+    const icon4 = icons[item.id];
+    if (typeof icon4 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon4)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon4}" alt="" /></span>`;
     return `<span class="ql-ic ql-letter" aria-hidden="true">${esc9(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
@@ -32146,7 +32555,7 @@ ${BLOCKED_PILL_CSS}
     };
     let editing = null;
     const paint = () => {
-      const focusKey = document.activeElement?.closest?.(".ql-dialog") ? keyOf(document.activeElement) : null;
+      const focusKey = document.activeElement?.closest?.(".ql-dialog") ? keyOf2(document.activeElement) : null;
       $("[data-ql-preview]").innerHTML = previewHtml();
       const extra = overflowItems(STATE).length;
       const note = $("[data-ql-note]");
@@ -32155,7 +32564,7 @@ ${BLOCKED_PILL_CSS}
       $("[data-ql-lists]").innerHTML = listsHtml();
       if (focusKey) overlay.querySelector(focusKey)?.focus();
     };
-    const keyOf = (el) => {
+    const keyOf2 = (el) => {
       for (const a of ["data-ql-toggle", "data-ql-grip", "data-ql-edit", "data-ql-remove"]) if (el.hasAttribute?.(a)) return `[${a}="${CSS.escape(el.getAttribute(a))}"]`;
       return null;
     };

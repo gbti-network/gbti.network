@@ -9,7 +9,7 @@ import { takeListRun, serializeListItems, isFlatList, isThematicBreak } from '..
 import { underscoreEmphasis, UNDERSCORE_MARK } from '../../client/src/underscore-emphasis.mjs'; // sow-355: _x_ and __x__
 
 export const MEMBERS_MARKER = '<!-- members-only -->';
-export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members'];
+export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members', 'audio'];
 
 // SOW-169/SOW-170: GFM table helpers. A table is a header row of `| ... |` cells immediately followed by a
 // delimiter row (`| --- | :--: |`), then zero or more body rows. Before this, a table fell into the paragraph
@@ -80,7 +80,8 @@ function serializeBlock(b) {
   switch (b.type) {
     case 'members': return MEMBERS_MARKER;
     case 'heading': return `${'#'.repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ''}`;
-    case 'code': {
+    case 'code':
+    case 'audio': { // sow-483: the podcast block keeps its fence's exact text, so it is written back as it was read
       // The fence must be LONGER than any backtick run in the code, or a nested ``` closes it early.
       const code = b.code ?? '';
       const runs = code.match(/^`{3,}/gm) || [];
@@ -144,6 +145,9 @@ export function parseBlocks(md) {
       // SOW-062: ```callout <variant> and ```embed are first-class blocks; anything else stays a code block.
       if (info[0] === 'callout') blocks.push({ type: 'callout', variant: normalizeVariant(info[1]), text: code.join('\n') });
       else if (info[0] === 'embed') blocks.push({ type: 'embed', url: code.join('\n').trim(), ...(info[1] === 'lightbox' ? { lightbox: true } : {}) });
+      // sow-483: ```audio <label> is the podcast block. It keeps the code block's two fields (the info string and the
+      // lines) untouched, and the WorkBench form rewrites single lines of them (client/src/audio-block-edit.mjs).
+      else if (info[0] === 'audio') blocks.push({ type: 'audio', lang, code: code.join('\n') });
       else blocks.push({ type: 'code', lang, code: code.join('\n') });
       continue;
     }
@@ -220,6 +224,7 @@ export function emptyBlock(type) {
     case 'embed': return { type: 'embed', url: '' };
     case 'callout': return { type: 'callout', variant: 'note', text: '' };
     case 'members': return { type: 'members' };
+    case 'audio': return { type: 'audio', lang: 'audio', code: '' };
     default: return { type: 'paragraph', text: '' };
   }
 }

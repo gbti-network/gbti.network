@@ -40,12 +40,12 @@ test('the article page, the WorkBench preview and the extension reader each run 
 });
 
 test('the WorkBench Visual view offers the Player style buttons on an audio block', () => {
-  const src = fs.readFileSync(new URL('../client-ui/src/elements/gbti-doc-editor.mjs', import.meta.url), 'utf8');
-  assert.match(src, /\/\^audio\(\\s\|\$\)\/\.test\(b\.lang/);
-  assert.match(src, /Player style<\/span>\$\{AUDIO_STYLES\.map/);
-  assert.match(src, /b\.code = setAudioStyle\(b\.code \|\| '', el\.dataset\.aval\)/);
-  // A style click puts the cursor in the block, and a focused code block once lost its dark surface (light text on
-  // white, 2026-10-26). It keeps it now.
+  // sow-483 Phase 2: the buttons moved into the podcast block's form (client-ui/src/audio-block-ui.mjs), where they
+  // write the style line through setAudioStyle as before.
+  const src = fs.readFileSync(new URL('../client-ui/src/audio-block-ui.mjs', import.meta.url), 'utf8');
+  assert.match(src, /Player style<\/span>\$\{seg\('Player style', AUDIO_STYLES\.map/);
+  assert.match(src, /b\.code = setAudioStyle\(b\.code, btn\.dataset\.abStyle\)/);
+  // A focused code block once lost its dark surface (light text on white, 2026-10-26). It keeps it now.
   const css = fs.readFileSync(new URL('../client-ui/src/doc-editor-css.mjs', import.meta.url), 'utf8');
   assert.match(css, /\.ce\.ce-code:focus \{ background:var\(--ink\); \}/);
 });

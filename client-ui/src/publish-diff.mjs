@@ -65,7 +65,7 @@ export function fieldLabel(key) {
 
 const BLOCK_NOUNS = {
   paragraph: 'Paragraph', heading: 'Heading', code: 'Code block', quote: 'Quote', list: 'List',
-  table: 'Table', image: 'Image', embed: 'Embed', callout: 'Callout', members: 'Members-only divider',
+  table: 'Table', image: 'Image', embed: 'Embed', callout: 'Callout', members: 'Members-only divider', audio: 'Podcast player',
 };
 export const blockNoun = (type) => BLOCK_NOUNS[type] || 'Block';
 

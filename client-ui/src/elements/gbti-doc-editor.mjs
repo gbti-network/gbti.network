@@ -19,7 +19,7 @@ import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* e
 import { imageLayoutButtonsHtml } from '../image-layout-ui.mjs'; // Natural | Full width, Left | Center | Right, Wrap text
 import { DOC_EDITOR_CSS as CSS } from '../doc-editor-css.mjs'; // sow-327: the stylesheet, split out at the 900-line cap
 import { applyImageLayoutAction, normalizeImageLayout } from '../../../client/src/image-attrs.mjs'; // what one of those clicks means
-import { AUDIO_STYLES, parseAudio, setAudioStyle } from '../../../client/src/content-blocks.mjs'; // the podcast block's Player style
+import { audioBlockHtml, wireAudioBlocks, AUDIO_ICON_PATHS } from '../audio-block-ui.mjs'; // sow-483: the podcast block's form
 
 let UID = 0;
 const withId = (b) => { if (b && !b._id) b._id = ++UID; return b; };
@@ -41,6 +41,7 @@ const CONVERT = [
   { key: 'table', label: 'Table', icon: 'table', desc: 'Rows and columns' },
   { key: 'image', label: 'Image', icon: 'img', desc: 'Upload or embed a picture' },
   { key: 'embed', label: 'Video / embed', icon: 'video', desc: 'YouTube or Vimeo' },
+  { key: 'audio', label: 'Podcast player', icon: 'audio', desc: 'A recording, or SoundCloud, Spotify or Apple' }, // sow-483
 ];
 // SOW-062 P6: one rich palette row (icon box + name + description); `sel` marks the keyboard-highlighted row.
 const paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? ' on' : ''}" ${dataAttr}><span class="mi-ic">${svg(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc(c.label)}</span><span class="mi-ds">${esc(c.desc)}</span></span></div>`;
@@ -64,6 +65,7 @@ const ic = {
   img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   gear: '<path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.86-1.43-1.8-3.12-2.2.88a7 7 0 0 0-1.73-1l-.33-2.33h-3.6l-.33 2.33a7 7 0 0 0-1.73 1l-2.2-.88-1.8 3.12L7.1 11c-.05.33-.08.66-.08 1s.03.67.08 1l-1.86 1.43 1.8 3.12 2.2-.88c.52.4 1.1.74 1.73 1l.33 2.33h3.6l.33-2.33a7 7 0 0 0 1.73-1l2.2.88 1.8-3.12L19.4 13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  audio: `<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${AUDIO_ICON_PATHS}</g>`,
   info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>',
   // SOW-062 P6: block-palette glyphs for the rich slash / add-block menu rows (from the hi-fi sprite).
   text: '<path d="M5 6h14M5 6v1.5M19 6v1.5M12 6v13M9.5 19h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -240,11 +242,9 @@ class GbtiDocEditor extends GbtiElement {
         const bar = `<div class="cvar"><span class="cvar-lab">${svg('gear')} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? 'on' : ''}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join('')}</div>`;
         return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg('info')}</span>${this._ce('', 'text', b, 'Callout text')}</div></div>`;
       }
+      case 'audio': return audioBlockHtml(b); // sow-483: the podcast block's form (client-ui/src/audio-block-ui.mjs)
       case 'code': {
-        // An ```audio block (the podcast player) gets the callout's style bar: Bar (the default) or Card (owner, 2026-10-26).
-        const audioStyle = /^audio(\s|$)/.test(b.lang || '') ? parseAudio(b.code || '').style : null;
-        const bar = audioStyle ? `<div class="cvar"><span class="cvar-lab">${svg('gear')} Player style</span>${AUDIO_STYLES.map((x) => `<button type="button" class="${x === audioStyle ? 'on' : ''}" data-astyle="${b._id}" data-aval="${x}">${x}</button>`).join('')}</div>` : '';
-        return bar + `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
+        return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
           + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
       }
       case 'list': {
@@ -372,10 +372,11 @@ class GbtiDocEditor extends GbtiElement {
       const b = this._byId(el.dataset.cvar);
       if (b) { b.variant = el.dataset.cval; this._render(); this._focusBlock(b._id); this._change(); }
     }));
-    this.$$('[data-astyle]').forEach((el) => el.addEventListener('click', () => {
-      const b = this._byId(el.dataset.astyle);
-      if (b) { b.code = setAudioStyle(b.code || '', el.dataset.aval); this._render(); this._focusBlock(b._id); this._change(); }
-    }));
+    wireAudioBlocks(this.root, { byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
+      const el = this.$(sel);
+      el?.focus();
+      if (el && typeof el.setSelectionRange === 'function' && el.type !== 'file') { const n = el.value.length; try { el.setSelectionRange(n, n); } catch { /* not a text field */ } }
+    } });
     // SOW-169: table structure controls. Each mutates the model then re-renders (structural, so caret loss is fine).
     const tblCols = (b) => Math.max(1, (Array.isArray(b.head) ? b.head.length : 1));
     const tblNorm = (b) => { const c = tblCols(b); if (!Array.isArray(b.head)) b.head = []; while (b.head.length < c) b.head.push(''); if (!Array.isArray(b.aligns)) b.aligns = []; while (b.aligns.length < c) b.aligns.push(''); b.aligns.length = c; b.rows = (Array.isArray(b.rows) ? b.rows : []).map((r) => { const row = Array.isArray(r) ? r.slice(0, c) : []; while (row.length < c) row.push(''); return row; }); };
@@ -739,6 +740,9 @@ class GbtiDocEditor extends GbtiElement {
     if (cur.text != null && 'text' in next) next.text = cur.text;
     if (cur.text != null && next.type === 'code') next.code = cur.text;
     if (cur.text != null && next.type === 'list') next.items = String(cur.text).split('\n');
+    // sow-483: a podcast block turned into Code shows its fence's text to edit by hand, and that text turns back.
+    if (cur.type === 'audio' && next.type === 'code') { next.lang = cur.lang; next.code = cur.code; }
+    if (cur.type === 'code' && next.type === 'audio' && /^audio(\s|$)/.test(cur.lang || '')) { next.lang = cur.lang; next.code = cur.code; }
     this._blocks[i] = next;
     this._closeConvert();
     this._render(); this._focusBlock(next._id); this._change();

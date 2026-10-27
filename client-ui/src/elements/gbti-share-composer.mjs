@@ -521,7 +521,8 @@ class GbtiShareComposer extends GbtiElement {
       // sow-350: a quote renders through the renderer the feed uses for the published note, so its paragraphs (and
       // any list inside it) show exactly as they will publish. A callout keeps the quote look, with the published
       // callout's line breaks: every line its own, so a blank line stays a blank line.
-      case 'quote': return renderMarkdown(serializeBlocks([b]));
+      case 'quote':
+      case 'audio': return renderMarkdown(serializeBlocks([b])); // sow-483: the podcast block, as the published note draws it
       case 'callout': return `<blockquote>${String(b.text || '').split('\n').map((l) => inlineMdToHtml(l)).join('<br>')}</blockquote>`;
       case 'code': return `<pre><code>${esc(b.code || '')}</code></pre>`;
       case 'list': {
