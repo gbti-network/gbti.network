@@ -196,6 +196,8 @@ test('there is no masthead: no GBTI NETWORK eyebrow, the mark sits top right of 
     assert.match(row, new RegExp(`</h1></td><td width="34" valign="top" align="right"[^>]*><img src="https://gbti\\.network/brand/logo/mark-${mark}-96\\.png" width="34" height="34" alt="GBTI Network"`),
       `${label}: the ${mark} mark, top right of the heading`);
     assert.equal((html.slice(0, html.indexOf('<h1')).match(/<img /g) || []).length, 0, `${label}: no image above or before the heading`);
+    assert.match(html.slice(html.lastIndexOf('<td style=', html.indexOf('<h1')), html.indexOf('<h1')), /^<td style="padding:26px 26px 26px">/,
+      `${label}: 26px under the heading, before the card (owner, 2026-10-27; was 14px)`);
     assert.match(html, /You are receiving this because you joined GBTI Network\./, `${label}: the footer still names the network`);
     // Everything before the heading, less the hidden preheader, must be markup with no visible text in it.
     const before = html.slice(html.indexOf('<body'), html.indexOf('<h1')).replace(/<div style="display:none[^"]*">[^<]*<\/div>/, '');

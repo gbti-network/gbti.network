@@ -429,7 +429,9 @@ export function welcomeMail({
   const rows = [
     // No masthead (owner, 2026-10-27): the logo and the "GBTI NETWORK" eyebrow ABOVE the heading were removed, and
     // the black mark then came back BESIDE it, vertically centred on the heading, with no eyebrow (owner, same day).
-    cell(headingHtml(t, base, theme, heading), '26px 26px 14px'),
+    // 26px under the heading, the same as the card's side padding (owner, 2026-10-27: "more spacing between the
+    // project card and the header"; was 14px).
+    cell(headingHtml(t, base, theme, heading), '26px 26px 26px'),
     cell(published ? receiptHtml(t, published) : perksHtml(t, feedUrl), '0 26px'),
     published ? cell(para(t, ownership), '16px 26px 0') : '',
     cell(`<div style="height:1px;background-color:${t.hairline};font-size:0;line-height:0">&nbsp;</div>`, '20px 26px 0'),
