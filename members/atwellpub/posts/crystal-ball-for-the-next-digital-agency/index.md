@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-27T02:46:09.025Z'
+updatedAt: '2026-10-27T02:57:55.844Z'
 type: post
 author: atwellpub
 ---
@@ -31,11 +31,13 @@ src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ```
 
-*A Strategic Vision for the Next Generation of Digital Agencies;*  First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then shared on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>*.  *The podcast version was generated through Notebook LLM to help better introduce the paper to readers before a deeper technical dive. If you are pressed on time, I advise starting above and then later visiting the paper in full.*
+*A Strategic Vision for the Next Generation of Digital Agencies;*  First published on *<a href="https://docs.google.com/document/d/1UeDXC09Q68NtVx0vdGMvvznqC0CdVwStX1g3lUprY50/edit?usp=sharing" rel="nofollow noopener" target="_blank"><em>Google Docs</em></a>* and then shared on *<a href="https://lnkd.in/p/ehjs9Ez5" rel="noopener" target="_blank"><em>LinkedIn</em></a>*.  
 
 ## Executive Summary
 
-The experience is fundamentally project-driven and client-driven. The agency manages the client's entire project through an integrated project management system, providing a centralized environment for coordinating work, managing resources, tracking progress, and maintaining the ongoing client relationship.
+This paper presents a vision for the next generation of digital agencies, where AI-enabled client operating environments transform how web properties are managed, how technical capabilities are delivered, and how agencies build sustainable, recurring service relationships.
+
+The agency manages the client's entire project through an integrated project management system, providing a centralized environment for coordinating work, managing resources, tracking progress, and maintaining the ongoing client relationship.
 
 Within this environment, clients have access to a conversational interface resembling a chat-based experience or command-line terminal, through which they can interact with their project and its connected systems. This interface is highly empowered by an extensive MCP architecture provisioned, configured, and managed by the agency. The agency determines which capabilities, integrations, and permissions are available to each client, enabling them to interact with and operate their digital infrastructure through a unified experience.
 
@@ -43,7 +45,13 @@ Traditional CMS administration interfaces remain accessible alongside these capa
 
 The agency's responsibility evolves from performing individual development tasks to configuring, securing, maintaining, and expanding the client's AI-enabled infrastructure.
 
-**The agency becomes the architect, operator, and steward of the client's digital operating environment.**
+The following sections explore how this vision will most likely take shape, beginning with the proposed client operating environment and the integration of frontier AI models and MCP capabilities. Particular attention is given to the permissions and governance frameworks through which agencies manage access, delegate authority, and control the capabilities available to clients, their teams, and AI agents.
+
+We then examine the evolving role of agencies as providers of managed digital infrastructure, including the opportunities for recurring revenue and continued professional service provision.
+
+Finally, we consider the technical challenges of agent-driven operations, the architectural principles necessary to support these systems, and the broader strategic implications for the agency industry.
+
+Together, these considerations establish a proposed direction for the next generation of agency-driven web property management, while raising important questions about who will develop, deliver, and ultimately lead this emerging market.
 
 ## 1. The Client Operating Environment
 
