@@ -7399,7 +7399,7 @@ ${barWidthCss(s)}`;
     const chosen = s.campaign || camps[0]?.code || "";
     const campaignField = saved ? `<select id="prep-camp" data-prep="campaign" disabled>${opt({ code: s.campaign, freeDays: camps.find((c) => c.code === s.campaign)?.freeDays }, true)}</select>
        <p class="pnote">The campaign is fixed while this invitation is out. To change it, revoke the invitation and send it again with another campaign.</p>` : camps.length ? `<select id="prep-camp" data-prep="campaign">${camps.map((c) => opt(c, c.code === chosen)).join("")}</select>
-         <p class="pnote">The free year the invitation carries.</p>` : `<select id="prep-camp" data-prep="campaign"><option value="">No active campaign</option></select>
+         <p class="pnote">The free year the invitation carries. An account that is already a member is offered none.</p>` : `<select id="prep-camp" data-prep="campaign"><option value="">No active campaign</option></select>
          <p class="pnote warn">Activate a campaign in Admin, Coupons first. The invitation needs one for its free year.</p>`;
     const status = !saved ? '<p class="pnote">Nothing is sent. Save listing stores this project privately and gives you an invitation link to send yourself.</p>' : revoked ? '<p class="pnote warn">This invitation is revoked, so its link no longer works. Edits still save; Send again in the invite manager gives it a new link.</p>' : "";
     const link = saved && !revoked && s.link ? `<div class="plink"><label for="prep-link">Invitation link</label><input id="prep-link" class="plinkval" readonly value="${esc4(s.link)}" />
@@ -15969,6 +15969,8 @@ ${barWidthCss(s)}`;
     const out = [];
     if (row.recipientName) out.push(`For ${row.recipientName}`);
     out.push(row.bound ? row.boundLogin ? `Tied to ${at2(row.boundLogin)}` : "Tied to one GitHub account" : "Open to whoever claims it first");
+    const live = preparedRowState(row) === LISTING_STATE.prepared || preparedRowState(row) === LISTING_STATE.revoked;
+    if (row.bound && row.recipientMember === true && live) out.push("Already a member, so no free year is offered");
     if (row.campaign) out.push(`Campaign ${row.campaign}`);
     if (row.createdAt) out.push(`Prepared ${day(row.createdAt)}${row.preparedByLogin ? ` by ${at2(row.preparedByLogin)}` : ""}`);
     const st2 = preparedRowState(row);

@@ -250,7 +250,7 @@ test('the dispatcher names the new ops, and the adapter sends them', () => {
   const src = read('workers/signup/membership-prepared-admin.mjs');
   assert.match(src, /case 'mark-sent': return sentListingOp\(body, ctx, true\);/);
   assert.match(src, /case 'unmark-sent': return sentListingOp\(body, ctx, false\);/);
-  assert.match(src, /next = carrySent\(next, again\.rec\);\n\s*if \(!\(await writeListing\(kv, next\)\)\)/, 'the edit carries the sent fields right before its write');
+  assert.match(src, /next = \{ \.\.\.carrySent\(next, again\.rec\), recipientMember \};\n\s*if \(!\(await writeListing\(kv, next\)\)\)/, 'the edit carries the sent fields right before its write');
 });
 
 // ---- the lanes ---------------------------------------------------------------------------------------------------

@@ -206,6 +206,9 @@ export function preparedRowMeta(row) {
   const out = [];
   if (row.recipientName) out.push(`For ${row.recipientName}`);
   out.push(row.bound ? (row.boundLogin ? `Tied to ${at(row.boundLogin)}` : 'Tied to one GitHub account') : 'Open to whoever claims it first');
+  // sow-480: tied to an account that was already a member when saved, so the claim page offers no free year.
+  const live = preparedRowState(row) === LISTING_STATE.prepared || preparedRowState(row) === LISTING_STATE.revoked;
+  if (row.bound && row.recipientMember === true && live) out.push('Already a member, so no free year is offered');
   if (row.campaign) out.push(`Campaign ${row.campaign}`);
   if (row.createdAt) out.push(`Prepared ${day(row.createdAt)}${row.preparedByLogin ? ` by ${at(row.preparedByLogin)}` : ''}`);
   const st = preparedRowState(row);

@@ -30,8 +30,8 @@ import { resolveEffectiveTier, grantTier } from '../../membership/tier-gate.mjs'
 import { TIER } from '../../membership/tiers.mjs'; // sow-185 (2026-08-24): a coupon's own tier decides its badge
 import { deriveMembershipFromCustomer } from '../../membership/derive-status.mjs';
 import { effectiveStatus } from '../../membership/overrides-core.mjs';
-import { overridesFromMirror } from '../../membership/usage-bucket.mjs';
-import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
+// sow-480: the fresh overrides mirror is read by one function, shared with the invitation recipient check.
+import { readFreshOverrides } from './prepared-recipient.mjs';
 import { readInvite } from './invites-store.mjs'; // sow-427: is the code a prepared listing's invitation?
 import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted, retained via [observability])
 
@@ -62,17 +62,6 @@ import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacte
  * A live coupon grant counts as paid here. It is the whole point of the invite, and it is authoritative before
  * the fold lands: the same fast path membership-status.mjs uses to report a fresh redeemer as paid.
  */
-/**
- * The overrides mirror folded for effectiveStatus, or null when it is absent, stale or malformed. A KV error THROWS,
- * so each caller keeps its own failure answer (resolveSignupRole's catch answers `locked`).
- */
-async function readFreshOverrides(kv, now) {
-  const mirror = await kv?.get(OVERRIDES_KV_KEY, 'json');
-  if (!mirror?.generatedAt) return null;
-  const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
-  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return null;
-  return overridesFromMirror(mirror);
-}
 
 /**
  * sow-427 (owner decision 5): "a paying member claims straight away with no free year involved". True when `code`

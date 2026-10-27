@@ -17,8 +17,9 @@
 //
 // What a readable listing shows is publicListingView: the project, the greeting and the personal message, the
 // suggested note, the preparer's login, the tied account's login (sow-434, for the example profile's GitHub link),
-// and the campaign's tier and length. Never the administration note (that lives on the invite and is not read into
-// the answer), never a code, never an account number, so never the number a tie is stored by.
+// and the campaign's tier and length (left out for an invitation tied to an existing member, sow-480). Never the
+// administration note (that lives on the invite and is not read into the answer), never a code, never an account
+// number, so never the number a tie is stored by.
 //
 // THE CAMPAIGN IS READ FOR ITS TERMS ONLY, WITHOUT THE ACTIVE GATE (sow-231 trap 1, sow-427 trap 6): switching a
 // campaign off closes its walk-up code, and must not void a prepared invitation already in someone's inbox. A
@@ -77,7 +78,9 @@ export async function inviteListingRead(request, env, { kv = env?.SIGNUP_KV, now
   const r = await readable(request, env, { kv, now, limiter, limit: LISTING_READ_LIMIT });
   if (r.res) return r.res;
   let terms = null;
-  const config = await readCouponsConfig(kv, now instanceof Date ? now : new Date(now));
+  // sow-480: an invitation tied to an existing member grants no year, so its terms are not read at all
+  // (publicListingView drops them for such a listing regardless; this only saves the registry read).
+  const config = r.listing.recipientMember === true ? null : await readCouponsConfig(kv, now instanceof Date ? now : new Date(now));
   if (config) {
     const c = couponsFromParsed(config).get(normalizeCouponCode(r.invite.campaign));
     if (c) terms = { tier: c.tier, freeDays: c.freeDays };

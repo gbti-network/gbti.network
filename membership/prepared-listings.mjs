@@ -185,7 +185,8 @@ function boundFields(boundGithubId, boundLogin) {
  */
 export function newListing({
   id, draft, recipientName, message, suggestedNote = '', campaign, code,
-  boundGithubId = null, boundLogin = null, preparedBy, preparedByLogin = null, creditPreparer = false, now = new Date(),
+  boundGithubId = null, boundLogin = null, preparedBy, preparedByLogin = null, creditPreparer = false, recipientMember = null,
+  now = new Date(),
 } = {}) {
   if (!isListingId(id)) throw new Error('prepared-listings: invalid listing id');
   if (!draft || !PREPARABLE_TYPES.includes(draft.type) || !isPlainObject(draft.frontmatter) || !SLUG_RE.test(String(draft.slug ?? ''))) {
@@ -222,6 +223,9 @@ export function newListing({
     // The credit is applied SERVER-SIDE at claim time from `preparedByLogin`; `contributors` stays in
     // SERVER_FIELDS and stays stripped from the draft, so a payload can never assert its own credit.
     creditPreparer: creditPreparer === true,
+    // sow-480: whether the account this is tied to was ALREADY a member when it was saved (true, false, or null when
+    // untied or not known). Decided by the admin route (workers/signup/prepared-recipient.mjs), never by a payload.
+    recipientMember: memberAnswer(recipientMember),
     createdAt: at,
     updatedAt: at,
     revokedAt: null,
@@ -364,6 +368,11 @@ export function listingUnmarkSent(rec) {
   }
   if (!rec.sentAt && rec.sentAtLaunch !== true) return { ok: true, next: rec, changed: false };
   return { ok: true, changed: true, next: { ...rec, ...UNSENT } };
+}
+
+/** sow-480: a stored recipient-membership answer, as exactly true, false or null. */
+export function memberAnswer(v) {
+  return v === true ? true : v === false ? false : null;
 }
 
 /** The four sent fields, cleared. A new link (Send again) and the undo both start from here. */
@@ -511,6 +520,8 @@ export function listingSummary(rec, invite = null, now = new Date()) {
     sentAt: rec.sentAt ?? null,
     sentByLogin: rec.sentByLogin ?? null,
     sentAtLaunch: rec.sentAtLaunch === true,
+    // sow-480: the tied account was already a member when this was saved, so the invitation offers no year.
+    recipientMember: memberAnswer(rec.recipientMember),
   };
 }
 
@@ -541,6 +552,7 @@ export function listingAdminView(rec, invite = null, now = new Date()) {
  */
 export function publicListingView(rec, terms = null) {
   const tied = rec?.boundGithubId !== null && rec?.boundGithubId !== undefined && rec?.boundGithubId !== '';
+  const member = tied && rec?.recipientMember === true;
   return {
     type: rec?.type ?? 'project',
     slug: rec?.slug ?? null,
@@ -555,8 +567,10 @@ export function publicListingView(rec, terms = null) {
     // sow-475: the recipient is told BEFORE claiming that the preparer will appear as a contributor on the
     // item once it is theirs. Someone accepting a gift should know whose name lands on it beside their own.
     creditPreparer: rec?.creditPreparer === true,
-    tier: terms?.tier ?? null,
-    freeDays: Number.isInteger(terms?.freeDays) ? terms.freeDays : null,
+    // sow-480: an invitation tied to an existing member grants no year (the sign-in skips the coupon for a paying
+    // account), so it states no free-year terms, and the claim page then omits its free-year line.
+    tier: member ? null : terms?.tier ?? null,
+    freeDays: !member && Number.isInteger(terms?.freeDays) ? terms.freeDays : null,
   };
 }
 

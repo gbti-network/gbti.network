@@ -226,7 +226,7 @@ export function preparedCardHtml(p, campaigns = []) {
        <p class="pnote">The campaign is fixed while this invitation is out. To change it, revoke the invitation and send it again with another campaign.</p>`
     : camps.length
       ? `<select id="prep-camp" data-prep="campaign">${camps.map((c) => opt(c, c.code === chosen)).join('')}</select>
-         <p class="pnote">The free year the invitation carries.</p>`
+         <p class="pnote">The free year the invitation carries. An account that is already a member is offered none.</p>`
       : `<select id="prep-camp" data-prep="campaign"><option value="">No active campaign</option></select>
          <p class="pnote warn">Activate a campaign in Admin, Coupons first. The invitation needs one for its free year.</p>`;
   const status = !saved

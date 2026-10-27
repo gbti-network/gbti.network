@@ -44,9 +44,10 @@ import { newInvite, revokeInvite, setInviteBinding, inviteState, INVITE_STATE } 
 import {
   isListingId, isListingImageName, mintListingId, normalizeGithubLogin, validateInvitationText, validatePreparedDraft,
   validateSuggestedNote, newListing, listingState, LISTING_STATE, applyListingEdit, listingRevoke, listingResend, listingMarkSent, listingUnmarkSent, carrySent,
-  listingSummary, listingAdminView, claimLink, PREPARABLE_TYPES,
+  memberAnswer, listingSummary, listingAdminView, claimLink, PREPARABLE_TYPES,
 } from '../../membership/prepared-listings.mjs';
 import { listingHouseProblems, preparedSizeProblem } from '../../membership/prepared-claim-files.mjs';
+import { recipientIsMember } from './prepared-recipient.mjs'; // sow-480
 
 export const TAXONOMY_PATH = 'house/taxonomy.yml';
 export const LICENSES_PATH = 'house/licenses.yml';
@@ -72,6 +73,7 @@ function ioFrom(env, deps) {
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
     getToken: deps.getToken ?? getInstallationToken,
     lookupUser: deps.lookupUser ?? githubUserByLogin,
+    recipientMember: deps.recipientMember ?? recipientIsMember, // sow-480
     readTree: deps.readTree ?? readContentTree,
     loadHouse: deps.loadHouse ?? loadHouseYaml,
     upstream: deps.upstream ?? (env?.UPSTREAM_REPO || 'gbti-network/gbti.network'),
@@ -298,12 +300,23 @@ async function saveListing(body, { env, kv, auth, now, rand, io }) {
     if (house) return house;
   }
 
+  // sow-480: is the account this invitation is tied to ALREADY a member? Then it grants no year, and the claim page
+  // must not say it does. Asked last, so only a save that is going ahead costs the Stripe read. A check that could
+  // not be made (null) keeps whatever an edit already knew about the same tie; a new or removed tie starts again.
+  const tiedTo = bind.binding === undefined ? (current?.boundGithubId ?? null) : (bind.binding?.boundGithubId ?? null);
+  let recipientMember = null;
+  if (tiedTo) {
+    let answer = null;
+    try { answer = memberAnswer(await io.recipientMember({ env, kv, githubId: String(tiedTo), now })); } catch { answer = null; }
+    recipientMember = answer === null && bind.binding === undefined ? memberAnswer(current?.recipientMember) : answer;
+  }
+
   return creating
-    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding: bind.binding, collected, creditPreparer })
-    : updateListing({ kv, auth, now, io, id, readEarlier: current, text, suggestedNote, draft, binding: bind.binding, collected });
+    ? createListing({ env, kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding: bind.binding, collected, creditPreparer, recipientMember })
+    : updateListing({ kv, auth, now, io, id, readEarlier: current, text, suggestedNote, draft, binding: bind.binding, collected, recipientMember });
 }
 
-async function createListing({ kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding, collected, creditPreparer = false }) {
+async function createListing({ kv, auth, now, rand, io, config, campaign, text, suggestedNote, draft, binding, collected, creditPreparer = false, recipientMember = null }) {
   let id = null;
   for (let i = 0; i < LISTING_ID_ATTEMPTS && !id; i += 1) {
     let candidate;
@@ -327,7 +340,7 @@ async function createListing({ kv, auth, now, rand, io, config, campaign, text, 
     rec = newListing({
       id, draft, recipientName: text.recipientName, message: text.message, suggestedNote: suggestedNote ?? '', campaign, code,
       boundGithubId: bound?.boundGithubId ?? null, boundLogin: bound?.boundLogin ?? null,
-      preparedBy: auth.githubId, preparedByLogin: login, creditPreparer, now,
+      preparedBy: auth.githubId, preparedByLogin: login, creditPreparer, recipientMember, now,
     });
   } catch {
     return bad(400, 'invalid', 'This listing could not be recorded as given.');
@@ -347,7 +360,7 @@ async function createListing({ kv, auth, now, rand, io, config, campaign, text, 
   return { status: 200, body: { ok: true, created: true, changed: true, listing: listingSummary(rec, inv, now), code, link: claimLink(io.siteBase, code) } };
 }
 
-async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggestedNote, draft, binding, collected }) {
+async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggestedNote, draft, binding, collected, recipientMember = null }) {
   // RE-READ BEFORE THE FIRST WRITE (review F1). saveListing read the listing and then waited on GitHub (the login
   // lookup, the uncached permalink check, the house lists), and a claim can take its lock in that gap. Writing the
   // copy read before it back would wipe the lock while the claim's pull request is open: nothing would ever finalize
@@ -371,6 +384,8 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
     return bad(status, applied.error, applied.message);
   }
   let next = applied.next;
+  // sow-480: the recipient answer saveListing decided. A change to it alone is still a write.
+  const memberMoved = recipientMember !== memberAnswer(current.recipientMember);
 
   // New or replaced image bytes first, so the record never names an image that is not stored.
   const images = await writeCollectedImages(kv, id, collected.images, { now });
@@ -386,7 +401,7 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
       nextInvite = b.next;
     }
   }
-  if (applied.changed) {
+  if (applied.changed || memberMoved) {
     // And once more right before the one write that could erase a claim lock, so the window a claim can still slip
     // through is this single KV round trip (KV has no compare-and-set; api-contract section 18 records the residual).
     // takeClaim writes the listing lock BEFORE it marks the invite, so a lock taken now is already visible here.
@@ -397,7 +412,7 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
     }
     // sow-481: Mark sent does not move updatedAt (so it never refuses this save), which also means the check above
     // cannot see one that landed meanwhile. Take the sent fields from this read rather than from `current`.
-    next = carrySent(next, again.rec);
+    next = { ...carrySent(next, again.rec), recipientMember };
     if (!(await writeListing(kv, next))) {
       if (nextInvite !== invite) await restoreInviteBinding(kv, current.code, current, now); // the old tie beside the old record
       return unavailable();
@@ -408,7 +423,7 @@ async function updateListing({ kv, auth, now, io, id, readEarlier, text, suggest
   return {
     status: 200,
     body: {
-      ok: true, created: false, changed: applied.changed || images.written.length > 0,
+      ok: true, created: false, changed: applied.changed || memberMoved || images.written.length > 0,
       listing: listingSummary(next, nextInvite, now), code: next.code, link: claimLink(io.siteBase, next.code),
     },
   };
@@ -622,12 +637,13 @@ export async function membershipPreparedGet(request, env, { authorize = authoriz
 
 /**
  * POST /membership/admin/prepared `{ op, ... }`. Injectable for tests: `authorize`, `now`, `randomBytes`
- * (`(n) => Uint8Array`), `lookupUser`, `readTree`, `loadHouse`, `getToken`, `fetchImpl`, `upstream`, `siteBase`.
+ * (`(n) => Uint8Array`), `lookupUser`, `recipientMember` (sow-480), `readTree`, `loadHouse`, `getToken`, `fetchImpl`,
+ * `upstream`, `siteBase`.
  * Everything else in `deps` (allowCookie, fetchUser, verifyCookie) goes to the superadmin gate.
  */
 export async function membershipPreparedPost(request, env, {
   authorize = authorizeSuperadmin, now = new Date(), randomBytes = null,
-  lookupUser, readTree, loadHouse, getToken, fetchImpl, upstream, siteBase, ...deps
+  lookupUser, recipientMember, readTree, loadHouse, getToken, fetchImpl, upstream, siteBase, ...deps
 } = {}) {
   const auth = await authorize(request, env, deps);
   if (!auth.ok) return { status: auth.status, body: auth.body };
@@ -639,7 +655,7 @@ export async function membershipPreparedPost(request, env, {
   if (!isPlainObject(body)) return bad(400, 'bad_request', 'A JSON body is required.');
 
   const rand = typeof randomBytes === 'function' ? randomBytes : (n) => crypto.getRandomValues(new Uint8Array(n));
-  const io = ioFrom(env, { lookupUser, readTree, loadHouse, getToken, fetchImpl, upstream, siteBase });
+  const io = ioFrom(env, { lookupUser, recipientMember, readTree, loadHouse, getToken, fetchImpl, upstream, siteBase });
   const ctx = { env, kv, auth, now, rand, io };
   switch (body.op) {
     case 'save': return saveListing(body, ctx);
