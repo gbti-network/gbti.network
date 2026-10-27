@@ -286,10 +286,16 @@ function stepHtml(t, step, n) {
     + `</td></tr></table>`;
 }
 
+/**
+ * The one button. Black with a 2px radius (owner, 2026-10-27), in the light palette the email ships with. The dark
+ * variant inverts it, because a black button on the dark card would disappear.
+ */
 function buttonHtml(t, url, label) {
-  const fg = t === PALETTES.dark ? '#16202a' : '#ffffff';
+  const dark = t === PALETTES.dark;
+  const bg = dark ? t.ink : '#000000';
+  const fg = dark ? '#000000' : '#ffffff';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%">`
-    + `<tr><td align="center" bgcolor="${t.accent}" style="background-color:${t.accent};border-radius:8px">`
+    + `<tr><td align="center" bgcolor="${bg}" style="background-color:${bg};border-radius:2px">`
     + `<a href="${escapeHtml(url)}" style="display:block;padding:14px 20px;font-family:${FONT};font-size:15px;`
     + `font-weight:700;color:${fg};text-decoration:none;mso-line-height-rule:exactly;line-height:20px">`
     + `${escapeHtml(label)}</a></td></tr></table>`;
