@@ -20589,11 +20589,10 @@ ${F}`,
   {
     name: "audio",
     kind: "fence",
-    purpose: "Play a recording, such as the podcast version of an article, under a label and its length. The source is EITHER a file on gbti.network (src: lines under /media/podcasts/: Opus in an .ogg file first, then an MP3 copy; nothing downloads until play; style: card swaps the browser bar for the card) OR one soundcloud:, spotify: or apple: line holding the page link copied from that service, played in the service's own player (SoundCloud tracks and playlists, Spotify and Apple Podcasts episodes and shows). An optional link: (and link-label:) adds a link out to the recording's own page; without words it reads, for example, Listen on Spotify.",
+    purpose: "Play a recording, such as the podcast version of an article, under a label and its length. The source is EITHER a file on gbti.network (src: ./audio/<file>.mp3 for a recording the author uploaded in the WorkBench podcast block, committed in the audio/ folder beside the article and played on a published, public article only; or src: lines under /media/podcasts/ for a site-wide recording, Opus in an .ogg file first, then an MP3 copy; nothing downloads until play; style: card swaps the browser bar for the card) OR one soundcloud:, spotify: or apple: line holding the page link copied from that service, played in the service's own player (SoundCloud tracks and playlists, Spotify and Apple Podcasts episodes and shows). An optional link: (and link-label:) adds a link out to the recording's own page; without words it reads, for example, Listen on Spotify.",
     syntax: `${F}audio <label...>
 length: <how long>
-src: /media/podcasts/<name>.ogg
-src: /media/podcasts/<name>.mp3
+src: ./audio/<name>.mp3 (an upload) or src: /media/podcasts/<name>.ogg and .mp3
 style: card (optional, files only)
 link: <page address> (optional)
 link-label: <its words> (optional)

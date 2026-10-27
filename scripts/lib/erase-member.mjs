@@ -44,6 +44,7 @@ export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subsc
 export const NOTIFICATIONS_KEY = (githubId) => `notifications:${githubId}`; // SOW-150/186 per-member notification store
 export const DRAFTS_KEY = (githubId) => `drafts:${githubId}`; // SOW-157 hosted draft staging
 export const DRAFT_IMAGES_PREFIX = (githubId) => `draftimg:${githubId}:`; // staged image bytes, one key per image per draft
+export const DRAFT_AUDIO_PREFIX = (githubId) => `draftaudio:${githubId}:`; // sow-483: staged podcast recordings, one key per file per draft
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
 export const CONV_SNAPSHOT_KEY = (githubId) => `conv:${githubId}`; // SOW-059 P1c: the frozen conversion attribution snapshot
@@ -216,6 +217,24 @@ export async function eraseDrafts({ githubId, env = process.env, fetchImpl = glo
 export async function eraseDraftImages({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   const listed = await listKvByPrefix({ prefix: DRAFT_IMAGES_PREFIX(String(githubId)), env, fetchImpl, keysOnly: true });
+  if (!listed.available) return { available: false, reason: listed.reason, deleted: 0 };
+  let deleted = 0;
+  for (const key of listed.keys) {
+    const r = await deleteKvKey({ key, env, fetchImpl });
+    if (r?.deleted !== false) deleted++;
+  }
+  return { available: true, deleted, scanned: listed.keys.length };
+}
+
+/**
+ * sow-483: hard-delete a member's STAGED RECORDINGS (`draftaudio:<github_id>:<type>:<slug>:<file>`, raw bytes up to
+ * 20 MB each). Their own keyspace for the same reason as the staged images: unpublished member content beside the
+ * drafts. Each key also expires 30 days after its upload, but an erasure does not wait for that. Fail-closed on the
+ * listing, as eraseDraftImages is.
+ */
+export async function eraseDraftAudio({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: DRAFT_AUDIO_PREFIX(String(githubId)), env, fetchImpl, keysOnly: true });
   if (!listed.available) return { available: false, reason: listed.reason, deleted: 0 };
   let deleted = 0;
   for (const key of listed.keys) {
@@ -455,6 +474,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'coupon-grant', auto: true, tool: 'erase-member.mjs --apply', action: `MINIMIZE ${COUPON_GRANT_KEY(githubId)}: write a keyed-hash lock, then delete the raw-id record. The one-coupon-per-member lock SURVIVES erasure (owner ruling 2026-08-11); needs COUPON_LOCK_KEY.` },
     { step: 'coupon-redemptions', auto: true, tool: 'erase-member.mjs --apply', action: `Delete every redemption:<CODE>:${githubId} record (the id is in the key name) and decrement each shared redemptions:<CODE> counter.` },
     { step: 'draft-images', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete every ${DRAFT_IMAGES_PREFIX(githubId)}* key (staged image bytes for unpublished drafts).` },
+    { step: 'draft-audio', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete every ${DRAFT_AUDIO_PREFIX(githubId)}* key (staged podcast recordings for unpublished drafts, sow-483).` },
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
     // sow-313 follow-up: FOUR STEPS RAN AND THE PLAN NEVER LISTED THEM. `runErasure` called eraseFollows,
     // erasePrefs, eraseDrafts and minimizeRedeemedInvites while planErasure declared none of them, so the plan
@@ -595,6 +615,7 @@ export async function runErasure({
   await runStep('shoptalk', () => eraseShoptalk({ githubId, env, fetchImpl, calendar: clients.calendar ?? null })); // sow-314: the guest list we do not own
   await runStep('drafts', () => eraseDrafts({ githubId, env, fetchImpl })); // SOW-157: hosted draft staging
   await runStep('draft-images', () => eraseDraftImages({ githubId, env, fetchImpl })); // the staged image bytes beside those drafts
+  await runStep('draft-audio', () => eraseDraftAudio({ githubId, env, fetchImpl })); // sow-483: the staged recordings beside them
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
   await runStep('coupon-grant', () => minimizeCouponGrant({ githubId, env, fetchImpl })); // SOW-119: minimize, never delete (owner ruling)
