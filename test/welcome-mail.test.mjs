@@ -183,3 +183,16 @@ test('the writing rules hold in what a member actually reads', () => {
     }
   }
 });
+
+test('there is no masthead: no logo and no GBTI NETWORK eyebrow, and the email opens on its heading (owner, 2026-10-27)', () => {
+  for (const [label, rec] of [['claimer', CLAIMER], ['free account', FREE], ['dark', { ...CLAIMER, theme: 'dark' }]]) {
+    const { html } = welcomeMail(rec);
+    assert.doesNotMatch(html, /brand\/logo\/mark-/, `${label}: no logo image`);
+    assert.doesNotMatch(html, /GBTI NETWORK/, `${label}: no eyebrow (the footer's "joined GBTI Network" is mixed case)`);
+    assert.match(html, /You are receiving this because you joined GBTI Network\./, `${label}: the footer still names the network`);
+    // Everything before the heading, less the hidden preheader, must be markup with no visible text in it.
+    const before = html.slice(html.indexOf('<body'), html.indexOf('<h1')).replace(/<div style="display:none[^"]*">[^<]*<\/div>/, '');
+    assert.ok(html.indexOf('<h1') > 0, `${label}: the heading moved; this assertion measures nothing`);
+    assert.equal(before.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim(), '', `${label}: the heading is the first thing read`);
+  }
+});

@@ -181,17 +181,6 @@ const para = (t, text, size = 13.5) => `<p style="margin:0;font-family:${FONT};f
 
 const cell = (inner, padding) => `<tr><td style="padding:${padding}">${inner}</td></tr>`;
 
-function mastheadHtml(t, siteBase, theme) {
-  const logo = `${siteBase}/brand/logo/mark-${theme === 'dark' ? 'white' : 'ink'}-96.png`;
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
-    + `<td style="padding-right:9px;line-height:0">`
-    + `<img src="${escapeHtml(logo)}" width="26" height="26" alt="GBTI Network" style="display:block;border:0;width:26px;height:26px">`
-    + `</td>`
-    + `<td style="font-family:${MONO};font-size:10.5px;font-weight:700;letter-spacing:.09em;color:${t.accent};`
-    + `mso-line-height-rule:exactly;line-height:26px">GBTI NETWORK</td>`
-    + `</tr></table>`;
-}
-
 /** The receipt card: the published item, its cover when one resolves, and the link to it. */
 function receiptHtml(t, item) {
   const noun = ITEM_NOUNS[item.type] ?? 'item';
@@ -366,9 +355,10 @@ export function welcomeMail({
   const ctaNote = `Opens your setup on step one. Or go to ${base.replace(/^https?:\/\//, '')}/welcome in any browser.`;
 
   const rows = [
-    cell(mastheadHtml(t, base, theme), '16px 26px', t),
+    // No masthead (owner, 2026-10-27): the logo and the "GBTI NETWORK" eyebrow above the heading were removed. The
+    // sender name and the subject already say who it is from, so the email opens on the heading.
     cell(`<h1 style="margin:0;font-family:${DISPLAY};font-size:23px;font-weight:700;color:${t.ink};`
-      + `mso-line-height-rule:exactly;line-height:29px">${escapeHtml(heading)}</h1>`, '22px 26px 14px'),
+      + `mso-line-height-rule:exactly;line-height:29px">${escapeHtml(heading)}</h1>`, '26px 26px 14px'),
     cell(published ? receiptHtml(t, published) : perksHtml(t, feedUrl), '0 26px'),
     published ? cell(para(t, ownership), '16px 26px 0') : '',
     cell(`<div style="height:1px;background-color:${t.hairline};font-size:0;line-height:0">&nbsp;</div>`, '20px 26px 0'),
