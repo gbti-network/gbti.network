@@ -5,7 +5,7 @@
 # of clicks whose agent names a well-known crawler, other = every answer that was not a 301 (Cloudflare's own Early
 # Hints probes land here). A date in `coverage` was queried; a date absent from it was NOT measured and must never
 # be read as zero. Request counts per path per day only: no personal data of any kind.
-generatedAt: '2026-10-26T14:20:03.830Z'
+generatedAt: '2026-10-27T13:16:39.372Z'
 coverage:
   - '2026-09-08'
   - '2026-09-09'
@@ -55,6 +55,7 @@ coverage:
   - '2026-10-23'
   - '2026-10-24'
   - '2026-10-25'
+  - '2026-10-26'
 clicks:
   /codeable:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
@@ -105,6 +106,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /codeable/naresh-devineni:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 2, crawlers: 1, other: 0}
@@ -154,6 +156,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 2, crawlers: 1, other: 1}
     '2026-10-25': {clicks: 1, crawlers: 1, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outbound/bugherd:
     '2026-09-08': {clicks: 3, crawlers: 1, other: 2}
     '2026-09-09': {clicks: 1, crawlers: 0, other: 0}
@@ -203,6 +206,7 @@ clicks:
     '2026-10-23': {clicks: 2, crawlers: 0, other: 2}
     '2026-10-24': {clicks: 4, crawlers: 1, other: 4}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 1, crawlers: 0, other: 5}
   /outbound/cloudways:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -252,6 +256,7 @@ clicks:
     '2026-10-23': {clicks: 1, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 1, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 1, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 1, crawlers: 1, other: 1}
   /outbound/codeable:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 5, crawlers: 1, other: 0}
@@ -301,6 +306,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 3, crawlers: 1, other: 1}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outbound/codeable/wordpress-services:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -350,6 +356,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outbound/tailscale:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -399,6 +406,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outsource/codeable/wp-cli:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -448,6 +456,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outsourcing/codeable:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -497,6 +506,7 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
   /outsourcing/codeable/wp-cli:
     '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
     '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
@@ -546,3 +556,4 @@ clicks:
     '2026-10-23': {clicks: 0, crawlers: 0, other: 0}
     '2026-10-24': {clicks: 2, crawlers: 1, other: 1}
     '2026-10-25': {clicks: 0, crawlers: 0, other: 0}
+    '2026-10-26': {clicks: 0, crawlers: 0, other: 0}
