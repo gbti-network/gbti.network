@@ -9,7 +9,8 @@
 //   welcome-owed:<github_id>   THE ENTITLEMENT. Written at a genuinely new sign-in (`signup.created === true`)
 //                              and at nothing else, so only a NEW member is ever welcomed. Deleted the moment
 //                              one goes out. It is also the retry queue: the five-minute sweep finds anything
-//                              still owed after an hour and sends the plain version.
+//                              still owed after an hour and sends the plain version, or the receipt version
+//                              when the record carries an item (carriedFields; the 2026-10-27 backsend).
 //   welcome-mail:<github_id>   THE RECORD, permanent. `sent` means never again, whatever else happens.
 //
 // WHY NOT ONE KEY. A prefix scan of `welcome-mail:` is not the "small key set" the sweep needs: it grows by one
@@ -30,7 +31,7 @@
 
 import { createResendClient } from '../../clients/resend.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
-import { welcomeMail } from '../../membership/welcome-mail.mjs';
+import { welcomeMail, ITEM_ROUTES } from '../../membership/welcome-mail.mjs';
 import { readCouponGrant } from './coupons.mjs';
 import { resolveSiteUrl } from '../../membership/mail-click.mjs';
 
@@ -50,19 +51,56 @@ const SWEEP_MAX_PER_TICK = 10;
 /** A github id as the stores key them: digits, bounded. Anything else is refused rather than coerced. */
 const isGithubId = (v) => /^[0-9]{1,20}$/.test(String(v ?? ''));
 
+const boundedString = (v, max) => (typeof v === 'string' && v.trim().length <= max ? v.trim() : '');
+
+/**
+ * What an owed record may carry into the send: the greeting name, the status and the claimed item. Used when the
+ * record is written and again when the sweep reads it, so a hand-written or older record is held to the same
+ * shape. An item that does not fit is DROPPED, never repaired: the plain welcome is the safe direction, and the
+ * builder's own guards (the slug check, the cover url pattern, escaping) still run on whatever passes here.
+ *
+ * Only the 2026-10-27 backsend writes a carry today (the seven invitation claimers who joined before the welcome
+ * email existed). A new sign-in writes none, and the claim leg sends its receipt directly.
+ */
+export function carriedFields(carry) {
+  const out = {};
+  if (!carry || typeof carry !== 'object') return out;
+  const name = boundedString(carry.name, 80);
+  if (name) out.name = name;
+  const status = boundedString(carry.status, 20);
+  if (/^[a-z_]+$/.test(status)) out.status = status;
+  const it = carry.item;
+  if (it && typeof it === 'object' && Object.hasOwn(ITEM_ROUTES, it.type)) {
+    const item = {
+      type: it.type,
+      title: boundedString(it.title, 200),
+      slug: boundedString(it.slug, 120),
+      folder: boundedString(it.folder, 80),
+      image: boundedString(it.image, 300),
+      creditTo: boundedString(it.creditTo, 40),
+    };
+    if (item.title && item.slug) out.item = item;
+  }
+  return out;
+}
+
 /**
  * Record that this member is OWED a welcome. Called at a genuinely new sign-in and nowhere else.
  *
  * @param viaClaim true when the sign-in came from a prepared-listing claim page, so the send waits for the merge
  *                 and the email can carry the receipt. Informational on the record; the sweep ignores it.
+ * @param carry    optional `{ name, status, item }` the sweep passes to the send (see carriedFields). The sign-in
+ *                 leg writes none.
  * @returns true when the key was written. Never throws: a lost key costs a welcome, never a signup.
  */
-export async function markWelcomeOwed(kv, githubId, { viaClaim = false, now = new Date() } = {}) {
+export async function markWelcomeOwed(kv, githubId, { viaClaim = false, now = new Date(), carry = null } = {}) {
   if (!kv || !isGithubId(githubId)) return false;
   try {
     const stamp = await readWelcomeStamp(kv, githubId);
     if (stamp?.state === 'sent') return false; // already welcomed, once, ever
-    await kv.put(welcomeOwedKey(githubId), JSON.stringify({ at: now.toISOString(), viaClaim: viaClaim === true }), {
+    const extra = carriedFields(carry);
+    const rec = { at: now.toISOString(), viaClaim: viaClaim === true, ...(Object.keys(extra).length ? { carry: extra } : {}) };
+    await kv.put(welcomeOwedKey(githubId), JSON.stringify(rec), {
       expirationTtl: OWED_TTL_SECONDS,
     });
     return true;
@@ -225,7 +263,8 @@ export async function sweepOwedWelcomes(env, deps = {}) {
     if (!Number.isFinite(at) || now.getTime() - at < OWED_GRACE_MS) continue;
     out.due += 1;
     try {
-      const r = await send(env, { githubId }, { kv, now });
+      // A carried name, status and item go through to the send; a record without one sends the plain welcome.
+      const r = await send(env, { githubId, ...carriedFields(rec?.carry) }, { kv, now });
       if (r?.sent) out.sent += 1;
     } catch {
       out.errors += 1;

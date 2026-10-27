@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  sendWelcomeMail, markWelcomeOwed, readWelcomeStamp, sweepOwedWelcomes,
+  sendWelcomeMail, markWelcomeOwed, readWelcomeStamp, sweepOwedWelcomes, carriedFields,
   welcomeOwedKey, welcomeStampKey, WELCOME_OWED_PREFIX, OWED_GRACE_MS, SENDING_STALE_MS,
 } from '../workers/signup/welcome-mail-send.mjs';
 import { isClaimReturn, signinLanding } from '../workers/signup/signin-landing.mjs';
@@ -288,4 +288,67 @@ test('the five-minute drain actually RUNS the sweep, fail-soft, and reports it',
 test('the owed prefix is its own, so the sweep never walks every member\'s record', () => {
   assert.ok(!welcomeStampKey(ID).startsWith(WELCOME_OWED_PREFIX),
     'a permanent stamp must not be listed by the sweep: that set grows by one key per member for ever');
+});
+
+
+// ---- the 2026-10-27 backsend: an owed record that CARRIES the receipt ----------------------------------------------
+
+const SEAN_ITEM = { type: 'prompt', title: 'Pedro Monkey Puppet Portrait', slug: 'pedro-monkey-puppet-portrait', folder: 'sbalger75', image: './images/result.jpg', creditTo: 'atwellpub' };
+const STALE = new Date(NOW.getTime() - 2 * OWED_GRACE_MS);
+// The sweep's real send, with the address read from a fake Stripe customer as it would be in production.
+const realSend = (box) => (env, rec, deps) => sendWelcomeMail(env, rec, {
+  ...deps, ...box, stripe: { searchCustomerByGithubId: async () => ({ email: 'm@example.test' }) },
+});
+
+test('the sweep sends what the owed record carries: the greeting, the status and the receipt card', async () => {
+  const kv = fakeKv();
+  const box = outbox();
+  assert.ok(await markWelcomeOwed(kv, ID, { viaClaim: true, now: STALE, carry: { name: 'Sean', status: 'paid', item: SEAN_ITEM } }));
+  const r = await sweepOwedWelcomes(ENV, { kv, now: NOW, send: realSend(box) });
+  assert.equal(r.sent, 1);
+  assert.equal(box.sent.length, 1);
+  assert.equal(box.sent[0].subject, 'Your prompt is live on GBTI Network \u2022 COMPLETE ONBOARDING');
+  assert.match(box.sent[0].html, /Your prompt is live, Sean\./);
+  assert.match(box.sent[0].html, /members\/sbalger75\/prompts\/pedro-monkey-puppet-portrait\/images\/result\.jpg/, 'the cover is in the card');
+  assert.match(box.sent[0].html, /Join the Discord/, 'the carried status, paid, opens the community');
+  assert.equal((await readWelcomeStamp(kv, ID)).state, 'sent');
+  assert.equal(kv.store.has(welcomeOwedKey(ID)), false);
+});
+
+test('an owed record with nothing carried still sends the plain welcome, exactly as before', async () => {
+  const kv = fakeKv();
+  const box = outbox();
+  await markWelcomeOwed(kv, ID, { now: STALE });
+  assert.equal(JSON.parse(kv.store.get(welcomeOwedKey(ID))).carry, undefined, 'a sign-in writes no carry');
+  await sweepOwedWelcomes(ENV, { kv, now: NOW, send: realSend(box) });
+  assert.match(box.sent[0].subject, /^Welcome to GBTI Network/);
+  assert.doesNotMatch(box.sent[0].html, /is live/);
+});
+
+test('a carried item that does not fit is dropped, and the plain welcome goes out rather than nothing', async () => {
+  for (const item of [{ ...SEAN_ITEM, type: 'post' }, { ...SEAN_ITEM, slug: '' }, 'not an item', { ...SEAN_ITEM, title: 'x'.repeat(201) }]) {
+    const kv = fakeKv();
+    const box = outbox();
+    // Written by hand, as an older or tampered record would be, so the READ side's guard is what is tested.
+    kv.store.set(welcomeOwedKey(ID), JSON.stringify({ at: STALE.toISOString(), carry: { name: 'Sean', item } }));
+    await sweepOwedWelcomes(ENV, { kv, now: NOW, send: realSend(box) });
+    assert.equal(box.sent.length, 1, `${JSON.stringify(item).slice(0, 40)}: still sent`);
+    assert.match(box.sent[0].subject, /^Welcome to GBTI Network/, 'plain, without the card');
+    assert.match(box.sent[0].html, /Welcome, Sean\. Here is what you can do\./, 'the name survives a dropped item');
+  }
+});
+
+test('carriedFields keeps only the shapes the builder expects', () => {
+  assert.deepEqual(carriedFields(null), {});
+  assert.deepEqual(carriedFields({ status: 'Paid<script>' }), {}, 'a status is lowercase letters only');
+  assert.deepEqual(carriedFields({ name: 'x'.repeat(81) }), {}, 'a name is bounded');
+  assert.deepEqual(carriedFields({ item: { ...SEAN_ITEM, type: 'post' } }), {}, 'only a project or a prompt has a receipt');
+  assert.deepEqual(carriedFields({ name: ' Sean ', status: 'paid', item: SEAN_ITEM, extra: 'dropped' }),
+    { name: 'Sean', status: 'paid', item: SEAN_ITEM });
+});
+
+test('a member already welcomed is not re-owed by a backsend that carries a receipt', async () => {
+  const kv = fakeKv({ [welcomeStampKey(ID)]: JSON.stringify({ state: 'sent', at: NOW.toISOString() }) });
+  assert.equal(await markWelcomeOwed(kv, ID, { now: STALE, carry: { name: 'Sean', item: SEAN_ITEM } }), false);
+  assert.equal(kv.store.has(welcomeOwedKey(ID)), false);
 });
