@@ -14503,8 +14503,8 @@ ${listStyleProseCss(".doc-blocks")}
   /* sow-444: --embed-out-* = how far the text column sits in (padding 10 + avatar 22 + gap 9), so an embed spans the row */
   .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; --embed-out-l:41px; --embed-out-r:0px; }
   .comment.reply { margin-left:16px; }
-  /* sow-441: the pinned author note as a green card, as on the website's project and prompt pages. */
-  .comment.note { border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius:12px; background:var(--green-tint); padding:14px 16px; --embed-out-l:47px; --embed-out-r:16px; }
+  /* sow-441: the pinned author note as a card, as on the website's pages (2026-10-27, owner pick A: neutral, 2px corners). */
+  .comment.note { border:1px solid var(--line-2); border-radius:2px; background:var(--panel); padding:14px 16px; --embed-out-l:47px; --embed-out-r:16px; }
   .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }

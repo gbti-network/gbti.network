@@ -146,11 +146,11 @@ test('the reader: a project gets the project layout and no cover; every other ty
   assert.match(r, /try \{ return \(await this\.client\.status\(\)\)\?\.membership === 'paid'; \} catch \{ return false; \}/);
 });
 
-test('the discussion draws the pinned author note as the green card', () => {
+test('the discussion draws the pinned author note as the card the website draws (owner pick A, 2026-10-27)', () => {
   const d = read('client-ui/src/elements/gbti-discussion.mjs');
   assert.match(d, /const noteCard = c\.authorNote \? ' note' : '';/);
   assert.match(d, /<div class="comment\$\{reply\}\$\{noteCard\}">/);
-  assert.match(d, /\.comment\.note \{ border:1px solid [^}]*background:var\(--green-tint\)/);
+  assert.match(d, /\.comment\.note \{ border:1px solid var\(--line-2\); border-radius:2px; background:var\(--panel\);/);
 });
 
 test('the screenshot buttons override the base button paint, hover included', () => {

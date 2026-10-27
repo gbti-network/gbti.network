@@ -15,15 +15,18 @@
 /** The class + style contract of the pinned block, read off Comments.astro. */
 export const AUTHOR_NOTE_BLOCK = {
   card: 'card',
-  cardStyle: 'padding:24px;border-color:var(--green);background:var(--green-tint)',
+  // 2026-10-27 (owner pick A, .data/design/author-note-2026-10-27): a neutral card with 2px corners, a hairline
+  // under the head, green on the kicker only.
+  cardStyle: 'padding:28px;border:1px solid var(--line-2);border-radius:2px;box-shadow:none;background:var(--paper)',
   head: 'flex items-center g12',
+  headStyle: 'padding-bottom:18px;border-bottom:1px solid var(--line)',
   eyebrow: 'eyebrow',
   eyebrowStyle: 'color:var(--green-700)',
   eyebrowText: 'From the author',
   name: 'link',
-  nameStyle: 'font-weight:700;display:inline-flex',
+  nameStyle: 'font-weight:700;display:inline-flex;color:var(--fg)',
   body: 'cmt-rich',
-  bodyStyle: 'margin-top:14px;color:var(--fg)',
+  bodyStyle: 'margin-top:18px;color:var(--fg)',
   avatarSize: 44,
 };
 
@@ -58,7 +61,7 @@ export function buildAuthorNoteHtml({ name, href, avatarUrl, bodyHtml, seed } = 
     + (avatarUrl ? `<img src="${esc(avatarUrl)}" alt="" width="${b.avatarSize}" height="${b.avatarSize}" onerror="this.remove()" style="${layer}" />` : '')
     + `</span>`;
   return `<article class="${b.card}" style="${b.cardStyle}">`
-    + `<div class="${b.head}">`
+    + `<div class="${b.head}" style="${b.headStyle}">`
     + `<a href="${esc(href)}" class="shrink-0">${avatar}</a>`
     + `<div><p class="${b.eyebrow}" style="${b.eyebrowStyle}">${b.eyebrowText}</p>`
     + `<a href="${esc(href)}" class="${b.name}" style="${b.nameStyle}">${esc(name)}</a></div>`
@@ -96,7 +99,7 @@ export function buildAuthorNoteNodes(doc, { name, href, avatarUrl, seed, bodyNod
     avatar.appendChild(photo);
   }
   const card = el('article', { class: b.card, style: b.cardStyle });
-  const head = el('div', { class: b.head });
+  const head = el('div', { class: b.head, style: b.headStyle });
   const avLink = el('a', link ? { href: link, class: 'shrink-0' } : { class: 'shrink-0' });
   avLink.appendChild(avatar);
   const who = el('div');

@@ -156,7 +156,7 @@ test('the note card name is the display name the published card prints, not the 
   const comments = read('src/components/blog/AuthorNote.astro');
   assert.match(comments, /const nameOf = \(username: string\) => profileName\.get\(username\) \?\? authorDisplay\(username\);/, 'the published card prefers the profile name');
   assert.match(comments, /const introName = intro \? nameOf\(intro\.data\.author\) : '';/);
-  assert.match(comments, /class="link" style="font-weight:700;display:inline-flex">\{introName\}<\/a>/);
+  assert.match(comments, /class="link" style="font-weight:700;display:inline-flex[^"]*">\{introName\}<\/a>/); // 2026-10-27 pick A adds the body colour
   // The name map must be built from the collection this file already loads for the avatars, not a second read.
   assert.match(comments, /const profileName = new Map\(/);
   const tied = { recipientName: 'Rob Rochford', githubLogin: 'RobRoch' };

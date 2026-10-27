@@ -30,6 +30,23 @@ test('DRIFT: every class and style in the shared contract still appears in the p
   assert.doesNotMatch(COMMENTS, /<article class="card"|>From the author</, 'Comments.astro carries no second copy of the card');
 });
 
+// 2026-10-27 (owner, design round .data/design/author-note-2026-10-27, pick A): "I am not sure I like this green author
+// box on light mode. maybe the border radius needs to be 2px." The note is a neutral card: 2px corners, a warm grey
+// hairline border, no green wash and no shadow, a hairline under the head, green on the kicker only.
+test('pick A: the note is a neutral card with 2px corners, green on the kicker only', () => {
+  const card = PINNED.match(/<article class="card" style="([^"]+)">/)[1];
+  assert.match(card, /border-radius:2px/);
+  assert.match(card, /border:1px solid var\(--line-2\)/);
+  assert.match(card, /background:var\(--paper\)/);
+  assert.match(card, /box-shadow:none/, 'the .card shadow is dropped');
+  assert.doesNotMatch(card, /--green/, 'no green wash or green border');
+  assert.match(PINNED, /class="link" style="font-weight:700;display:inline-flex;color:var\(--fg\)">\{introName\}<\/a>/, 'the name is body colour, not link green');
+  assert.match(PINNED, /<p class="eyebrow" style="color:var\(--green-700\)">From the author<\/p>/, 'the kicker keeps the green');
+  assert.match(PINNED, /<div class="flex items-center g12" style="padding-bottom:18px;border-bottom:1px solid var\(--line\)">/, 'the hairline under the head');
+  const pad = Number(card.match(/padding:(\d+)px;/)[1]);
+  assert.match(card, new RegExp(`--embed-out-l:${pad}px;--embed-out-r:${pad}px`), 'an embed still spans the card');
+});
+
 test('DRIFT: the published block still selects a PUBLIC authorNote comment, which the preview mirrors', () => {
   // The preview re-implements this filter client-side. If the published rule changes (say it starts pinning a
   // members-visibility note), the preview would silently show something the page does not.
@@ -57,7 +74,8 @@ test('introPathFor: null for a path that is not member or house content, or a mi
 
 test('buildAuthorNoteHtml: renders the pinned structure, escaping the name and href', () => {
   const html = buildAuthorNoteHtml({ name: 'GBTI Network', href: '/members/gbtilabs/', avatarUrl: 'https://x/a.png', bodyHtml: '<p>Why I wrote this.</p>' });
-  assert.match(html, /class="card" style="padding:24px;border-color:var\(--green\);background:var\(--green-tint\)"/);
+  assert.match(html, /class="card" style="padding:28px;border:1px solid var\(--line-2\);border-radius:2px;box-shadow:none;background:var\(--paper\)"/);
+  assert.match(html, /<div class="flex items-center g12" style="padding-bottom:18px;border-bottom:1px solid var\(--line\)">/, 'the hairline under the head');
   assert.match(html, /From the author/);
   assert.match(html, /GBTI Network/);
   assert.match(html, /<p>Why I wrote this\.<\/p>/); // the rendered body is injected, not escaped
