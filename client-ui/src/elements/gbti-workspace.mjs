@@ -21,7 +21,7 @@ import './gbti-profile-editor.mjs'; // sow-346: the Profile tab
 import { openPreparedInto, preparedChanged } from '../prepared-editor.mjs'; // sow-427: prepared mode lives there, not here
 import { WORKSPACE_CSS as CSS } from './workspace-css.mjs'; // the stylesheet, split out at the 900-line limit
 import { withWorkspaceData } from './workspace-data.mjs'; // the loaders and caches, split out at the 900-line limit
-import { checkDraftBehind, staleDraftRowMessage, openPublishedInto } from '../draft-behind.mjs'; // sow-482: a draft the article moved past
+import { checkDraftBehind, staleDraftRowMessage, openPublishedInto, rowDraftParts, BEHIND_ROW_CSS } from '../draft-behind.mjs'; // sow-482: a draft the article moved past
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -271,7 +271,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       const badge = n ? `<span class="tbadge">${esc(n)}</span>` : '';
       return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
     }).join('');
-    this.set(this.css(CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`); // sow-163: .wb is the rail grid
+    this.set(this.css(CSS + BEHIND_ROW_CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`); // sow-163: .wb is the rail grid
     if (this._tab === 'profile') this.$('[data-profile-slot]')?.append(this._profileEd ||= document.createElement('gbti-profile-editor')); // sow-346: kept, so a repaint never loses typed edits
     this._revealTab();
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this._draftMsg = null; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(this._tab); })); // SOW-085: a direct tab click resets the page + filter (was a gap)
@@ -454,7 +454,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     // Who can read this item, told from the item itself (sow-458: the editorial review it used to report is retired).
     const aud = audienceTag(it);
     const vis = aud ? `<span class="tag" title="${esc(aud.title)}">${esc(aud.label)}</span>` : '';
-    const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '', bt = buildingTag(it); // sow-454: bt = published but not rebuilt yet, so no public page and no View link
+    const dp = rowDraftParts({ draft: (this._drafts || []).find((d) => d.path === it.path), item: it, index: i, esc, discardedPath: this._discardedPath }), stagedTag = dp.tag, bt = buildingTag(it); // sow-482: staged edits, or the amber behind line // sow-454: bt = published but not rebuilt yet, so no public page and no View link
     const flip = it.status === 'published'
       ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
       : it.status === 'draft'
@@ -472,7 +472,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     // sow-317: in Network scope every row names its author; the list mixes every member's items.
     const who = this._scopeNow() === 'house' && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : '';
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
-      + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
+      + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span>${dp.line}</span>`
       + `<span class="right">${who}${status} ${bt ? `<span class="tag" title="${esc(bt.title)}">${esc(bt.label)}</span>` : ''}${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
   }
 
@@ -580,6 +580,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       this.$$('[data-drow-edit]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowEdit)]; if (d) this._openDraft(d); }));
       this.$$('[data-drow-publish]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowPublish)]; if (d) this._publishDraft(d, b); }));
       this.$$('[data-drow-discard]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowDiscard)]; if (d) this._discardDraft(d, b); }));
+      this.$$('[data-behind-discard]').forEach((b) => b.addEventListener('click', () => { const it = view()[Number(b.dataset.behindDiscard)]; const d = it && (this._drafts || []).find((x) => x.path === it.path); if (d) this._discardDraft(d, b); })); // sow-482
       // SOW-085: the shared list controls. Sort persists (one device-local key); the status filter is session-only.
       this.$('[data-sort]')?.addEventListener('change', (e) => {
         this._sort = sortModeFor(e.target.value);
@@ -699,6 +700,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     try {
       // sow-194: carry store (a repo draft has no Discard control, but a client refuses it with a typed error).
       await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store });
+      this._discardedPath = d.path || null; // sow-482: the row says "draft discarded" until the next discard or reload
       this._drafts = null;
       this._overview = null;
       this._ensureTab(this._tab); // SOW-085: refresh the current content tab (drafts merge into it now)

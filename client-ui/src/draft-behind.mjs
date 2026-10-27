@@ -100,3 +100,76 @@ export async function checkDraftBehind(client, full, d) {
   if (!base && lastAt && savedAt) base = committedBase;
   return { behind: null, base };
 }
+
+// ---- the work list (sow-482 Phase 4, the owner's pick of option B on 2026-10-27: "the row explains itself") ----
+// A draft of a published item has no row of its own (mergeTypeItems folds it into the item's row), so the item's row
+// says so: an amber line under the title with both dates and a "Discard draft" link. The list compares dates it
+// already holds (the draft's save time, the item's last publish from the content index), so it reads nothing per row;
+// the editor's check, which compares versions, stays the exact one.
+
+const when = (v) => { const t = typeof v === 'number' ? v : Date.parse(String(v ?? '')); return Number.isFinite(t) ? t : null; };
+
+/** "Oct 27" in the reader's locale. */
+export function fmtDay(value) {
+  const t = when(value);
+  if (t == null) return '';
+  try { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; }
+}
+
+/** "Oct 27, 2:00 AM": used when both dates fall on one day, where the day alone would read as no change at all. */
+export function fmtDayTime(value) {
+  const t = when(value);
+  if (t == null) return '';
+  try { return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; }
+}
+
+/**
+ * Is this row's saved draft behind its published item? `draft` is the work list's draft summary (its `updatedAt` is
+ * the save time), `item` the content row (`updatedAt`, else `publishedAt`, from the index). A draft the editor already
+ * found behind carries BEHIND_BASE and stays behind after a later save. A repository draft IS the committed file.
+ * @returns {null | { publishedAt: number|null, savedAt: number|null }}
+ */
+export function rowDraftBehind(draft, item) {
+  if (!draft || !item || draft.store === 'repo') return null;
+  const savedAt = when(draft.updatedAt);
+  const publishedAt = when(item.updatedAt) ?? when(item.publishedAt);
+  const byDates = savedAt != null && publishedAt != null && publishedAt > savedAt;
+  return byDates || draft.base === BEHIND_BASE ? { publishedAt, savedAt } : null;
+}
+
+/** The row's sentence. The dates are named only while they are true as written, as in the editor's banner. */
+export function behindRowMessage({ publishedAt, savedAt, type } = {}, { day = fmtDay, dayTime = fmtDayTime } = {}) {
+  const noun = itemNoun(type);
+  const pub = when(publishedAt);
+  const saved = when(savedAt);
+  if (pub == null || saved == null || pub <= saved) return `Your saved draft is behind. The ${noun} changed after the draft was started.`;
+  const f = day(pub) === day(saved) ? dayTime : day;
+  return `Your saved draft is behind. The ${noun} changed on ${f(pub)}, after the draft was saved on ${f(saved)}.`;
+}
+
+const CLOCK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+
+/**
+ * The content row's draft parts: the plain "staged edits" tag for a draft that is current, the amber line for one
+ * that is behind (in place of the tag), and the green "draft discarded" tag the row shows once its draft is gone.
+ * `esc` is the caller's HTML escape; `index` is the row's position, which the Discard link carries.
+ */
+export function rowDraftParts({ draft, item, index, esc, discardedPath = null }) {
+  const behind = rowDraftBehind(draft, item);
+  const done = !draft && discardedPath && item?.path === discardedPath ? '<span class="tag ok">draft discarded</span>' : '';
+  if (!draft) return { tag: done, line: '' };
+  if (!behind) return { tag: '<span class="tag">staged edits</span>', line: '' };
+  const msg = behindRowMessage({ ...behind, type: item.type });
+  return { tag: '', line: `<span class="behind">${CLOCK}<span>${esc(msg)} <button class="lnk" data-behind-discard="${Number(index)}" type="button">Discard draft</button></span></span>` };
+}
+
+/** The line's look: the work list's own amber, defined for both themes (the editor's --s-amber-fg is not in scope). */
+export const BEHIND_ROW_CSS = `
+  :host { --behind-fg:#8a5500; }
+  :host-context([data-theme="dark"]) { --behind-fg:#e6b45c; }
+  .row:has(.behind) { align-items:flex-start; }
+  .row .t .behind { display:flex; align-items:flex-start; gap:6px; margin-top:4px; color:var(--behind-fg); font-size:12.5px; line-height:1.4; white-space:normal; }
+  .row .t .behind svg { flex:none; margin-top:2px; }
+  .row .t .behind .lnk { font:inherit; font-weight:700; color:var(--behind-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  .row .t .behind .lnk:hover { background:none; color:var(--fg); }
+`;

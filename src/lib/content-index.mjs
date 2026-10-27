@@ -64,6 +64,9 @@ export function aliasSlugsOf(d) {
   return out;
 }
 
+/** sow-482: a frontmatter date (a Date from the schema, or an ISO string) as epoch ms, or null. */
+const msOf = (v) => { const t = v instanceof Date ? v.getTime() : Date.parse(String(v ?? '')); return Number.isFinite(t) ? t : null; };
+
 export function toIndexItem(entry, type) {
   const d = (entry && entry.data) || {};
   const slug = d.slug;
@@ -80,6 +83,9 @@ export function toIndexItem(entry, type) {
     category: (Array.isArray(d.categories) && d.categories[0]) || null, // top-level category -> the UI's fallback glyph (cat-glyph.mjs)
     categories: Array.isArray(d.categories) ? d.categories.filter((s) => typeof s === 'string') : [], // SOW-054: full key path for the browse drill-down (paired with categoryLabels emitted by the index endpoints)
     publishedAt: d.publishedAt ? Number(d.publishedAt) : null,
+    // sow-482: when the item was last published (every publish stamps it; publishedAt is kept from the first), so the
+    // WorkBench can tell a saved draft the article has moved past without reading each item. Public frontmatter.
+    updatedAt: msOf(d.updatedAt),
     visibility: d.visibility || 'public',
     aliases: aliasSlugsOf(d), // SOW-112: old slugs after a rename (saved rows + reader discussions resolve via these)
     tags: Array.isArray(d.tags) ? d.tags.filter((t) => typeof t === 'string') : [], // SOW-100: the admin tag explorer

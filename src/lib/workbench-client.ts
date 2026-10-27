@@ -81,6 +81,7 @@ function mapDraftRecord(rec: any) {
     store: 'kv', // sow-194: the store discriminator, so a KV draft never collides with a repo draft on merge
     publishedAt: fm.publishedAt ? Number(fm.publishedAt) : null,
     updatedAt: rec?.updatedAt || null,
+    base: typeof rec?.base === 'string' ? rec.base : null, // sow-482: a draft the editor found behind keeps its row warning
   };
 }
 

@@ -10363,6 +10363,61 @@ ${listStyleProseCss(".doc-blocks")}
     if (!base && lastAt && savedAt) base = committedBase;
     return { behind: null, base };
   }
+  var when = (v2) => {
+    const t = typeof v2 === "number" ? v2 : Date.parse(String(v2 ?? ""));
+    return Number.isFinite(t) ? t : null;
+  };
+  function fmtDay(value) {
+    const t = when(value);
+    if (t == null) return "";
+    try {
+      return new Date(t).toLocaleDateString(void 0, { month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  }
+  function fmtDayTime(value) {
+    const t = when(value);
+    if (t == null) return "";
+    try {
+      return new Date(t).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  }
+  function rowDraftBehind(draft, item) {
+    if (!draft || !item || draft.store === "repo") return null;
+    const savedAt = when(draft.updatedAt);
+    const publishedAt = when(item.updatedAt) ?? when(item.publishedAt);
+    const byDates = savedAt != null && publishedAt != null && publishedAt > savedAt;
+    return byDates || draft.base === BEHIND_BASE ? { publishedAt, savedAt } : null;
+  }
+  function behindRowMessage({ publishedAt, savedAt, type } = {}, { day: day3 = fmtDay, dayTime = fmtDayTime } = {}) {
+    const noun = itemNoun(type);
+    const pub = when(publishedAt);
+    const saved = when(savedAt);
+    if (pub == null || saved == null || pub <= saved) return `Your saved draft is behind. The ${noun} changed after the draft was started.`;
+    const f = day3(pub) === day3(saved) ? dayTime : day3;
+    return `Your saved draft is behind. The ${noun} changed on ${f(pub)}, after the draft was saved on ${f(saved)}.`;
+  }
+  var CLOCK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+  function rowDraftParts({ draft, item, index, esc: esc8, discardedPath = null }) {
+    const behind = rowDraftBehind(draft, item);
+    const done = !draft && discardedPath && item?.path === discardedPath ? '<span class="tag ok">draft discarded</span>' : "";
+    if (!draft) return { tag: done, line: "" };
+    if (!behind) return { tag: '<span class="tag">staged edits</span>', line: "" };
+    const msg = behindRowMessage({ ...behind, type: item.type });
+    return { tag: "", line: `<span class="behind">${CLOCK}<span>${esc8(msg)} <button class="lnk" data-behind-discard="${Number(index)}" type="button">Discard draft</button></span></span>` };
+  }
+  var BEHIND_ROW_CSS = `
+  :host { --behind-fg:#8a5500; }
+  :host-context([data-theme="dark"]) { --behind-fg:#e6b45c; }
+  .row:has(.behind) { align-items:flex-start; }
+  .row .t .behind { display:flex; align-items:flex-start; gap:6px; margin-top:4px; color:var(--behind-fg); font-size:12.5px; line-height:1.4; white-space:normal; }
+  .row .t .behind svg { flex:none; margin-top:2px; }
+  .row .t .behind .lnk { font:inherit; font-weight:700; color:var(--behind-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  .row .t .behind .lnk:hover { background:none; color:var(--fg); }
+`;
 
   // client-ui/src/elements/editor-actions.mjs
   var stagedBannerHtml = () => `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>`;
@@ -11279,9 +11334,9 @@ ${listStyleProseCss(".doc-blocks")}
            ${prs.length === 0 ? `<p class="muted">No open PRs.</p>` : ""}
            <ul class="list">${sortPullsByEvent(prs).map((pr) => {
           const ev = prEvent(pr);
-          const when = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">· ${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
+          const when2 = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">· ${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
           return `<li class="row" style="justify-content:space-between" data-n="${esc2(pr.number)}">
-             <span><a href="${esc2(pr.html_url)}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> ${esc2(pr.title)}${when}</span>
+             <span><a href="${esc2(pr.html_url)}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> ${esc2(pr.title)}${when2}</span>
              <span class="gate tag" data-n="${esc2(pr.number)}">checking…</span>
            </li>`;
         }).join("")}</ul>
@@ -14763,8 +14818,8 @@ ${listStyleProseCss(".doc-blocks")}
       if (!this._pulls.length) return `<h3 class="sec-h">Open pull requests</h3><p class="muted">No open pull requests right now.</p>`;
       const rows = this._pulls.map((p) => {
         const author = p.author?.login ? `@${esc2(p.author.login)}` : "unknown";
-        const when = p.createdAt ? esc2(String(p.createdAt).slice(0, 10)) : "";
-        return `<li class="pr"><a class="pr-t" href="${esc2(p.html_url || "#")}" target="_blank" rel="noopener">#${esc2(p.number)} ${esc2(p.title || "")}</a><span class="pr-m">${author}${when ? ` · ${when}` : ""}</span></li>`;
+        const when2 = p.createdAt ? esc2(String(p.createdAt).slice(0, 10)) : "";
+        return `<li class="pr"><a class="pr-t" href="${esc2(p.html_url || "#")}" target="_blank" rel="noopener">#${esc2(p.number)} ${esc2(p.title || "")}</a><span class="pr-m">${author}${when2 ? ` · ${when2}` : ""}</span></li>`;
       }).join("");
       return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
     }
@@ -17594,11 +17649,11 @@ ${listStyleProseCss(".doc-blocks")}
       else if (!rows.length) body = '<p class="inq-none">Nothing has come in yet. The form is at /sponsorship/, which is not linked from the site and is not indexed, so it only reaches people you send it to.</p>';
       else {
         body = `<ul class="inq">${rows.map((r) => {
-          const when = String(r.at || "").slice(0, 10);
+          const when2 = String(r.at || "").slice(0, 10);
           const bits = [r.organization, r.website].filter(Boolean).map((b) => esc2(b)).join(" &middot; ");
           const mail = r.email ? `<a href="mailto:${esc2(r.email)}">${esc2(r.email)}</a>` : r.emailStored ? "the address could not be read back" : "the address was not stored (the mail keys were unset); it is in the notification email";
           return `<li>
-          <div class="inq-hd"><span class="inq-who">${esc2(r.name || "Someone")}</span><span class="inq-meta">${esc2(when)}${bits ? " &middot; " + bits : ""}</span></div>
+          <div class="inq-hd"><span class="inq-who">${esc2(r.name || "Someone")}</span><span class="inq-meta">${esc2(when2)}${bits ? " &middot; " + bits : ""}</span></div>
           <p class="inq-mail">${mail}</p>
           <p class="inq-body">${esc2(r.message || "")}</p>
         </li>`;
@@ -20334,7 +20389,7 @@ ${SKILL_BOX_CSS}`;
       const title = it2.title || it2.targetSlug || it2.id || "(untitled)";
       const manual = it2.trigger === "manual" ? `<span class="manual">MANUAL${it2.manualBy ? ` · ${esc2(String(it2.manualBy))}` : ""}</span>` : "";
       const flags = Array.isArray(it2.flags) && it2.flags.length ? it2.flags.map((f) => `<span class="flag">⚠ ${esc2(f)}</span>`).join("") : "";
-      const when = it2.sentAt || it2.cancelledAt || it2.enqueuedAt;
+      const when2 = it2.sentAt || it2.cancelledAt || it2.enqueuedAt;
       const sub = it2.cancelReason || it2.url || "";
       let actions = "";
       if (st2 === "pending") actions = `<button class="approve" data-approve="${esc2(it2.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc2(it2.id)}" type="button">Reject</button>`;
@@ -20345,7 +20400,7 @@ ${SKILL_BOX_CSS}`;
       <td><span class="src">${esc2(SRC_LABEL[it2.source] || it2.source || "")}</span></td>
       <td class="ti">${t}${manual}${flags}${sub ? `<span class="r">${esc2(sub)}</span>` : ""}</td>
       <td><span class="chs">${this._channels(it2.perChannel)}</span></td>
-      <td class="wh">${when ? esc2(new Date(when).toLocaleString()) : ""}</td>
+      <td class="wh">${when2 ? esc2(new Date(when2).toLocaleString()) : ""}</td>
       <td class="ac">${actions}</td>
     </tr>`;
     }
@@ -25059,12 +25114,12 @@ ${link}` : ""}`;
       const vis = String(it2.visibility ?? "members") === "public" ? "public" : "members";
       const url = sharePublicUrl(it2);
       const title = it2.title || (it2.shortDescription ? String(it2.shortDescription) : "") || (it2.body ? String(it2.body).split("\n")[0] : "") || (it2.url ? String(it2.url) : "") || it2.id;
-      const when = it2.createdAt ? `<time datetime="${esc2(it2.createdAt)}" title="${esc2(absTime(it2.createdAt))}">${esc2(relTime(it2.createdAt))}</time>` : "";
+      const when2 = it2.createdAt ? `<time datetime="${esc2(it2.createdAt)}" title="${esc2(absTime(it2.createdAt))}">${esc2(relTime(it2.createdAt))}</time>` : "";
       const edited = it2.updatedAt ? ` <span class="muted">(edited ${esc2(relTime(it2.updatedAt))})</span>` : "";
       const view = url ? `<button class="ghost" data-view="${esc2(url)}" title="Open the live public page in a new tab">View</button>` : "";
       const who = this._network() && it2.author ? `<span class="tag who">@${esc2(String(it2.author))}</span> ` : "";
       return `<li class="row">
-      <span class="sh-main"><span class="sh-t">${esc2(title)}</span><span class="sh-m">${who}${when}${edited} <span class="tag ${state.tone}">${esc2(state.label)}</span> <span class="tag">${vis}</span></span></span>
+      <span class="sh-main"><span class="sh-t">${esc2(title)}</span><span class="sh-m">${who}${when2}${edited} <span class="tag ${state.tone}">${esc2(state.label)}</span> <span class="tag">${vis}</span></span></span>
       <span class="rowacts">${view}<button class="ghost" data-i="${i}">Edit</button></span>
     </li>`;
     }
@@ -27114,7 +27169,7 @@ ${link}` : ""}`;
         const badge = n ? `<span class="tbadge">${esc2(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc2(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(WORKSPACE_CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(WORKSPACE_CSS + BEHIND_ROW_CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -27160,9 +27215,9 @@ ${link}` : ""}`;
         const { page: page2, pages: pages2, start: start2, end: end2 } = pageWindow(prs.length, this._page, WORKSPACE_PAGE_SIZE);
         const rows2 = prs.slice(start2, end2).map((pr) => {
           const ev = prEvent(pr);
-          const when = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
+          const when2 = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
           return `<li class="row">
-        <span class="t"><b>${esc2(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc2(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> on GitHub${when}</span><span class="why" data-n="${esc2(pr.number)}" hidden></span></span>
+        <span class="t"><b>${esc2(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc2(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> on GitHub${when2}</span><span class="why" data-n="${esc2(pr.number)}" hidden></span></span>
         <span class="right"><span class="gate tag" data-n="${esc2(pr.number)}">checking...</span></span></li>`;
         }).join("");
         const pager2 = pages2 > 1 ? `<div class="pager"><button class="btn" data-page="${page2 - 1}" type="button"${page2 === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page2 + 1} of ${pages2}</span><button class="btn" data-page="${page2 + 1}" type="button"${page2 >= pages2 - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
@@ -27257,13 +27312,13 @@ ${link}` : ""}`;
       const status = it2.status ? `<span class="tag ${it2.status === "published" ? "ok" : ""}">${esc2(it2.status)}</span>` : "";
       const aud = audienceTag(it2);
       const vis = aud ? `<span class="tag" title="${esc2(aud.title)}">${esc2(aud.label)}</span>` : "";
-      const stagedTag = (this._drafts || []).some((d) => d.path === it2.path) ? `<span class="tag">staged edits</span>` : "", bt2 = buildingTag(it2);
+      const dp = rowDraftParts({ draft: (this._drafts || []).find((d) => d.path === it2.path), item: it2, index: i, esc: esc2, discardedPath: this._discardedPath }), stagedTag = dp.tag, bt2 = buildingTag(it2);
       const flip = it2.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it2.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it2.status === "published" && !bt2 ? publicPathFor({ type: it2.type, path: it2.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE17 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it2) ? `<span class="tag who">@${esc2(authorOf(it2))}</span>` : "";
-      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${bt2 ? `<span class="tag" title="${esc2(bt2.title)}">${esc2(bt2.label)}</span>` : ""}${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span>${dp.line}</span><span class="right">${who}${status} ${bt2 ? `<span class="tag" title="${esc2(bt2.title)}">${esc2(bt2.label)}</span>` : ""}${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and (superadmins only, sow-404) the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
@@ -27350,6 +27405,11 @@ ${link}` : ""}`;
         }));
         this.$$("[data-drow-discard]").forEach((b) => b.addEventListener("click", () => {
           const d = view()[Number(b.dataset.drowDiscard)];
+          if (d) this._discardDraft(d, b);
+        }));
+        this.$$("[data-behind-discard]").forEach((b) => b.addEventListener("click", () => {
+          const it2 = view()[Number(b.dataset.behindDiscard)];
+          const d = it2 && (this._drafts || []).find((x) => x.path === it2.path);
           if (d) this._discardDraft(d, b);
         }));
         this.$("[data-sort]")?.addEventListener("change", (e) => {
@@ -27482,6 +27542,7 @@ ${link}` : ""}`;
       }
       try {
         await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store });
+        this._discardedPath = d.path || null;
         this._drafts = null;
         this._overview = null;
         this._ensureTab(this._tab);
@@ -28065,9 +28126,9 @@ ${link}` : ""}`;
         const rows = g.items.slice(0, 8).map((it2) => {
           const cls = un.has(it2.id) ? "it unread" : "it";
           const ext = /^https?:\/\//.test(it2.href) ? ' target="_blank" rel="noopener"' : "";
-          const when = relTime(it2.ts);
-          const abs = when ? absTime(it2.ts) : "";
-          const sub = `${esc2(it2.sub || "")}${when ? `${it2.sub ? " · " : ""}${esc2(when)}` : ""}`;
+          const when2 = relTime(it2.ts);
+          const abs = when2 ? absTime(it2.ts) : "";
+          const sub = `${esc2(it2.sub || "")}${when2 ? `${it2.sub ? " · " : ""}${esc2(when2)}` : ""}`;
           return `<a class="${cls}" href="${esc2(it2.href)}"${ext}${abs ? ` title="${esc2(abs)}"` : ""}><span class="t">${esc2(it2.title)}</span><span class="s">${sub}</span></a>`;
         }).join("");
         const moreN = g.items.length - Math.min(g.items.length, 8);
@@ -28300,13 +28361,13 @@ ${link}` : ""}`;
     }
     _rowsHtml() {
       const rows = this._bell.rows.slice(0, 12).map((r) => {
-        const when = relTime(r.ts);
-        const abs = when ? absTime(r.ts) : "";
+        const when2 = relTime(r.ts);
+        const abs = when2 ? absTime(r.ts) : "";
         const person = r.kind === "person" && r.actor;
         const href = r.url || SETTINGS_URL;
         const internal = /^\//.test(href);
         const ext = internal ? "" : ' target="_blank" rel="noopener nofollow"';
-        return `<a class="it${r.unread ? " unread" : ""}" href="${esc2(href)}"${ext}${abs ? ` title="${esc2(abs)}"` : ""}>` + (person ? `<span class="av">${avatarLayers(r.actor)}</span>` : `<span class="av nav">${I_NEWS}</span>`) + `<span class="body"><span class="line"><b>${esc2(r.actor)}</b> ${esc2(r.action)} <span class="tg">${esc2(r.target)}</span></span>${when ? `<span class="when">${esc2(when)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
+        return `<a class="it${r.unread ? " unread" : ""}" href="${esc2(href)}"${ext}${abs ? ` title="${esc2(abs)}"` : ""}>` + (person ? `<span class="av">${avatarLayers(r.actor)}</span>` : `<span class="av nav">${I_NEWS}</span>`) + `<span class="body"><span class="line"><b>${esc2(r.actor)}</b> ${esc2(r.action)} <span class="tg">${esc2(r.target)}</span></span>${when2 ? `<span class="when">${esc2(when2)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
       }).join("");
       return `<div class="list">${rows}</div>`;
     }
@@ -29259,8 +29320,8 @@ ${BLOCKED_PILL_CSS}
       }
       const rec = this._status?.channels?.[ch];
       if (!rec) return "";
-      const when = rec.doneAt ? ` on ${esc2(fmtWhen2(rec.doneAt))}` : "";
-      return `<p class="note">Marked done${rec.doneBy ? ` by ${esc2(rec.doneBy)}` : ""}${when}. You can still post it again.</p>`;
+      const when2 = rec.doneAt ? ` on ${esc2(fmtWhen2(rec.doneAt))}` : "";
+      return `<p class="note">Marked done${rec.doneBy ? ` by ${esc2(rec.doneBy)}` : ""}${when2}. You can still post it again.</p>`;
     }
     render() {
       if (!this._story) {
@@ -30428,7 +30489,7 @@ ${BLOCKED_PILL_CSS}
       if (!html && visibility === "members") html = lockNotice("This");
       return html;
     }
-    _metaHtml(it2, when) {
+    _metaHtml(it2, when2) {
       const t = TYPE_LABEL6[it2.type] || it2.type || "";
       const name = authorName4(it2.author);
       const folder2 = lc8(it2.author) || "gbti";
@@ -30442,7 +30503,7 @@ ${BLOCKED_PILL_CSS}
       const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc2(it2.type)}" data-gbti-author="${esc2(it2.author || "")}" data-gbti-slug="${esc2(slug)}"${it2.type === "share" ? ` data-gbti-id="${esc2(it2.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
       const kind2 = this._kind(it2);
       const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc2(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
-      return `<div class="meta">${badge}<span class="who">${av}<b>${esc2(name)}</b></span>${when ? `<span>· ${esc2(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
+      return `<div class="meta">${badge}<span class="who">${av}<b>${esc2(name)}</b></span>${when2 ? `<span>· ${esc2(dateStr(when2))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it2) {
       const a = this._author;
@@ -30486,9 +30547,9 @@ ${BLOCKED_PILL_CSS}
       }
       const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
       const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE22 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
-      const when = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
+      const when2 = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
       const proj = it2.type === "project" ? projectViewModel({ item: it2, frontmatter: this._fm, itemPath: it2.path, paid: this._paid === true }) : null;
-      const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when);
+      const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when2);
       const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const play = it2.type === "share" && it2.url ? shareEmbed(it2.url) : null;
       const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb || (it2.type === "share" ? it2.image : null));

@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { contentBase, baseOf, draftBehind, publishBaseProblem } from '../client/src/content-base.mjs';
-import { checkDraftBehind, openPublishedInto, behindMessage, staleMessage, staleDraftRowMessage, forceConfirmMessage, itemNoun, BEHIND_BASE } from '../client-ui/src/draft-behind.mjs';
+import { checkDraftBehind, openPublishedInto, behindMessage, staleMessage, staleDraftRowMessage, forceConfirmMessage, itemNoun, BEHIND_BASE, rowDraftBehind, behindRowMessage, rowDraftParts, BEHIND_ROW_CSS } from '../client-ui/src/draft-behind.mjs';
 import { applyDraftPut, normalizeDrafts, listDraftRecords } from '../membership/member-drafts.mjs';
 import { draftRecordForEditor } from '../src/lib/workbench-client-core.mjs';
 import { changeLabel } from '../client-ui/src/publish-diff.mjs';
@@ -300,4 +300,78 @@ test('openPublishedInto: a stale tab discards nothing, and a failure is shown in
   assert.deepEqual(calls, []);
   assert.equal(ws.problem, 'offline');
   assert.equal(ws.rendered, 0, 'the editor stays as it was');
+});
+
+// ---------------------------------------------------------------- the work list (Phase 4, option B)
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const CB = { type: 'post', path: PATH, updatedAt: Date.parse('2026-10-27T02:00:00Z'), publishedAt: Date.parse('2026-10-20T00:00:00Z') };
+const draftAt = (iso, over = {}) => ({ type: 'post', slug: 'crystal-ball', path: PATH, title: 'Crystal Ball', store: 'kv', updatedAt: iso, base: null, ...over });
+
+test('rowDraftBehind: the Crystal Ball draft (saved 21:42, published 02:00) is behind; a later save is not', () => {
+  assert.deepEqual(rowDraftBehind(draftAt('2026-10-26T21:42:00Z'), CB), { publishedAt: CB.updatedAt, savedAt: Date.parse('2026-10-26T21:42:00Z') });
+  assert.equal(rowDraftBehind(draftAt('2026-10-27T09:00:00Z'), CB), null);
+  assert.equal(rowDraftBehind(draftAt('2026-10-27T02:00:00Z'), CB), null, 'saved at the same moment is not behind');
+});
+
+test('rowDraftBehind falls back to the first publish date, and keeps a draft the editor found behind', () => {
+  const noUpdate = { ...CB, updatedAt: null };
+  assert.ok(rowDraftBehind(draftAt('2026-10-19T00:00:00Z'), noUpdate), 'published after the draft was saved');
+  assert.equal(rowDraftBehind(draftAt('2026-10-21T00:00:00Z'), noUpdate), null);
+  assert.ok(rowDraftBehind(draftAt('2026-10-28T00:00:00Z', { base: BEHIND_BASE }), CB), 'saved again after the warning, still behind');
+  assert.equal(rowDraftBehind(draftAt('2026-10-26T21:42:00Z', { store: 'repo' }), CB), null, 'a repo draft IS the committed file');
+  assert.equal(rowDraftBehind(draftAt(null), CB), null, 'no save time, nothing claimed');
+  assert.equal(rowDraftBehind(null, CB), null);
+  assert.equal(rowDraftBehind(draftAt('2026-10-26T21:42:00Z'), { type: 'post', path: PATH }), null, 'no dates on the item, nothing claimed');
+});
+
+test('behindRowMessage: both dates while true, the time when they share a day, the plain sentence otherwise', () => {
+  const day = (t) => `D${new Date(t).getUTCDate()}`;
+  const dayTime = (t) => `D${new Date(t).getUTCDate()}@${new Date(t).getUTCHours()}`;
+  assert.equal(behindRowMessage({ publishedAt: Date.parse('2026-10-27T02:00:00Z'), savedAt: Date.parse('2026-10-26T21:42:00Z'), type: 'post' }, { day, dayTime }),
+    'Your saved draft is behind. The article changed on D27, after the draft was saved on D26.');
+  assert.equal(behindRowMessage({ publishedAt: Date.parse('2026-10-27T15:00:00Z'), savedAt: Date.parse('2026-10-27T09:00:00Z'), type: 'project' }, { day, dayTime }),
+    'Your saved draft is behind. The project changed on D27@15, after the draft was saved on D27@9.', 'the day alone would read as no change');
+  assert.equal(behindRowMessage({ publishedAt: Date.parse('2026-10-27T02:00:00Z'), savedAt: Date.parse('2026-10-28T00:00:00Z'), type: 'post' }, { day, dayTime }),
+    'Your saved draft is behind. The article changed after the draft was started.', 'after a re-save the dates would be false');
+  assert.ok(!/[–—]|\b\w+(n't|'re|'ve|'ll)\b/.test(behindRowMessage({ publishedAt: 2, savedAt: 1, type: 'prompt' })));
+});
+
+test('rowDraftParts: a current draft keeps "staged edits", a behind one gets the line instead, a discarded one says so', () => {
+  const current = rowDraftParts({ draft: draftAt('2026-10-27T09:00:00Z'), item: CB, index: 1, esc });
+  assert.deepEqual(current, { tag: '<span class="tag">staged edits</span>', line: '' });
+  const behind = rowDraftParts({ draft: draftAt('2026-10-26T21:42:00Z'), item: CB, index: 1, esc });
+  assert.equal(behind.tag, '', 'the line replaces the tag');
+  assert.match(behind.line, /^<span class="behind"><svg[^>]*aria-hidden="true">/);
+  assert.match(behind.line, /Your saved draft is behind\. The article changed on .+, after the draft was saved on .+\. <button class="lnk" data-behind-discard="1" type="button">Discard draft<\/button>/);
+  assert.deepEqual(rowDraftParts({ draft: undefined, item: CB, index: 1, esc }), { tag: '', line: '' });
+  assert.deepEqual(rowDraftParts({ draft: undefined, item: CB, index: 1, esc, discardedPath: PATH }), { tag: '<span class="tag ok">draft discarded</span>', line: '' });
+  assert.deepEqual(rowDraftParts({ draft: undefined, item: { ...CB, path: 'members/a/posts/other/index.md' }, index: 2, esc, discardedPath: PATH }), { tag: '', line: '' });
+  assert.equal(rowDraftParts({ draft: draftAt('2026-10-26T21:42:00Z'), item: { ...CB, type: '<b>' }, index: '1"x', esc }).line.includes('data-behind-discard="NaN"'), true, 'the index is a number, never markup');
+});
+
+test('the row CSS defines its amber for both themes and overrides the base button look on the link', () => {
+  assert.match(BEHIND_ROW_CSS, /:host \{ --behind-fg:#8a5500; \}/);
+  assert.match(BEHIND_ROW_CSS, /:host-context\(\[data-theme="dark"\]\) \{ --behind-fg:#e6b45c; \}/);
+  assert.match(BEHIND_ROW_CSS, /\.behind \.lnk \{[^}]*background:none; border:0; padding:0;/);
+  assert.match(BEHIND_ROW_CSS, /\.behind \.lnk:hover \{ background:none;/, 'BASE_CSS button:hover would fill it green');
+});
+
+test('the work list wiring: the row uses the parts, the link discards through the confirming path, the index carries updatedAt', () => {
+  const w = src('client-ui/src/elements/gbti-workspace.mjs');
+  assert.match(w, /const dp = rowDraftParts\(\{ draft: \(this\._drafts \|\| \[\]\)\.find\(\(d\) => d\.path === it\.path\), item: it, index: i, esc, discardedPath: this\._discardedPath \}\), stagedTag = dp\.tag/);
+  assert.match(w, /<span class="meta">\$\{esc\(it\.type \|\| ''\)\}<\/span>\$\{dp\.line\}<\/span>/, 'the line sits under the title');
+  assert.match(w, /\[data-behind-discard\][^\n]*this\._discardDraft\(d, b\)/, 'the confirming discard the Drafts rows use');
+  assert.match(w, /this\.css\(CSS \+ BEHIND_ROW_CSS\)/);
+  assert.match(w, /this\._discardedPath = d\.path \|\| null;/);
+  assert.match(src('src/lib/workbench-client.ts'), /base: typeof rec\?\.base === 'string' \? rec\.base : null, \/\/ sow-482/);
+});
+
+test('the content index carries the last publish time as epoch ms', async () => {
+  const { toIndexItem } = await import('../src/lib/content-index.mjs');
+  const item = (updatedAt) => toIndexItem({ data: { slug: 'x', title: 'X', author: 'a', publishedAt: new Date('2026-10-20'), updatedAt } }, 'post');
+  assert.equal(item(new Date('2026-10-27T02:00:00.123Z')).updatedAt, Date.parse('2026-10-27T02:00:00.123Z'), 'a schema Date, to the millisecond');
+  assert.equal(item('2026-10-27T02:00:00Z').updatedAt, Date.parse('2026-10-27T02:00:00Z'));
+  assert.equal(item(undefined).updatedAt, null);
+  assert.equal(item('not a date').updatedAt, null);
 });
