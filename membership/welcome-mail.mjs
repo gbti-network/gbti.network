@@ -191,6 +191,21 @@ const para = (t, text, size = 13.5) => `<p style="margin:0;font-family:${FONT};f
 
 const cell = (inner, padding) => `<tr><td style="padding:${padding}">${inner}</td></tr>`;
 
+/**
+ * The heading with the GBTI mark to its left, centred on it in its own cell so a heading that wraps on a phone keeps
+ * the mark beside it rather than above. Black on the light card; the white mark on the dark variant.
+ */
+function headingHtml(t, base, theme, heading) {
+  const logo = `${base}/brand/logo/mark-${theme === 'dark' ? 'white' : 'ink'}-96.png`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%"><tr>`
+    + `<td width="34" valign="middle" style="width:34px;padding-right:12px;line-height:0">`
+    + `<img src="${escapeHtml(logo)}" width="34" height="34" alt="GBTI Network" style="display:block;border:0;width:34px;height:34px">`
+    + `</td><td valign="middle">`
+    + `<h1 style="margin:0;font-family:${DISPLAY};font-size:23px;font-weight:700;color:${t.ink};`
+    + `mso-line-height-rule:exactly;line-height:29px">${escapeHtml(heading)}</h1>`
+    + `</td></tr></table>`;
+}
+
 /** The receipt card: the published item, its cover when one resolves, and the link to it. */
 function receiptHtml(t, item) {
   const noun = ITEM_NOUNS[item.type] ?? 'item';
@@ -394,10 +409,9 @@ export function welcomeMail({
   const ctaNote = `Opens your setup on step one. Or go to ${base.replace(/^https?:\/\//, '')}/welcome in any browser.`;
 
   const rows = [
-    // No masthead (owner, 2026-10-27): the logo and the "GBTI NETWORK" eyebrow above the heading were removed. The
-    // sender name and the subject already say who it is from, so the email opens on the heading.
-    cell(`<h1 style="margin:0;font-family:${DISPLAY};font-size:23px;font-weight:700;color:${t.ink};`
-      + `mso-line-height-rule:exactly;line-height:29px">${escapeHtml(heading)}</h1>`, '26px 26px 14px'),
+    // No masthead (owner, 2026-10-27): the logo and the "GBTI NETWORK" eyebrow ABOVE the heading were removed, and
+    // the black mark then came back BESIDE it, vertically centred on the heading, with no eyebrow (owner, same day).
+    cell(headingHtml(t, base, theme, heading), '26px 26px 14px'),
     cell(published ? receiptHtml(t, published) : perksHtml(t, feedUrl), '0 26px'),
     published ? cell(para(t, ownership), '16px 26px 0') : '',
     cell(`<div style="height:1px;background-color:${t.hairline};font-size:0;line-height:0">&nbsp;</div>`, '20px 26px 0'),

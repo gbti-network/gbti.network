@@ -185,11 +185,17 @@ test('the writing rules hold in what a member actually reads', () => {
   }
 });
 
-test('there is no masthead: no logo and no GBTI NETWORK eyebrow, and the email opens on its heading (owner, 2026-10-27)', () => {
+test('there is no masthead: no GBTI NETWORK eyebrow, the mark sits beside the heading, and the email opens on it (owner, 2026-10-27)', () => {
   for (const [label, rec] of [['claimer', CLAIMER], ['free account', FREE], ['dark', { ...CLAIMER, theme: 'dark' }]]) {
     const { html } = welcomeMail(rec);
-    assert.doesNotMatch(html, /brand\/logo\/mark-/, `${label}: no logo image`);
     assert.doesNotMatch(html, /GBTI NETWORK/, `${label}: no eyebrow (the footer's "joined GBTI Network" is mixed case)`);
+    // The mark is the one image before the heading, in the heading's own row, centred on it.
+    const row = html.slice(html.lastIndexOf('<tr>', html.indexOf('<h1')), html.indexOf('</h1>'));
+    const mark = rec.theme === 'dark' ? 'white' : 'ink';
+    assert.match(row, new RegExp(`<td width="34" valign="middle"[^>]*><img src="https://gbti\\.network/brand/logo/mark-${mark}-96\\.png" width="34" height="34" alt="GBTI Network"`),
+      `${label}: the ${mark} mark, left of the heading`);
+    assert.match(row, /<\/td><td valign="middle"><h1/, `${label}: the heading is centred against it`);
+    assert.equal((html.slice(0, html.indexOf('<h1')).match(/<img /g) || []).length, 1, `${label}: no other image above the heading`);
     assert.match(html, /You are receiving this because you joined GBTI Network\./, `${label}: the footer still names the network`);
     // Everything before the heading, less the hidden preheader, must be markup with no visible text in it.
     const before = html.slice(html.indexOf('<body'), html.indexOf('<h1')).replace(/<div style="display:none[^"]*">[^<]*<\/div>/, '');
