@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/crystal-ball.webp
 featured: false
 publishedAt: '2026-10-24T20:49:39.765Z'
-updatedAt: '2026-10-27T02:57:55.844Z'
+updatedAt: '2026-10-27T03:03:24.474Z'
 type: post
 author: atwellpub
 ---
@@ -37,9 +37,7 @@ src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 
 This paper presents a vision for the next generation of digital agencies, where AI-enabled client operating environments transform how web properties are managed, how technical capabilities are delivered, and how agencies build sustainable, recurring service relationships.
 
-The agency manages the client's entire project through an integrated project management system, providing a centralized environment for coordinating work, managing resources, tracking progress, and maintaining the ongoing client relationship.
-
-Within this environment, clients have access to a conversational interface resembling a chat-based experience or command-line terminal, through which they can interact with their project and its connected systems. This interface is highly empowered by an extensive MCP architecture provisioned, configured, and managed by the agency. The agency determines which capabilities, integrations, and permissions are available to each client, enabling them to interact with and operate their digital infrastructure through a unified experience.
+In this paper, we propose a future in which agencies manage client projects through an integrated project management environment, combining project coordination, resource management, and client relationships with conversational AI interfaces. Through an agency-managed MCP architecture, clients can interact directly with their websites and connected systems, using capabilities and permissions configured and governed by their agency.
 
 Traditional CMS administration interfaces remain accessible alongside these capabilities, allowing clients and developers to perform specialized tasks, make visual edits, and interact directly with the underlying systems when appropriate.
 
