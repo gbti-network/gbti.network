@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { scanHtmlCardPages, cardRules, CARD_POLICY_DIRECTIVES, HEADER_LIMITS } from './lib/cta-headers.mjs'; // sow-337
 import { readCtas } from './lib/ctas-store.mjs';
 import { CTA_HOST_RE } from '../membership/cta-edits.mjs';
+import { IFRAME_HOSTS } from '../src/lib/markdown-sanitize.mjs'; // the players an article may frame
 
 /**
  * Parse a Cloudflare Pages `_headers` file into rules. Each rule is { path, set: { <lowercase-name>: { name,
@@ -133,7 +134,11 @@ export function checkHeaders({ root, distDir = path.join(root, 'dist'), headersF
   if (directives.has('base-uri') && !tok('base-uri').includes("'self'")) errors.push("base-uri must be 'self'");
   if (directives.has('connect-src') && !wants('connect-src', 'signup.gbti.network')) errors.push('connect-src must include signup.gbti.network (the news feed + login break otherwise)');
   if (directives.has('frame-src') && !wants('frame-src', 'challenges.cloudflare.com')) errors.push('frame-src must include challenges.cloudflare.com (Turnstile)');
-  if (directives.has('frame-src') && !wants('frame-src', 'www.youtube.com')) errors.push('frame-src must include www.youtube.com (member embeds)');
+  // Every host the sanitizer lets an article frame (src/lib/markdown-sanitize.mjs IFRAME_HOSTS) must be allowed here,
+  // or the player is admitted by one layer and refused by the next, and the page shows an empty box (sow-483).
+  for (const host of IFRAME_HOSTS) {
+    if (directives.has('frame-src') && !wants('frame-src', host)) errors.push(`frame-src must include ${host} (member embeds: the sanitizer admits it)`);
+  }
   if (directives.has('script-src') && !wants('script-src', 'challenges.cloudflare.com')) errors.push('script-src must include challenges.cloudflare.com (Turnstile)');
 
   // SOW-092 / sow-158: the /embed video relay is the ONE place a chrome-extension ancestor is allowed. The

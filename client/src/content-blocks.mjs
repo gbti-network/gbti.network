@@ -7,6 +7,8 @@
 // thing. Output HTML uses only the classes the site sanitizer admits (src/lib/markdown-sanitize.mjs); a bar's length
 // is a class (gbti-bar-w-<0..100>) because the sanitizer does not admit an inline width.
 
+import { AUDIO_PROVIDERS, PROVIDER_NAMES, DEFAULT_LINK_LABELS, audioEmbed, embedProblem } from './audio-embed.mjs';
+
 export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -183,12 +185,26 @@ export const AUDIO_STYLES = ['bar', 'card'];
 const AUDIO_DEFAULT_LABEL = 'Listen';
 const SITE_ORIGIN = 'https://gbti.network';
 
+// sow-483 (owner, 2026-10-27): the source can instead be a SoundCloud, Spotify or Apple Podcasts page link, played in
+// the provider's own player (client/src/audio-embed.mjs), and any block can carry a link out to the recording's page:
+//   soundcloud: https://soundcloud.com/<account>/<track>
+//   link: https://open.spotify.com/episode/<id>
+//   link-label: Listen on Spotify
 export function parseAudio(body, meta = '') {
-  const out = { label: String(meta ?? '').trim() || AUDIO_DEFAULT_LABEL, length: '', style: 'bar', badStyle: '', sources: [], bad: [], unknown: [] };
+  const out = { label: String(meta ?? '').trim() || AUDIO_DEFAULT_LABEL, length: '', style: 'bar', badStyle: '', sources: [], bad: [], unknown: [],
+    providers: [], embed: null, embedBad: null, link: '', linkBad: '', linkLabel: '' };
   for (const l of lines(body)) {
     const { k, v } = keyValue(l);
     const key = (k || '').toLowerCase();
     if (key === 'length') out.length = v;
+    else if (AUDIO_PROVIDERS.includes(key)) {
+      out.providers.push(key);
+      const e = audioEmbed(key, v);
+      if (e && !out.embed) out.embed = e;
+      else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v };
+    }
+    else if (key === 'link') { if (safeUrl(v)) out.link = safeUrl(v); else out.linkBad = v; }
+    else if (key === 'link-label') out.linkLabel = v;
     else if (key === 'style') {
       if (AUDIO_STYLES.includes(v.toLowerCase())) out.style = v.toLowerCase(); else out.badStyle = v;
     }
@@ -207,15 +223,45 @@ export function setAudioStyle(body, style) {
   return style === 'card' ? ['style: card', ...kept].join('\n') : kept.join('\n');
 }
 
+/** The words of a link out: the author's own, else the provider's ("Listen on Spotify"), else the site's name. */
+export function audioLinkLabel(link, label = '') {
+  if (String(label ?? '').trim()) return String(label).trim();
+  let host = '';
+  try { host = new URL(String(link)).hostname.toLowerCase().replace(/^(www|m)\./, ''); } catch { return 'Listen elsewhere'; }
+  if (host === 'soundcloud.com') return DEFAULT_LINK_LABELS.soundcloud;
+  if (host === 'open.spotify.com' || host === 'spotify.com') return DEFAULT_LINK_LABELS.spotify;
+  if (host === 'podcasts.apple.com') return DEFAULT_LINK_LABELS.apple;
+  return `Listen on ${host}`;
+}
+
+// What each provider's frame may do, as the providers' own embed snippets ask for it.
+const EMBED_ALLOW = {
+  soundcloud: 'autoplay',
+  spotify: 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture',
+  apple: 'autoplay *; encrypted-media *; fullscreen *; clipboard-write',
+};
+const APPLE_SANDBOX = 'allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation';
+
 // origin: '' on the site, where a /media/ path is the page's own; the extension reader runs on chrome-extension://,
-// so markdown.mjs passes the site origin and the files still come from gbti.network.
+// so markdown.mjs passes the site origin and the files still come from gbti.network. A provider's player addresses
+// are absolute already. The link out comes last: the label row holds it on a wide screen and it drops under the
+// player on a phone (the stylesheet's grid), and the card moves it into its own row (client/src/audio-card.mjs).
 function renderAudio(body, meta, origin = '') {
   const a = parseAudio(body, meta);
+  const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
+    + (a.length ? ` <span class="gbti-audio-length">${esc(a.length)}</span>` : '') + '</div>';
+  const link = a.link ? `<a class="gbti-audio-link" href="${esc(a.link)}" target="_blank" rel="noopener nofollow">${esc(audioLinkLabel(a.link, a.linkLabel))}</a>` : '';
+  if (a.embed) {
+    const e = a.embed;
+    const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
+    return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}">`
+      + `<iframe src="${esc(e.src)}" title="${esc(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"`
+      + (e.provider === 'apple' ? ` sandbox="${APPLE_SANDBOX}"` : '') + `></iframe></div>${link}</div>`;
+  }
   if (!a.sources.length) return null;
-  return `<div class="gbti-audio${a.style === 'card' ? ' gbti-audio-card' : ''}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
-    + (a.length ? ` <span class="gbti-audio-length">${esc(a.length)}</span>` : '') + '</div>'
+  return `<div class="gbti-audio${a.style === 'card' ? ' gbti-audio-card' : ''}">${head}`
     + `<audio class="gbti-audio-player" controls preload="none" aria-label="${esc(a.label)}">`
-    + a.sources.map((x) => `<source src="${esc(origin + x.src)}" type="${esc(x.type)}">`).join('') + '</audio></div>';
+    + a.sources.map((x) => `<source src="${esc(origin + x.src)}" type="${esc(x.type)}">`).join('') + `</audio>${link}</div>`;
 }
 
 /** Whole-percent widths that sum to exactly 100, in proportion to the weights. */
@@ -290,11 +336,13 @@ export function dataBlockToMarkdown(name, body, meta = '') {
     const r = parseReveal(body, meta);
     return [r.weights ? r.weights.map((w) => `**${w.name}** ${w.n}%`).join(' · ') : r.weightsRaw, r.note, r.body].filter(Boolean).join('\n\n');
   }
-  if (name === 'audio') { // a cross-post cannot play it: a link to the MP3, which every browser plays
+  if (name === 'audio') { // a cross-post cannot play it: a link to the provider's page, or to the MP3 every browser plays
     const a = parseAudio(body, meta);
     const file = a.sources.find((x) => x.src.endsWith('.mp3')) || a.sources[0];
-    if (!file) return '';
-    return `[${a.label}](${SITE_ORIGIN}${file.src})${a.length ? ` (${a.length})` : ''}`;
+    const target = a.embed ? a.embed.page : (file ? `${SITE_ORIGIN}${file.src}` : '');
+    if (!target) return '';
+    const out = `[${a.label}](${target})${a.length ? ` (${a.length})` : ''}`;
+    return a.link && a.link !== target ? `${out} · [${audioLinkLabel(a.link, a.linkLabel)}](${a.link})` : out;
   }
   if (name === 'tags') return parseTags(body).tags.map((t) => `_${t}_`).join(' · ');
   if (name === 'bar') {
@@ -386,10 +434,16 @@ export function checkComponentBlocks(md) {
       const a = parseAudio(text, meta);
       if (!meta) warn('audio needs its label after the block name, such as ```audio Listen to the podcast version');
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
+      const sourceCount = (a.sources.length || a.bad.length ? 1 : 0) + a.providers.length;
+      if (sourceCount > 1) warn('audio has more than one source; keep the src: lines of a file, or one soundcloud:, spotify: or apple: line');
+      if (a.embedBad) warn(`audio ${a.embedBad.provider}: ${embedProblem(a.embedBad.provider, a.embedBad.raw)}`);
       for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
-      if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
+      if (!sourceCount) warn('audio needs a source: "src:" lines naming a /media/podcasts/ file, or one soundcloud:, spotify: or apple: link');
       if (a.badStyle) warn(`audio style "${a.badStyle}" is not known; use bar or card (it shows as bar)`);
-      for (const u of a.unknown) warn(`audio line "${u}" is not src:, length: or style:`);
+      if (a.style === 'card' && a.providers.length) warn('audio style: card applies to a file only; a provider plays in its own player');
+      if (a.linkBad) warn(`audio link: "${a.linkBad}" is not an http or https address`);
+      if (a.linkLabel && !a.link && !a.linkBad) warn('audio link-label: has no link: line to go with it');
+      for (const u of a.unknown) warn(`audio line "${u}" is not src:, soundcloud:, spotify:, apple:, length:, style:, link: or link-label:`);
     }
     if (name === 'reveal') {
       const r = parseReveal(text, meta);
@@ -499,5 +553,28 @@ ${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
 ${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
 ${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
 ${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
+${s} .gbti-audio:not(.gbti-audio-card){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px}
+${s} .gbti-audio:not(.gbti-audio-card)>*{grid-column:1/-1}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-head{grid-column:1;grid-row:1;align-self:baseline}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:2;grid-row:1;align-self:baseline}
+${s} a.gbti-audio-link{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;font-weight:600;line-height:1.2;color:${t.green700};text-decoration:none;white-space:nowrap}
+${s} a.gbti-audio-link::after{content:"\\2197";font-size:.95em}
+${s} a.gbti-audio-link:hover{text-decoration:underline;text-underline-offset:3px}
+${s} a.gbti-audio-link:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-row .gbti-audio-link{margin-left:auto}
+${s} .gbti-audio-row{flex-wrap:wrap}
+${s} .gbti-audio-row .gbti-audio-head{flex:1 1 0;min-width:0}
+${s} .gbti-audio-embed{margin-top:10px}
+${s} .gbti-audio-embed iframe{display:block;width:100%;max-width:100%;margin:0;border:0;aspect-ratio:auto}
+${s} .gbti-audio-embed-soundcloud iframe{height:166px;border-radius:0}
+${s} .gbti-audio-embed-soundcloud-tall iframe{height:300px;border-radius:0}
+${s} .gbti-audio-embed-spotify iframe{height:152px;border-radius:12px}
+${s} .gbti-audio-embed-apple iframe{height:175px;border-radius:10px}
+${s} .gbti-audio-embed-apple-tall iframe{height:450px;border-radius:10px}
+@media (max-width:560px){
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:1/-1;grid-row:auto;justify-self:start;margin-top:6px}
+${s} a.gbti-audio-link{min-height:32px}
+${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
+}
 ${barWidthCss(s)}`;
 }

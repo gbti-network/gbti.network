@@ -83,10 +83,10 @@ export const COMPONENTS = Object.freeze([
   {
     name: 'audio',
     kind: 'fence',
-    purpose: 'Play a recording, such as the podcast version of an article, with the browser\'s own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus in an .ogg file first, then an MP3 copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play. Add a style: card line for the card look (a green play button beside the label, then a progress line once it plays); without it the block shows the browser bar. In the WorkBench the Player style buttons above the block set it.',
-    syntax: `${F}audio <label...>\nstyle: card (optional)\nlength: <how long>\nsrc: /media/podcasts/<name>.ogg\nsrc: /media/podcasts/<name>.mp3\n${F}`,
+    purpose: 'Play a recording, such as the podcast version of an article, under a label and its length. The source is EITHER a file on gbti.network (src: lines under /media/podcasts/: Opus in an .ogg file first, then an MP3 copy; nothing downloads until play; style: card swaps the browser bar for the card) OR one soundcloud:, spotify: or apple: line holding the page link copied from that service, played in the service\'s own player (SoundCloud tracks and playlists, Spotify and Apple Podcasts episodes and shows). An optional link: (and link-label:) adds a link out to the recording\'s own page; without words it reads, for example, Listen on Spotify.',
+    syntax: `${F}audio <label...>\nlength: <how long>\nsrc: /media/podcasts/<name>.ogg\nsrc: /media/podcasts/<name>.mp3\nstyle: card (optional, files only)\nlink: <page address> (optional)\nlink-label: <its words> (optional)\n${F}\n\nor, for a provider, one of these in place of the src: lines:\nsoundcloud: https://soundcloud.com/<account>/<track>\nspotify: https://open.spotify.com/episode/<id>\napple: https://podcasts.apple.com/<country>/podcast/<name>/id<show>?i=<episode>`,
     example: `${F}audio Listen to the podcast version\nlength: 22 minutes\nsrc: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg\nsrc: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3\n${F}`,
-    renders: 'Site, preview and reader: the label, the length, then the player (or the card with its play button). Cross-posts: the label as a link to the MP3 file, with the length.',
+    renders: 'Site, preview and reader: the label and length with the link out beside them (under the player on a phone), then the browser player, the card, or the provider\'s own player. Cross-posts: the label as a link to the MP3 file or the provider page, with the length and the link out.',
   },
   {
     name: 'image layout',

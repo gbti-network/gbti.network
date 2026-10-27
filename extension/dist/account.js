@@ -2530,6 +2530,85 @@ ${listStyleProseCss(".doc-blocks")}
   }
 `;
 
+  // client/src/audio-embed.mjs
+  var AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
+  var PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
+  var DEFAULT_LINK_LABELS = { soundcloud: "Listen on SoundCloud", spotify: "Listen on Spotify", apple: "Open in Apple Podcasts" };
+  var SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
+    "discover",
+    "search",
+    "charts",
+    "stations",
+    "you",
+    "upload",
+    "settings",
+    "messages",
+    "notifications",
+    "pages",
+    "people",
+    "popular",
+    "terms-of-use",
+    "imprint",
+    "jobs",
+    "mobile",
+    "pro",
+    "feed",
+    "player",
+    "widget"
+  ]);
+  var parse = (raw) => {
+    try {
+      const u = new URL(String(raw ?? "").trim());
+      return /^https?:$/.test(u.protocol) ? u : null;
+    } catch {
+      return null;
+    }
+  };
+  function audioEmbed(provider, raw) {
+    const u = parse(raw);
+    if (!u) return null;
+    const host = u.hostname.toLowerCase().replace(/^(www|m)\./, "");
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (provider === "soundcloud") {
+      if (host !== "soundcloud.com") return null;
+      const [account, second, third, fourth] = parts;
+      if (!account || SOUNDCLOUD_RESERVED.has(account.toLowerCase()) || !/^[A-Za-z0-9_-]+$/.test(account)) return null;
+      let kind2 = null;
+      let pagePath = null;
+      if (second === "sets" && third && /^[A-Za-z0-9_-]+$/.test(third) && (!fourth || /^s-[A-Za-z0-9]+$/.test(fourth)) && parts.length <= 4) {
+        kind2 = "playlist";
+        pagePath = parts.join("/");
+      } else if (second && second !== "sets" && /^[A-Za-z0-9_-]+$/.test(second) && (!third || /^s-[A-Za-z0-9]+$/.test(third)) && parts.length <= 3 && !["tracks", "albums", "reposts", "likes", "followers", "following", "comments", "popular-tracks"].includes(second)) {
+        kind2 = "track";
+        pagePath = parts.join("/");
+      }
+      if (!kind2) return null;
+      const page = `https://soundcloud.com/${pagePath}`;
+      const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(page)}&color=%231f9e5f&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
+      return { provider, kind: kind2, page, src, height: kind2 === "playlist" ? 300 : 166 };
+    }
+    if (provider === "spotify") {
+      if (host !== "open.spotify.com") return null;
+      const p = /^intl-[a-z-]+$/i.test(parts[0] || "") ? parts.slice(1) : parts;
+      const [kind2, id] = p;
+      if (!["episode", "show"].includes(kind2) || !/^[A-Za-z0-9]{22}$/.test(id || "") || p.length !== 2) return null;
+      return { provider, kind: kind2, page: `https://open.spotify.com/${kind2}/${id}`, src: `https://open.spotify.com/embed/${kind2}/${id}`, height: 152 };
+    }
+    if (provider === "apple") {
+      if (host !== "podcasts.apple.com") return null;
+      const [cc, word, ...rest] = parts;
+      if (!/^[a-z]{2}$/i.test(cc || "") || word !== "podcast") return null;
+      const idSeg = rest[rest.length - 1] || "";
+      const name = rest.length === 2 ? rest[0] : null;
+      if (!/^id\d+$/.test(idSeg) || rest.length > 2 || name !== null && !/^[A-Za-z0-9%_.-]+$/.test(name)) return null;
+      const episode = u.searchParams.get("i");
+      if (episode !== null && !/^\d+$/.test(episode)) return null;
+      const pathPart = `${cc.toLowerCase()}/podcast/${name ? `${name}/` : ""}${idSeg}${episode ? `?i=${episode}` : ""}`;
+      return { provider, kind: episode ? "episode" : "show", page: `https://podcasts.apple.com/${pathPart}`, src: `https://embed.podcasts.apple.com/${pathPart}`, height: episode ? 175 : 450 };
+    }
+    return null;
+  }
+
   // client/src/content-blocks.mjs
   var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
   var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -2680,11 +2759,34 @@ ${listStyleProseCss(".doc-blocks")}
   var AUDIO_STYLES = ["bar", "card"];
   var AUDIO_DEFAULT_LABEL = "Listen";
   function parseAudio(body, meta = "") {
-    const out = { label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
+    const out = {
+      label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL,
+      length: "",
+      style: "bar",
+      badStyle: "",
+      sources: [],
+      bad: [],
+      unknown: [],
+      providers: [],
+      embed: null,
+      embedBad: null,
+      link: "",
+      linkBad: "",
+      linkLabel: ""
+    };
     for (const l of lines(body)) {
       const { k, v: v2 } = keyValue(l);
       const key = (k || "").toLowerCase();
       if (key === "length") out.length = v2;
+      else if (AUDIO_PROVIDERS.includes(key)) {
+        out.providers.push(key);
+        const e = audioEmbed(key, v2);
+        if (e && !out.embed) out.embed = e;
+        else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v2 };
+      } else if (key === "link") {
+        if (safeUrl(v2)) out.link = safeUrl(v2);
+        else out.linkBad = v2;
+      } else if (key === "link-label") out.linkLabel = v2;
       else if (key === "style") {
         if (AUDIO_STYLES.includes(v2.toLowerCase())) out.style = v2.toLowerCase();
         else out.badStyle = v2;
@@ -2700,10 +2802,36 @@ ${listStyleProseCss(".doc-blocks")}
     const kept = String(body ?? "").split("\n").filter((l) => !/^\s*style\s*:/i.test(l));
     return style === "card" ? ["style: card", ...kept].join("\n") : kept.join("\n");
   }
+  function audioLinkLabel(link, label = "") {
+    if (String(label ?? "").trim()) return String(label).trim();
+    let host = "";
+    try {
+      host = new URL(String(link)).hostname.toLowerCase().replace(/^(www|m)\./, "");
+    } catch {
+      return "Listen elsewhere";
+    }
+    if (host === "soundcloud.com") return DEFAULT_LINK_LABELS.soundcloud;
+    if (host === "open.spotify.com" || host === "spotify.com") return DEFAULT_LINK_LABELS.spotify;
+    if (host === "podcasts.apple.com") return DEFAULT_LINK_LABELS.apple;
+    return `Listen on ${host}`;
+  }
+  var EMBED_ALLOW = {
+    soundcloud: "autoplay",
+    spotify: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
+    apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
+  };
+  var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
   function renderAudio(body, meta, origin = "") {
     const a = parseAudio(body, meta);
+    const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
+    const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
+    if (a.embed) {
+      const e = a.embed;
+      const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
+      return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
+    }
     if (!a.sources.length) return null;
-    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}"><div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + `</div><audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + "</audio></div>";
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
   }
   function weightWidths(weights) {
     const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
@@ -2855,6 +2983,29 @@ ${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
 ${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
 ${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
 ${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
+${s} .gbti-audio:not(.gbti-audio-card){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px}
+${s} .gbti-audio:not(.gbti-audio-card)>*{grid-column:1/-1}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-head{grid-column:1;grid-row:1;align-self:baseline}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:2;grid-row:1;align-self:baseline}
+${s} a.gbti-audio-link{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;font-weight:600;line-height:1.2;color:${t.green700};text-decoration:none;white-space:nowrap}
+${s} a.gbti-audio-link::after{content:"\\2197";font-size:.95em}
+${s} a.gbti-audio-link:hover{text-decoration:underline;text-underline-offset:3px}
+${s} a.gbti-audio-link:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-row .gbti-audio-link{margin-left:auto}
+${s} .gbti-audio-row{flex-wrap:wrap}
+${s} .gbti-audio-row .gbti-audio-head{flex:1 1 0;min-width:0}
+${s} .gbti-audio-embed{margin-top:10px}
+${s} .gbti-audio-embed iframe{display:block;width:100%;max-width:100%;margin:0;border:0;aspect-ratio:auto}
+${s} .gbti-audio-embed-soundcloud iframe{height:166px;border-radius:0}
+${s} .gbti-audio-embed-soundcloud-tall iframe{height:300px;border-radius:0}
+${s} .gbti-audio-embed-spotify iframe{height:152px;border-radius:12px}
+${s} .gbti-audio-embed-apple iframe{height:175px;border-radius:10px}
+${s} .gbti-audio-embed-apple-tall iframe{height:450px;border-radius:10px}
+@media (max-width:560px){
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:1/-1;grid-row:auto;justify-self:start;margin-top:6px}
+${s} a.gbti-audio-link{min-height:32px}
+${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
+}
 ${barWidthCss(s)}`;
   }
 
@@ -28759,7 +28910,7 @@ ${BLOCKED_PILL_CSS}
   var HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
   var DIGITS_RE = /^\d+$/;
   var hostOf5 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
-  function parse(raw) {
+  function parse2(raw) {
     let u;
     try {
       u = new URL(String(raw || ""));
@@ -28770,7 +28921,7 @@ ${BLOCKED_PILL_CSS}
     return u;
   }
   function storedCreator(raw, platform) {
-    const u = parse(raw);
+    const u = parse2(raw);
     if (!u || u.protocol !== "https:") return null;
     const hosts = PLATFORMS[platform]?.hosts || [];
     const host = hostOf5(u);
@@ -28778,7 +28929,7 @@ ${BLOCKED_PILL_CSS}
     return u.toString();
   }
   function creatorFrom(rawUrl, stored = {}) {
-    const u = parse(rawUrl);
+    const u = parse2(rawUrl);
     if (!u) return null;
     const host = hostOf5(u);
     const seg = u.pathname.split("/").filter(Boolean);
@@ -28843,7 +28994,7 @@ ${BLOCKED_PILL_CSS}
     return null;
   }
   function sourceCardModel({ url, memberName, creatorUrl = "", creatorName = "" } = {}) {
-    const u = parse(url);
+    const u = parse2(url);
     if (!u) return null;
     const host = hostOf5(u);
     const who = String(memberName || "").trim();
@@ -28902,6 +29053,8 @@ ${BLOCKED_PILL_CSS}
       btn.type = "button";
       card.insertBefore(row, head);
       row.append(btn, head);
+      const link = card.querySelector(".gbti-audio-link");
+      if (link) row.append(link);
       const progress = el("div", "gbti-audio-progress");
       progress.hidden = true;
       const seek = el("input", "gbti-audio-seek");

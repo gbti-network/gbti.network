@@ -49,6 +49,8 @@ export function enhanceAudioCards(root) {
     btn.type = 'button';
     card.insertBefore(row, head);
     row.append(btn, head);
+    const link = card.querySelector('.gbti-audio-link'); // sow-483: the link out sits at the end of the row
+    if (link) row.append(link);
 
     const progress = el('div', 'gbti-audio-progress');
     progress.hidden = true; // as on the board: the line and the time appear once it plays

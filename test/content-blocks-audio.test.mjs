@@ -75,9 +75,11 @@ test('validator: none for a good block, a warning for each fault', () => {
   const msgs = checkComponentBlocks([
     `${F}audio\nsrc: ${OGG}\n${F}`,
     `${F}audio Hear it\nlength: 3 minutes\nsrc: https://cdn.example/a.mp3\nspeed: 2x\n${F}`,
+    `${F}audio Nothing to play\nlength: 1 minute\n${F}`,
   ].join('\n\n')).map((x) => `${x.line}: ${x.message}`).join('\n');
   for (const re of [/^1: audio needs its label/m, /^1: audio needs a "length:" line/m, /^5: audio source "https:\/\/cdn\.example\/a\.mp3" is not a \/media\/podcasts\/ file/m,
-    /^5: audio needs at least one "src:" line/m, /^5: audio line "speed: 2x" is not src:, length: or style:/m]) assert.match(msgs, re);
+    /^5: audio line "speed: 2x" is not src:, soundcloud:, spotify:, apple:, length:, style:, link: or link-label:/m,
+    /^11: audio needs a source: "src:" lines naming a \/media\/podcasts\/ file, or one soundcloud:, spotify: or apple: link/m]) assert.match(msgs, re);
 });
 
 test('styles and the editor: rules for every class, and the block round-trips unchanged', () => {

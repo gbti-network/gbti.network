@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkHeaders, parseHeaders, parseCsp, cspForPath } from '../scripts/check-headers.mjs';
 
-const CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://signup.gbti.network; frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com; form-action 'self' https://signup.gbti.network; upgrade-insecure-requests";
+const CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://signup.gbti.network; frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com https://w.soundcloud.com https://open.spotify.com https://embed.podcasts.apple.com; form-action 'self' https://signup.gbti.network; upgrade-insecure-requests";
 
 function tmpRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-headers-'));
@@ -32,6 +32,16 @@ test('passes for a well-formed enforce CSP', () => {
   assert.deepEqual(errors, []);
   assert.equal(checked, 3); // the /* policy + the two /embed relay policies
   assert.ok(notes.some((n) => /ENFORCE/.test(n)));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+// sow-483: every host the sanitizer lets an article frame must be in frame-src, or the player is admitted by one layer
+// and refused by the next (an empty box on the page). Drop one and the guard names it.
+test('errors when frame-src lacks a host the sanitizer admits (a member embed would render empty)', () => {
+  const root = tmpRoot();
+  writeHeaders(root, block('Content-Security-Policy', CSP.replace(' https://w.soundcloud.com', '')));
+  const { errors } = checkHeaders({ root });
+  assert.ok(errors.some((e) => /frame-src must include w\.soundcloud\.com/.test(e)), errors.join(' | '));
   fs.rmSync(root, { recursive: true, force: true });
 });
 

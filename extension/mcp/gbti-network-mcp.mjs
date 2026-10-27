@@ -18591,6 +18591,107 @@ async function requireAdmin(ctx2) {
   return { id, role, rolesParsed, readText };
 }
 
+// client/src/audio-embed.mjs
+var AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
+var PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
+var SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
+  "discover",
+  "search",
+  "charts",
+  "stations",
+  "you",
+  "upload",
+  "settings",
+  "messages",
+  "notifications",
+  "pages",
+  "people",
+  "popular",
+  "terms-of-use",
+  "imprint",
+  "jobs",
+  "mobile",
+  "pro",
+  "feed",
+  "player",
+  "widget"
+]);
+var parse3 = (raw) => {
+  try {
+    const u = new URL(String(raw ?? "").trim());
+    return /^https?:$/.test(u.protocol) ? u : null;
+  } catch {
+    return null;
+  }
+};
+function audioEmbed(provider, raw) {
+  const u = parse3(raw);
+  if (!u) return null;
+  const host = u.hostname.toLowerCase().replace(/^(www|m)\./, "");
+  const parts = u.pathname.split("/").filter(Boolean);
+  if (provider === "soundcloud") {
+    if (host !== "soundcloud.com") return null;
+    const [account, second, third, fourth] = parts;
+    if (!account || SOUNDCLOUD_RESERVED.has(account.toLowerCase()) || !/^[A-Za-z0-9_-]+$/.test(account)) return null;
+    let kind = null;
+    let pagePath = null;
+    if (second === "sets" && third && /^[A-Za-z0-9_-]+$/.test(third) && (!fourth || /^s-[A-Za-z0-9]+$/.test(fourth)) && parts.length <= 4) {
+      kind = "playlist";
+      pagePath = parts.join("/");
+    } else if (second && second !== "sets" && /^[A-Za-z0-9_-]+$/.test(second) && (!third || /^s-[A-Za-z0-9]+$/.test(third)) && parts.length <= 3 && !["tracks", "albums", "reposts", "likes", "followers", "following", "comments", "popular-tracks"].includes(second)) {
+      kind = "track";
+      pagePath = parts.join("/");
+    }
+    if (!kind) return null;
+    const page = `https://soundcloud.com/${pagePath}`;
+    const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(page)}&color=%231f9e5f&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
+    return { provider, kind, page, src, height: kind === "playlist" ? 300 : 166 };
+  }
+  if (provider === "spotify") {
+    if (host !== "open.spotify.com") return null;
+    const p = /^intl-[a-z-]+$/i.test(parts[0] || "") ? parts.slice(1) : parts;
+    const [kind, id] = p;
+    if (!["episode", "show"].includes(kind) || !/^[A-Za-z0-9]{22}$/.test(id || "") || p.length !== 2) return null;
+    return { provider, kind, page: `https://open.spotify.com/${kind}/${id}`, src: `https://open.spotify.com/embed/${kind}/${id}`, height: 152 };
+  }
+  if (provider === "apple") {
+    if (host !== "podcasts.apple.com") return null;
+    const [cc, word, ...rest] = parts;
+    if (!/^[a-z]{2}$/i.test(cc || "") || word !== "podcast") return null;
+    const idSeg = rest[rest.length - 1] || "";
+    const name = rest.length === 2 ? rest[0] : null;
+    if (!/^id\d+$/.test(idSeg) || rest.length > 2 || name !== null && !/^[A-Za-z0-9%_.-]+$/.test(name)) return null;
+    const episode = u.searchParams.get("i");
+    if (episode !== null && !/^\d+$/.test(episode)) return null;
+    const pathPart = `${cc.toLowerCase()}/podcast/${name ? `${name}/` : ""}${idSeg}${episode ? `?i=${episode}` : ""}`;
+    return { provider, kind: episode ? "episode" : "show", page: `https://podcasts.apple.com/${pathPart}`, src: `https://embed.podcasts.apple.com/${pathPart}`, height: episode ? 175 : 450 };
+  }
+  return null;
+}
+var KNOWN_HOSTS = [
+  [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
+  [/(^|\.)vimeo\.com$/, "Vimeo"],
+  [/(^|\.)tiktok\.com$/, "TikTok"],
+  [/(^|\.)mixcloud\.com$/, "Mixcloud"],
+  [/(^|\.)soundcloud\.com$/, "SoundCloud"],
+  [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
+  [/(^|\.)apple\.com$/, "Apple"]
+];
+function embedProblem(provider, raw) {
+  const name = PROVIDER_NAMES[provider] || "this service";
+  const wants = { soundcloud: "a SoundCloud track or playlist link", spotify: "a Spotify episode or show link", apple: "an Apple Podcasts episode or show link" }[provider] || "a link";
+  const u = parse3(raw);
+  if (!u) return `"${String(raw ?? "").trim()}" is not a web address. Paste ${wants}.`;
+  const host = u.hostname.toLowerCase();
+  if (/^on\.soundcloud\.com$|^spotify\.link$|^spoti\.fi$/.test(host)) return `This is a short link. Open it, then copy the full ${name} address from the page.`;
+  const known = KNOWN_HOSTS.find(([re]) => re.test(host.replace(/^(www|m)\./, "")));
+  if (known && known[1] !== name && !(provider === "apple" && known[1] === "Apple")) {
+    const video = ["YouTube", "Vimeo", "TikTok"].includes(known[1]) ? ", or add the video with a Video block" : "";
+    return `This is a ${known[1]} link. Paste ${wants}${video}.`;
+  }
+  return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
+}
+
 // client/src/content-blocks.mjs
 var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
@@ -18695,11 +18796,34 @@ var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
 var AUDIO_STYLES = ["bar", "card"];
 var AUDIO_DEFAULT_LABEL = "Listen";
 function parseAudio(body, meta3 = "") {
-  const out = { label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL, length: "", style: "bar", badStyle: "", sources: [], bad: [], unknown: [] };
+  const out = {
+    label: String(meta3 ?? "").trim() || AUDIO_DEFAULT_LABEL,
+    length: "",
+    style: "bar",
+    badStyle: "",
+    sources: [],
+    bad: [],
+    unknown: [],
+    providers: [],
+    embed: null,
+    embedBad: null,
+    link: "",
+    linkBad: "",
+    linkLabel: ""
+  };
   for (const l of lines(body)) {
     const { k, v } = keyValue(l);
     const key = (k || "").toLowerCase();
     if (key === "length") out.length = v;
+    else if (AUDIO_PROVIDERS.includes(key)) {
+      out.providers.push(key);
+      const e = audioEmbed(key, v);
+      if (e && !out.embed) out.embed = e;
+      else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v };
+    } else if (key === "link") {
+      if (safeUrl(v)) out.link = safeUrl(v);
+      else out.linkBad = v;
+    } else if (key === "link-label") out.linkLabel = v;
     else if (key === "style") {
       if (AUDIO_STYLES.includes(v.toLowerCase())) out.style = v.toLowerCase();
       else out.badStyle = v;
@@ -18765,10 +18889,16 @@ function checkComponentBlocks(md) {
       const a = parseAudio(text, meta3);
       if (!meta3) warn("audio needs its label after the block name, such as ```audio Listen to the podcast version");
       if (!a.length) warn('audio needs a "length:" line, such as "length: 22 minutes"');
+      const sourceCount = (a.sources.length || a.bad.length ? 1 : 0) + a.providers.length;
+      if (sourceCount > 1) warn("audio has more than one source; keep the src: lines of a file, or one soundcloud:, spotify: or apple: line");
+      if (a.embedBad) warn(`audio ${a.embedBad.provider}: ${embedProblem(a.embedBad.provider, a.embedBad.raw)}`);
       for (const b of a.bad) warn(`audio source "${b}" is not a /media/podcasts/ file ending in .ogg or .mp3; it is left out`);
-      if (!a.sources.length) warn('audio needs at least one "src:" line naming a /media/podcasts/ file');
+      if (!sourceCount) warn('audio needs a source: "src:" lines naming a /media/podcasts/ file, or one soundcloud:, spotify: or apple: link');
       if (a.badStyle) warn(`audio style "${a.badStyle}" is not known; use bar or card (it shows as bar)`);
-      for (const u of a.unknown) warn(`audio line "${u}" is not src:, length: or style:`);
+      if (a.style === "card" && a.providers.length) warn("audio style: card applies to a file only; a provider plays in its own player");
+      if (a.linkBad) warn(`audio link: "${a.linkBad}" is not an http or https address`);
+      if (a.linkLabel && !a.link && !a.linkBad) warn("audio link-label: has no link: line to go with it");
+      for (const u of a.unknown) warn(`audio line "${u}" is not src:, soundcloud:, spotify:, apple:, length:, style:, link: or link-label:`);
     }
     if (name === "reveal") {
       const r = parseReveal(text, meta3);
@@ -20459,19 +20589,26 @@ ${F}`,
   {
     name: "audio",
     kind: "fence",
-    purpose: "Play a recording, such as the podcast version of an article, with the browser's own player under a label and its length. The files live on gbti.network under /media/podcasts/ (Opus in an .ogg file first, then an MP3 copy for the browsers that cannot play Opus). Nothing downloads until the reader presses play. Add a style: card line for the card look (a green play button beside the label, then a progress line once it plays); without it the block shows the browser bar. In the WorkBench the Player style buttons above the block set it.",
+    purpose: "Play a recording, such as the podcast version of an article, under a label and its length. The source is EITHER a file on gbti.network (src: lines under /media/podcasts/: Opus in an .ogg file first, then an MP3 copy; nothing downloads until play; style: card swaps the browser bar for the card) OR one soundcloud:, spotify: or apple: line holding the page link copied from that service, played in the service's own player (SoundCloud tracks and playlists, Spotify and Apple Podcasts episodes and shows). An optional link: (and link-label:) adds a link out to the recording's own page; without words it reads, for example, Listen on Spotify.",
     syntax: `${F}audio <label...>
-style: card (optional)
 length: <how long>
 src: /media/podcasts/<name>.ogg
 src: /media/podcasts/<name>.mp3
-${F}`,
+style: card (optional, files only)
+link: <page address> (optional)
+link-label: <its words> (optional)
+${F}
+
+or, for a provider, one of these in place of the src: lines:
+soundcloud: https://soundcloud.com/<account>/<track>
+spotify: https://open.spotify.com/episode/<id>
+apple: https://podcasts.apple.com/<country>/podcast/<name>/id<show>?i=<episode>`,
     example: `${F}audio Listen to the podcast version
 length: 22 minutes
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ${F}`,
-    renders: "Site, preview and reader: the label, the length, then the player (or the card with its play button). Cross-posts: the label as a link to the MP3 file, with the length."
+    renders: "Site, preview and reader: the label and length with the link out beside them (under the player on a phone), then the browser player, the card, or the provider's own player. Cross-posts: the label as a link to the MP3 file or the provider page, with the length and the link out."
   },
   {
     name: "image layout",
