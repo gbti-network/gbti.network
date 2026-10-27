@@ -2,7 +2,7 @@
 id: intro-crystal-ball-for-the-next-digital-agency
 targetType: post
 targetSlug: crystal-ball-for-the-next-digital-agency
-createdAt: '2026-10-27T01:59:57.411Z'
+createdAt: '2026-10-27T02:39:45.561Z'
 status: published
 visibility: public
 authorNote: true
