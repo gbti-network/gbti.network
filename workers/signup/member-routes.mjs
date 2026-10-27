@@ -23,6 +23,7 @@ import { handleFollows } from './membership-follows.mjs';
 import { handleNotifications } from './membership-notifications.mjs'; // SOW-150/186: the per-member notification store (bell source)
 import { handleDrafts } from './membership-drafts.mjs'; // SOW-157: the hosted draft store
 import { handleDraftImage } from './membership-draft-images.mjs'; // the staged image bytes beside those drafts
+import { handleDraftAudio } from './membership-draft-audio.mjs'; // sow-483: a paid member's staged recordings, raw bytes
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
 import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
 import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews, publicNewsItem } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
@@ -236,6 +237,19 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (method === 'GET' || method === 'POST') {
       const r = await handleDraftImage(request, env);
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+    }
+  }
+
+  // sow-483 Phase 3: a paid member's staged recordings, as RAW bytes: PUT when the author picks the file, GET for the
+  // WorkBench preview (or `meta=1` for the size alone), DELETE after publish. Credentialed, so PUT and DELETE clear the
+  // CSRF gate in resolveIdentity, as the image store's POST does.
+  if (pathname === '/membership/draft-audio') {
+    const cors = corsHeaders(request, env, { credentials: true, methods: 'GET, PUT, DELETE, OPTIONS' });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (method === 'GET' || method === 'PUT' || method === 'DELETE') {
+      const r = await handleDraftAudio(request, env);
+      if (r.raw) return new Response(r.raw, { status: r.status, headers: { ...cors, 'Content-Type': r.contentType, 'Cache-Control': 'no-store' } });
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
     }
   }

@@ -543,7 +543,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
     // (`./images/x.webp`) resolves against the item folder on its first render instead of 404-ing against
     // the page url.
     if (be && this._prepared?.id) be.client = imageClientFor(this); // sow-427: body images of a saved listing read from its store
-    if (be) { be.itemPath = this.itemPath; be.item = this.itemToken; be.value = this.preset?.body ?? ''; }
+    if (be) { be.itemPath = this.itemPath; be.item = this.itemToken; be.isMembersOnly = () => this.$('[data-visswitch]')?.dataset.active === 'members'; be.liveItem = () => this.itemToken; be.value = this.preset?.body ?? ''; } // sow-483: the podcast form's members note, and the draft token read at upload time (the permalink may fill in later)
 
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.
     const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));

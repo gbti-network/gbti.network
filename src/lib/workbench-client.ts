@@ -43,6 +43,7 @@ import { WorkbenchClientError, err, readCsrf, createWorkerTransport } from './wo
 import { TYPE_LABEL, hostedItemId, createPublish } from './workbench-client-publish'; // publish, and the two names flipStatus shares with it
 import { adminMethods } from './workbench-client-admin'; // the admin, channel-map, invite and editorial methods
 import { preparedMethods } from './workbench-prepared'; // sow-427: prepared project listings (Worker-gated superadmin route)
+import { createAudioStaging } from './workbench-client-audio'; // sow-483: the podcast block's staged recordings
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
 const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
@@ -127,11 +128,12 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
 
   // The Worker transport (workbench-client-transport.ts): the cookie-session GET/POST/PATCH, the news GET, the
   // same-origin index read, and the two own-file reads, all bound to this client's Worker origin.
-  const { workerGet, workerPost, workerPatch, newsGet, sameOriginJson, readOwnFile, readOwnFileBase64 } = createWorkerTransport(base);
+  const { workerGet, workerPost, workerPatch, newsGet, sameOriginJson, readOwnFile, readOwnFileBase64, ownFileExists } = createWorkerTransport(base);
+  const audio = createAudioStaging(base); // sow-483
 
   // The core publish (workbench-client-publish.ts). Built over this closure's state so a publish still reads
   // and clears the same staged images, and still encrypts through the same cookie route, as it did inline.
-  const publish = createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie });
+  const publish = createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie, ownFileExists, stagedAudioBytes: audio.stagedAudioBytes, deleteStagedAudio: audio.deleteStagedAudio });
 
   async function discardDraft({ type, slug, store }: any) {
     // sow-194: a repo draft is committed to the public repo; discarding it is a delete request, not a KV delete.
@@ -367,7 +369,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
 
     // ----- pure form/preview/validate (no network) -----
     formFields({ type }: any) { return { type, fields: fieldsFor(type) || [] }; },
-    preview({ body, autoEmbed }: any) { return { html: renderMarkdown(body ?? '', { autoEmbed: !!autoEmbed }) }; }, // autoEmbed: comment bodies frame a bare video URL
+    preview({ body, autoEmbed, itemPath }: any) { return { html: renderMarkdown(body ?? '', { autoEmbed: !!autoEmbed, itemPath: itemPath || undefined }) }; }, // autoEmbed: comment bodies frame a bare video URL; itemPath (sow-483) resolves an uploaded recording
     validateContent({ type, input, body }: any) {
       try {
         const built = buildContentFile({ type, username: user, input, body });
@@ -705,6 +707,9 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
 
     // The editor and the preview call this to rehydrate a thumbnail after a reload, scoped to their item.
     getStagedImage: readStagedImage,
+
+    // sow-483: the podcast block uploads a picked recording once, with progress; the publish names it.
+    stageAudio: audio.stageAudio,
   };
 }
 

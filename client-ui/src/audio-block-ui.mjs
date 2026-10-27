@@ -9,14 +9,16 @@
 //   _stash     each source's last value, so trying another source and coming back loses nothing
 //   _autoLink  the link out this form filled in from a provider link, replaced while the author leaves it alone
 //   _linkOpen  the link out fields are showing although both are empty
-//   _file      what happened to the last file picked: a problem to show, or a file waiting on uploads
+//   _file      what happened to the last file picked: a problem to show, an upload in flight, or the staged file
+//              (its size and length, for the row), or `elsewhere` when this host has no upload (sow-483 Phase 3)
 // Player style shows once the block has a file, as on the canvas: a provider brings its own player.
 import { esc } from './base.mjs';
 import { parseAudio, setAudioStyle, AUDIO_STYLES, audioLinkLabel } from '../../client/src/content-blocks.mjs';
 import {
   AUDIO_SOURCES, SOURCE_NAMES, audioLabelOf, setAudioLabel, audioLineValue, setAudioLine, audioSourceOf, setAudioSource,
-  audioLinkNote, audioFileProblem, audioExt,
+  audioLinkNote, audioFileProblem, audioExt, formatBytes, stagedAudioName, lengthWords,
 } from '../../client/src/audio-block-edit.mjs';
+import { formatTime } from '../../client/src/audio-card.mjs';
 
 const icon = (paths, w = 1.8) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 /** The music note the block wears in its header and in the Turn into palette. */
@@ -45,8 +47,14 @@ const lab = (text, forId) => `<label class="ab-lab" for="${forId}">${text}</labe
 const seg = (name, items, on, attr, id) => `<div class="ab-seg" role="group" aria-label="${name}">${items.map(([k, words]) =>
   `<button type="button" ${attr}="${k}" data-id="${id}" aria-pressed="${k === on}">${words}</button>`).join('')}</div>`;
 
-function uploadField(b, a) {
+// A recording beside a members-only article, or below the members-only marker, would sit in the public repository as
+// plain bytes, so the publish leaves it out (src/lib/workbench-client-publish.ts) and the form says why.
+const MEMBERS_NOTE = 'Uploaded recordings play on public articles only, and this one is for members. For a members-only '
+  + 'recording, use a private SoundCloud link instead.';
+
+function uploadField(b, a, { membersOnly = false } = {}) {
   const id = b._id;
+  const members = membersOnly ? `<p class="ab-hint ab-wait">${MEMBERS_NOTE}</p>` : '';
   const pick = `<input type="file" accept=".mp3,.ogg,.opus,audio/mpeg,audio/ogg" hidden data-ab-file="${id}" />`;
   const p = b._file?.problem;
   if (p) {
@@ -54,22 +62,31 @@ function uploadField(b, a) {
       + `<p class="ab-alert-d"><span class="ab-mono">${esc(p.name)}</span>${esc(p.rest)}</p></div></div>`
       + `<button type="button" class="ab-btn ab-self" data-ab-pick="${id}">Choose another file</button>${pick}`;
   }
+  const up = b._file?.uploading;
+  if (up) {
+    return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc(up.name)}</span>`
+      + `<span class="ab-file-m" role="status" data-ab-progress="${id}">Uploading ${Math.round((up.pct || 0) * 100)}% of ${esc(formatBytes(up.size))}</span></div></div>`;
+  }
   const src = audioSourceOf(b.code)?.value || '';
   if (src) {
     const name = src.split('/').pop();
     const ok = a.sources.length > 0;
-    const meta = ok ? `${audioExt(name).toUpperCase()} · published on gbti.network` : 'This path cannot be played. Choose the file again.';
+    const ext = audioExt(name).toUpperCase();
+    const staged = b._file?.staged?.name === name ? b._file.staged : null;
+    let meta = 'This path cannot be played. Choose the file again.';
+    if (staged) meta = [formatBytes(staged.size), ext, staged.duration ? formatTime(staged.duration) : '', 'publishes with the article'].filter(Boolean).join(' · ');
+    else if (ok) meta = `${ext} · ${src.startsWith('./') ? 'saved with this article' : 'published on gbti.network'}`;
     return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc(name)}</span>`
       + `<span class="ab-file-m${ok ? '' : ' ab-bad-t'}">${esc(meta)}</span></div>`
       + `<button type="button" class="ab-btn" data-ab-pick="${id}">Replace</button><button type="button" class="ab-btn" data-ab-remove="${id}">Remove</button></div>`
-      + `<p class="ab-hint">MP3 or Ogg, up to 20 MB. It is published with the article and played from gbti.network.</p>${pick}`;
+      + `<p class="ab-hint">MP3 or Ogg, up to 20 MB. It is published with the article and played from gbti.network.</p>${members}${pick}`;
   }
-  const waiting = b._file?.waiting;
+  const elsewhere = b._file?.elsewhere;
   return `<button type="button" class="ab-drop" data-ab-drop="${id}">${UPLOAD}<span class="ab-mono">Drop an MP3 or Ogg file here, or click to choose one</span></button>`
-    + (waiting
-      ? `<p class="ab-hint ab-wait" role="status">Uploads arrive in the next update. Choose <span class="ab-mono">${esc(waiting.name)}</span> again once it lands.</p>`
+    + (elsewhere
+      ? `<p class="ab-hint ab-wait" role="status">${esc(elsewhere)}</p>`
       : '<p class="ab-hint">Up to 20 MB, roughly an hour of speech as MP3.</p>')
-    + pick;
+    + members + pick;
 }
 
 function providerField(b, kind) {
@@ -96,8 +113,8 @@ function linkOut(b, a) {
     + `</div><p class="ab-note ab-bad-t" id="ab-lnote-${id}" data-ab-lnote="${id}">${bad ? `${ALERT}<span>${WEB_ADDRESS}</span>` : ''}</p></div>`;
 }
 
-/** The whole form for one block. */
-export function audioBlockHtml(b) {
+/** The whole form for one block. `membersOnly`: the article, or this block's section of it, is for members. */
+export function audioBlockHtml(b, { membersOnly = false } = {}) {
   const id = b._id;
   const a = parseAudio(b.code || '', audioLabelOf(b.lang));
   const kind = audioSourceKind(b);
@@ -105,7 +122,7 @@ export function audioBlockHtml(b) {
     + `<div class="ab-two"><div class="ab-f">${lab('Label', `ab-l-${id}`)}<input id="ab-l-${id}" class="ab-in" data-ab="label" data-id="${id}" value="${esc(audioLabelOf(b.lang))}" placeholder="Label, such as Listen to the podcast version" /></div>`
     + `<div class="ab-f">${lab('Length', `ab-n-${id}`)}<input id="ab-n-${id}" class="ab-in" data-ab="length" data-id="${id}" value="${esc(audioLineValue(b.code, 'length'))}" placeholder="Length, such as 22 minutes" /></div></div>`
     + `<div class="ab-f"><span class="ab-lab">Source</span>${seg('Source', AUDIO_SOURCES.map((k) => [k, SOURCE_NAMES[k]]), kind, 'data-ab-src', id)}</div>`
-    + (kind === 'upload' ? uploadField(b, a) : providerField(b, kind))
+    + (kind === 'upload' ? uploadField(b, a, { membersOnly }) : providerField(b, kind))
     + (kind === 'upload' && audioSourceOf(b.code) ? `<div class="ab-row"><span class="ab-lab">Player style</span>${seg('Player style', AUDIO_STYLES.map((s) => [s, s === 'bar' ? 'Bar' : 'Card']), a.style, 'data-ab-style', id)}</div>` : '')
     + linkOut(b, a)
     + '</section>';
@@ -143,9 +160,55 @@ export function setAudioProviderLink(b, kind, value) {
   return { note, linkChanged: false };
 }
 
+/** A picked file's length, read from its own metadata, or NaN when the browser cannot tell within a few seconds. */
+function durationOf(file) {
+  return new Promise((resolve) => {
+    let url;
+    try { url = URL.createObjectURL(file); } catch { resolve(NaN); return; }
+    const a = new Audio();
+    const done = (v) => { clearTimeout(timer); try { URL.revokeObjectURL(url); } catch { /* gone */ } resolve(v); };
+    const timer = setTimeout(() => done(NaN), 8000);
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => done(a.duration);
+    a.onerror = () => done(NaN);
+    a.src = url;
+  });
+}
+
 /**
- * Wire every podcast form in `root`. `ctx` is the doc editor's: byId, render, change, and focus(selector) to put the
- * caret back after a re-render. `stageAudio(b, file)`, when the host has one, uploads a picked file (sow-483 Phase 3).
+ * sow-483 Phase 3: upload one picked recording to this member's staged store, with progress, then point the block at
+ * it (`src: ./audio/<name>`) and fill Length from the file when the author left it empty. The publish names the staged
+ * copy and the Worker commits it into the item's audio/ folder (src/lib/workbench-client-publish.ts).
+ */
+export async function uploadAudio(b, file, ctx, root) {
+  const name = stagedAudioName(file.name); // audioFileProblem has already refused anything but MP3, Ogg and Opus
+  b._file = { uploading: { name, size: file.size, pct: 0 } };
+  ctx.render();
+  const length = durationOf(file);
+  try {
+    await ctx.client.stageAudio({ file, name, item: ctx.item, onProgress: (pct) => {
+      if (b._file?.uploading) b._file.uploading.pct = pct;
+      const el = root.querySelector(`[data-ab-progress="${b._id}"]`); // in place: a redraw per tick would be wasted work
+      if (el) el.textContent = `Uploading ${Math.round(pct * 100)}% of ${formatBytes(file.size)}`;
+    } });
+  } catch (e) {
+    b._file = { problem: { title: 'The upload did not finish.', name: file.name, rest: `: ${String(e?.message || 'try again.')}` } };
+    ctx.render();
+    ctx.focus(`[data-ab-pick="${b._id}"]`);
+    return;
+  }
+  const seconds = await length;
+  b.code = setAudioSource(b.code, 'upload', `./audio/${name}`);
+  if (!audioLineValue(b.code, 'length') && lengthWords(seconds)) b.code = setAudioLine(b.code, 'length', lengthWords(seconds));
+  b._file = { staged: { name, size: file.size, duration: Number.isFinite(seconds) ? seconds : 0 } };
+  ctx.render();
+  ctx.change();
+  ctx.focus(`[data-ab-pick="${b._id}"]`);
+}
+
+/**
+ * Wire every podcast form in `root`. `ctx` is the doc editor's: byId, render, change, focus(selector) to put the caret
+ * back after a re-render, and the host's `client` and the draft's `item` token, which an upload needs.
  */
 export function wireAudioBlocks(root, ctx) {
   const all = (sel) => Array.from(root.querySelectorAll(sel));
@@ -206,9 +269,10 @@ export function wireAudioBlocks(root, ctx) {
     if (!b || !file) return;
     const problem = audioFileProblem({ name: file.name, size: file.size });
     if (problem) { b._file = { problem }; ctx.render(); ctx.focus(`[data-ab-pick="${b._id}"]`); return; }
-    if (typeof ctx.stageAudio === 'function') { ctx.stageAudio(b, file); return; }
-    b._file = { waiting: { name: file.name } };
-    ctx.render();
+    // The website WorkBench has the upload; another host (the local CMS) says where to do it instead.
+    if (typeof ctx.client?.stageAudio !== 'function') { b._file = { elsewhere: 'Upload recordings in the WorkBench on gbti.network.' }; ctx.render(); return; }
+    if (!ctx.item) { b._file = { elsewhere: 'Give the article a permalink first, so the recording has a place to go.' }; ctx.render(); return; }
+    uploadAudio(b, file, ctx, root);
   };
   for (const input of all('input[data-ab-file]')) input.addEventListener('change', () => take(ctx.byId(input.dataset.abFile), input.files?.[0]));
   const openPicker = (id) => root.querySelector(`input[data-ab-file="${id}"]`)?.click();

@@ -226,14 +226,14 @@ class GbtiDocEditor extends GbtiElement {
   }
 
   _blockHtml(b, inMem) {
-    return `<div class="blk blk-${esc(b.type)}${inMem ? ' in-members' : ''}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
+    return `<div class="blk blk-${esc(b.type)}${inMem ? ' in-members' : ''}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b, inMem)}</div></div>`;
   }
 
   _ce(cls, edit, b, ph) {
     return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || '')}">${textBlockToHtml(b.text || '')}</div>`; // sow-350: a blank line shows as one
   }
 
-  _bodyHtml(b) {
+  _bodyHtml(b, inMem = false) {
     switch (b.type) {
       case 'heading': return this._ce(`ce-h${Math.min(3, Math.max(1, b.level || 2))}`, 'text', b, 'Heading');
       case 'quote': return this._ce('ce-q', 'text', b, 'Quote');
@@ -242,7 +242,8 @@ class GbtiDocEditor extends GbtiElement {
         const bar = `<div class="cvar"><span class="cvar-lab">${svg('gear')} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? 'on' : ''}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join('')}</div>`;
         return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg('info')}</span>${this._ce('', 'text', b, 'Callout text')}</div></div>`;
       }
-      case 'audio': return audioBlockHtml(b); // sow-483: the podcast block's form (client-ui/src/audio-block-ui.mjs)
+      // sow-483: the podcast block's form. membersOnly: below the marker, or the host says the article is for members.
+      case 'audio': return audioBlockHtml(b, { membersOnly: inMem || (typeof this.isMembersOnly === 'function' && this.isMembersOnly()) });
       case 'code': {
         return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
           + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
@@ -372,7 +373,8 @@ class GbtiDocEditor extends GbtiElement {
       const b = this._byId(el.dataset.cvar);
       if (b) { b.variant = el.dataset.cval; this._render(); this._focusBlock(b._id); this._change(); }
     }));
-    wireAudioBlocks(this.root, { byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
+    const ed = this; // the draft token is read when a file is picked: a new draft's permalink can fill in after this render
+    wireAudioBlocks(this.root, { client: this.client, get item() { return (typeof ed.liveItem === 'function' && ed.liveItem()) || ed.item; }, byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
       const el = this.$(sel);
       el?.focus();
       if (el && typeof el.setSelectionRange === 'function' && el.type !== 'file') { const n = el.value.length; try { el.setSelectionRange(n, n); } catch { /* not a text field */ } }

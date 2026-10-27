@@ -45,8 +45,10 @@ test('the origin copy is read as BYTES, and only through the existing member-gat
   assert.match(client, /readOwnFileBase64\(oldPath\)/, 'the origin copy is no longer read as bytes');
   // Same route, same allow-list, same auth as the text read it sits beside. A separate endpoint here would be
   // a second place the allow-list has to be got right.
+  // sow-483 added the third read, ownFileExists: a recording past 1 MB comes back with no text, so the route's
+  // `exists` answers for it. Same route, same allow-list, same auth.
   const reads = [...client.matchAll(/\/membership\/file\?path=/g)].length;
-  assert.equal(reads, 2, 'the file read forked into a third path; both reads must share one gated route');
+  assert.equal(reads, 3, 'the file read forked into another path; every read must share one gated route');
 });
 
 test('publish plans BOTH halves of the move through the pure helper, not by hand', () => {
@@ -65,7 +67,7 @@ test('publish plans BOTH halves of the move through the pure helper, not by hand
 });
 
 test('the Worker hands back the base64 it already holds, without widening what it will serve', () => {
-  assert.match(worker, /return \{ status: 200, body: \{ ok: true, text, base64 \} \};/, 'the file route stopped returning base64');
+  assert.match(worker, /return \{ status: 200, body: \{ ok: true, text, base64, exists: true, size: Number\(data\.size\) \|\| 0 \} \};/, 'the file route stopped returning base64'); // sow-483: + exists, size
   // Decoded from the SAME string that is returned, so text and base64 can never describe different bytes.
   assert.match(worker, /const base64 = String\(data\.content\)\.replace\(\/\\s\+\/g, ''\);\s*\n\s*let text = null;\s*\n\s*try \{\s*\n\s*const bin = atob\(base64\);/,
     'the returned base64 is no longer the string the text is decoded from');

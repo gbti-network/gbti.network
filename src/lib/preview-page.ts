@@ -189,6 +189,17 @@ export async function initWorkbenchPreview() {
       },
     ));
   } catch { /* the preview still renders; unstaged images just resolve to the CDN */ }
+  // sow-483: a recording uploaded in the podcast block but not yet published lives only in the Worker's staged store,
+  // so the preview plays that copy (a blob URL, keyed by the block's `./audio/<file>` the way asset() looks it up). A
+  // recording that is not staged resolves to the repository copy through asset(), as an image does.
+  try {
+    const { audioUploadNames } = await import('../../client/src/content-blocks.mjs');
+    await Promise.all(audioUploadNames(String(draft.body || '')).map(async (name: string) => {
+      const q = `name=${encodeURIComponent(name)}&item=${encodeURIComponent(`${type}:${slug}`)}`;
+      const r = await fetch(`${base}/membership/draft-audio?${q}`, { credentials: 'include' });
+      if (r.ok) stagedSrc[`./audio/${name}`] = URL.createObjectURL(await r.blob());
+    }));
+  } catch { /* the preview still renders; the player falls back to the repository copy */ }
   // A KV-sourced preview is a STAGED (saved-but-not-published) draft; a main-sourced one is the committed draft.
   const stagedPreview = fromKv || store !== 'repo';
   say(stagedPreview
@@ -382,12 +393,12 @@ export async function initWorkbenchPreview() {
     const { renderMarkdownWithBlocks, renderMarkdown } = await import('../../client/src/markdown.mjs');
     const src = String(draft.body || '');
     if (editing) {
-      const r = renderMarkdownWithBlocks(src);
+      const r = renderMarkdownWithBlocks(src, { relativeAudio: true }); // sow-483: ./audio/ resolves below, staged copy first
       bodyDoc.ranges = r.blocks;
       draft.__html = r.html;
     } else {
       bodyDoc.ranges = [];
-      draft.__html = renderMarkdown(src);
+      draft.__html = renderMarkdown(src, { relativeAudio: true });
     }
     // data-ref carries the source ref alongside the resolved src, so an image read back out of an edited block
     // (inlineHtmlToMd) keeps ./images/x.png rather than the CDN or staged URL it was shown from.
@@ -396,7 +407,7 @@ export async function initWorkbenchPreview() {
 
   try {
     const { renderMarkdown } = await import('../../client/src/markdown.mjs');
-    draft.__html = renderMarkdown(String(draft.body || ''));
+    draft.__html = renderMarkdown(String(draft.body || ''), { relativeAudio: true }); // sow-483: as renderFromSource
     // Repo-relative body images need the item folder, exactly as the editor's blocks do.
     draft.__html = String(draft.__html).replace(/src="(\.\/[^"]+)"/g, (_m: string, p: string) => `src="${asset(p, itemPath)}" data-ref="${p}"`);
   } catch { draft.__html = '<p class="muted">The body could not be rendered.</p>'; }

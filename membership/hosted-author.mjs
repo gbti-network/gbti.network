@@ -9,7 +9,7 @@
 // own-folder path is.
 
 import { isCleanPath } from './classify-pr.mjs';
-import { ITEM_ID_MAX, ITEM_ID_PATTERN } from './item-id.mjs';
+import { ITEM_ID_MAX, ITEM_ID_PATTERN, SLUG_PATTERN } from './item-id.mjs';
 import { shareFilesCategoryProblem } from './share-category.mjs';
 
 export const HOSTED_MAX_FILES = 20;
@@ -76,6 +76,22 @@ export function imagePathProblem(tail) {
   }
   return 'an uploaded image must be a png, jpg, webp, or gif under your images/ folder';
 }
+
+// sow-483: a member's uploaded recording, in the audio/ folder beside the item it plays in. Lowercase throughout for
+// the reason IMAGE_PATH_TAIL_RE gives, and only the co-located shape. A recording never travels as base64 in the
+// request: an entry names the caller's own STAGED copy (`stagedAudio: { item, name }`, read from the Worker's store) or
+// a recording already on main to copy when the item moves (`copyFrom`), and the Worker reads the bytes itself.
+const AUDIO_PATH_TAIL_RE = /^(?:posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]{0,63}\/audio\/[a-z0-9][a-z0-9_-]{0,79}\.(?:mp3|ogg)$/;
+const AUDIO_ITEM_RE = new RegExp(`^(post|project|product|prompt):${SLUG_PATTERN}$`); // membership/draft-audio.mjs itemTokenOf
+/** Recordings one publish may carry, each up to 20 MB. */
+export const HOSTED_MAX_AUDIO_FILES = 2;
+
+/** Why `tail` is not an acceptable recording path, or null. */
+export function audioPathProblem(tail) {
+  if (AUDIO_PATH_TAIL_RE.test(String(tail ?? ''))) return null;
+  return 'a recording must be an .mp3 or .ogg file in the audio/ folder beside its item, named in lowercase';
+}
+
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /** The exact decoded byte length of a base64 string, or -1 if it is not well-formed base64. Node-free (no atob):
@@ -205,6 +221,7 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
   const paths = [];
   let totalBytes = 0;
   let imageBytes = 0;
+  let audioCount = 0;
   const seen = new Set();
   for (const f of files) {
     if (!f || typeof f.path !== 'string') return bad('every file needs a path');
@@ -224,6 +241,35 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
     }
     if (seen.has(f.path)) return bad('duplicate file path');
     seen.add(f.path);
+    if (f.stagedAudio !== undefined || f.copyFrom !== undefined) {
+      // sow-483: a recording, by reference. Its path is the item's own audio/ folder; its bytes come from the
+      // caller's own staged copy or from a recording already on main, read by the Worker, never from the request.
+      const name = f.path.slice(f.path.lastIndexOf('/') + 1);
+      if (f.content !== undefined || f.contentBase64 !== undefined) return bad(`the recording ${name} carries a reference, not content`);
+      const problem = audioPathProblem(f.path.slice(matchedPrefix.length));
+      if (problem) return bad(problem);
+      audioCount += 1;
+      if (audioCount > HOSTED_MAX_AUDIO_FILES) return bad(`one publish carries at most ${HOSTED_MAX_AUDIO_FILES} recordings`);
+      if (f.stagedAudio !== undefined) {
+        if (f.copyFrom !== undefined) return bad(`the recording ${name} is either staged or copied, not both`);
+        const s = f.stagedAudio;
+        if (!s || typeof s !== 'object' || s.name !== name || !AUDIO_ITEM_RE.test(String(s.item ?? ''))) {
+          return bad(`the recording ${name} does not name its staged copy`);
+        }
+      } else {
+        // The source must be a recording in a folder this caller may write: their own, or any member's for a
+        // superadmin, the same rule as the destination. Same name, different place.
+        const from = typeof f.copyFrom === 'string' ? f.copyFrom : '';
+        let fromPrefix = null;
+        if (isCleanPath(from) && from.startsWith(ownPrefix)) fromPrefix = ownPrefix;
+        else if (isCleanPath(from) && allowAnyFolder) fromPrefix = (ANY_MEMBER_FOLDER_RE.exec(from) || [])[0] || null;
+        if (!fromPrefix || audioPathProblem(from.slice(fromPrefix.length)) || from.slice(from.lastIndexOf('/') + 1) !== name || from === f.path) {
+          return bad(`the recording ${name} can only be copied from another item's audio/ folder you can write to`);
+        }
+      }
+      paths.push(f.path);
+      continue;
+    }
     const isBinary = f.contentBase64 !== undefined && f.contentBase64 !== null;
     if (isBinary) {
       // sow-158 image upload: a binary entry is a base64-encoded raster image, own-folder images/ only, capped.

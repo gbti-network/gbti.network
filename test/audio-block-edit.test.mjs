@@ -143,16 +143,24 @@ test('the form in each state from the canvas', () => {
   assert.match(big, /role="alert"[\s\S]*This file is 231 MB\. The limit is 20 MB\.[\s\S]*<span class="ab-mono">x\.wav<\/span> is a WAV recording/);
   assert.match(big, /Choose another file/);
 
-  assert.match(html('', { _file: { waiting: { name: 'talk.mp3' } } }), /Uploads arrive in the next update\. Choose <span class="ab-mono">talk\.mp3<\/span> again once it lands\./);
+  assert.match(html('', { _file: { elsewhere: 'Upload recordings in the WorkBench on gbti.network.' } }), /role="status">Upload recordings in the WorkBench on gbti\.network\.</);
+  // sow-483 Phase 3: an upload in flight, then the staged file with its size and length.
+  assert.match(html('', { _file: { uploading: { name: 'talk.mp3', size: 8 * 1024 * 1024, pct: 0.45 } } }), /data-ab-progress="7">Uploading 45% of 8 MB</);
+  const staged = html('length: 22 minutes\nsrc: ./audio/talk.mp3', { _file: { staged: { name: 'talk.mp3', size: 7.9 * 1024 * 1024, duration: 1316 } } });
+  assert.match(staged, />7\.9 MB · MP3 · 21:56 · publishes with the article</);
+  assert.match(html('src: ./audio/talk.mp3'), />MP3 · saved with this article</, 'staged in an earlier session, or committed');
+  assert.match(audioBlockHtml({ _id: 7, type: 'audio', lang: 'audio', code: '' }, { membersOnly: true }), /Uploaded recordings play on public articles only, and this one is for members\./);
+  assert.doesNotMatch(empty, /this one is for members/);
   assert.match(html('link: javascript:alert(1)'), /Paste a full web address, starting with https:\/\/\./);
   assert.doesNotMatch(html('', { lang: 'audio <img src=x onerror=alert(1)>' }), /<img/, 'the label is escaped');
   assert.doesNotMatch(html('', { _file: { problem: audioFileProblem({ name: '<img src=x onerror=alert(1)>.wav', size: 1 }) } }), /<img/, 'a file name is escaped');
-  assert.doesNotMatch(html('', { _file: { waiting: { name: '<b>x</b>.mp3' } } }), /<b>/, 'so is a waiting one');
+  assert.doesNotMatch(html('', { _file: { uploading: { name: '<b>x</b>.mp3', size: 1 } } }), /<b>/, 'so is one uploading');
 });
 
 test('the doc editor draws the form for an audio block and offers it in Turn into', () => {
   const src = fs.readFileSync(new URL('../client-ui/src/elements/gbti-doc-editor.mjs', import.meta.url), 'utf8');
-  assert.match(src, /case 'audio': return audioBlockHtml\(b\);/);
+  assert.match(src, /case 'audio': return audioBlockHtml\(b, \{ membersOnly: inMem \|\| \(typeof this\.isMembersOnly === 'function' && this\.isMembersOnly\(\)\) \}\);/);
+  assert.match(src, /get item\(\) \{ return \(typeof ed\.liveItem === 'function' && ed\.liveItem\(\)\) \|\| ed\.item; \}/, 'the draft token is read at upload time');
   assert.match(src, /wireAudioBlocks\(this\.root, \{/);
   assert.match(src, /\{ key: 'audio', label: 'Podcast player', icon: 'audio'/);
   assert.doesNotMatch(src, /data-astyle/, 'the old style bar over a code box is gone');

@@ -10,7 +10,7 @@
 import { defaultSchema } from 'rehype-sanitize';
 import { IMAGE_LAYOUT_CLASS_RE } from '../../client/src/image-attrs.mjs'; // the five image layout classes
 import { LIST_STYLE_CLASS_RE } from '../../client/src/list-attrs.mjs';    // the six list marker style classes (sow-322)
-import { AUDIO_SRC_RE, AUDIO_TYPES } from '../../client/src/content-blocks.mjs'; // the ```audio block's sources
+import { AUDIO_SERVED_RE, AUDIO_TYPES } from '../../client/src/content-blocks.mjs'; // the ```audio block's sources, as served
 
 /**
  * sow-322: the ONE className rule for a list. hast-util-sanitize honours only the FIRST className entry on a tag
@@ -66,7 +66,7 @@ export const sanitizeSchema = {
     // own /media/podcasts/ files. An audio tag an author writes by hand gets the same rule, so it cannot autoplay,
     // preload or point anywhere else.
     audio: [['className', /^gbti-audio-player$/], 'controls', ['preload', 'none'], 'ariaLabel'],
-    source: [['src', AUDIO_SRC_RE], ['type', ...Object.values(AUDIO_TYPES)]],
+    source: [['src', AUDIO_SERVED_RE], ['type', ...Object.values(AUDIO_TYPES)]], // sow-483: /media/podcasts/ or an item's /media/audio/
     pre: [...(defaultSchema.attributes?.pre ?? []), 'style', 'tabIndex', 'dataLanguage'],
     code: [...(defaultSchema.attributes?.code ?? []), 'style'],
     span: [...(defaultSchema.attributes?.span ?? []), 'style', 'className'],

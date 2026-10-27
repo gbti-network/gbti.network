@@ -461,11 +461,12 @@ class GbtiReader extends GbtiElement {
   // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
   async _body(visibility, publicBody, encPath) {
     const resolve = (md) => resolveMarkdownAssets(md, this._itemPath);
-    let html = publicBody ? ((await this.client.preview({ body: resolve(publicBody) }))?.html ?? '') : '';
+    const itemPath = this._itemPath || undefined; // sow-483: an uploaded recording plays from the item's own route
+    let html = publicBody ? ((await this.client.preview({ body: resolve(publicBody), itemPath }))?.html ?? '') : '';
     if (encPath) {
       try {
         const { text } = await this.client.decrypt({ encPath });
-        html += (await this.client.preview({ body: resolve(text) }))?.html ?? '';
+        html += (await this.client.preview({ body: resolve(text), itemPath }))?.html ?? '';
       } catch (err) {
         const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
         html += locked ? lockNotice('This part') : `<p class="muted">Could not load the members-only part right now.</p>`;

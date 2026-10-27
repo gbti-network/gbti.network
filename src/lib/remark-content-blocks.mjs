@@ -8,7 +8,7 @@ import { embedUrl, bareVideoLine, embedPoster } from '../../client/src/video-emb
 import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';
-import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
+import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -199,6 +199,9 @@ export function applyListStyle(list) {
 export function remarkContentBlocks() {
   return (tree, file) => {
     const autoEmbed = isCommentSource(file);
+    // sow-483: an ```audio block's uploaded recording (`./audio/<file>`) plays from the route serving this item's
+    // recordings, worked out from the file Astro is rendering (members/<author>/<dir>/<slug>/index.md).
+    const blockOpts = { audioBase: audioBaseFor(file?.path || (Array.isArray(file?.history) ? file.history[0] : '')) };
     const walk = (node) => {
       if (!node || !Array.isArray(node.children)) return;
       for (let i = 0; i < node.children.length; i++) {
@@ -213,8 +216,8 @@ export function remarkContentBlocks() {
         }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };
-        } else if (n && n.type === 'code' && DATA_BLOCKS.includes(n.lang) && renderDataBlock(n.lang, n.value, n.meta) != null) {
-          node.children[i] = { type: 'html', value: renderDataBlock(n.lang, n.value, n.meta) };
+        } else if (n && n.type === 'code' && DATA_BLOCKS.includes(n.lang) && renderDataBlock(n.lang, n.value, n.meta, blockOpts) != null) {
+          node.children[i] = { type: 'html', value: renderDataBlock(n.lang, n.value, n.meta, blockOpts) };
         } else if (n && n.type === 'code' && n.lang === 'directory') {
           // sow-452: a sortable list. The placeholder only; src/lib/sort-list.mjs reads the h3 entries after it.
           node.children[i] = { type: 'html', value: sortListPlaceholder(n.meta) };

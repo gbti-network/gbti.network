@@ -9,7 +9,7 @@
 //   4. prepend the rendered byline intro (the {fullName}/{member-url} template) + a blank line;
 //   5. normalize tags for dev.to (lowercase alphanumeric, max 4; fallback: the taxonomy path leaves).
 
-import { DATA_BLOCKS, dataBlockToMarkdown } from '../../client/src/content-blocks.mjs';
+import { DATA_BLOCKS, dataBlockToMarkdown, audioBaseFor } from '../../client/src/content-blocks.mjs';
 import yaml from 'js-yaml';
 import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
@@ -60,16 +60,18 @@ export function parsePublishedFile(rawFileText) {
 
 /** sow-452: site-only fences (```directory, a sortable list) mean nothing on dev.to or Hashnode, where they would
  *  show as a code block. Drop them; the entries after them read in their source order. */
-export function stripSiteOnlyFences(body) {
-  return dataBlocksToMarkdown(embedFencesToLinks(String(body))).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
+export function stripSiteOnlyFences(body, item = null) {
+  // sow-483: an uploaded recording (`./audio/<file>`) links to the route serving it, which needs the item.
+  const audioBase = item ? audioBaseFor(contentPathFor(item)) : null;
+  return dataBlocksToMarkdown(embedFencesToLinks(String(body)), { audioBase }).replace(/^```directory[^\n]*\n[\s\S]*?^```[ \t]*\n?/gm, '').replace(/\n{3,}/g, '\n\n');
 }
 
 /** sow-453: ```tags, ```bar, ```facts and ```button as plain markdown (an italic line, a bold figure, a list, a link).
  *  sow-455: a ```reveal is written out open (its weights, note and body). An ```audio player becomes a link to the
  *  file. The names come from DATA_BLOCKS, so a new block cannot reach a cross-post as a code block. */
 const DATA_FENCE_RE = new RegExp(`^\`\`\`(${DATA_BLOCKS.join('|')})(?:[ \\t]([^\\n]*))?\\n([\\s\\S]*?)^\`\`\`[ \\t]*$`, 'gm');
-export function dataBlocksToMarkdown(body) {
-  return String(body).replace(DATA_FENCE_RE, (m, name, meta, inner) => dataBlockToMarkdown(name, inner, meta || '') ?? m);
+export function dataBlocksToMarkdown(body, opts = {}) {
+  return String(body).replace(DATA_FENCE_RE, (m, name, meta, inner) => dataBlockToMarkdown(name, inner, meta || '', opts) ?? m);
 }
 
 /** A ```embed fence (with or without `lightbox`) is a player on the site and a code block anywhere else. Cross-posts
@@ -126,7 +128,7 @@ export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', s
   body = body.trim();
   if (!body) return { ok: false, reason: 'the public body is empty' };
 
-  body = rewriteRelativeImages(stripSiteOnlyFences(body), item); // relative targets -> the CDN over the item's folder
+  body = rewriteRelativeImages(stripSiteOnlyFences(body, item), item); // relative targets -> the CDN over the item's folder
 
   // SOW-138: the public body runs through the admin/popup body template ({body} = the article verbatim; the
   // default '{body}' reproduces today's post exactly). The article is NEVER sanitized/truncated (renderBodyTemplate).

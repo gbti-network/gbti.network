@@ -127,3 +127,30 @@ export function audioFileProblem({ name, size } = {}) {
     : ` ${what}. Export it as MP3, then choose it again.`;
   return { title, name: file, rest };
 }
+
+/**
+ * The name a picked file is stored and committed under: lowercase, every other run of characters a hyphen, at most 60
+ * characters before the extension. An .opus file is Opus in an Ogg container and becomes .ogg, the extension the site
+ * serves with byte ranges (content-blocks.mjs AUDIO_SRC_RE). Null for any other kind of file. The Worker accepts exactly
+ * these names (membership/draft-audio.mjs AUDIO_NAME_RE).
+ */
+export function stagedAudioName(fileName) {
+  const m = /^(.*)\.([A-Za-z0-9]+)$/.exec(String(fileName ?? '').split(/[\\/]/).pop() || '');
+  if (!m) return null;
+  const ext = { mp3: 'mp3', ogg: 'ogg', opus: 'ogg' }[m[2].toLowerCase()];
+  if (!ext) return null;
+  const stem = m[1].toLowerCase().replace(/[^a-z0-9_]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 60).replace(/[-_]+$/, '');
+  return `${stem || 'recording'}.${ext}`;
+}
+
+/** The Length words for a duration in seconds ("22 minutes", "1 hour 5 minutes"), or '' when it is unknown. */
+export function lengthWords(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s <= 0) return '';
+  if (s < 60) return `${Math.round(s)} seconds`;
+  const m = Math.round(s / 60);
+  if (m < 60) return m === 1 ? '1 minute' : `${m} minutes`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return `${h} hour${h > 1 ? 's' : ''}${r ? ` ${r} minute${r > 1 ? 's' : ''}` : ''}`;
+}

@@ -26,7 +26,7 @@
 # /utilities/js-animate-hue/ frames /tools/...). scripts/check-headers.mjs enforces exactly that split.
 
 /*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://signup.gbti.network https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com https://www.mixcloud.com https://player-widget.mixcloud.com https://w.soundcloud.com https://open.spotify.com https://embed.podcasts.apple.com; form-action 'self' https://signup.gbti.network; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src 'self' blob: https://raw.githubusercontent.com; font-src 'self' data:; connect-src 'self' https://signup.gbti.network https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com https://player.vimeo.com https://www.tiktok.com https://rumble.com https://platform.twitter.com https://www.mixcloud.com https://player-widget.mixcloud.com https://w.soundcloud.com https://open.spotify.com https://embed.podcasts.apple.com; form-action 'self' https://signup.gbti.network; upgrade-insecure-requests
 
 /tools/email-signature-generator/*
   ! Content-Security-Policy

@@ -55,7 +55,7 @@ export function prepareHashnodeBody(rawFileText, item, { intro = '', footer = ''
   body = body.trim();
   if (!body) return { ok: false, reason: 'the public body is empty' };
 
-  body = rewriteRelativeImages(stripSiteOnlyFences(body), item); // relative targets -> the CDN over the item's folder
+  body = rewriteRelativeImages(stripSiteOnlyFences(body, item), item); // relative targets -> the CDN over the item's folder
 
   // SOW-138: the public body runs through the admin body template ({body} = the article verbatim; the default
   // '{body}' reproduces today's post). The article is NEVER sanitized/truncated (renderBodyTemplate).

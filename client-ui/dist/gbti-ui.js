@@ -2635,7 +2635,17 @@ ${String(body ?? "")}`;
     flush();
     return out.join("");
   }
-  var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+  var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+  var ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
+  function audioBaseFor(itemPath) {
+    const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
+    return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
+  }
+  function audioServedPath(src, audioBase) {
+    const s = String(src ?? "");
+    if (!s.startsWith("./audio/")) return s;
+    return audioBase ? `${audioBase}/${s.slice("./audio/".length)}` : null;
+  }
   var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
   var AUDIO_STYLES = ["bar", "card"];
   var AUDIO_DEFAULT_LABEL = "Listen";
@@ -2702,7 +2712,7 @@ ${String(body ?? "")}`;
     apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
   };
   var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
-  function renderAudio(body, meta, origin = "") {
+  function renderAudio(body, meta, { origin = "", audioBase = null, relativeAudio = false } = {}) {
     const a = parseAudio(body, meta);
     const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
     const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
@@ -2712,7 +2722,12 @@ ${String(body ?? "")}`;
       return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
     }
     if (!a.sources.length) return null;
-    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + a.sources.map((x) => `<source src="${esc3(origin + x.src)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
+    const served = a.sources.map((x) => {
+      const path = audioServedPath(x.src, audioBase);
+      return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
+    }).filter((x) => x.url);
+    if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + served.map((x) => `<source src="${esc3(x.url)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
   }
   function weightWidths(weights) {
     const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
@@ -2735,7 +2750,7 @@ ${String(body ?? "")}`;
   }
   function renderDataBlock(name, body, meta = "", opts = {}) {
     if (name === "reveal") return renderReveal(body, meta);
-    if (name === "audio") return renderAudio(body, meta, opts.origin || "");
+    if (name === "audio") return renderAudio(body, meta, opts);
     if (name === "tags") {
       const { tags } = parseTags(body);
       if (!tags.length) return null;
@@ -2987,6 +3002,118 @@ ${barWidthCss(s)}`;
     const rest = okFormat ? " can be exported again at a lower bitrate, such as 64 kbps for speech. Then choose it again." : ` ${what}. Export it as MP3, then choose it again.`;
     return { title, name: file, rest };
   }
+  function stagedAudioName(fileName) {
+    const m = /^(.*)\.([A-Za-z0-9]+)$/.exec(String(fileName ?? "").split(/[\\/]/).pop() || "");
+    if (!m) return null;
+    const ext = { mp3: "mp3", ogg: "ogg", opus: "ogg" }[m[2].toLowerCase()];
+    if (!ext) return null;
+    const stem = m[1].toLowerCase().replace(/[^a-z0-9_]+/g, "-").replace(/^[-_]+|[-_]+$/g, "").slice(0, 60).replace(/[-_]+$/, "");
+    return `${stem || "recording"}.${ext}`;
+  }
+  function lengthWords(seconds) {
+    const s = Number(seconds);
+    if (!Number.isFinite(s) || s <= 0) return "";
+    if (s < 60) return `${Math.round(s)} seconds`;
+    const m = Math.round(s / 60);
+    if (m < 60) return m === 1 ? "1 minute" : `${m} minutes`;
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return `${h} hour${h > 1 ? "s" : ""}${r ? ` ${r} minute${r > 1 ? "s" : ""}` : ""}`;
+  }
+
+  // client/src/audio-card.mjs
+  var SKIP_SECONDS = 10;
+  var ARROWS = ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"];
+  function formatTime(sec) {
+    const n = Number.isFinite(sec) && sec > 0 ? Math.floor(sec) : 0;
+    const h = Math.floor(n / 3600);
+    const m = Math.floor(n % 3600 / 60);
+    const ss = String(n % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+  }
+  function skipTo(current, key, duration) {
+    const step = { ArrowRight: SKIP_SECONDS, ArrowUp: SKIP_SECONDS, ArrowLeft: -SKIP_SECONDS, ArrowDown: -SKIP_SECONDS }[key] ?? 0;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+    return Math.min(end, Math.max(0, (Number(current) || 0) + step));
+  }
+  var positionText = (current, duration) => `${formatTime(current)} of ${formatTime(duration)}`;
+  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>';
+  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>';
+  function enhanceAudioCards(root) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll(".gbti-audio-card").forEach((card) => {
+      const audio = card.querySelector("audio");
+      const head = card.querySelector(".gbti-audio-head");
+      if (!audio || !head || card.dataset.enhanced) return;
+      card.dataset.enhanced = "1";
+      const label = card.querySelector(".gbti-audio-label")?.textContent || "the recording";
+      const doc = card.ownerDocument;
+      const el = (tag, cls) => Object.assign(doc.createElement(tag), { className: cls });
+      const row = el("div", "gbti-audio-row");
+      const btn = el("button", "gbti-audio-play");
+      btn.type = "button";
+      card.insertBefore(row, head);
+      row.append(btn, head);
+      const link = card.querySelector(".gbti-audio-link");
+      if (link) row.append(link);
+      const progress = el("div", "gbti-audio-progress");
+      progress.hidden = true;
+      const seek = el("input", "gbti-audio-seek");
+      Object.assign(seek, { type: "range", min: "0", max: "0", step: "any", value: "0" });
+      seek.setAttribute("aria-label", "Playback position");
+      const time = el("span", "gbti-audio-time");
+      progress.append(seek, time);
+      card.insertBefore(progress, audio);
+      audio.removeAttribute("controls");
+      let dragging = false;
+      const show = (pos2) => {
+        const d = audio.duration;
+        const known = Number.isFinite(d) && d > 0;
+        seek.style.setProperty("--p", `${known ? Math.min(100, pos2 / d * 100) : 0}%`);
+        seek.setAttribute("aria-valuetext", positionText(pos2, d));
+        time.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
+      };
+      const sync = () => {
+        const d = audio.duration;
+        if (Number.isFinite(d) && d > 0) seek.max = String(d);
+        if (dragging) return;
+        seek.value = String(audio.currentTime);
+        show(audio.currentTime);
+      };
+      const paint = () => {
+        const playing = !audio.paused && !audio.ended;
+        btn.innerHTML = playing ? PAUSE : PLAY;
+        btn.setAttribute("aria-label", `${playing ? "Pause" : "Play"}: ${label}`);
+      };
+      btn.addEventListener("click", () => {
+        if (audio.paused || audio.ended) audio.play()?.catch?.(() => {
+        });
+        else audio.pause();
+      });
+      audio.addEventListener("play", () => {
+        progress.hidden = false;
+        paint();
+        sync();
+      });
+      audio.addEventListener("pause", paint);
+      audio.addEventListener("ended", paint);
+      for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) audio.addEventListener(ev, sync);
+      seek.addEventListener("input", () => {
+        dragging = true;
+        show(Number(seek.value));
+      });
+      seek.addEventListener("change", () => {
+        dragging = false;
+        audio.currentTime = Number(seek.value);
+      });
+      seek.addEventListener("keydown", (e) => {
+        if (!ARROWS.includes(e.key)) return;
+        e.preventDefault();
+        audio.currentTime = skipTo(audio.currentTime, e.key, audio.duration);
+      });
+      paint();
+    });
+  }
 
   // client-ui/src/audio-block-ui.mjs
   var icon = (paths, w2 = 1.8) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="${w2}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -3009,22 +3136,32 @@ ${barWidthCss(s)}`;
   }
   var lab = (text2, forId) => `<label class="ab-lab" for="${forId}">${text2}</label>`;
   var seg = (name, items, on, attr2, id) => `<div class="ab-seg" role="group" aria-label="${name}">${items.map(([k, words]) => `<button type="button" ${attr2}="${k}" data-id="${id}" aria-pressed="${k === on}">${words}</button>`).join("")}</div>`;
-  function uploadField(b, a) {
+  var MEMBERS_NOTE = "Uploaded recordings play on public articles only, and this one is for members. For a members-only recording, use a private SoundCloud link instead.";
+  function uploadField(b, a, { membersOnly = false } = {}) {
     const id = b._id;
+    const members = membersOnly ? `<p class="ab-hint ab-wait">${MEMBERS_NOTE}</p>` : "";
     const pick = `<input type="file" accept=".mp3,.ogg,.opus,audio/mpeg,audio/ogg" hidden data-ab-file="${id}" />`;
     const p = b._file?.problem;
     if (p) {
       return `<div class="ab-alert" role="alert">${ALERT}<div><p class="ab-alert-t">${esc2(p.title)}</p><p class="ab-alert-d"><span class="ab-mono">${esc2(p.name)}</span>${esc2(p.rest)}</p></div></div><button type="button" class="ab-btn ab-self" data-ab-pick="${id}">Choose another file</button>${pick}`;
     }
+    const up = b._file?.uploading;
+    if (up) {
+      return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc2(up.name)}</span><span class="ab-file-m" role="status" data-ab-progress="${id}">Uploading ${Math.round((up.pct || 0) * 100)}% of ${esc2(formatBytes(up.size))}</span></div></div>`;
+    }
     const src = audioSourceOf(b.code)?.value || "";
     if (src) {
       const name = src.split("/").pop();
       const ok = a.sources.length > 0;
-      const meta = ok ? `${audioExt(name).toUpperCase()} · published on gbti.network` : "This path cannot be played. Choose the file again.";
-      return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc2(name)}</span><span class="ab-file-m${ok ? "" : " ab-bad-t"}">${esc2(meta)}</span></div><button type="button" class="ab-btn" data-ab-pick="${id}">Replace</button><button type="button" class="ab-btn" data-ab-remove="${id}">Remove</button></div><p class="ab-hint">MP3 or Ogg, up to 20 MB. It is published with the article and played from gbti.network.</p>${pick}`;
+      const ext = audioExt(name).toUpperCase();
+      const staged = b._file?.staged?.name === name ? b._file.staged : null;
+      let meta = "This path cannot be played. Choose the file again.";
+      if (staged) meta = [formatBytes(staged.size), ext, staged.duration ? formatTime(staged.duration) : "", "publishes with the article"].filter(Boolean).join(" · ");
+      else if (ok) meta = `${ext} · ${src.startsWith("./") ? "saved with this article" : "published on gbti.network"}`;
+      return `<div class="ab-file"><span class="ab-file-ic">${NOTE}</span><div class="ab-file-tx"><span class="ab-mono ab-file-n">${esc2(name)}</span><span class="ab-file-m${ok ? "" : " ab-bad-t"}">${esc2(meta)}</span></div><button type="button" class="ab-btn" data-ab-pick="${id}">Replace</button><button type="button" class="ab-btn" data-ab-remove="${id}">Remove</button></div><p class="ab-hint">MP3 or Ogg, up to 20 MB. It is published with the article and played from gbti.network.</p>${members}${pick}`;
     }
-    const waiting = b._file?.waiting;
-    return `<button type="button" class="ab-drop" data-ab-drop="${id}">${UPLOAD}<span class="ab-mono">Drop an MP3 or Ogg file here, or click to choose one</span></button>` + (waiting ? `<p class="ab-hint ab-wait" role="status">Uploads arrive in the next update. Choose <span class="ab-mono">${esc2(waiting.name)}</span> again once it lands.</p>` : '<p class="ab-hint">Up to 20 MB, roughly an hour of speech as MP3.</p>') + pick;
+    const elsewhere = b._file?.elsewhere;
+    return `<button type="button" class="ab-drop" data-ab-drop="${id}">${UPLOAD}<span class="ab-mono">Drop an MP3 or Ogg file here, or click to choose one</span></button>` + (elsewhere ? `<p class="ab-hint ab-wait" role="status">${esc2(elsewhere)}</p>` : '<p class="ab-hint">Up to 20 MB, roughly an hour of speech as MP3.</p>') + members + pick;
   }
   function providerField(b, kind2) {
     const id = b._id;
@@ -3042,11 +3179,11 @@ ${barWidthCss(s)}`;
     const bad = raw && !isWebAddress(raw);
     return `<div class="ab-out"><span class="ab-lab" id="ab-out-${id}">Link out, optional</span><div class="ab-two"><input class="ab-in${bad ? " ab-bad" : ""}" data-ab="link" data-id="${id}" value="${esc2(raw)}" aria-label="Link out address" placeholder="https://" aria-describedby="ab-lnote-${id}"${bad ? ' aria-invalid="true"' : ""} /><input class="ab-in" data-ab="link-label" data-id="${id}" value="${esc2(words)}" aria-label="Link out words" placeholder="${esc2(a.link ? audioLinkLabel(a.link, "") : "Words, such as Listen on Spotify")}" /></div><p class="ab-note ab-bad-t" id="ab-lnote-${id}" data-ab-lnote="${id}">${bad ? `${ALERT}<span>${WEB_ADDRESS}</span>` : ""}</p></div>`;
   }
-  function audioBlockHtml(b) {
+  function audioBlockHtml(b, { membersOnly = false } = {}) {
     const id = b._id;
     const a = parseAudio(b.code || "", audioLabelOf(b.lang));
     const kind2 = audioSourceKind(b);
-    return `<section class="card ab" aria-label="Podcast player block"><div class="card-h">${NOTE} Podcast player</div><div class="ab-two"><div class="ab-f">${lab("Label", `ab-l-${id}`)}<input id="ab-l-${id}" class="ab-in" data-ab="label" data-id="${id}" value="${esc2(audioLabelOf(b.lang))}" placeholder="Label, such as Listen to the podcast version" /></div><div class="ab-f">${lab("Length", `ab-n-${id}`)}<input id="ab-n-${id}" class="ab-in" data-ab="length" data-id="${id}" value="${esc2(audioLineValue(b.code, "length"))}" placeholder="Length, such as 22 minutes" /></div></div><div class="ab-f"><span class="ab-lab">Source</span>${seg("Source", AUDIO_SOURCES.map((k) => [k, SOURCE_NAMES[k]]), kind2, "data-ab-src", id)}</div>` + (kind2 === "upload" ? uploadField(b, a) : providerField(b, kind2)) + (kind2 === "upload" && audioSourceOf(b.code) ? `<div class="ab-row"><span class="ab-lab">Player style</span>${seg("Player style", AUDIO_STYLES.map((s) => [s, s === "bar" ? "Bar" : "Card"]), a.style, "data-ab-style", id)}</div>` : "") + linkOut(b, a) + "</section>";
+    return `<section class="card ab" aria-label="Podcast player block"><div class="card-h">${NOTE} Podcast player</div><div class="ab-two"><div class="ab-f">${lab("Label", `ab-l-${id}`)}<input id="ab-l-${id}" class="ab-in" data-ab="label" data-id="${id}" value="${esc2(audioLabelOf(b.lang))}" placeholder="Label, such as Listen to the podcast version" /></div><div class="ab-f">${lab("Length", `ab-n-${id}`)}<input id="ab-n-${id}" class="ab-in" data-ab="length" data-id="${id}" value="${esc2(audioLineValue(b.code, "length"))}" placeholder="Length, such as 22 minutes" /></div></div><div class="ab-f"><span class="ab-lab">Source</span>${seg("Source", AUDIO_SOURCES.map((k) => [k, SOURCE_NAMES[k]]), kind2, "data-ab-src", id)}</div>` + (kind2 === "upload" ? uploadField(b, a, { membersOnly }) : providerField(b, kind2)) + (kind2 === "upload" && audioSourceOf(b.code) ? `<div class="ab-row"><span class="ab-lab">Player style</span>${seg("Player style", AUDIO_STYLES.map((s) => [s, s === "bar" ? "Bar" : "Card"]), a.style, "data-ab-style", id)}</div>` : "") + linkOut(b, a) + "</section>";
   }
   function switchAudioSource(b, next) {
     const cur = audioSourceKind(b);
@@ -3080,6 +3217,56 @@ ${barWidthCss(s)}`;
       return { note, linkChanged: true };
     }
     return { note, linkChanged: false };
+  }
+  function durationOf(file) {
+    return new Promise((resolve) => {
+      let url;
+      try {
+        url = URL.createObjectURL(file);
+      } catch {
+        resolve(NaN);
+        return;
+      }
+      const a = new Audio();
+      const done = (v2) => {
+        clearTimeout(timer);
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+        }
+        resolve(v2);
+      };
+      const timer = setTimeout(() => done(NaN), 8e3);
+      a.preload = "metadata";
+      a.onloadedmetadata = () => done(a.duration);
+      a.onerror = () => done(NaN);
+      a.src = url;
+    });
+  }
+  async function uploadAudio(b, file, ctx, root) {
+    const name = stagedAudioName(file.name);
+    b._file = { uploading: { name, size: file.size, pct: 0 } };
+    ctx.render();
+    const length = durationOf(file);
+    try {
+      await ctx.client.stageAudio({ file, name, item: ctx.item, onProgress: (pct) => {
+        if (b._file?.uploading) b._file.uploading.pct = pct;
+        const el = root.querySelector(`[data-ab-progress="${b._id}"]`);
+        if (el) el.textContent = `Uploading ${Math.round(pct * 100)}% of ${formatBytes(file.size)}`;
+      } });
+    } catch (e) {
+      b._file = { problem: { title: "The upload did not finish.", name: file.name, rest: `: ${String(e?.message || "try again.")}` } };
+      ctx.render();
+      ctx.focus(`[data-ab-pick="${b._id}"]`);
+      return;
+    }
+    const seconds = await length;
+    b.code = setAudioSource(b.code, "upload", `./audio/${name}`);
+    if (!audioLineValue(b.code, "length") && lengthWords(seconds)) b.code = setAudioLine(b.code, "length", lengthWords(seconds));
+    b._file = { staged: { name, size: file.size, duration: Number.isFinite(seconds) ? seconds : 0 } };
+    ctx.render();
+    ctx.change();
+    ctx.focus(`[data-ab-pick="${b._id}"]`);
   }
   function wireAudioBlocks(root, ctx) {
     const all = (sel) => Array.from(root.querySelectorAll(sel));
@@ -3165,12 +3352,17 @@ ${barWidthCss(s)}`;
         ctx.focus(`[data-ab-pick="${b._id}"]`);
         return;
       }
-      if (typeof ctx.stageAudio === "function") {
-        ctx.stageAudio(b, file);
+      if (typeof ctx.client?.stageAudio !== "function") {
+        b._file = { elsewhere: "Upload recordings in the WorkBench on gbti.network." };
+        ctx.render();
         return;
       }
-      b._file = { waiting: { name: file.name } };
-      ctx.render();
+      if (!ctx.item) {
+        b._file = { elsewhere: "Give the article a permalink first, so the recording has a place to go." };
+        ctx.render();
+        return;
+      }
+      uploadAudio(b, file, ctx, root);
     };
     for (const input of all("input[data-ab-file]")) input.addEventListener("change", () => take(ctx.byId(input.dataset.abFile), input.files?.[0]));
     const openPicker = (id) => root.querySelector(`input[data-ab-file="${id}"]`)?.click();
@@ -3661,12 +3853,12 @@ ${listStyleProseCss(".doc-blocks")}
     </div>`;
     }
     _blockHtml(b, inMem) {
-      return `<div class="blk blk-${esc2(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
+      return `<div class="blk blk-${esc2(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b, inMem)}</div></div>`;
     }
     _ce(cls, edit, b, ph) {
       return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc2(ph || "")}">${textBlockToHtml(b.text || "")}</div>`;
     }
-    _bodyHtml(b) {
+    _bodyHtml(b, inMem = false) {
       switch (b.type) {
         case "heading":
           return this._ce(`ce-h${Math.min(3, Math.max(1, b.level || 2))}`, "text", b, "Heading");
@@ -3677,9 +3869,9 @@ ${listStyleProseCss(".doc-blocks")}
           const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
           return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
+        // sow-483: the podcast block's form. membersOnly: below the marker, or the host says the article is for members.
         case "audio":
-          return audioBlockHtml(b);
-        // sow-483: the podcast block's form (client-ui/src/audio-block-ui.mjs)
+          return audioBlockHtml(b, { membersOnly: inMem || typeof this.isMembersOnly === "function" && this.isMembersOnly() });
         case "code": {
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
         }
@@ -3813,7 +4005,10 @@ ${listStyleProseCss(".doc-blocks")}
           this._change();
         }
       }));
-      wireAudioBlocks(this.root, { byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
+      const ed = this;
+      wireAudioBlocks(this.root, { client: this.client, get item() {
+        return typeof ed.liveItem === "function" && ed.liveItem() || ed.item;
+      }, byId: (id) => this._byId(id), render: () => this._render(), change: () => this._change(), focus: (sel) => {
         const el = this.$(sel);
         el?.focus();
         if (el && typeof el.setSelectionRange === "function" && el.type !== "file") {
@@ -5375,7 +5570,7 @@ ${listStyleProseCss(".doc-blocks")}
     return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
   }
   var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
-  function renderFence(lang, buf, fn = null, { poster = false } = {}) {
+  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
     const info = String(lang || "").trim().split(/\s+/);
     const body = buf.join("\n");
     if (info[0] === "callout") {
@@ -5385,7 +5580,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
     if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN });
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
       if (html != null) return html;
     }
     if (info[0] === "embed") {
@@ -5433,6 +5628,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function renderDoc(md, ids, opts = {}, nest = null) {
     const autoEmbed = !!opts.autoEmbed;
+    const audioBase = audioBaseFor(opts.itemPath);
+    const relativeAudio = !!opts.relativeAudio;
     const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
     const out = [];
     const ranges = [];
@@ -5469,7 +5666,7 @@ ${listStyleProseCss(".doc-blocks")}
         if (fence[1].length >= codeFence && !fence[2].trim()) {
           inCode = false;
           flushList();
-          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
           codeLang2 = "";
           i++;
           continue;
@@ -5541,7 +5738,7 @@ ${listStyleProseCss(".doc-blocks")}
           inner.push(lines2[i].replace(QUOTE_LINE, ""));
           i++;
         }
-        const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes, defs }).html;
+        const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
         emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
         continue;
       }
@@ -5598,7 +5795,7 @@ ${listStyleProseCss(".doc-blocks")}
       emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
     }
     flushList();
-    if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines2.length - 1);
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
     if (nest) return { html: out.join("\n"), blocks: ranges };
     const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
     if (referenced.length) {
@@ -10875,6 +11072,8 @@ ${listStyleProseCss(".doc-blocks")}
       if (be) {
         be.itemPath = this.itemPath;
         be.item = this.itemToken;
+        be.isMembersOnly = () => this.$("[data-visswitch]")?.dataset.active === "members";
+        be.liveItem = () => this.itemToken;
         be.value = this.preset?.body ?? "";
       }
       const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
@@ -29448,100 +29647,6 @@ ${BLOCKED_PILL_CSS}
     };
   }
 
-  // client/src/audio-card.mjs
-  var SKIP_SECONDS = 10;
-  var ARROWS = ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"];
-  function formatTime(sec) {
-    const n = Number.isFinite(sec) && sec > 0 ? Math.floor(sec) : 0;
-    const h = Math.floor(n / 3600);
-    const m = Math.floor(n % 3600 / 60);
-    const ss = String(n % 60).padStart(2, "0");
-    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
-  }
-  function skipTo(current, key, duration) {
-    const step = { ArrowRight: SKIP_SECONDS, ArrowUp: SKIP_SECONDS, ArrowLeft: -SKIP_SECONDS, ArrowDown: -SKIP_SECONDS }[key] ?? 0;
-    const end = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
-    return Math.min(end, Math.max(0, (Number(current) || 0) + step));
-  }
-  var positionText = (current, duration) => `${formatTime(current)} of ${formatTime(duration)}`;
-  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>';
-  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>';
-  function enhanceAudioCards(root) {
-    if (!root?.querySelectorAll) return;
-    root.querySelectorAll(".gbti-audio-card").forEach((card) => {
-      const audio = card.querySelector("audio");
-      const head = card.querySelector(".gbti-audio-head");
-      if (!audio || !head || card.dataset.enhanced) return;
-      card.dataset.enhanced = "1";
-      const label = card.querySelector(".gbti-audio-label")?.textContent || "the recording";
-      const doc = card.ownerDocument;
-      const el = (tag, cls) => Object.assign(doc.createElement(tag), { className: cls });
-      const row = el("div", "gbti-audio-row");
-      const btn = el("button", "gbti-audio-play");
-      btn.type = "button";
-      card.insertBefore(row, head);
-      row.append(btn, head);
-      const link = card.querySelector(".gbti-audio-link");
-      if (link) row.append(link);
-      const progress = el("div", "gbti-audio-progress");
-      progress.hidden = true;
-      const seek = el("input", "gbti-audio-seek");
-      Object.assign(seek, { type: "range", min: "0", max: "0", step: "any", value: "0" });
-      seek.setAttribute("aria-label", "Playback position");
-      const time = el("span", "gbti-audio-time");
-      progress.append(seek, time);
-      card.insertBefore(progress, audio);
-      audio.removeAttribute("controls");
-      let dragging = false;
-      const show = (pos2) => {
-        const d = audio.duration;
-        const known = Number.isFinite(d) && d > 0;
-        seek.style.setProperty("--p", `${known ? Math.min(100, pos2 / d * 100) : 0}%`);
-        seek.setAttribute("aria-valuetext", positionText(pos2, d));
-        time.textContent = `${formatTime(pos2)} / ${formatTime(d)}`;
-      };
-      const sync = () => {
-        const d = audio.duration;
-        if (Number.isFinite(d) && d > 0) seek.max = String(d);
-        if (dragging) return;
-        seek.value = String(audio.currentTime);
-        show(audio.currentTime);
-      };
-      const paint = () => {
-        const playing = !audio.paused && !audio.ended;
-        btn.innerHTML = playing ? PAUSE : PLAY;
-        btn.setAttribute("aria-label", `${playing ? "Pause" : "Play"}: ${label}`);
-      };
-      btn.addEventListener("click", () => {
-        if (audio.paused || audio.ended) audio.play()?.catch?.(() => {
-        });
-        else audio.pause();
-      });
-      audio.addEventListener("play", () => {
-        progress.hidden = false;
-        paint();
-        sync();
-      });
-      audio.addEventListener("pause", paint);
-      audio.addEventListener("ended", paint);
-      for (const ev of ["timeupdate", "durationchange", "loadedmetadata", "seeked"]) audio.addEventListener(ev, sync);
-      seek.addEventListener("input", () => {
-        dragging = true;
-        show(Number(seek.value));
-      });
-      seek.addEventListener("change", () => {
-        dragging = false;
-        audio.currentTime = Number(seek.value);
-      });
-      seek.addEventListener("keydown", (e) => {
-        if (!ARROWS.includes(e.key)) return;
-        e.preventDefault();
-        audio.currentTime = skipTo(audio.currentTime, e.key, audio.duration);
-      });
-      paint();
-    });
-  }
-
   // client-ui/src/members-index.mjs
   var SITE21 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -30186,11 +30291,12 @@ ${BLOCKED_PILL_CSS}
     // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
     async _body(visibility, publicBody, encPath) {
       const resolve = (md) => resolveMarkdownAssets(md, this._itemPath);
-      let html = publicBody ? (await this.client.preview({ body: resolve(publicBody) }))?.html ?? "" : "";
+      const itemPath = this._itemPath || void 0;
+      let html = publicBody ? (await this.client.preview({ body: resolve(publicBody), itemPath }))?.html ?? "" : "";
       if (encPath) {
         try {
           const { text: text2 } = await this.client.decrypt({ encPath });
-          html += (await this.client.preview({ body: resolve(text2) }))?.html ?? "";
+          html += (await this.client.preview({ body: resolve(text2), itemPath }))?.html ?? "";
         } catch (err) {
           const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
           html += locked ? lockNotice("This part") : `<p class="muted">Could not load the members-only part right now.</p>`;
@@ -30991,7 +31097,8 @@ ${BLOCKED_PILL_CSS}
       formFields: ({ type }) => request("GET", `/api/form-fields${qs({ type })}`),
       // sow-443: autoEmbed travels too. It was dropped here, so a comment's bare video line (and, with sow-261, its bare
       // tweet line) rendered as a plain link in the extension while the website's in-page client kept it.
-      preview: ({ body, autoEmbed }) => request("POST", "/api/preview", { body, ...autoEmbed ? { autoEmbed: true } : {} }),
+      preview: ({ body, autoEmbed, itemPath }) => request("POST", "/api/preview", { body, ...autoEmbed ? { autoEmbed: true } : {}, ...itemPath ? { itemPath } : {} }),
+      // sow-483: itemPath resolves an uploaded recording
       stageImage: (b) => request("POST", "/api/image", b),
       listMembersOnly: () => request("GET", "/api/members-content"),
       decrypt: ({ encPath }) => request("POST", "/api/member-decrypt", { encPath }),

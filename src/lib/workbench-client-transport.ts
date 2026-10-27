@@ -89,7 +89,14 @@ export function createWorkerTransport(base: string) {
     return r?.base64 ?? null;
   }
 
-  return { parseJson, workerGet, workerPost, workerPatch, newsGet, sameOriginJson, readOwnFile, readOwnFileBase64 };
+  // sow-483: whether a file is on main, which readOwnFile cannot say for a file past 1 MB: GitHub sends such a file's
+  // metadata without its content, so a recording reads as no text. The route reports `exists` for it.
+  async function ownFileExists(path: string): Promise<boolean> {
+    const r = await workerGet(`/membership/file?path=${encodeURIComponent(path)}&ref=main`);
+    return Boolean(r?.exists || r?.text != null);
+  }
+
+  return { parseJson, workerGet, workerPost, workerPatch, newsGet, sameOriginJson, readOwnFile, readOwnFileBase64, ownFileExists };
 }
 
 export { WorkbenchClientError, err, readCsrf };

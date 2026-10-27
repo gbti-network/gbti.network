@@ -177,7 +177,43 @@ function revealBodyHtml(md) {
 // play it. Only .ogg and .mp3, because Cloudflare caches by file extension and those two are on its list: the first
 // upload was .opus and .m4a, which it served uncached and WITHOUT byte ranges (200 to a Range request, measured
 // 2026-10-26), so Chrome could not read the recording's length and a reader could not skip ahead.
-export const AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+export const AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+// sow-483 Phase 3: a member's uploaded recording sits in the audio/ folder beside its item, and the block names it
+// `./audio/<file>`. Every renderer resolves that against the item (audioBaseFor) to the route that serves it,
+// /media/audio/<author>/<dir>/<slug>/<file> (src/pages/media/audio/), so the page never carries a relative source.
+// AUDIO_SERVED_RE is that resolved shape, and it is all the site's sanitizer admits for a <source>.
+export const AUDIO_SERVED_RE = /^\/media\/(?:podcasts\/[a-z0-9][a-z0-9_-]*|audio\/[a-z0-9][a-z0-9-]{0,63}\/(?:posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]{0,63}\/[a-z0-9][a-z0-9_-]*)\.(ogg|mp3)$/;
+const ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
+/** Where an item's uploaded recordings are served, from its index.md path (repo-relative or absolute), or null. */
+export function audioBaseFor(itemPath) {
+  const m = ITEM_FILE_RE.exec(String(itemPath ?? ''));
+  return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
+}
+/** A source's served path: a /media/podcasts/ path as written, a ./audio/ one under the item's base, else null. */
+export function audioServedPath(src, audioBase) {
+  const s = String(src ?? '');
+  if (!s.startsWith('./audio/')) return s;
+  return audioBase ? `${audioBase}/${s.slice('./audio/'.length)}` : null;
+}
+
+/** The uploaded recordings (`./audio/<file>`) the ```audio blocks in a body name, as file names, deduped, in order. */
+export function audioUploadNames(markdown) {
+  const out = [];
+  const src = String(markdown ?? '').split('\n');
+  for (let i = 0; i < src.length; i++) {
+    const open = /^```audio(?:[ \t]+(.*))?$/.exec(src[i]);
+    if (!open) continue;
+    const body = [];
+    let j = i + 1;
+    while (j < src.length && !/^```\s*$/.test(src[j])) body.push(src[j++]);
+    for (const s of parseAudio(body.join('\n'), open[1] || '').sources) {
+      const name = s.src.startsWith('./audio/') ? s.src.slice('./audio/'.length) : null;
+      if (name && !out.includes(name)) out.push(name);
+    }
+    i = j;
+  }
+  return out;
+}
 export const AUDIO_TYPES = { ogg: 'audio/ogg; codecs=opus', mp3: 'audio/mpeg' };
 // The two looks (owner, 2026-10-26): bar (option A, the default) and card (option B: a green play button beside the
 // label, then a progress line once it plays; client/src/audio-card.mjs draws it). A `style: card` line picks the card.
@@ -246,7 +282,7 @@ const APPLE_SANDBOX = 'allow-forms allow-popups allow-same-origin allow-scripts 
 // so markdown.mjs passes the site origin and the files still come from gbti.network. A provider's player addresses
 // are absolute already. The link out comes last: the label row holds it on a wide screen and it drops under the
 // player on a phone (the stylesheet's grid), and the card moves it into its own row (client/src/audio-card.mjs).
-function renderAudio(body, meta, origin = '') {
+function renderAudio(body, meta, { origin = '', audioBase = null, relativeAudio = false } = {}) {
   const a = parseAudio(body, meta);
   const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc(a.label)}</span>`
     + (a.length ? ` <span class="gbti-audio-length">${esc(a.length)}</span>` : '') + '</div>';
@@ -259,9 +295,17 @@ function renderAudio(body, meta, origin = '') {
       + (e.provider === 'apple' ? ` sandbox="${APPLE_SANDBOX}"` : '') + `></iframe></div>${link}</div>`;
   }
   if (!a.sources.length) return null;
+  // An uploaded recording needs the item to resolve against. A renderer that has none (an agent's preview of a bare
+  // body) shows the label and the link out rather than a player with nothing in it. relativeAudio keeps `./audio/x`
+  // as written instead, for the WorkBench preview, which resolves it itself (a staged copy first, then the repo).
+  const served = a.sources.map((x) => {
+    const path = audioServedPath(x.src, audioBase);
+    return { ...x, url: path ? origin + path : (relativeAudio ? x.src : null) };
+  }).filter((x) => x.url);
+  if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
   return `<div class="gbti-audio${a.style === 'card' ? ' gbti-audio-card' : ''}">${head}`
     + `<audio class="gbti-audio-player" controls preload="none" aria-label="${esc(a.label)}">`
-    + a.sources.map((x) => `<source src="${esc(origin + x.src)}" type="${esc(x.type)}">`).join('') + `</audio>${link}</div>`;
+    + served.map((x) => `<source src="${esc(x.url)}" type="${esc(x.type)}">`).join('') + `</audio>${link}</div>`;
 }
 
 /** Whole-percent widths that sum to exactly 100, in proportion to the weights. */
@@ -292,10 +336,11 @@ function renderReveal(body, meta) {
 }
 
 /** The HTML for a data block, or null when the fence is not one of them (or the block is empty). opts.origin: the
- *  site origin, for renderers that do not run on gbti.network (the audio block's sources). */
+ *  site origin, for renderers that do not run on gbti.network (the audio block's sources); opts.audioBase: where the
+ *  item's own recordings are served (audioBaseFor), for a `./audio/` source. */
 export function renderDataBlock(name, body, meta = '', opts = {}) {
   if (name === 'reveal') return renderReveal(body, meta);
-  if (name === 'audio') return renderAudio(body, meta, opts.origin || '');
+  if (name === 'audio') return renderAudio(body, meta, opts);
   if (name === 'tags') {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -331,7 +376,7 @@ export function renderDataBlock(name, body, meta = '', opts = {}) {
 }
 
 /** Plain markdown for places that cannot run the site's blocks (dev.to, Hashnode). */
-export function dataBlockToMarkdown(name, body, meta = '') {
+export function dataBlockToMarkdown(name, body, meta = '', opts = {}) {
   if (name === 'reveal') { // everything written out open: a cross-post cannot fold it
     const r = parseReveal(body, meta);
     return [r.weights ? r.weights.map((w) => `**${w.name}** ${w.n}%`).join(' · ') : r.weightsRaw, r.note, r.body].filter(Boolean).join('\n\n');
@@ -339,7 +384,8 @@ export function dataBlockToMarkdown(name, body, meta = '') {
   if (name === 'audio') { // a cross-post cannot play it: a link to the provider's page, or to the MP3 every browser plays
     const a = parseAudio(body, meta);
     const file = a.sources.find((x) => x.src.endsWith('.mp3')) || a.sources[0];
-    const target = a.embed ? a.embed.page : (file ? `${SITE_ORIGIN}${file.src}` : '');
+    const served = file ? audioServedPath(file.src, opts.audioBase) : null;
+    const target = a.embed ? a.embed.page : (served ? `${SITE_ORIGIN}${served}` : a.link);
     if (!target) return '';
     const out = `[${a.label}](${target})${a.length ? ` (${a.length})` : ''}`;
     return a.link && a.link !== target ? `${out} · [${audioLinkLabel(a.link, a.linkLabel)}](${a.link})` : out;

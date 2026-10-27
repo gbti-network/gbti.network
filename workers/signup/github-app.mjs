@@ -234,7 +234,10 @@ export async function reviewFileContent(request, env, deps = {}) {
   if (res && res.status === 404) return { status: 200, body: { ok: true, text: null } };
   if (!res || !res.ok) return { status: 502, body: { error: 'file_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
   const data = await res.json().catch(() => ({}));
-  if (Array.isArray(data) || !data?.content) return { status: 200, body: { ok: true, text: null } };
+  // sow-483: past 1 MB GitHub sends a file's metadata without its content (`encoding: none`, measured 2026-10-27), so a
+  // recording reads as no text. `exists` and `size` still say it is there, which is what a publish asks before it
+  // decides a recording on main needs no re-sending.
+  if (Array.isArray(data) || !data?.content) return { status: 200, body: { ok: true, text: null, ...(!Array.isArray(data) && data?.sha ? { exists: true, size: Number(data.size) || 0 } : {}) } };
   // The RAW base64 is returned beside the decoded text. GitHub already sends it in this response, so this is
   // not a second call, a wider scope, or a wider path allow-list: it is the bytes this handler had in hand and
   // was throwing away. A BINARY file (an image) decodes to mojibake in `text` and is unrecoverable from it,
@@ -251,7 +254,7 @@ export async function reviewFileContent(request, env, deps = {}) {
     for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
     text = new TextDecoder().decode(bytes);
   } catch { text = null; }
-  return { status: 200, body: { ok: true, text, base64 } };
+  return { status: 200, body: { ok: true, text, base64, exists: true, size: Number(data.size) || 0 } };
 }
 
 /**

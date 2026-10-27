@@ -84,7 +84,23 @@ export function podcastFileProblem({ rel, bytes }) {
   return null;
 }
 
-/** Every well-formed source the ```audio blocks in one markdown body name, as served paths (/media/podcasts/x.ogg). */
+// sow-483 Phase 3 (owner, 2026-10-27: uploads live in the git repository, beside the article): a member's uploaded
+// recording sits in the audio/ folder beside the item it plays in, and src/pages/media/audio/ serves it for a published,
+// public item. Audio anywhere else in a content folder is still refused, because nothing would serve it.
+export const ITEM_AUDIO_RE = /^members\/[a-z0-9][a-z0-9-]{0,63}\/(?:posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]{0,63}\/audio\/[a-z0-9][a-z0-9_-]{0,79}\.(?:mp3|ogg)$/;
+
+/** The problem with one audio file under house/ or members/ (rel is repo-relative, forward slashes), or null. */
+export function contentAudioProblem({ rel, bytes }) {
+  if (!ITEM_AUDIO_RE.test(String(rel))) {
+    return `audio file ${rel}: a recording in a content folder goes in the audio/ folder beside its item, as a lowercase .mp3 or .ogg file `
+      + `(letters, digits, - and _); recordings for the whole site go in ${PODCAST_DIR}/`;
+  }
+  if (bytes > PODCAST_MAX_BYTES) return `audio file over 20 MB (${(bytes / 1024 / 1024).toFixed(1)} MB): ${rel}, which Cloudflare Pages would refuse past 25 MiB`;
+  return null;
+}
+
+/** Every well-formed source the ```audio blocks in one markdown body name: a served path (/media/podcasts/x.ogg), or an
+ *  item's own recording as the block writes it (./audio/x.mp3). */
 export function audioBlockSources(markdown) {
   const out = [];
   const src = String(markdown ?? '').split('\n');

@@ -18499,7 +18499,17 @@ function revealBodyHtml(md) {
   flush();
   return out.join("");
 }
-var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+var ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
+function audioBaseFor(itemPath) {
+  const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
+  return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
+}
+function audioServedPath(src, audioBase) {
+  const s = String(src ?? "");
+  if (!s.startsWith("./audio/")) return s;
+  return audioBase ? `${audioBase}/${s.slice("./audio/".length)}` : null;
+}
 var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
 var AUDIO_STYLES = ["bar", "card"];
 var AUDIO_DEFAULT_LABEL = "Listen";
@@ -18562,7 +18572,7 @@ var EMBED_ALLOW = {
   apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
 };
 var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
-function renderAudio(body, meta3, origin = "") {
+function renderAudio(body, meta3, { origin = "", audioBase = null, relativeAudio = false } = {}) {
   const a = parseAudio(body, meta3);
   const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc2(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc2(a.length)}</span>` : "") + "</div>";
   const link = a.link ? `<a class="gbti-audio-link" href="${esc2(a.link)}" target="_blank" rel="noopener nofollow">${esc2(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
@@ -18572,7 +18582,12 @@ function renderAudio(body, meta3, origin = "") {
     return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc2(e.src)}" title="${esc2(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
   }
   if (!a.sources.length) return null;
-  return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + a.sources.map((x) => `<source src="${esc2(origin + x.src)}" type="${esc2(x.type)}">`).join("") + `</audio>${link}</div>`;
+  const served = a.sources.map((x) => {
+    const path = audioServedPath(x.src, audioBase);
+    return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
+  }).filter((x) => x.url);
+  if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
+  return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + served.map((x) => `<source src="${esc2(x.url)}" type="${esc2(x.type)}">`).join("") + `</audio>${link}</div>`;
 }
 function weightWidths(weights) {
   const total = weights.reduce((a, w) => a + w.n, 0) || 1;
@@ -18595,7 +18610,7 @@ function renderReveal(body, meta3) {
 }
 function renderDataBlock(name, body, meta3 = "", opts = {}) {
   if (name === "reveal") return renderReveal(body, meta3);
-  if (name === "audio") return renderAudio(body, meta3, opts.origin || "");
+  if (name === "audio") return renderAudio(body, meta3, opts);
   if (name === "tags") {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -20987,7 +21002,7 @@ function codeOpen(lang) {
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
 }
 var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-function renderFence(lang, buf, fn = null, { poster = false } = {}) {
+function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
   const info = String(lang || "").trim().split(/\s+/);
   const body = buf.join("\n");
   if (info[0] === "callout") {
@@ -20997,7 +21012,7 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   }
   if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
   if (DATA_BLOCKS.includes(info[0])) {
-    const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN });
+    const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
     if (html != null) return html;
   }
   if (info[0] === "embed") {
@@ -21045,6 +21060,8 @@ function renderMarkdown(md, opts = {}) {
 }
 function renderDoc(md, ids, opts = {}, nest = null) {
   const autoEmbed = !!opts.autoEmbed;
+  const audioBase = audioBaseFor(opts.itemPath);
+  const relativeAudio = !!opts.relativeAudio;
   const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
   const ranges = [];
@@ -21081,7 +21098,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       if (fence[1].length >= codeFence && !fence[2].trim()) {
         inCode = false;
         flushList();
-        emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
+        emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
         codeLang = "";
         i++;
         continue;
@@ -21153,7 +21170,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
         inner.push(lines2[i].replace(QUOTE_LINE, ""));
         i++;
       }
-      const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes, defs }).html;
+      const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
       emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
       continue;
     }
@@ -21210,7 +21227,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
   }
   flushList();
-  if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines2.length - 1);
+  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
   if (nest) return { html: out.join("\n"), blocks: ranges };
   const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
   if (referenced.length) {
@@ -21855,7 +21872,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/members-content":
         return ok(await listMembersOnly(ctx));
       case "/api/preview":
-        return ok({ html: renderMarkdown(body?.body ?? "", { autoEmbed: !!body?.autoEmbed }) });
+        return ok({ html: renderMarkdown(body?.body ?? "", { autoEmbed: !!body?.autoEmbed, itemPath: typeof body?.itemPath === "string" ? body.itemPath : void 0 }) });
       // autoEmbed: comment bodies frame a bare video URL
       // SOW-082 + sow-204: what survives of draft staging in the EXTENSION is this read/save pair, which the
       // reader uses. The list, discard and publish-from-draft routes were authoring and left with the rest.

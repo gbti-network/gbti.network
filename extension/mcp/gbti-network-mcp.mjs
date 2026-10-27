@@ -18791,7 +18791,7 @@ function parseReveal(body, meta3 = "") {
   }
   return out;
 }
-var AUDIO_SRC_RE = /^\/media\/podcasts\/[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
 var AUDIO_STYLES = ["bar", "card"];
 var AUDIO_DEFAULT_LABEL = "Listen";

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Media policy check for committed content (content-schemas.md media handling). Fails if any
 // content image exceeds the size cap, falls under the size floor, uses a non-web format, or if any
-// video file is committed (video is embed-only). Audio (the ```audio block) lives only in
-// public/media/podcasts/ as Opus or M4A under a size cap, and every file a block names must exist.
+// video file is committed (video is embed-only). Audio (the ```audio block) lives in public/media/podcasts/ or, for a
+// member's upload, in the audio/ folder beside its item (sow-483), as .ogg or .mp3 under a size cap, and every file a
+// block names must exist.
 // Runs locally and in CI (.github/workflows/media-check.yml) on content PRs.
 //   node scripts/check-media.mjs
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import sharp from 'sharp';
-import { sizedImageRefs, undersizeProblem, AUDIO_FILE, podcastFileProblem, audioBlockSources } from './lib/media-rules.mjs';
+import { sizedImageRefs, undersizeProblem, AUDIO_FILE, podcastFileProblem, contentAudioProblem, audioBlockSources } from './lib/media-rules.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const ROOTS = ['house', 'members'];
@@ -50,7 +51,8 @@ for (const root of ROOTS) {
       continue;
     }
     if (AUDIO_FILE.test(f)) {
-      errors.push(podcastFileProblem({ rel: rel.split(path.sep).join('/'), bytes: fs.statSync(f).size }));
+      const problem = contentAudioProblem({ rel: rel.split(path.sep).join('/'), bytes: fs.statSync(f).size });
+      if (problem) errors.push(problem);
       continue;
     }
     if (RASTER.test(f)) {
@@ -76,7 +78,11 @@ for (const root of ROOTS) {
     if (!MARKDOWN.test(f)) continue;
     for (const src of audioBlockSources(fs.readFileSync(f, 'utf8'))) {
       audioRefs += 1;
-      if (!fs.existsSync(path.join(ROOT, 'public', src))) errors.push(`audio block in ${path.relative(ROOT, f)} names ${src}, which is not in public/`);
+      // An item's own recording (./audio/x.mp3) sits beside its index.md; a site-wide one under public/.
+      const own = src.startsWith('./');
+      if (!fs.existsSync(own ? path.join(path.dirname(f), src) : path.join(ROOT, 'public', src))) {
+        errors.push(`audio block in ${path.relative(ROOT, f)} names ${src}, which is not ${own ? 'beside it' : 'in public/'}`);
+      }
     }
   }
 }

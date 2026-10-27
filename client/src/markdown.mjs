@@ -5,7 +5,7 @@
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
-import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder } from './content-blocks.mjs';
+import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor } from './content-blocks.mjs';
 import { bareTweetLine, tweetBlockHtml } from './tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
 import { takeListRun, listHtml, isListLine, isThematicBreak } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
@@ -229,7 +229,7 @@ function codeOpen(lang) {
 // provider iframe instead of a code block; everything else stays a normal code block. HTML is still escaped, and the
 // iframe src is a NORMALIZED provider URL (never author HTML), so no author script executes.
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
-function renderFence(lang, buf, fn = null, { poster = false } = {}) {
+function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
   const info = String(lang || '').trim().split(/\s+/);
   const body = buf.join('\n');
   if (info[0] === 'callout') {
@@ -242,7 +242,8 @@ function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   if (info[0] === 'directory') return sortListPlaceholder(info.slice(1).join(' '));
   // sow-453: tags, bar, facts, button, through the one module the site uses too. The origin makes an audio block's
   // /media/ sources load from gbti.network on the extension's chrome-extension:// pages too.
-  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' '), { origin: SITE_ORIGIN }); if (html != null) return html; }
+  // sow-483: audioBase resolves an uploaded recording (`./audio/<file>`) to the route serving it for this item.
+  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' '), { origin: SITE_ORIGIN, audioBase, relativeAudio }); if (html != null) return html; }
   if (info[0] === 'embed') {
     const url = body.trim();
     // Frame the SOW-092 relay, never the provider directly. This renderer only ever runs off-https (the
@@ -306,8 +307,8 @@ export function tableAlignments(line) {
 /** A quote line: optional indent, `>`, and one optional space that belongs to the marker. */
 const QUOTE_LINE = /^\s*>\s?/;
 
-export function renderMarkdownWithBlocks(md) {
-  return renderDoc(md, true);
+export function renderMarkdownWithBlocks(md, opts = {}) {
+  return renderDoc(md, true, opts);
 }
 
 // CommonMark hard break. A source line ending in TWO OR MORE spaces breaks the line; the spaces themselves are
@@ -319,8 +320,10 @@ function hardBreak(escaped, raw) {
 
 /**
  * @param {string} md
- * @param {{ autoEmbed?: boolean }} [opts]  autoEmbed: a line that is only a video URL renders as the embed block
- *   (comments; see bareVideoLine). Off by default so an article body renders exactly as the site builds it.
+ * @param {{ autoEmbed?: boolean, itemPath?: string }} [opts]  autoEmbed: a line that is only a video URL renders as the
+ *   embed block (comments; see bareVideoLine). Off by default so an article body renders exactly as the site builds it.
+ *   itemPath: the item's index.md path, which an ```audio block's uploaded recording (`./audio/<file>`) resolves against;
+ *   relativeAudio: leave that source relative instead, for a caller that resolves it (the WorkBench preview).
  */
 export function renderMarkdown(md, opts = {}) {
   return renderDoc(md, false, opts).html;
@@ -331,6 +334,8 @@ export function renderMarkdown(md, opts = {}) {
 // and the link restore to the outer call, which runs them once for the whole document.
 function renderDoc(md, ids, opts = {}, nest = null) {
   const autoEmbed = !!opts.autoEmbed;
+  const audioBase = audioBaseFor(opts.itemPath); // sow-483: an uploaded recording plays from the item's own route
+  const relativeAudio = !!opts.relativeAudio; // ...or stays ./audio/<file> for a caller that resolves it (the WorkBench preview)
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
   const ranges = [];
@@ -359,7 +364,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       if (!inCode) { inCode = true; fenceStart = i; codeBuf = []; codeFence = fence[1].length; codeLang = fence[2]; i++; continue; }
       // CommonMark: a fence closes only on a fence of >= the OPENING length with no info string, so a
       // ````markdown block can carry ``` fences as CONTENT (the /ci skill prompt broke on this).
-      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed }), fenceStart, i); codeLang = ''; i++; continue; }
+      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i); codeLang = ''; i++; continue; }
       codeBuf.push(line); i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
@@ -421,7 +426,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       const quoteStart = i;
       const inner = [];
       while (i < lines.length && QUOTE_LINE.test(lines[i])) { inner.push(lines[i].replace(QUOTE_LINE, '')); i++; }
-      const body = renderDoc(inner.join('\n'), false, {}, { fn, linkKeep, footnotes, defs }).html;
+      const body = renderDoc(inner.join('\n'), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
       emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
       continue;
     }
@@ -484,7 +489,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     emit(`<p>${inline(joined, fn, defs).replace(/\u0000BR\u0000\s*/g, '<br />')}</p>`, paraStart, i - 1);
   }
   flushList();
-  if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);
+  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines.length - 1);
   if (nest) return { html: out.join('\n'), blocks: ranges }; // sow-350: the outer document finishes the job
   // The footnote section: only REFERENCED definitions render (GFM drops the rest), with one back arrow per
   // reference occurrence (matching the disambiguated fnref ids), so every jump down has a jump back.

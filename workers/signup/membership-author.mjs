@@ -24,6 +24,7 @@ import { validateHostedRequest, hostedBranchFor, contentItemsIn } from '../../me
 // there unchanged so the prepared-listing claim commits through the same path.
 import { readMembersIndex, commitHostedFiles } from './hosted-commit.mjs';
 import { readTopicsVocab } from './topic-suggest.mjs'; // the share category must be a real topic
+import { resolveAudioEntries } from './hosted-audio.mjs'; // sow-483: recordings travel by reference
 
 /**
  * sow-301: is this file set ENTIRELY comments in the caller's own folder?
@@ -145,7 +146,11 @@ export async function membershipAuthor(request, env, deps = {}) {
   // sow-428: the folder is a GBTI name, not necessarily a GitHub login, so it is never written as an @mention: a
   // member named `mike-conley` would otherwise ping whichever stranger owns that GitHub account.
   const body = `Hosted authoring: published on behalf of ${folder} (github_id ${githubId}) via the GBTI publishing app.`;
-  const committed = await commitHostedFiles({ fetchImpl, instToken, upstream, branch, files: payload.files, title, body });
+  // sow-483: a recording travels by reference. Its bytes are read here, from the caller's OWN staged copy (keyed by the
+  // verified githubId, never the payload) or, for an item that moved, from main, so the request never carries them.
+  const audio = await resolveAudioEntries({ files: payload.files, kv, githubId, fetchImpl, instToken, upstream });
+  if (!audio.ok) return { status: audio.status, body: { error: 'audio_unavailable', message: audio.message } };
+  const committed = await commitHostedFiles({ fetchImpl, instToken, upstream, branch, files: audio.files, title, body });
   if (!committed.ok) return { status: committed.status, body: { error: committed.error, message: committed.message } };
   const created = await createdCheck;
   if (committed.already) {

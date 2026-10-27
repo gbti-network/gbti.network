@@ -11,6 +11,7 @@ import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-cor
 import { planMemberFiles, AUTHOR_NOTE_TYPES, planPublishImageFiles, resolvePublishedAt, referencedImages, planImageRefs, normalizeImageFields, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, isForeignMemberPath } from './workbench-client-core.mjs';
 import { WorkbenchClientError, err } from './workbench-client-transport';
 import { staleEncDeletes } from '../../client/src/member-content.mjs'; // sow-458: members-only to public drops the old .enc
+import { planPublishAudio } from '../../client/src/audio-publish.mjs'; // sow-483: the podcast block's recordings
 
 const TYPE_LABEL: Record<string, string> = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
 
@@ -57,10 +58,14 @@ export type PublishContext = {
   readStagedImage: (name: string, item?: string | null) => Promise<{ dataBase64: string; contentType: string } | null>;
   workerPost: (path: string, body: unknown) => Promise<any>;
   encryptViaCookie: (plaintext: string, assetId: string) => Promise<any>;
+  // sow-483: the podcast block's recordings (an existence check that works past 1 MB, and the staged store).
+  ownFileExists: (path: string) => Promise<boolean>;
+  stagedAudioBytes: (name: string, item: string) => Promise<number | null>;
+  deleteStagedAudio: (name: string, item: string) => Promise<void>;
 };
 
 /** Build the client's `publish` over its closure state. The client exposes it unchanged as `publish`. */
-export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie }: PublishContext) {
+export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie, ownFileExists, stagedAudioBytes, deleteStagedAudio }: PublishContext) {
   // The core publish: build the file set from PURE builders and POST it to the hosted-authoring endpoint.
   // sow-158 permalink rename (SOW-112 v2, owner-directed rename-at-publish): `path` names the canonical item this
   // edit was loaded from; a submitted slug that differs makes this publish a RENAME (one hosted PR: the new path,
@@ -244,6 +249,15 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
       pendingImages.delete(ref.name);
       for (const it of itemTokens) stagedForCleanup.push({ name: ref.name, item: it });
     }
+    // sow-483 Phase 3: the recordings the body's podcast blocks upload, committed into the item's own audio/ folder by
+    // reference (the Worker reads the staged bytes), left alone when already on main, or carried along when the item
+    // moved. planPublishAudio (client/src/audio-publish.mjs) holds every rule and is tested in node.
+    const audioPlan: any = await planPublishAudio(
+      { body, visibility: effInput.visibility, builtPath: built.path, oldPath: origin?.oldPath, moved, itemTokens },
+      { stagedBytes: stagedAudioBytes, onMain: ownFileExists },
+    );
+    if (audioPlan.refuse) throw err('bad-request', audioPlan.refuse);
+    files.push(...audioPlan.files);
     // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (project/prompt), all
     // in the same PR. Fail closed if the original vanished from main (never a half-move).
     if (moved) {
@@ -271,6 +285,7 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
     for (const c of stagedForCleanup) {
       try { await workerPost('/membership/draft-image', { op: 'delete', item: c.item, name: c.name }); } catch { /* see above */ }
     }
+    for (const c of audioPlan.cleanup) await deleteStagedAudio(c.name, c.item); // sow-483: same rule, never throws
     // sow-326: THE PUBLISHED DRAFT RECORD DIES HERE, and until now nothing ever deleted it. publish() swept the
     // staged IMAGES and left the KV draft (`drafts:<github_id>`, keyed `<type>:<slug>`) exactly as it was, so a
     // record outlived its own publication and every later open of the item read it back instead of the file

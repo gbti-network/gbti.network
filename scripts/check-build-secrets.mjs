@@ -348,6 +348,24 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
         }
       }
     }
+    // e) sow-483: an uploaded recording (dist/media/audio/<author>/<dir>/<slug>/<file>) must belong to a published +
+    // public item. A static site cannot hide a file, so a draft's or a members-only item's recording never gets a copy;
+    // this is the backstop for the route's own isPublic filter (src/pages/media/audio/[...path].ts). Any other shape
+    // under that directory fails too, so the check cannot be sidestepped by a different name.
+    const distAudio = path.join(distDir, 'media', 'audio');
+    if (fs.existsSync(distAudio)) {
+      for (const f of walk(distAudio)) {
+        const rel = path.relative(distAudio, f).split(path.sep).join('/');
+        const m = /^([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/[a-z0-9][a-z0-9_-]*\.(mp3|ogg)$/.exec(rel);
+        const item = m ? path.join(root, 'members', m[1], m[2], m[3], 'index.md') : null;
+        const fm = (item && fs.existsSync(item) ? fs.readFileSync(item, 'utf8') : '').match(/^---\r?\n[\s\S]*?\r?\n---/)?.[0] || '';
+        const published = shareField(fm, 'status') === 'published';
+        const isPublicItem = (shareField(fm, 'visibility') ?? 'public') === 'public'; // the schema's default
+        if (!m || !published || !isPublicItem) {
+          errors.push(`a recording that is not a published + public item's reached dist: dist/media/audio/${rel}. Only a public item's recordings may be served. See sow-483.`);
+        }
+      }
+    }
     if (shareNeedles.length) {
       for (const f of walk(distDir)) {
         if (BINARY.test(f)) continue;
