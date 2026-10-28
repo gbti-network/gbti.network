@@ -159,3 +159,14 @@ links:
     note: >-
       Added 2026-10-28 for Ali's share of this SurfacedBy article (members/bomsn/shares/20260928191738-...). The
       blog page loads the tracking script (measured 2026-10-28), so the atp parameter attributes here.
+  - path: /outbound/opengeo
+    destination: https://github.com/surfacedby/OpenGEO
+    partner: opengeo
+    status: live
+    note: >-
+      Added 2026-10-28 on the owner's request: OpenGEO, Ali Khallad's (bomsn) free, open-source AI visibility app,
+      maintained by SurfacedBy. Click tracking only: OpenGEO has no page on surfacedby.com (measured 2026-10-28,
+      /opengeo answers 404 and opengeo.surfacedby.com does not load), so this points at the GitHub repository, and
+      GitHub carries no referral parameter. The money is in the managed SurfacedBy API OpenGEO offers as one of
+      its connections; a reader who goes on to surfacedby.com through /outbound/surfacedby is the one credited.
+      Repoint this, keeping the path, if OpenGEO ever gets a page on surfacedby.com that loads the Affonso script.

@@ -13,14 +13,24 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const store = () => yaml.load(fs.readFileSync(path.join(ROOT, 'house/outbound-links.yml'), 'utf8'));
 const good = (over = {}) => ({ path: '/outbound/x', destination: 'https://example.com/?ref=1', partner: 'example', status: 'live', note: 'why', ...over });
 
-test('the committed store is valid, holds the fifteen paths, and five of them sit outside /outbound/', () => {
+// Every path the store has ever held. Paths are never deleted (a retired one still redirects), so each must still be
+// here; a NEW path is fine, which is why this is a containment check and not an exact count: an exact count turned
+// CI red on every link a superadmin added from the board (it pinned 10, then 15, before 2026-10-28).
+const KNOWN_PATHS = [
+  '/outbound/codeable', '/outbound/codeable/wordpress-services', '/codeable/naresh-devineni', '/outbound/bugherd',
+  '/codeable', '/outsourcing/codeable', '/outsource/codeable/wp-cli', '/outsourcing/codeable/wp-cli',
+  '/outbound/cloudways', '/outbound/tailscale',
+  '/outbound/surfacedby', '/outbound/surfacedby/pricing', '/outbound/surfacedby/demo', '/outbound/surfacedby/docs',
+  '/outbound/surfacedby/blog/chatgpt-no-longer-reads-your-page', '/outbound/opengeo',
+];
+
+test('the committed store is valid, still holds every path it ever held, and five of them sit outside /outbound/', () => {
   const parsed = store();
   assert.deepEqual(validateOutboundLinks(parsed), []);
   const paths = linksOf(parsed).map((e) => e.path);
-  // Ten until 2026-10-28, when the five SurfacedBy paths were added, all under /outbound/.
-  assert.equal(paths.length, 15);
+  for (const p of KNOWN_PATHS) assert.ok(paths.includes(p), `${p} left the store: deleting a path turns its old links into 404s`);
   assert.equal(paths.filter((p) => !p.startsWith('/outbound/')).length, 5, 'a prefix filter would still miss the five legacy paths');
-  assert.equal(new Set(paths).size, 15);
+  assert.equal(new Set(paths).size, paths.length, 'no path twice');
   assert.equal(linksOf(parsed).find((e) => e.path === '/outbound/tailscale').status, 'placeholder');
   for (const e of linksOf(parsed)) assert.ok(e.note && e.note.length > 20, `${e.path} carries its provenance note`);
 });
@@ -63,7 +73,7 @@ test('the store reader the generator uses refuses an invalid store, and the rows
   // map), so the reader it imports is tested here, not the script.
   const { outboundRows } = await import('../scripts/lib/outbound-links-store.mjs');
   const rows = outboundRows(ROOT);
-  assert.equal(rows.length, 15);
+  assert.ok(rows.length >= KNOWN_PATHS.length);
   assert.deepEqual(rows[0], ['/outbound/codeable', 'https://codeable.io/?ref=MzT91']);
   assert.deepEqual(rows[9], ['/outbound/tailscale', 'https://tailscale.com/']);
   assert.deepEqual(rows[10], ['/outbound/surfacedby', 'https://surfacedby.com/?atp=GBTI']);
