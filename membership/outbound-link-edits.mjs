@@ -116,9 +116,23 @@ export const OUTBOUND_MARKER =
   '# sow-359: the tracked partner links from house/outbound-links.yml are emitted here by scripts/compose-redirects.mjs.';
 
 /**
- * Replace the marker line with one `<path> <destination> 301` per row, in store order, at exactly the
- * position the marker holds. Position is not cosmetic: Cloudflare takes the FIRST matching rule, so a row
- * moved below a splat stops working.
+ * The same path with its trailing slash toggled (`/outbound/x` <-> `/outbound/x/`), or null for the root.
+ *
+ * WHY EVERY ROW GETS ONE (owner, 2026-10-28). Cloudflare Pages matches a static `_redirects` rule by the EXACT path,
+ * so `/outbound/surfacedby/` with a slash fell through to the 404 page while `/outbound/surfacedby` answered 301.
+ * A masked link is pasted by hand into posts, emails and chats, and a trailing slash is the most ordinary thing to
+ * add to one, so each row is emitted twice: as written, and with the slash toggled, to the same destination.
+ */
+export function slashTwin(p) {
+  const s = String(p ?? '');
+  if (!s || s === '/') return null;
+  return s.endsWith('/') ? s.replace(/\/+$/, '') : `${s}/`;
+}
+
+/**
+ * Replace the marker line with `<path> <destination> 301` per row, in store order, at exactly the position the
+ * marker holds, each followed by its slash twin (slashTwin) unless the store lists that path itself. Position is
+ * not cosmetic: Cloudflare takes the FIRST matching rule, so a row moved below a splat stops working.
  *
  * A text with no marker comes back unchanged. That is the safe direction (the committed file is served as it
  * stands) and it is why the caller asserts the rows landed rather than trusting this to have found anything.
@@ -129,7 +143,11 @@ export function spliceOutboundRows(text, rows = []) {
   const lines = String(text ?? '').split('\n');
   const at = lines.indexOf(OUTBOUND_MARKER);
   if (at === -1) return String(text ?? '');
-  const emitted = rows.map(([p, dest]) => `${p} ${dest} 301`);
+  const listed = new Set(rows.map(([p]) => String(p)));
+  const emitted = rows.flatMap(([p, dest]) => {
+    const twin = slashTwin(p);
+    return twin && !listed.has(twin) ? [`${p} ${dest} 301`, `${twin} ${dest} 301`] : [`${p} ${dest} 301`];
+  });
   return [...lines.slice(0, at), ...emitted, ...lines.slice(at + 1)].join('\n');
 }
 

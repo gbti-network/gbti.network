@@ -7,16 +7,23 @@
 // rehypeSponsoredLinks, so the link it inserts gets exactly the rel every other partner link in a body gets
 // (`sponsored nofollow noopener`, from the store's path list) and no new rel logic lives here.
 //
-// What is never linked: text already inside a link, a heading (a link in a heading reads as navigation and the
-// heading is often the brand name on its own page), a table header (the sortable-table script rebuilds a header
-// from its text and would erase the link, leaving the body with none), a <summary> (a link there swallows the
-// toggle), code, and anything that is not prose. A mention that is part of an address, a handle or a path
-// (`surfacedby.com`, `@surfacedby`, `surfacedby/OpenGEO`) is not a mention of the brand, and the match follows the
-// keyword's own capitalisation, so a package or account name written in lower case (`pip install surfacedby`) is
-// left alone too.
+// What is never linked, and never COUNTED, so the first mention is always one in ordinary prose:
+// - text already inside a link;
+// - any title or headline: a heading, a caption, a definition term, a bold run-in head (see SKIP and
+//   isHeadlineBold). A link in a heading reads as navigation, and the heading is often the brand name on its own page;
+// - a table header: the sortable-table script rebuilds a header from its text and would erase the link;
+// - a <summary>, where a link swallows the toggle;
+// - code, and anything else that is not prose.
+// A mention that is part of an address, a handle or a path (`surfacedby.com`, `@surfacedby`, `surfacedby/OpenGEO`)
+// is not a mention of the brand, and the match follows the keyword's own capitalisation, so a package or account
+// name written in lower case (`pip install surfacedby`) is left alone too.
 
-/** Elements whose text is never linked. */
-const SKIP = new Set(['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'th', 'summary', 'code', 'pre', 'kbd', 'samp', 'script', 'style', 'button', 'svg', 'math', 'textarea', 'select', 'option']);
+/**
+ * Elements whose text is never linked and never counted. Titles and headlines of every kind are out (owner,
+ * 2026-10-28: "First mention should not include titles or headlines"): headings, a table's header cells and
+ * caption, a figure's caption, a definition term, a fieldset legend, a disclosure's summary.
+ */
+const SKIP = new Set(['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'th', 'caption', 'figcaption', 'dt', 'legend', 'summary', 'code', 'pre', 'kbd', 'samp', 'script', 'style', 'button', 'svg', 'math', 'textarea', 'select', 'option']);
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -35,6 +42,22 @@ export function chosenMentions(count) {
   return count > 3 ? [0, count - 1] : [0];
 }
 
+const textOf = (n) => (n.type === 'text' ? n.value : Array.isArray(n.children) ? n.children.map(textOf).join('') : '');
+const meaningful = (children) => (children || []).filter((c) => !(c.type === 'text' && !c.value.trim()));
+
+/**
+ * A bold label doing a headline's job: the run-in head that opens a paragraph or a list item ("**Content.** Briefs
+ * and drafts..."), or a paragraph that is nothing but bold text. Markdown writers use both as headings, so they are
+ * headlines for this rule too. Bold that merely EMPHASISES a word inside a sentence is prose and is linked as usual.
+ */
+export function isHeadlineBold(node, parent) {
+  if (node?.type !== 'element' || (node.tagName !== 'strong' && node.tagName !== 'b')) return false;
+  if (!parent || (parent.tagName !== 'p' && parent.tagName !== 'li')) return false;
+  const kids = meaningful(parent.children);
+  if (kids[0] !== node) return false;
+  return kids.length === 1 || /[.:!?]\s*$/.test(textOf(node));
+}
+
 /** Every eligible mention of `re` in the tree, in document order, as `{ node, parent, start, end }`. */
 function mentionsIn(tree, re) {
   const out = [];
@@ -45,7 +68,7 @@ function mentionsIn(tree, re) {
       while ((m = re.exec(node.value)) !== null) out.push({ node, parent, start: m.index, end: m.index + m[0].length });
       return;
     }
-    if (node.type === 'element' && SKIP.has(node.tagName)) return;
+    if (node.type === 'element' && (SKIP.has(node.tagName) || isHeadlineBold(node, parent))) return;
     if (Array.isArray(node.children)) for (const c of [...node.children]) walk(c, node);
   };
   walk(tree, null);

@@ -23,6 +23,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
+import { slashTwin } from '../../membership/outbound-link-edits.mjs'; // 2026-10-28: each row is also served with its slash toggled
+
+/** twin path -> the row's own path, for every row whose slash twin is not itself a row. */
+function twinAliases(paths) {
+  const listed = new Set(paths);
+  const out = new Map();
+  for (const p of paths) { const t = slashTwin(p); if (t && !listed.has(t)) out.set(t, p); }
+  return out;
+}
+
+/** The rows' paths plus their slash twins: what the analytics query asks for, so a slash click is measured. */
+export function withTwins(paths) {
+  return [...paths, ...twinAliases(paths).keys()];
+}
 
 export const OUTBOUND_CLICKS_PATH = 'house/outbound-clicks.yml';
 /** How many past days one run queries (the zone keeps eight). Today is never queried: it is not over. */
@@ -105,10 +119,14 @@ export function estimateOf(row) {
 export function summarizeDay(rows, paths, { patterns = CRAWLER_PATTERNS } = {}) {
   const out = {};
   for (const p of paths) out[p] = { clicks: 0, crawlers: 0, other: 0 };
+  // A request to a row's slash twin (2026-10-28: every row is also served with its trailing slash toggled) is a
+  // click on that row, so it is folded into the row's own count rather than lost or listed as a second link.
+  const alias = twinAliases(paths);
   for (const row of Array.isArray(rows) ? rows : []) {
     const d = row?.dimensions || {};
-    const p = String(d.clientRequestPath ?? '');
-    if (!(p in out)) continue;
+    const seen = String(d.clientRequestPath ?? '');
+    const p = seen in out ? seen : alias.get(seen);
+    if (!p) continue;
     const n = estimateOf(row);
     if (Number(d.edgeResponseStatus) === 301) {
       out[p].clicks += n;
@@ -213,7 +231,7 @@ export async function syncOutboundClicks({
   for (let n = days; n >= 1; n -= 1) {
     const date = dayBefore(now, n);
     let rows;
-    try { rows = await query({ token, zone, date, paths, fetchImpl }); } catch (err) { failedDates.push({ date, reason: err?.message || String(err) }); continue; }
+    try { rows = await query({ token, zone, date, paths: withTwins(paths), fetchImpl }); } catch (err) { failedDates.push({ date, reason: err?.message || String(err) }); continue; }
     next = mergeClicks(next, { date, byPath: summarizeDay(rows, paths) }, { now });
     dates.push(date);
   }

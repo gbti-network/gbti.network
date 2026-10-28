@@ -244,3 +244,100 @@ test('every share surface passes the display url (source pins)', () => {
   assert.match(feed, /\$\{shareLinkVerb\(shown\)\} on \$\{esc\(hostOf\(shown\)\)\}/);
   assert.match(feed, /href="\$\{esc\(utmLink\(share\.url,/, 'the feed link still goes through the masked url');
 });
+
+// ---- owner, 2026-10-28: "First mention should not include titles or headlines" ------------------------------------
+
+test('a bold run-in head or a bold-only paragraph is a headline: neither linked nor counted', () => {
+  const html = render([
+    '- **SurfacedBy.** Opens a list item the way a heading would.',
+    '',
+    '**SurfacedBy**',
+    '',
+    'We like **SurfacedBy** a lot, and that is emphasis inside a sentence.',
+  ].join('\n'));
+  const links = keywordLinks(html);
+  assert.equal(links.length, 1, 'only the prose mention counts, so it is the first and only one');
+  assert.match(html, /<li><strong>SurfacedBy\.<\/strong>/, 'the run-in head stays plain');
+  assert.match(html, /<p><strong>SurfacedBy<\/strong><\/p>/, 'so does a paragraph that is only bold');
+  assert.match(html, /We like <strong><a href="\/outbound\/surfacedby"/, 'bold inside a sentence is prose');
+});
+
+test('captions, figure captions, definition terms and legends are titles too', () => {
+  const el = (tagName, children) => ({ type: 'element', tagName, properties: {}, children });
+  const t = (value) => ({ type: 'text', value });
+  const tree = { type: 'root', children: [
+    el('figure', [el('figcaption', [t('SurfacedBy dashboard')])]),
+    el('table', [el('caption', [t('SurfacedBy plans')])]),
+    el('dl', [el('dt', [t('SurfacedBy')]), el('dd', [t('A tool.')])]),
+    el('fieldset', [el('legend', [t('SurfacedBy')])]),
+    el('p', [t('Then SurfacedBy in prose.')]),
+  ] };
+  rehypeKeywordLinks({ keywords: KEYWORDS })(tree);
+  const linked = JSON.stringify(tree).match(/"data-keyword-link"|dataKeywordLink/g) || [];
+  assert.equal(linked.length, 1);
+  assert.equal(tree.children[4].children[1].tagName, 'a', 'the prose mention is the one linked');
+});
+
+test('isHeadlineBold tells a run-in head from emphasis', async () => {
+  const { isHeadlineBold } = await import('../src/lib/rehype-keyword-links.mjs');
+  const strong = (v) => ({ type: 'element', tagName: 'strong', properties: {}, children: [{ type: 'text', value: v }] });
+  const p = (...children) => ({ type: 'element', tagName: 'p', properties: {}, children });
+  const head = strong('Content.');
+  assert.equal(isHeadlineBold(head, p(head, { type: 'text', value: ' Briefs and drafts.' })), true);
+  const colon = strong('Note:');
+  assert.equal(isHeadlineBold(colon, p(colon, { type: 'text', value: ' more' })), true);
+  const alone = strong('SurfacedBy');
+  assert.equal(isHeadlineBold(alone, p({ type: 'text', value: '  ' }, alone)), true, 'only bold, whitespace aside');
+  const lead = strong('SurfacedBy');
+  assert.equal(isHeadlineBold(lead, p(lead, { type: 'text', value: ' is the tool we use.' })), false, 'bold that starts a sentence');
+  const mid = strong('SurfacedBy');
+  assert.equal(isHeadlineBold(mid, p({ type: 'text', value: 'We use ' }, mid)), false);
+  const inH = strong('X.');
+  assert.equal(isHeadlineBold(inH, { type: 'element', tagName: 'td', properties: {}, children: [inH] }), false, 'p and li only');
+});
+
+// ---- owner, 2026-10-28: a masked link with a trailing slash must work ----------------------------------------------
+
+test('every row is served with its trailing slash toggled, to the same destination', async () => {
+  const { spliceOutboundRows, OUTBOUND_MARKER, slashTwin } = await import('../membership/outbound-link-edits.mjs');
+  assert.equal(slashTwin('/outbound/surfacedby'), '/outbound/surfacedby/');
+  assert.equal(slashTwin('/legacy/'), '/legacy');
+  assert.equal(slashTwin('/'), null);
+  const text = spliceOutboundRows(`a\n${OUTBOUND_MARKER}\nb`, [
+    ['/outbound/x', 'https://x.com/?ref=1'], ['/y/', 'https://y.com/'], ['/z', 'https://z.com/'], ['/z/', 'https://z2.com/'],
+  ]);
+  assert.deepEqual(text.split('\n'), [
+    'a',
+    '/outbound/x https://x.com/?ref=1 301', '/outbound/x/ https://x.com/?ref=1 301',
+    '/y/ https://y.com/ 301', '/y https://y.com/ 301',
+    '/z https://z.com/ 301', '/z/ https://z2.com/ 301', // a twin the store lists itself is never shadowed
+    'b',
+  ]);
+  // The committed store, as served: each SurfacedBy path answers with and without the slash.
+  const rows = outboundRows(ROOT);
+  const served = spliceOutboundRows(OUTBOUND_MARKER, rows).split('\n');
+  for (const p of ['/outbound/surfacedby', '/outbound/surfacedby/pricing']) {
+    assert.ok(served.includes(`${p} ${Object.fromEntries(rows)[p]} 301`));
+    assert.ok(served.includes(`${p}/ ${Object.fromEntries(rows)[p]} 301`), `${p}/ is served`);
+  }
+});
+
+test('a click on the slash twin is counted on its row, and the query asks for it', async () => {
+  const { summarizeDay, withTwins } = await import('../scripts/lib/outbound-clicks.mjs');
+  assert.deepEqual(withTwins(['/outbound/x', '/y/']), ['/outbound/x', '/y/', '/outbound/x/', '/y']);
+  const row = (p, n, status = 301) => ({ count: n, avg: { sampleInterval: 1 }, dimensions: { clientRequestPath: p, edgeResponseStatus: status, userAgent: 'Mozilla/5.0' } });
+  const day = summarizeDay([row('/outbound/x', 2), row('/outbound/x/', 3), row('/elsewhere/', 9)], ['/outbound/x']);
+  assert.deepEqual(Object.keys(day), ['/outbound/x'], 'the twin is never listed as a link of its own');
+  assert.equal(day['/outbound/x'].clicks, 5);
+});
+
+test('the daily rollup asks the analytics query for each row and its slash twin', async () => {
+  const { syncOutboundClicks } = await import('../scripts/lib/outbound-clicks.mjs');
+  const asked = [];
+  await syncOutboundClicks({
+    env: { CF_ANALYTICS_TOKEN: 't', CF_ZONE_ID: 'z' }, now: new Date('2026-10-28T12:00:00Z'), days: 1,
+    paths: ['/outbound/surfacedby'],
+    query: async ({ paths }) => { asked.push(paths); return []; },
+  });
+  assert.deepEqual(asked, [['/outbound/surfacedby', '/outbound/surfacedby/']]);
+});

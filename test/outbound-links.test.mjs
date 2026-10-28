@@ -79,9 +79,11 @@ test('the store reader the generator uses refuses an invalid store, and the rows
   const lines = text.split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(/\s+/)[0]);
   const first = lines.indexOf(rows[0][0]);
   assert.ok(first > 0, 'the first store row is not in the composed output');
-  assert.deepEqual(lines.slice(first, first + rows.length), rows.map((r) => r[0]), 'the rows are contiguous and in file order');
+  // Each row is followed by its slash twin (2026-10-28), so the served block is twice the store.
+  const expected = rows.flatMap(([p]) => [p, p.endsWith('/') ? p.replace(/\/+$/, '') : `${p}/`]);
+  assert.deepEqual(lines.slice(first, first + expected.length), expected, 'the rows and their twins are contiguous and in file order');
   assert.equal(lines[first - 1], '/products/email-signature-generator/', 'the row before is the last utility row');
-  assert.ok(lines[first + rows.length].startsWith('/shares/atwellpub/'), 'the row after is the moved share');
+  assert.ok(lines[first + expected.length].startsWith('/shares/atwellpub/'), 'the row after is the moved share');
   // An invalid store refuses generation rather than writing a broken 301.
   const tmp = fs.mkdtempSync(path.join(ROOT, 'node_modules', '.gbti-outbound-'));
   try {
@@ -96,8 +98,11 @@ test('sow-359: the splice puts the rows exactly where the marker stood, and refu
   const base = ['# head', '/keep/ /kept/ 301', OUTBOUND_MARKER, '/tail/ /tailed/ 301'].join('\n');
   assert.equal(
     spliceOutboundRows(base, rows),
-    ['# head', '/keep/ /kept/ 301', '/outbound/a https://a.example.com/x 301', '/outbound/b https://b.example.com/y 301', '/tail/ /tailed/ 301'].join('\n'),
-    'the rows replace the marker in place, in store order, with the neighbours untouched',
+    ['# head', '/keep/ /kept/ 301',
+      '/outbound/a https://a.example.com/x 301', '/outbound/a/ https://a.example.com/x 301',
+      '/outbound/b https://b.example.com/y 301', '/outbound/b/ https://b.example.com/y 301',
+      '/tail/ /tailed/ 301'].join('\n'),
+    'the rows (each with its slash twin, 2026-10-28) replace the marker in place, in store order, neighbours untouched',
   );
   // No marker: the text comes back byte-identical rather than the rows being appended somewhere arbitrary.
   // Appending them past a splat would look like it worked and quietly stop the links earning, so the silence
@@ -106,5 +111,5 @@ test('sow-359: the splice puts the rows exactly where the marker stood, and refu
   assert.equal(spliceOutboundRows(noMarker, rows), noMarker);
   assert.equal(spliceOutboundRows('', rows), '');
   // A retired row is emitted like any other: an old post must never start 404ing.
-  assert.match(spliceOutboundRows(OUTBOUND_MARKER, [['/gone', 'https://x.example.com/z']]), /^\/gone https:\/\/x\.example\.com\/z 301$/);
+  assert.match(spliceOutboundRows(OUTBOUND_MARKER, [['/gone', 'https://x.example.com/z']]), /^\/gone https:\/\/x\.example\.com\/z 301$/m);
 });
