@@ -38,6 +38,8 @@ import { favoriteCount, favoritedBy } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
 import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
+import { outboundRows } from '../../../scripts/lib/outbound-links-store.mjs';
+import { partnerRel } from '../../lib/rehype-sponsored-links.mjs'; // 2026-10-28: a masked partner link button is rel=sponsored
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
 import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
@@ -92,6 +94,10 @@ const stub = isStub(project);
 const links = d.links ?? [];
 const repoUrl = findRepo(links);
 const primary = resolvePrimaryCta(links, d.pricingUrl);
+// A button or rail link to a partner redirect path (house/outbound-links.yml) is a paid placement, so it carries
+// rel="sponsored nofollow noopener" like the same link inside a body; every other link keeps rel="noopener".
+const partnerPaths = outboundRows(process.cwd()).map(([p]) => p);
+const relOf = (url) => partnerRel(url, partnerPaths);
 const asideLinks = railLinks(links, primary, d.pricingUrl, d.pricing);
 
 // sow-174: the hero is an uploaded banner image, an author-chosen color preset, or the fallback chain (the
@@ -239,7 +245,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
               {linkLabel(primary)}
             </span>
           ) : (
-            <a href={primary.url} rel="noopener" class="btn btn-primary">
+            <a href={primary.url} rel={relOf(primary.url)} class="btn btn-primary">
               {iconForUrl(primary.url) && <svg viewBox="0 0 24 24" aria-hidden="true"><use href={`#${iconForUrl(primary.url)}`} /></svg>}
               {linkLabel(primary)}
             </a>
@@ -299,7 +305,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
               </div>
               <div class="pd-cta-btns">
                 {primary && !isLockedLink(primary) && (
-                  <a href={primary.url} rel="noopener" class="btn btn-primary">
+                  <a href={primary.url} rel={relOf(primary.url)} class="btn btn-primary">
                     {iconForUrl(primary.url) && <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href={`#${iconForUrl(primary.url)}`} /></svg>}
                     {linkLabel(primary)}
                   </a>
@@ -418,7 +424,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-lock" /></svg>{linkLabel(l)}
                   </span>
                 ) : (
-                  <a class="pd-rail-link" href={l.url} rel="noopener">
+                  <a class="pd-rail-link" href={l.url} rel={relOf(l.url)}>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-link" /></svg>{linkLabel(l)}
                   </a>
                 )

@@ -9,6 +9,8 @@
 // Owner, 2026-10-19: a members-only share whose author ticked "Leave a public stub" also gets a page here, LOCKED
 // (isShareStub): title, summary, picture and author only. The link, its source, the member's note and the discussion
 // never ship, and the page asks search engines to skip it. It is what that share's announcements link to.
+import { outboundRows } from '../../../../scripts/lib/outbound-links-store.mjs';
+import { displayHrefOf } from '../../../lib/rehype-sponsored-links.mjs'; // 2026-10-28: a masked share url still shows its real domain
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import Avatar from '../../../components/Avatar.astro';
 import FavoriteButton from '../../../components/FavoriteButton.astro';
@@ -55,7 +57,8 @@ const desc = d.title && d.shortDescription ? decodeEntities(d.shortDescription) 
 const descComplete = desc ? /[.!?]["')\]]?$/.test(desc.trim()) : true;
 const quotedDesc = desc ? `"${desc.trim()}${descComplete ? '' : '...'}"` : undefined;
 let srcDomain: string | undefined;
-try { srcDomain = link ? new URL(link).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
+// A share whose url is a partner redirect path shows the partner's domain, not ours (displayHrefOf).
+try { srcDomain = link ? new URL(displayHrefOf(link, outboundRows(process.cwd()))).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
 // sow-445: a posted link card reads "<title> | Quanta Magazine". A share with no link keeps "| GBTI Network".
 const cardSource = locked ? undefined : cardSourceFor({ url: link, sourceName: d.sourceName }, newsHostNames(readNewsSourceList())) || undefined;
 const profiles = await getCollection('profile');
@@ -86,7 +89,8 @@ const linkWords = { audio: 'Listen to it on', video: 'Watch video on', read: 'Re
 // drift apart on it. When a creator resolves (a stored YouTube or Vimeo channel, or a profile derived from the
 // link itself) the card names them and the action becomes Subscribe or Follow; otherwise it is exactly the
 // domain card with Visit that it has always been.
-const srcCard = link ? sourceCardModel({ url: link, memberName: authorName, creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
+// A masked partner url names its real destination on the card; the Visit action keeps the masked path (displayHrefOf).
+const srcCard = link ? sourceCardModel({ url: link, displayUrl: displayHrefOf(link, outboundRows(process.cwd())), memberName: authorName, creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
 // The action keeps this page's own outbound decoration, as the Visit link always had.
 const srcActionHref = srcCard ? utmUrl(srcCard.action.href, { campaign: 'shares' }) : undefined;
 // sow-283: when the share points at our hosted copy, declare its real pixel size to link-preview scrapers, read

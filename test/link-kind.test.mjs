@@ -52,8 +52,10 @@ test('sow-417: the three surfaces take their verb from linkKind, not from embedU
   const reader = read('client-ui/src/elements/gbti-reader.mjs');
   const feed = read('client-ui/src/elements/gbti-shares-feed.mjs');
   const page = read('src/pages/shares/[author]/[id].astro');
-  assert.match(reader, /\$\{shareLinkVerb\(it\.url\)\} on \$\{esc\(hostOf\(it\.url\)\)\}/);
-  assert.match(feed, /\$\{shareLinkVerb\(share\.url\)\} on \$\{esc\(hostOf\(share\.url\)\)\}/);
+  // Since 2026-10-28 both read the DISPLAY url (a masked partner link resolved to its real destination); the verb
+  // and the host still come from the one decision each.
+  assert.match(reader, /\$\{shareLinkVerb\(srcUrl\)\} on \$\{esc\(hostOf\(srcUrl\)\)\}/);
+  assert.match(feed, /\$\{shareLinkVerb\(shown\)\} on \$\{esc\(hostOf\(shown\)\)\}/);
   assert.match(page, /audio: 'Listen to it on'/);
   assert.match(page, /\{linkWords\} \{srcDomain \?\? 'the source'\}/);
   for (const src of [reader, feed, page]) assert.equal(/'Watch video' : 'Read article'|'Watch video on' : 'Read on'/.test(src), false);

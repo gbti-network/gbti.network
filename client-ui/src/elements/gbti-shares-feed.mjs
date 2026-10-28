@@ -15,6 +15,7 @@ import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep
 import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
 import { shareEmbed, AUDIO_EMBED_HEIGHT } from '../../../client/src/video-embed.mjs'; // SOW-092: what a share's link plays in place (video, or a Mixcloud mix since 2026-10-17)
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
+import { maskedPathOf, displayUrlOf, loadPartnerLinks } from '../../../client/src/partner-links.mjs'; // 2026-10-28: a masked share link shows its real domain
 import { rememberedTopicLabels, loadTopicLabels, sameTopicLabels } from '../topic-labels.mjs'; // the card's category pill
 import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
 import './gbti-card-list.mjs';
@@ -254,7 +255,10 @@ class GbtiSharesFeed extends GbtiElement {
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
     // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed). sow-417: an audio link
     // says "Listen to it on <domain>" and a video link "Watch video on <domain>" (client/src/link-kind.mjs).
-    const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc(hostOf(share.url))}</a>` : '';
+    // A masked partner url names the partner's own domain; the link itself keeps the masked path (2026-10-28).
+    const shown = displayUrlOf(share.url, this._partnerLinks);
+    if (maskedPathOf(share.url) && !this._partnerLinks) loadPartnerLinks().then((l) => { this._partnerLinks = l; if (this._reading === share) this.render(); });
+    const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(shown)} on ${esc(hostOf(shown))}</a>` : '';
     // SOW-092: a video link (YouTube/Vimeo/TikTok/Rumble embed) plays inline; the static image (usually
     // that video's thumbnail) shows only for non-video links.
     const play = share.url ? shareEmbed(share.url) : null;

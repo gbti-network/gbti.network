@@ -11,7 +11,7 @@ status: published
 visibility: public
 publicStub: false
 pricing: freemium
-pricingUrl: https://surfacedby.com/pricing
+pricingUrl: https://gbti.network/outbound/surfacedby/pricing
 tags:
   - ai-search
   - ai-visibility
@@ -44,14 +44,14 @@ sidebarPosition: right
 video: https://www.youtube.com/watch?v=kGDpgonzeKc
 links:
   - type: homepage
-    url: https://surfacedby.com/
+    url: https://gbti.network/outbound/surfacedby
     label: Check your AI visibility free
     primary: true
   - type: homepage
-    url: https://surfacedby.com/demo
+    url: https://gbti.network/outbound/surfacedby/demo
     label: Try the live demo
   - type: documentation
-    url: https://docs.surfacedby.com
+    url: https://gbti.network/outbound/surfacedby/docs
 publishedAt: '2026-09-28T22:35:28.000Z'
 updatedAt: '2026-09-29T13:18:48.094Z'
 type: project
@@ -89,4 +89,4 @@ Workspaces carry owner, admin, editor and viewer roles, and agencies keep each c
 
 ## Pricing
 
-A free visibility check shows 30 real AI answers with no credit card. Paid plans start at $29 a month and each begins with a 7-day trial (card on file, cancel any time before it ends). See the [pricing page](https://surfacedby.com/pricing) for the current plans and add-ons.
+A free visibility check shows 30 real AI answers with no credit card. Paid plans start at $29 a month and each begins with a 7-day trial (card on file, cancel any time before it ends). See the [pricing page](https://gbti.network/outbound/surfacedby/pricing) for the current plans and add-ons.

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { validateOutboundLinks, redirectRowsOf, linksOf, linkSummary } from '../../membership/outbound-link-edits.mjs';
+import { validateOutboundLinks, redirectRowsOf, linksOf, linkSummary, keywordLinksOf } from '../../membership/outbound-link-edits.mjs';
 
 export const OUTBOUND_LINKS_PATH = 'house/outbound-links.yml';
 
@@ -26,4 +26,9 @@ export function outboundRows(root) {
 /** The board's view of every entry, in file order, for the rollup and the build artifact. */
 export function outboundLinkSummaries(root) {
   return linksOf(readOutboundLinks(root)).map(linkSummary);
+}
+
+/** `[{ term, path }]` for the build's mention linker (src/lib/rehype-keyword-links.mjs), from live rows only. */
+export function outboundKeywords(root) {
+  return keywordLinksOf(readOutboundLinks(root));
 }

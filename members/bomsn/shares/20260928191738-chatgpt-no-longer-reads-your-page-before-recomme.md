@@ -5,7 +5,7 @@ title: ChatGPT no longer reads your page before recommending you | SurfacedBy
 shortDescription: >-
   We watched our server logs while ChatGPT answered ten questions: 9 used our pages, 1 page was
   fetched. Cloudflare shows ChatGPT-User fetches down 70%.
-url: https://surfacedby.com/blog/chatgpt-no-longer-reads-your-page
+url: https://gbti.network/outbound/surfacedby/blog/chatgpt-no-longer-reads-your-page
 sourceName: SurfacedBy
 category: llm
 tags:

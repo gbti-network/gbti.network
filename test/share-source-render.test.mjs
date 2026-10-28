@@ -37,7 +37,7 @@ test('sow-222: neither copy keeps its own credit sentence, verb or host derivati
     assert.equal(/Subscribe|Follow|Visit|View Channel/.test(block), false, `${what} still writes a verb into the card itself`);
   }
   // The reader kept its own favicon and outbound decoration, which is correct and deliberate.
-  assert.match(reader, /faviconFor\(it\.url\)/);
+  assert.match(reader, /faviconFor\(srcUrl\)/, 'the favicon of the DISPLAY url (a masked partner link resolved, 2026-10-28)');
   assert.match(reader, /utmLink\(srcCard\.action\.href/);
   assert.match(astro, /utmUrl\(srcCard\.action\.href/);
 });

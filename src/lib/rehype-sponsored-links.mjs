@@ -33,3 +33,25 @@ export function rehypeSponsoredLinks({ paths = [] } = {}) {
   };
   return (tree) => { walk(tree); };
 }
+
+/**
+ * The rel for a link rendered OUTSIDE a markdown body (a project's buttons and rail links, 2026-10-28): a partner
+ * redirect path is a paid placement and says so, exactly as rehypeSponsoredLinks marks one inside a body; any other
+ * link keeps `fallback`, the rel the template always used.
+ */
+export function partnerRel(href, paths = [], fallback = 'noopener') {
+  const p = sitePathOf(href);
+  return p && new Set(paths.map(norm)).has(norm(p)) ? 'sponsored nofollow noopener' : fallback;
+}
+
+/**
+ * Where a link really goes, for DISPLAY only: a partner redirect path resolves to its destination, so a share whose
+ * url is a masked path still reads "surfacedby.com" on its card rather than "gbti.network". `rows` is the store's
+ * `[path, destination]` list. Anything else comes back unchanged.
+ */
+export function displayHrefOf(href, rows = []) {
+  const p = sitePathOf(href);
+  if (!p) return href;
+  const hit = rows.find(([path]) => norm(String(path)) === norm(p));
+  return hit ? String(hit[1]) : href;
+}

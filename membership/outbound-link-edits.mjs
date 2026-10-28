@@ -9,6 +9,8 @@
 //   status       live | placeholder | retired. A placeholder carries no referral parameter and credits nobody; a
 //                retired link is STILL EMITTED as a redirect (an old post may link it), retired is a board label.
 //   note         provenance prose shown on the board: where the destination came from and what went wrong before
+//   keywords     optional list of words the site build links to this path wherever a page body mentions them
+//                (src/lib/rehype-keyword-links.mjs; first SurfacedBy, 2026-10-28). Live rows only.
 //
 // THE EXPLICIT SLASH RULE IS ENFORCED HERE BECAUSE IT WAS FOUND LIVE. A destination with no path before its query
 // (`https://cloudways.com?id=1`) is served by Cloudflare Pages with a trailing slash appended, and with no path to
@@ -20,6 +22,9 @@ export const LINK_STATUSES = Object.freeze(['live', 'placeholder', 'retired']);
 const PATH_RE = /^\/[^\s?#]*$/;
 const DESTINATION_RE = /^https?:\/\/[^/?#\s]+\/[^\s]*$/i;
 const PARTNER_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// A keyword is a brand name or a short phrase: letters and digits, with single spaces, dots or hyphens inside it.
+// No punctuation the matcher would have to escape, and nothing so short it would hit ordinary words.
+const KEYWORD_RE = /^[A-Za-z0-9](?:[A-Za-z0-9 .-]{1,38}[A-Za-z0-9])$/;
 
 /** Coerce a parsed store to its list of entries, or an empty list. Never throws. */
 export function linksOf(parsed) {
@@ -35,6 +40,7 @@ export function validateOutboundLinks(parsed) {
   if (!parsed || typeof parsed !== 'object') return ['outbound-links: the file did not parse to an object'];
   if (!Array.isArray(parsed.links)) return ['outbound-links: `links` must be a list'];
   const seen = new Set();
+  const seenKeywords = new Map();
   parsed.links.forEach((e, i) => {
     const at = `outbound-links: entry ${i + 1}`;
     if (!e || typeof e !== 'object') { problems.push(`${at} is not an object`); return; }
@@ -47,6 +53,17 @@ export function validateOutboundLinks(parsed) {
     if (!PARTNER_RE.test(String(e.partner ?? ''))) problems.push(`${at} (${p}) has an invalid partner "${e.partner}" (a short lowercase label)`);
     if (!LINK_STATUSES.includes(e.status)) problems.push(`${at} (${p}) has an invalid status "${e.status}" (one of ${LINK_STATUSES.join(', ')})`);
     if (e.note != null && typeof e.note !== 'string') problems.push(`${at} (${p}) has a note that is not text`);
+    if (e.keywords != null) {
+      if (!Array.isArray(e.keywords)) problems.push(`${at} (${p}) has keywords that are not a list`);
+      else for (const k of e.keywords) {
+        if (typeof k !== 'string' || !KEYWORD_RE.test(k)) { problems.push(`${at} (${p}) has an invalid keyword "${k}" (3 to 40 letters, digits, spaces, dots or hyphens)`); continue; }
+        // One word, one destination: two rows claiming a keyword would make which one a mention links to depend on
+        // file order, which nobody reading the board could see.
+        const key = k.toLowerCase();
+        if (seenKeywords.has(key)) problems.push(`${at} (${p}) repeats the keyword "${k}", already on ${seenKeywords.get(key)}`);
+        else seenKeywords.set(key, p);
+      }
+    }
   });
   return problems;
 }
@@ -64,7 +81,21 @@ export function linkSummary(e) {
     partner: String(e?.partner ?? ''),
     status: LINK_STATUSES.includes(e?.status) ? e.status : 'live',
     note: typeof e?.note === 'string' ? e.note.trim() : '',
+    keywords: Array.isArray(e?.keywords) ? e.keywords.filter((k) => typeof k === 'string') : [],
   };
+}
+
+/**
+ * The words the build links in page bodies, as `[{ term, path }]`, from LIVE rows only: a placeholder credits
+ * nobody and a retired link is kept only so old posts do not 404, so neither should gain new links.
+ */
+export function keywordLinksOf(parsed) {
+  const out = [];
+  for (const e of linksOf(parsed)) {
+    if (e?.status !== 'live' || !Array.isArray(e.keywords)) continue;
+    for (const k of e.keywords) if (typeof k === 'string' && KEYWORD_RE.test(k)) out.push({ term: k, path: String(e.path) });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------

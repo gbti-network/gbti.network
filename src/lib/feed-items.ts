@@ -11,6 +11,8 @@ import { resolveThumb } from './index-thumb';
 import { imageFieldOf } from './content-index.mjs';
 import { defaultFeatureImage } from './feature-image';
 import { shareImageForSite } from '../../membership/share-cover-url.mjs';
+import { outboundRows } from '../../scripts/lib/outbound-links-store.mjs';
+import { displayHrefOf } from './rehype-sponsored-links.mjs'; // 2026-10-28: a masked share url still shows its real domain
 import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-feed.mjs';
 // sow-381: the card's category pill. TWO VOCABULARIES, because the content types and shares have always had
 // two: an article/project/prompt carries `categories`, an ordered path into house/taxonomy.yml, and a share
@@ -83,11 +85,15 @@ async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', c
   };
 }
 
+let partnerRowsCache: string[][] | null = null;
+const partnerRows = () => (partnerRowsCache ??= outboundRows(process.cwd()));
+
 function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem {
   const d = entry.data;
   const slug = `${d.author}/${d.id}`;
   let srcDomain: string | undefined;
-  try { srcDomain = d.url ? new URL(d.url).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
+  // A share whose url is a partner redirect path shows the partner's domain, not ours (displayHrefOf).
+  try { srcDomain = d.url ? new URL(displayHrefOf(d.url, partnerRows())).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
   return {
     kind: 'share',
     targetType: 'share',

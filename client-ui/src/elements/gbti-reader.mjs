@@ -18,6 +18,7 @@
 // "About this project". Every other type keeps the layout above.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { sourceCardModel } from '../../../client/src/share-source.mjs'; // sow-222: the shared source-card decision
+import { maskedPathOf, displayUrlOf, loadPartnerLinks } from '../../../client/src/partner-links.mjs'; // 2026-10-28: a masked share link shows its real domain
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { dataBlocksCss } from '../../../client/src/content-blocks.mjs';
 import { enhanceAudioCards } from '../../../client/src/audio-card.mjs'; // an ```audio card's play button and progress line // sow-453: tags, bar, facts, button
@@ -286,7 +287,7 @@ class GbtiReader extends GbtiElement {
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
   open(item) {
-    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this._skill = null; this._paid = false; this.render(); this._resolve();
+    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this._skill = null; this._paid = false; this._srcUrl = null; this.render(); this._resolve();
   }
 
   async _resolve() {
@@ -307,6 +308,9 @@ class GbtiReader extends GbtiElement {
       this._author = author;
     }
     this._skill = await this._resolveSkill(this._item || it);
+    // A share whose url is a masked partner path names the partner's own domain (the click keeps the masked path).
+    const shareUrl = (this._item || it)?.type === 'share' ? (this._item || it).url : '';
+    this._srcUrl = maskedPathOf(shareUrl) ? displayUrlOf(shareUrl, await loadPartnerLinks({ site: SITE })) : null;
     this._paid = await this._resolvePaid(this._item || it);
     await this._backfillCategoryLabels();
     this.render();
@@ -485,7 +489,8 @@ class GbtiReader extends GbtiElement {
     const avUrl = this._author?.entry?.avatar || memberAvatarUrl(folder);
     // Owner QA 2026-07-22: on a Share the SOURCE favicon is the larger circle and the member avatar
     // rides as the badge (mirrors the site share page).
-    const srcFav = it.type === 'share' && it.url ? faviconFor(it.url) : '';
+    const srcUrl = this._srcUrl || it.url; // where the share's link really goes, for display only
+    const srcFav = it.type === 'share' && it.url ? faviconFor(srcUrl) : '';
     const av = srcFav
       ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt=""><span class="src-mini">${avatarLayers(folder, avUrl)}</span></span>`
       : `<span class="av">${avatarLayers(folder, avUrl)}</span>`;
@@ -582,11 +587,12 @@ class GbtiReader extends GbtiElement {
   render() {
     const it = this._item;
     if (!it) { this.set(this.css(READER_CSS())); return; }
+    const srcUrl = this._srcUrl || it.url; // where a share's link really goes, for display only (a masked partner path)
     // A Share's `url` is the external link it points at; every other type's `url` is a gbti.network path.
     // sow-145: outbound share links carry UTM attribution (the embed relay keeps the RAW url).
     const shareOut = it.type === 'share' && it.url ? utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }) : '';
     const view = it.type === 'share'
-      ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf(it.url))}</a>` : '')
+      ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(srcUrl)} on ${esc(hostOf(srcUrl))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     // sow-441: a project's model (null for every other type). Its category moves into the hero, so the meta line
@@ -627,7 +633,7 @@ class GbtiReader extends GbtiElement {
       // Owner QA 2026-07-22: the summary is scraped from the article source, so it renders QUOTED,
       // gains a trailing ellipsis when the scrape cut mid-sentence, and cites the source inline.
       const sumRaw = String(it.shortDescription || '').trim();
-      const sumHost = hostOf(it.url || '');
+      const sumHost = hostOf(srcUrl || '');
       const summary = sumRaw
         ? `<p class="share-summary"><em>"${esc(sumRaw)}${/[.!?]["')\]]?$/.test(sumRaw) ? '' : '...'}"</em>${sumHost ? ` <span class="share-cite">- ${esc(sumHost)}</span>` : ''}</p>`
         : '';
@@ -649,10 +655,10 @@ class GbtiReader extends GbtiElement {
     // an unresolved one renders exactly what it rendered before. The favicon service, the outbound decoration
     // and the escaping stay this surface's own.
     const srcCard = (it.type === 'share' && it.url)
-      ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName })
+      ? sourceCardModel({ url: it.url, displayUrl: srcUrl, memberName: this._author?.entry?.displayName || authorName(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName })
       : null;
     const sideLink = srcCard
-      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>`
+      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(srcUrl))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>`
       : '';
     // sow-399 (owner, 2026-09-24): the SOW-088 Manually Syndicate control that sat here moved to the website's
     // content pages (src/components/SyndicateNow.astro, attributes by src/lib/syndicate-attrs.mjs) with the rest of

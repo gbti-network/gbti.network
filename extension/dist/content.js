@@ -860,14 +860,14 @@ ${String(lines2[i]).trimStart()}`;
     });
   }
   function serializeListItems(items, ordered = false, { start = 1 } = {}) {
-    const norm2 = normalizeListItems(items, ordered);
+    const norm3 = normalizeListItems(items, ordered);
     const lines2 = [];
     const counters = [];
     const indents = [];
     const markerWidth = [];
     let prevDepth = -1;
     let prevOrderedAtDepth = [];
-    for (const it2 of norm2) {
+    for (const it2 of norm3) {
       if (it2.depth > prevDepth) {
         counters[it2.depth] = it2.depth === 0 ? Math.max(0, Math.floor(Number(start) || 1) - 1) : 0;
         indents[it2.depth] = it2.depth === 0 ? "" : indents[it2.depth - 1] + " ".repeat(markerWidth[it2.depth - 1] || 2);
@@ -898,7 +898,7 @@ ${String(lines2[i]).trimStart()}`;
     return `${a ? `${a} ` : ""}class="${cls}"`;
   }
   function listHtml(items, inline3 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
-    const norm2 = normalizeListItems(items, ordered);
+    const norm3 = normalizeListItems(items, ordered);
     let html = "";
     const open = [];
     const openList = (it2) => {
@@ -910,7 +910,7 @@ ${String(lines2[i]).trimStart()}`;
     const closeList = () => {
       html += `</li></${open.pop().tag}>`;
     };
-    for (const it2 of norm2) {
+    for (const it2 of norm3) {
       while (open.length > it2.depth + 1) closeList();
       if (open.length === it2.depth + 1) {
         const cur = open[open.length - 1];
@@ -928,15 +928,15 @@ ${String(lines2[i]).trimStart()}`;
     return html;
   }
   function indentListItem(items, index, delta, ordered = false) {
-    const norm2 = normalizeListItems(items, ordered);
+    const norm3 = normalizeListItems(items, ordered);
     const i = Number(index);
-    if (!(i >= 0 && i < norm2.length) || !delta) return null;
-    const oldDepth = norm2[i].depth;
-    const maxDepth = i === 0 ? 0 : norm2[i - 1].depth + 1;
+    if (!(i >= 0 && i < norm3.length) || !delta) return null;
+    const oldDepth = norm3[i].depth;
+    const maxDepth = i === 0 ? 0 : norm3[i - 1].depth + 1;
     const newDepth = Math.max(0, Math.min(maxDepth, oldDepth + (delta > 0 ? 1 : -1)));
     if (newDepth === oldDepth) return null;
     const shift = newDepth - oldDepth;
-    const out = norm2.map((it2) => ({ ...it2 }));
+    const out = norm3.map((it2) => ({ ...it2 }));
     if (out[i].style) {
       for (let j2 = i + 1; j2 < out.length; j2++) {
         if (out[j2].depth < oldDepth) break;
@@ -959,17 +959,17 @@ ${String(lines2[i]).trimStart()}`;
     return normalizeListItems(out, ordered);
   }
   function listRunState(items, ordered = false, index = 0) {
-    const norm2 = normalizeListItems(items, ordered);
-    if (!norm2.length) return { ordered: !!ordered, style: null, depth: 0 };
-    const i = Math.min(Math.max(0, Number(index) || 0), norm2.length - 1);
-    const run = runOf(norm2, i);
-    return { ordered: norm2[i].ordered, style: norm2[run[0]].style || null, depth: norm2[i].depth };
+    const norm3 = normalizeListItems(items, ordered);
+    if (!norm3.length) return { ordered: !!ordered, style: null, depth: 0 };
+    const i = Math.min(Math.max(0, Number(index) || 0), norm3.length - 1);
+    const run = runOf(norm3, i);
+    return { ordered: norm3[i].ordered, style: norm3[run[0]].style || null, depth: norm3[i].depth };
   }
   function applyListAction(list, index, action) {
     const ordered = !!list?.ordered;
-    const norm2 = normalizeListItems(list?.items, ordered);
+    const norm3 = normalizeListItems(list?.items, ordered);
     const i = Number(index);
-    if (!(i >= 0 && i < norm2.length)) return null;
+    if (!(i >= 0 && i < norm3.length)) return null;
     const act = String(action || "");
     let wantOrdered = null;
     let wantStyle;
@@ -984,7 +984,7 @@ ${String(lines2[i]).trimStart()}`;
         wantStyle = normalizeListStyle(word, wantOrdered);
       }
     } else return null;
-    const out = norm2.map((it2) => ({ ...it2 }));
+    const out = norm3.map((it2) => ({ ...it2 }));
     if (wantOrdered !== null) for (const j2 of runOf(out, i)) out[j2].ordered = wantOrdered;
     if (wantStyle !== void 0) {
       const run = runOf(out, i);
@@ -993,7 +993,7 @@ ${String(lines2[i]).trimStart()}`;
     }
     const topOrdered = out[0].ordered;
     const next = normalizeListItems(out, topOrdered);
-    if (JSON.stringify(next) === JSON.stringify(norm2)) return null;
+    if (JSON.stringify(next) === JSON.stringify(norm3)) return null;
     return { ordered: topOrdered, items: next };
   }
 
@@ -6745,10 +6745,10 @@ ${listStyleProseCss(".doc-blocks")}
       let items = [];
       const cacheKey = `comments-${targetType}`;
       if (!this._painted) {
-        const cached = await wbCacheGet(targetSlug, cacheKey).catch(() => null);
-        if (cached?.items?.length && !this._loaded) {
+        const cached2 = await wbCacheGet(targetSlug, cacheKey).catch(() => null);
+        if (cached2?.items?.length && !this._loaded) {
           this._painted = true;
-          this._resolveAndRender(targetType, targetSlug, cached.items).catch(() => {
+          this._resolveAndRender(targetType, targetSlug, cached2.items).catch(() => {
           });
         }
       }
@@ -24037,6 +24037,33 @@ ${link}` : ""}`;
     return { audio: "Listen to it", video: "Watch video", read: "Read article" }[linkKind(url)];
   }
 
+  // client/src/partner-links.mjs
+  var SITE_HOSTS = /* @__PURE__ */ new Set(["gbti.network", "www.gbti.network", "preview.gbti.network"]);
+  var norm2 = (p) => p.length > 1 ? p.replace(/\/+$/, "") : p;
+  function maskedPathOf(url) {
+    let u;
+    try {
+      u = new URL(String(url ?? ""));
+    } catch {
+      return null;
+    }
+    if (!/^https?:$/.test(u.protocol) || !SITE_HOSTS.has(u.hostname.toLowerCase())) return null;
+    return u.pathname.startsWith("/outbound/") ? norm2(u.pathname) : null;
+  }
+  function displayUrlOf(url, links = []) {
+    const p = maskedPathOf(url);
+    if (!p || !Array.isArray(links)) return url;
+    const hit = links.find((l) => l && typeof l.path === "string" && norm2(l.path) === p && typeof l.destination === "string");
+    return hit ? hit.destination : url;
+  }
+  var cached = null;
+  function loadPartnerLinks({ site = "https://gbti.network", fetchImpl = globalThis.fetch } = {}) {
+    if (!cached) {
+      cached = Promise.resolve().then(() => fetchImpl(`${site}/outbound-links.json`)).then((r) => r && r.ok ? r.json() : null).then((j2) => Array.isArray(j2?.links) ? j2.links.map((l) => ({ path: String(l.path || ""), destination: String(l.destination || "") })) : []).catch(() => []);
+    }
+    return cached;
+  }
+
   // client-ui/src/cat-glyph.mjs
   var GLYPH_SVG = {
     spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
@@ -24732,7 +24759,12 @@ ${link}` : ""}`;
       const badge = share.visibility === "members" ? `<span class="badge">Members</span>` : "";
       const title = share.title ? `<div class="title">${esc2(share.title)}</div>` : "";
       const desc = share.shortDescription ? `<div class="desc">${esc2(share.shortDescription)}</div>` : "";
-      const link = share.url ? `<a class="link" href="${esc2(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc2(hostOf2(share.url))}</a>` : "";
+      const shown = displayUrlOf(share.url, this._partnerLinks);
+      if (maskedPathOf(share.url) && !this._partnerLinks) loadPartnerLinks().then((l) => {
+        this._partnerLinks = l;
+        if (this._reading === share) this.render();
+      });
+      const link = share.url ? `<a class="link" href="${esc2(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(shown)} on ${esc2(hostOf2(shown))}</a>` : "";
       const play = share.url ? shareEmbed(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
       const relay = share.url ? `https://gbti.network/embed/?u=${encodeURIComponent(share.url)}` : "";
@@ -26633,9 +26665,9 @@ ${link}` : ""}`;
       if (this._overview && this._overview._trusted) return;
       if (!this._overview) {
         const ck = await this._memberKey();
-        const cached = ck ? await wbCacheGet(ck, "overview") : null;
-        if (cached?.items?.[0]) {
-          this._overview = cached.items[0];
+        const cached2 = ck ? await wbCacheGet(ck, "overview") : null;
+        if (cached2?.items?.[0]) {
+          this._overview = cached2.items[0];
           if (this._tab === "overview" && !this._editing) this.render();
         }
       }
@@ -26770,11 +26802,11 @@ ${link}` : ""}`;
       const key = await this._memberKey();
       let fresh = false;
       if (key) {
-        const cached = await wbCacheGet(key, ck);
-        if (cached) {
-          this._cache[ck] = cached.items;
+        const cached2 = await wbCacheGet(key, ck);
+        if (cached2) {
+          this._cache[ck] = cached2.items;
           if (this._tab === id && !this._editing) this.render();
-          fresh = cached.fresh;
+          fresh = cached2.fresh;
         }
       }
       if (fresh) return;
@@ -26799,13 +26831,13 @@ ${link}` : ""}`;
       const key = await this._memberKey();
       let fresh = false, painted = false;
       if (key) {
-        const cached = await wbCacheGet(key, "prs");
-        if (cached) {
-          this._prs = cached.items;
+        const cached2 = await wbCacheGet(key, "prs");
+        if (cached2) {
+          this._prs = cached2.items;
           painted = true;
           if (this._tab === id && !this._editing) this.render();
           if (id === "prs") this._loadPrStatuses();
-          fresh = cached.fresh;
+          fresh = cached2.fresh;
         }
       }
       if (fresh) return;
@@ -29804,12 +29836,13 @@ ${BLOCKED_PILL_CSS}
     }
     return null;
   }
-  function sourceCardModel({ url, memberName, creatorUrl = "", creatorName = "" } = {}) {
+  function sourceCardModel({ url, displayUrl = "", memberName, creatorUrl = "", creatorName = "" } = {}) {
     const u = parse2(url);
     if (!u) return null;
-    const host = hostOf5(u);
+    const named = parse2(displayUrl) || u;
+    const host = hostOf5(named);
     const who = String(memberName || "").trim();
-    const creator = creatorFrom(url, { creatorUrl, creatorName });
+    const creator = creatorFrom(named.toString(), { creatorUrl, creatorName });
     if (!creator) {
       return {
         host,
@@ -30303,6 +30336,7 @@ ${BLOCKED_PILL_CSS}
       this._fm = null;
       this._skill = null;
       this._paid = false;
+      this._srcUrl = null;
       this.render();
       this._resolve();
     }
@@ -30319,6 +30353,8 @@ ${BLOCKED_PILL_CSS}
         this._author = author;
       }
       this._skill = await this._resolveSkill(this._item || it2);
+      const shareUrl = (this._item || it2)?.type === "share" ? (this._item || it2).url : "";
+      this._srcUrl = maskedPathOf(shareUrl) ? displayUrlOf(shareUrl, await loadPartnerLinks({ site: SITE22 })) : null;
       this._paid = await this._resolvePaid(this._item || it2);
       await this._backfillCategoryLabels();
       this.render();
@@ -30494,7 +30530,8 @@ ${BLOCKED_PILL_CSS}
       const name = authorName4(it2.author);
       const folder2 = lc8(it2.author) || "gbti";
       const avUrl = this._author?.entry?.avatar || memberAvatarUrl(folder2);
-      const srcFav = it2.type === "share" && it2.url ? faviconFor(it2.url) : "";
+      const srcUrl = this._srcUrl || it2.url;
+      const srcFav = it2.type === "share" && it2.url ? faviconFor(srcUrl) : "";
       const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc2(srcFav)}" alt=""><span class="src-mini">${avatarLayers(folder2, avUrl)}</span></span>` : `<span class="av">${avatarLayers(folder2, avUrl)}</span>`;
       const cats = Array.isArray(it2.categoryLabels) && it2.categoryLabels.length ? `<span class="cats">${it2.categoryLabels.map((c) => `<span class="cat">${esc2(c)}</span>`).join("")}</span>` : "";
       const slug = targetSlugFor(it2);
@@ -30545,8 +30582,9 @@ ${BLOCKED_PILL_CSS}
         this.set(this.css(READER_CSS()));
         return;
       }
+      const srcUrl = this._srcUrl || it2.url;
       const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE22 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(srcUrl)} on ${esc2(hostOf2(srcUrl))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE22 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when2 = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
       const proj = it2.type === "project" ? projectViewModel({ item: it2, frontmatter: this._fm, itemPath: it2.path, paid: this._paid === true }) : null;
       const meta = this._metaHtml(proj ? { ...it2, categoryLabels: [] } : it2, when2);
@@ -30561,7 +30599,7 @@ ${BLOCKED_PILL_CSS}
       else if (it2.type === "share") {
         const authorDisplay = this._author?.entry?.displayName || authorName4(it2.author);
         const sumRaw = String(it2.shortDescription || "").trim();
-        const sumHost = hostOf2(it2.url || "");
+        const sumHost = hostOf2(srcUrl || "");
         const summary = sumRaw ? `<p class="share-summary"><em>"${esc2(sumRaw)}${/[.!?]["')\]]?$/.test(sumRaw) ? "" : "..."}"</em>${sumHost ? ` <span class="share-cite">- ${esc2(sumHost)}</span>` : ""}</p>` : "";
         const note = typeof this._html === "string" && this._html.trim() ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc2(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : "";
         body = `${summary}${note}`;
@@ -30569,8 +30607,8 @@ ${BLOCKED_PILL_CSS}
       const resolved = this._html !== null;
       const slug = targetSlugFor(it2);
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"${Array.isArray(it2.aliases) && it2.aliases.length ? ` data-gbti-target-aliases="${esc2(it2.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
-      const srcCard = it2.type === "share" && it2.url ? sourceCardModel({ url: it2.url, memberName: this._author?.entry?.displayName || authorName4(it2.author), creatorUrl: it2.creatorUrl, creatorName: it2.creatorName }) : null;
-      const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc2(faviconFor(it2.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc2(srcCard.name)}</div><p class="ss-note">${esc2(srcCard.credit)}</p><a class="side-open" href="${esc2(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc2(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc2(srcCard.action.text)}</a></div>` : "";
+      const srcCard = it2.type === "share" && it2.url ? sourceCardModel({ url: it2.url, displayUrl: srcUrl, memberName: this._author?.entry?.displayName || authorName4(it2.author), creatorUrl: it2.creatorUrl, creatorName: it2.creatorName }) : null;
+      const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc2(faviconFor(srcUrl))}" alt="" onerror="this.remove()"><div class="ss-host">${esc2(srcCard.name)}</div><p class="ss-note">${esc2(srcCard.credit)}</p><a class="side-open" href="${esc2(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc2(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc2(srcCard.action.text)}</a></div>` : "";
       const facts = proj ? projectFactsHtml(proj) : "";
       const side = resolved ? `<aside class="side">${facts}${this._authorCardHtml(it2)}${sideLink}${discussion}</aside>` : `<aside class="side">${facts}</aside>`;
       const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc2(this._skill.text)}</pre>` : "";

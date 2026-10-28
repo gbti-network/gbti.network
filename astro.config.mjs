@@ -16,7 +16,8 @@ import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehype
 import { rehypeSponsoredLinks } from './src/lib/rehype-sponsored-links.mjs'; // sow-281: partner redirect links in bodies are rel=sponsored
 import { rehypeExternalLinks } from './src/lib/rehype-external-links.mjs'; // sow-378: a body link that leaves the site opens in a new tab
 import { rehypeTableScroll } from './src/lib/rehype-table-scroll.mjs'; // sow-470: a body table gets its scroll container at build, not from a browser script
-import { outboundRows } from './scripts/lib/outbound-links-store.mjs'; // sow-289: the partner redirect paths
+import { outboundRows, outboundKeywords } from './scripts/lib/outbound-links-store.mjs'; // sow-289: the partner redirect paths
+import { rehypeKeywordLinks } from './src/lib/rehype-keyword-links.mjs'; // 2026-10-28: a partner's name in a body links to its masked path
 
 // SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
 // Output is the default `static` — Pages serves `dist/` directly; no adapter needed.
@@ -69,7 +70,8 @@ export default defineConfig({
     remarkPlugins: [remarkContentBlocks, remarkTableSort],
     // sow-281: LAST, after the sanitizer, because the sanitizer's rel allowlist does not know `sponsored`. Bounded to
     // the exact partner redirect paths in house/outbound-links.yml, so no other link is ever marked.
-    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety, rehypeExternalLinks, rehypeTableScroll, [rehypeSponsoredLinks, { paths: outboundRows(process.cwd()).map(([p]) => p) }]],
+    // The keyword linker sits before both link passes, so a mention it links is marked sponsored like any partner link.
+    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety, [rehypeKeywordLinks, { keywords: outboundKeywords(process.cwd()) }], rehypeExternalLinks, rehypeTableScroll, [rehypeSponsoredLinks, { paths: outboundRows(process.cwd()).map(([p]) => p) }]],
   },
   // Dev-only Astro toolbar — hidden so local testing matches the published view.
   devToolbar: { enabled: false },

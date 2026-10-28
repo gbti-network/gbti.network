@@ -13,13 +13,14 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const store = () => yaml.load(fs.readFileSync(path.join(ROOT, 'house/outbound-links.yml'), 'utf8'));
 const good = (over = {}) => ({ path: '/outbound/x', destination: 'https://example.com/?ref=1', partner: 'example', status: 'live', note: 'why', ...over });
 
-test('the committed store is valid, holds the ten paths, and only five sit under /outbound/', () => {
+test('the committed store is valid, holds the fifteen paths, and five of them sit outside /outbound/', () => {
   const parsed = store();
   assert.deepEqual(validateOutboundLinks(parsed), []);
   const paths = linksOf(parsed).map((e) => e.path);
-  assert.equal(paths.length, 10);
-  assert.equal(paths.filter((p) => p.startsWith('/outbound/')).length, 5, 'a prefix filter would miss half the store');
-  assert.equal(new Set(paths).size, 10);
+  // Ten until 2026-10-28, when the five SurfacedBy paths were added, all under /outbound/.
+  assert.equal(paths.length, 15);
+  assert.equal(paths.filter((p) => !p.startsWith('/outbound/')).length, 5, 'a prefix filter would still miss the five legacy paths');
+  assert.equal(new Set(paths).size, 15);
   assert.equal(linksOf(parsed).find((e) => e.path === '/outbound/tailscale').status, 'placeholder');
   for (const e of linksOf(parsed)) assert.ok(e.note && e.note.length > 20, `${e.path} carries its provenance note`);
 });
@@ -54,7 +55,7 @@ test('validator: duplicate paths, a relative or query-bearing path, a bad status
 test('redirectRowsOf keeps file order; linkSummary defaults an unknown status to live and trims the note', () => {
   const rows = redirectRowsOf({ links: [good({ path: '/b' }), good({ path: '/a' })] });
   assert.deepEqual(rows, [['/b', 'https://example.com/?ref=1'], ['/a', 'https://example.com/?ref=1']]);
-  assert.deepEqual(linkSummary({ path: '/x', destination: 'https://e.com/', partner: 'e', status: 'nope', note: '  n  ' }), { path: '/x', destination: 'https://e.com/', partner: 'e', status: 'live', note: 'n' });
+  assert.deepEqual(linkSummary({ path: '/x', destination: 'https://e.com/', partner: 'e', status: 'nope', note: '  n  ' }), { path: '/x', destination: 'https://e.com/', partner: 'e', status: 'live', note: 'n', keywords: [] });
 });
 
 test('the store reader the generator uses refuses an invalid store, and the rows sit between the utility rows and the moved share', async () => {
@@ -62,9 +63,10 @@ test('the store reader the generator uses refuses an invalid store, and the rows
   // map), so the reader it imports is tested here, not the script.
   const { outboundRows } = await import('../scripts/lib/outbound-links-store.mjs');
   const rows = outboundRows(ROOT);
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 15);
   assert.deepEqual(rows[0], ['/outbound/codeable', 'https://codeable.io/?ref=MzT91']);
   assert.deepEqual(rows[9], ['/outbound/tailscale', 'https://tailscale.com/']);
+  assert.deepEqual(rows[10], ['/outbound/surfacedby', 'https://surfacedby.com/?atp=GBTI']);
   // Position, and sow-359 moved WHERE it is pinned. The rows used to sit in the committed public/_redirects;
   // they are now spliced at a marker by compose-redirects at build, so the file that actually serves is the
   // one worth asserting against. The position itself is unchanged and still behaviour rather than tidiness:
@@ -77,9 +79,9 @@ test('the store reader the generator uses refuses an invalid store, and the rows
   const lines = text.split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(/\s+/)[0]);
   const first = lines.indexOf(rows[0][0]);
   assert.ok(first > 0, 'the first store row is not in the composed output');
-  assert.deepEqual(lines.slice(first, first + 10), rows.map((r) => r[0]), 'the ten rows are contiguous and in file order');
+  assert.deepEqual(lines.slice(first, first + rows.length), rows.map((r) => r[0]), 'the rows are contiguous and in file order');
   assert.equal(lines[first - 1], '/products/email-signature-generator/', 'the row before is the last utility row');
-  assert.ok(lines[first + 10].startsWith('/shares/atwellpub/'), 'the row after is the moved share');
+  assert.ok(lines[first + rows.length].startsWith('/shares/atwellpub/'), 'the row after is the moved share');
   // An invalid store refuses generation rather than writing a broken 301.
   const tmp = fs.mkdtempSync(path.join(ROOT, 'node_modules', '.gbti-outbound-'));
   try {

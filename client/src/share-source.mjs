@@ -170,12 +170,15 @@ export function platformLabel(rawUrl) {
  *
  * Returns null when there is no link to show a card for.
  */
-export function sourceCardModel({ url, memberName, creatorUrl = '', creatorName = '' } = {}) {
+export function sourceCardModel({ url, displayUrl = '', memberName, creatorUrl = '', creatorName = '' } = {}) {
   const u = parse(url);
   if (!u) return null;
-  const host = hostOf(u);
+  // 2026-10-28: `displayUrl` is where a masked partner link really goes (client/src/partner-links.mjs). It decides
+  // what the card NAMES; the action still opens `url`, so the click keeps going through the masked path.
+  const named = parse(displayUrl) || u;
+  const host = hostOf(named);
   const who = String(memberName || '').trim();
-  const creator = creatorFrom(url, { creatorUrl, creatorName });
+  const creator = creatorFrom(named.toString(), { creatorUrl, creatorName });
   if (!creator) {
     return {
       host,

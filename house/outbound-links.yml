@@ -113,3 +113,49 @@ links:
       affiliate or referral parameter, so a click through it credits nobody today. It exists so the path can be
       published and linked now and repointed once a real referral URL is issued. When the real URL arrives, keep
       the explicit path before any query.
+  - path: /outbound/surfacedby
+    destination: https://surfacedby.com/?atp=GBTI
+    partner: surfacedby
+    status: live
+    keywords:
+      - SurfacedBy
+    note: >-
+      Added 2026-10-28 on the owner's SurfacedBy affiliate account: 25% lifetime commission on referred
+      customers. The program runs on Affonso; its admin portal (earnings, payouts, the referral code) is
+      https://surfacedby.affonso.io/success-hub. The destination is the link the program issued. Measured
+      2026-10-28: the homepage, pricing, blog and demo pages all load the Affonso tracking script, which reads
+      atp=GBTI on landing. The keyword makes the site build link the word SurfacedBy in page bodies to this path
+      (the first mention in a body, and the last as well when it appears more than three times). SurfacedBy is
+      a member's product (Ali Khallad, bomsn), so every one of its links on the site points at a path in this
+      family.
+  - path: /outbound/surfacedby/pricing
+    destination: https://surfacedby.com/pricing?atp=GBTI
+    partner: surfacedby
+    status: live
+    note: >-
+      Added 2026-10-28, the pricing page on the same 25% lifetime program (see /outbound/surfacedby). The
+      pricing page loads the tracking script, so the atp parameter attributes here too (measured 2026-10-28).
+  - path: /outbound/surfacedby/demo
+    destination: https://surfacedby.com/demo?atp=GBTI
+    partner: surfacedby
+    status: live
+    note: >-
+      Added 2026-10-28 for the "Try the live demo" button. Clicks count here, but attribution is doubtful:
+      measured 2026-10-28, /demo answers 302 to /dashboard/demo/<id> and the redirect drops the atp parameter
+      before the tracking script on that page can read it. Ask SurfacedBy to carry the query through the
+      redirect, or repoint this to the homepage link, if demo clicks should earn.
+  - path: /outbound/surfacedby/docs
+    destination: https://docs.surfacedby.com/?atp=GBTI
+    partner: surfacedby
+    status: live
+    note: >-
+      Added 2026-10-28 for the documentation button. Clicks count here, but measured 2026-10-28 the docs
+      subdomain does not load the Affonso tracking script, so a visit through this path is unlikely to be
+      credited unless the reader goes on to the main site in the same browser session.
+  - path: /outbound/surfacedby/blog/chatgpt-no-longer-reads-your-page
+    destination: https://surfacedby.com/blog/chatgpt-no-longer-reads-your-page?atp=GBTI
+    partner: surfacedby
+    status: live
+    note: >-
+      Added 2026-10-28 for Ali's share of this SurfacedBy article (members/bomsn/shares/20260928191738-...). The
+      blog page loads the tracking script (measured 2026-10-28), so the atp parameter attributes here.
