@@ -7,7 +7,7 @@ shortDescription: >-
 categories:
   - gbti
   - products
-status: published
+status: draft
 visibility: public
 pricing: free
 tags:
