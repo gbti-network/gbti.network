@@ -469,22 +469,12 @@ const CHANGED = withoutSystemOnlyChanges((process.env.CHANGED_FILES || '').trim(
   readAfter: (f) => fs.readFileSync(path.join(ROOT, f), 'utf8'),
 });
 
-// Items the owner excused from the from-the-author note rule, as "<type>:<slug>" (house/author-note-exempt.yml).
-// Owner-controlled: only the author can write their note, so an item published before the rule existed can be
-// excused here rather than stay unpublished. Validated in scripts/lib/validate-house-config.mjs.
-const AUTHOR_NOTE_EXEMPT = (() => {
-  try {
-    const doc = yaml.load(fs.readFileSync(path.join(ROOT, 'house/author-note-exempt.yml'), 'utf8'));
-    return new Set(Array.isArray(doc?.items) ? doc.items.map(String) : []);
-  } catch {
-    return new Set();
-  }
-})();
-
-// SOW-014: a published project/prompt requires a from-the-author introduction comment (a published
-// comment by the content author targeting it). Enforced ONLY over the files changed in the PR
-// (CHANGED_FILES, set by .github/workflows/content-check.yml), so already-published content is
-// grandfathered and local full-repo runs skip it. The metadata-only merge gate is unchanged.
+// SOW-014: the from-the-author note (a published comment by the content author, flagged authorNote: true). It is
+// OPTIONAL since 2026-10-29 (owner). It used to be required of a published project or prompt, but the editor
+// offers it as an optional box and publish never refused without one, so a member's project went live and the
+// post-publish check drafted it a minute later, telling nobody (LetsGather 2026-10-29, SurfacedBy 2026-09-28, a
+// prompt on 2026-09-29). What is still checked, over the files changed in the PR only: a target carries at most
+// one note per author.
 function buildCommentIndex() {
   const files = [];
   const hc = path.join(ROOT, 'house/comments');
@@ -518,22 +508,6 @@ function validateAuthorIntro() {
   if (!CHANGED.length) return; // no PR diff => grandfather existing content (local + push runs skip this rule)
   const changed = CHANGED;
   const idx = buildCommentIndex();
-  for (const rel of changed) {
-    const m = /^(?:house|members\/[^/]+)\/(projects|prompts)\/[^/]+\/index\.md$/.exec(rel.replace(/^\.?\//, ''));
-    if (!m) continue;
-    const type = m[1].slice(0, -1); // 'project' | 'prompt'
-    const abs = path.join(ROOT, rel);
-    if (!has(abs)) continue; // deleted in the PR
-    const txt = fs.readFileSync(abs, 'utf8');
-    if (field(txt, 'status') !== 'published') continue; // only published content needs an intro
-    const author = field(txt, 'author');
-    const slug = field(txt, 'slug');
-    if (AUTHOR_NOTE_EXEMPT.has(`${type}:${slug}`)) continue; // excused by the owner
-    const count = idx.get(`${type}:${slug}`)?.get(author) ?? 0;
-    if (!author || count < 1) {
-      errors.push(`${rel}: a published ${type} requires a from-the-author note by "${author}" in the same pull request (a published comment with authorNote: true, targetType:${type}, targetSlug:${slug}). See SOW-014.`);
-    }
-  }
   // Exactly one author note per target+author: a changed comment flagged `authorNote` must not collide with another.
   const reported = new Set();
   for (const rel of changed) {

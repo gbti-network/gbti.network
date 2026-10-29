@@ -32,12 +32,13 @@ test('DRIFT: the client core, the website core and the editor agree on which typ
   assert.match(src, /const introSlug = AUTHOR_NOTE_TYPES\.has\(this\.type\)/);
 });
 
-// The REQUIREMENT is narrower than the permission, and conflating them would block every article that has no
-// note. validate-content enforces an intro for product/prompt only; nothing requires one of a post.
+// The note is PERMITTED on a post, a project and a prompt, and REQUIRED of none of them: since 2026-10-29 (owner) it
+// is optional on a project and a prompt too (test/author-note-optional.test.mjs runs the validator to prove it).
 test('an author note is PERMITTED on a post but never REQUIRED of one', () => {
   assert.ok(AUTHOR_NOTE_TYPES.has('post'));
   const validate = repoFile('scripts/validate-content.mjs');
-  assert.match(validate, /a published project\/prompt requires a from-the-author introduction comment/);
+  assert.match(validate, /OPTIONAL since 2026-10-29/);
+  assert.doesNotMatch(validate, /requires a from-the-author note by/, 'the error that drafted a member\'s live project is gone');
   assert.doesNotMatch(validate, /requires? a from-the-author (introduction )?comment[^\n]*\bpost\b/);
 });
 

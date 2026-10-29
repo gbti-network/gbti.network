@@ -62,13 +62,5 @@ test('the three changed-file rules read the filtered list, and both workflows pa
   assert.match(src('scripts/remediate-published.mjs'), /env: \{ \.\.\.env, CHANGED_FILES: changed\.join\(' '\) \}/, 'the remediation forwards CHANGED_BASE to the validator');
 });
 
-test('the author-note exemption names real items, and the rule honours it', () => {
-  const ex = yaml.load(src('house/author-note-exempt.yml'));
-  assert.deepEqual(ex.items, ['prompt:pdf-ua-1-remediation-assistant']);
-  assert.ok(fs.existsSync(new URL('members/nareshdevineni/prompts/pdf-ua-1-remediation-assistant/index.md', ROOT)));
-  const v = src('scripts/validate-content.mjs');
-  assert.match(v, /if \(AUTHOR_NOTE_EXEMPT\.has\(`\$\{type\}:\$\{slug\}`\)\) continue;/);
-  const h = src('scripts/lib/validate-house-config.mjs');
-  assert.match(h, /^  validateAuthorNoteExempt\(\);$/m, 'the exemption file is itself checked');
-  assert.match(h, /names no content file/);
-});
+// The author-note exemption (house/author-note-exempt.yml) was retired on 2026-10-29 with the rule it excused;
+// test/author-note-optional.test.mjs proves both are gone.

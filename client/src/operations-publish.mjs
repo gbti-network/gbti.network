@@ -318,10 +318,9 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
   try {
     plan = await planMemberFiles({ built, body, encrypt });
   } catch (err) { throw lockedNudge(err); }
-  // SOW-014: a published project/prompt must carry a from-the-author intro comment IN THE SAME PR. When authorNote
-  // is provided, seed intro-<slug>.md (public, authorNote:true) into this same publish, so validate-content's
-  // diff-scoped intro check passes and a compliant prompt/product ships in ONE PR (deterministic id -> a re-publish
-  // updates the same comment, never duplicating it).
+  // SOW-014: the from-the-author note (OPTIONAL since 2026-10-29) ships IN THE SAME PR as its item. When authorNote
+  // is provided, seed intro-<slug>.md (public, authorNote:true) into this same publish (deterministic id -> a
+  // re-publish updates the same comment, never duplicating it). A publish without one is complete as it stands.
   const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
   // A descriptive PR title / commit message / body (used only when the caller gave none), so the pull request
   // reads clearly and the activity feed (which shows the PR title) is not a bare "Update".

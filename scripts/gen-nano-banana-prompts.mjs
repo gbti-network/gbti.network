@@ -84,7 +84,7 @@ function writePrompt(item) {
   ].join('\n');
   fs.writeFileSync(path.join(dir, 'index.md'), fm);
 
-  // From-the-author intro comment (required for a published prompt, SOW-014).
+  // From-the-author intro comment (SOW-014; optional since 2026-10-29, written here because these prompts have one).
   const intro = [
     '---',
     'type: comment',
