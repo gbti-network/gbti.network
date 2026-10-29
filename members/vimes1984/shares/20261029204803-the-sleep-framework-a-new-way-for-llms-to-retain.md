@@ -13,8 +13,8 @@ tags:
   - continual-learning
   - llms
   - ai-research
-image: >-
-  https://storage.googleapis.com/gweb-research2023-media/images/HO_previewImage1.width-800.format-jpeg.jpg
+image: https://gbti.network/media/shares/vimes1984/20261029204803-the-sleep-framework-a-new-way-for-llms-to-retain-5bc700a6.webp
+imageSource: https://storage.googleapis.com/gweb-research2023-media/images/HO_previewImage1.width-800.format-jpeg.jpg
 id: 20261029204803-the-sleep-framework-a-new-way-for-llms-to-retain
 createdAt: '2026-10-29T20:48:03.291Z'
 type: share
