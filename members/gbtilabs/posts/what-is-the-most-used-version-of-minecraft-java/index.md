@@ -24,17 +24,30 @@ author: gbtilabs
 
 On 24 October 2026, 26.3 was the most used version of Minecraft Java: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats. 1.21.11 and 26.2 were within 0.32 percentage points, at 23.12% and 23.06%. 26.2 had led 50 of the week's 55 readings from 17 October 2026 to 24 October 2026 before 26.3 moved ahead on the last day.
 
-We measured the servers that report to bStats, plus one week of mod downloads for Fabric, Forge, NeoForge and Quilt on Modrinth, with CurseForge weekly totals beside them.
+This article shows which versions Minecraft Java servers run and how that differs between server software, including how soon each one shipped the newest versions. It also shows which versions Fabric, Forge, NeoForge and Quilt players and servers download mods for, how the most used version has changed since July 2018, and which Java runtimes and proxies servers run.
+
+The data comes from these sources:
+
+- [bStats global charts](https://bstats.org/global/bukkit): the share of servers on each Minecraft version, each server software and each Java runtime, read in full on the first, fourth and last day of the week from 17 October 2026 to 24 October 2026, and every three hours in between.
+- [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): the versions on each server software (Paper's page is the one linked; the others follow the same pattern).
+- [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
+- [Modrinth API](https://api.modrinth.com/v2): one week of downloads, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods of each loader, split by Minecraft version.
+- [CurseForge API](https://api.curseforge.com): each loader's total downloads for the same week.
+- [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
+- The build lists of [PaperMC](https://fill.papermc.io/v3/projects/paper), [Purpur](https://api.purpurmc.org/v2/purpur) and [Leaf](https://api.leafmc.one/v2/projects/leaf): when each one shipped a build for each new Minecraft version.
+- [Mojang's version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release dates and the list of every Java release. A version string that matched no release, such as a mod's own version or a typo, was left out of the shares.
+
+The article starts with which versions servers run, including Mojang's year-based version numbers. Next is the version mix on Paper, Purpur and the forks, with when each one shipped the new versions and the Forge and NeoForge hybrids. After that come the versions Fabric, Forge, NeoForge and Quilt players download, the most used version since July 2018 with the servers still on 1.8, and Java runtimes and proxies. It ends with how we measured (the full method sits behind a toggle there), short answers to three common questions, and the list of sources.
 
 ## Which Minecraft versions servers run
 
-The ten most used versions account for the bulk of servers. Three versions together hold 69.55%. Just over half run one of the new year-based versions (53.67%), the 1.21 line still has 36.46%, and 1.20.1 and 1.8.8 still hold 2.20% and 2.15%.
+Three versions together hold 69.55%. Just over half run one of the new year-based versions (53.67%), the 1.21 line still has 36.46%, and 1.20.1 and 1.8.8 still hold 2.20% and 2.15%.
 
-The other 58 releases share 7.99%. The scale has grown: about 150,000 Bukkit-family servers reported in October 2023, and about 188,000 in October 2026.
+Beyond the ten most used versions, the other 58 releases share 7.99%. About 150,000 Bukkit-family servers reported in October 2023, and about 188,000 in October 2026.
 
 ![The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a Java release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%.](./images/most-used-versions.svg)
 
-### The new year-based version numbers
+### Mojang's year-based version numbers
 
 Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that both Java and Bedrock editions would move to year-based version numbers: the year first, then the release number, then the hotfix number. Java writes the hotfix as a separate third number, whereas Bedrock counts upwards from the release number itself. The last version to start with "1." was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
 
@@ -185,18 +198,16 @@ The limits of this measurement are:
 
 ## Short answers about Minecraft Java versions
 
-### What is the latest version of Minecraft Java?
-The latest release is 26.3. Mojang shipped it on 15 September 2026.
+**What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026.
 
-### Which versions do Fabric and Forge players use most?
-On Modrinth this week, Fabric's most downloaded version was 26.3. Forge's was 1.20.1.
+**Which versions do Fabric and Forge players use most?** On Modrinth this week, Fabric's most downloaded version was 26.3. Forge's was 1.20.1.
 
-### Why do some servers still run 1.8?
-The sources do not state a reason. Hypixel said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
+**Why do some servers still run 1.8?** The sources do not state a reason. Hypixel said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
 
 ## Sources
 
-- [bStats global Bukkit charts](https://bstats.org/global/bukkit): server versions, software, Java runtimes, proxies and historical counts.
+- [bStats global Bukkit charts](https://bstats.org/global/bukkit): server versions, software, Java runtimes and historical counts.
+- [bStats Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord) charts: proxy counts.
 - [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): versions on each server software (Paper's page shown; the others follow the same address pattern).
 - [bStats software API](https://bstats.org/api/v2/software): per-IP submission caps.
 - [Internet Archive](https://web.archive.org/): archived bStats charts from 2018 to 2026.
@@ -204,6 +215,8 @@ The sources do not state a reason. Hypixel said in 2018 that it was still optimi
 - [Mojang new-version numbering](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system): the year-based scheme and Java's hotfix format.
 - [Minecraft Wiki version formats](https://minecraft.wiki/w/Version_formats): 1.21.11 as the last "1." release.
 - [PaperMC downloads service](https://fill.papermc.io/v3/projects/paper): build dates and support status for Paper and Folia.
+- [Purpur downloads API](https://api.purpurmc.org/v2/purpur): Purpur build dates.
+- [Leaf downloads API](https://api.leafmc.one/v2/projects/leaf): Leaf build dates and release channels.
 - [Mojang 26.1 release notes](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1): Java 25 requirement.
 - [Mojang 1.9 combat update](https://web.archive.org/web/20161218214458/http://mojang.com/2016/02/minecraft-19-combat-update/): attack cooldown.
 - [Hypixel 1.8.9 statement](https://hypixel.net/threads/hypixel-now-supports-minecraft-version-1-13.1698790/): optimization for 1.8.9.
