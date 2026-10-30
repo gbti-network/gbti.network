@@ -4,7 +4,7 @@ slug: what-is-the-most-used-version-of-minecraft-java
 status: draft
 visibility: public
 publicStub: false
-excerpt: "On 24 October 2026, 26.3 was the most used version of Minecraft Java: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats."
+excerpt: "26.3 leads on Paper and the other plugin servers and in Fabric and Quilt mod downloads; Forge mods are downloaded most for 1.20.1 and NeoForge mods for 1.21.1."
 categories:
   - entertainment
   - gaming
@@ -25,11 +25,11 @@ author: gbtilabs
 
 The article answers six questions about the versions of Minecraft Java people use in 2026:
 
-- Which versions do most servers run?
-- How does that change between Paper, Purpur and the other servers that run plugins?
+- Which version is most used on each major platform: Paper and its forks, Fabric, Forge, NeoForge and Quilt?
+- How does the version mix change between Paper, Purpur and the other servers that run plugins?
 - How fast did each server software ship the new versions?
-- Which versions do Fabric, Forge, NeoForge and Quilt players download mods for?
-- How has the most used version changed since July 2018?
+- How many downloads does each mod loader reach?
+- How has the most used version on plugin servers changed since July 2018?
 - Which Java version do servers run, and which proxy software is most common?
 
 Fabric, Forge, NeoForge and Quilt servers do not report their version to any statistics service, so the article measures them by mod downloads.
@@ -45,23 +45,38 @@ The data comes from these sources:
 - The build lists of [PaperMC](https://fill.papermc.io/v3/projects/paper), [Purpur](https://api.purpurmc.org/v2/purpur) and [Leaf](https://api.leafmc.one/v2/projects/leaf): when each one shipped a build for each new Minecraft version.
 - [Mojang's version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release dates and the list of every Java release. A version string that matched no release, such as a mod's own version or a typo, was left out of the shares.
 
-The article starts with which versions servers run, including Mojang's year-based version numbers. Next is the version mix on Paper, Purpur and the forks, with when each one shipped the new versions and the Forge and NeoForge hybrids. After that come the versions Fabric, Forge, NeoForge and Quilt players download, the most used version since July 2018 with the servers still on 1.8, and Java runtimes and proxies. It ends with how we measured (the full method sits behind a toggle there), short answers to three common questions, and the list of sources.
+The article starts with the most used version on each platform and a note on Mojang's year-based version numbers. Paper and the other plugin servers come next, with when each one shipped the new versions and the Forge and NeoForge hybrids. Fabric, Forge, NeoForge and Quilt follow, one section each, and then how many downloads each loader reaches. After that come the version leaders on plugin servers since July 2018, with the servers still on 1.8, and Java runtimes and proxies. It ends with how we measured (the full method sits behind a toggle there), short answers to three common questions, and the list of sources.
 
-## Which Minecraft versions servers run
+## The most used Minecraft Java version on each platform
 
-On 24 October 2026, 26.3 was the most used version of Minecraft Java: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats. 1.21.11 and 26.2 were within 0.32 percentage points, at 23.12% and 23.06%. 26.2 had led 50 of the week's 55 readings from 17 October 2026 to 24 October 2026 before 26.3 moved ahead on the last day.
+Each platform is measured by the best public data that exists for it: the servers that report to bStats for Paper and its forks, and one week of mod downloads for Fabric, Forge, NeoForge and Quilt, counting the 500 most downloaded mods of each on Modrinth from 17 October 2026 to 24 October 2026. A share of servers and a share of downloads measure different things, so read each row on its own.
 
-Three versions together hold 69.55%. Just over half run one of the new year-based versions (53.67%), the 1.21 line still has 36.46%, and 1.20.1 and 1.8.8 still hold 2.20% and 2.15%.
+<!-- sort: off -->
+| Platform | Most used | Share | Measured by |
+|---|---|---|---|
+| Paper and its forks | 26.3 | 23.38% | servers, bStats |
+| Fabric | 26.3 | 22.14% | mod downloads, Modrinth |
+| Forge | 1.20.1 | 66.30% | mod downloads, Modrinth |
+| NeoForge | 1.21.1 | 39.10% | mod downloads, Modrinth |
+| Quilt | 26.3 | 20.00% | mod downloads, Modrinth |
 
-Beyond the ten most used versions, the other 58 releases share 7.99%. About 150,000 Bukkit-family servers reported in October 2023, and about 188,000 in October 2026.
+On 24 October 2026, 26.3 was the most used version on Paper and the other plugin servers: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats. 1.21.11 and 26.2 were within 0.32 percentage points, at 23.12% and 23.06%. 26.2 had led 50 of the week's 55 readings from 17 October 2026 to 24 October 2026 before 26.3 moved ahead on the last day.
 
-![The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a Java release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%.](./images/most-used-versions.svg)
+Players and servers both download mods, so the four loader rows describe both together. Only the first place in each loader is firm. A release that lists several Minecraft versions has its downloads split evenly across them; counting only releases that list a single version keeps each loader's leader but reorders the places below it. For Quilt even the first place depends on the week's updates, as the Quilt section explains.
+
+Mojang's own server software, the plain unmodded one, reports to no statistics service either, so it has no row.
 
 ### Mojang's year-based version numbers
 
 Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that both Java and Bedrock editions would move to year-based version numbers: the year first, then the release number, then the hotfix number. Java writes the hotfix as a separate third number, whereas Bedrock counts upwards from the release number itself. The last version to start with "1." was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
 
-## The version mix on Paper, Purpur and the forks
+## Paper and the other plugin servers
+
+On the 196,558 servers that reported a Java release to bStats, three versions together hold 69.55%. Just over half run one of the new year-based versions (53.67%), the 1.21 line still has 36.46%, and 1.20.1 and 1.8.8 still hold 2.20% and 2.15%.
+
+Beyond the ten most used versions, the other 58 releases share 7.99%. About 150,000 Bukkit-family servers reported in October 2023, and about 188,000 in October 2026.
+
+![The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a Java release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%.](./images/most-used-versions.svg)
 
 bStats classifies 190,740 servers by software. Paper runs on 74.39% of them, Purpur on 9.05%, Spigot on 6.30%, Leaf on 2.31%, UniverseSpigot on 1.10%, [Arclight](https://github.com/IzzelAliz/Arclight) on 0.80%, and Folia on 0.71%. Another 2.77% report a name outside bStats' list.
 
@@ -112,19 +127,11 @@ Mohist, Youer, Magma, Magma Maintained, Ketting and LoliServer each sit mostly o
 
 Arclight (0.80% of servers), the largest hybrid, has no bStats page of its own. Spigot has no version page of its own, so it shows up only in the totals.
 
-## What Fabric, Forge, NeoForge and Quilt players download
+## Fabric
 
-Fabric, Forge, NeoForge and Quilt servers do not report their Minecraft version to any statistics service, so bStats cannot count them the way it counts Paper servers. We measured the closest thing available: one week of mod downloads from 17 October 2026 to 24 October 2026 for each loader, counting the 500 most downloaded mods on Modrinth. Players and servers both download mods, so the numbers describe both together.
+Fabric's most downloaded version is 26.3 at 22.14%. The next two are 1.20.1 at 16.19% and 1.21.1 at 14.89%. These are shares of one week of downloads of the 500 most downloaded Fabric mods on Modrinth, by players and servers together.
 
-![Share of one week of mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per loader (Modrinth only): Fabric: 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. NeoForge: 1.21.1 39.1%, 1.20.1 21.7%, 1.21 8.6%, 26.3 8.2%, 1.20 4.6%, 26.2 3.5%. Forge: 1.20.1 66.3%, 1.20 13.0%, 1.19.2 2.3%, 1.20.2 1.8%, 1.20.4 1.6%, 1.20.3 1.5%. Quilt: 26.3 20.0%, 1.20.1 16.8%, 1.21.11 12.7%, 1.21.1 10.0%, 26.2 9.3%, 1.21 6.1%.](./images/loaders.svg)
-
-Only the first place in each loader is firm. A release that lists several Minecraft versions has its downloads split evenly across them; counting only releases that list a single version keeps each loader's leader but reorders the places below it. Quilt's order also rests on this week's updates: counting only releases that existed before the week, 1.20.1 edges ahead of 26.3.
-
-### Paper and Fabric side by side
-
-The chart puts the two answers next to each other. Paper's panel is a share of servers, and Fabric's is a share of one week's mod downloads.
-
-![Paper and Fabric side by side. Paper servers (share of 178,346 servers, 24 October 2026): 26.3 30.5%, 26.2 25.4%, 1.21.11 19.8%, 26.1.2 7.4%, 1.21.4 3.1%, 1.21.10 2.6%. Fabric mod downloads (share of one week of downloads, Modrinth): 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. The download week runs from 17 October 2026 to 24 October 2026.](./images/paper-and-fabric.svg)
+![Share of one week of Fabric mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Fabric mods (Modrinth only): 26.3 22.1%; 1.20.1 16.2%; 1.21.1 14.9%; 1.21.11 13.0%; 26.2 9.4%; 1.21 4.9%.](./images/loader-fabric.svg)
 
 ### Fabric API by version
 
@@ -141,11 +148,37 @@ Fabric's own [documentation](https://docs.fabricmc.net/players/installing-mods) 
 
 *Fabric API on Modrinth, 17 October 2026 to 24 October 2026.*
 
-### What the loaders' own teams expect
+### Side by side with Paper
 
-Forge [treats](https://forums.minecraftforge.net/topic/154387-forge-474-minecraft-1201/) 1.20.1 as its long-lived version, and NeoForge [treats](https://neoforged.net/news/21.2release/) 1.21.1 that way. In March 2026 NeoForge [said](https://neoforged.net/news/26.1release/) 26.1 would likely replace 1.21.1 as the next stable modding version. This week 26.x versions took 13.86% of NeoForge's Modrinth downloads against 39.10% for 1.21.1, so that replacement has not happened yet.
+The chart puts the two answers next to each other. Paper's panel is a share of servers, and Fabric's is a share of one week's mod downloads.
 
-### How many downloads each loader reaches
+![Paper and Fabric side by side. Paper servers (share of 178,346 servers, 24 October 2026): 26.3 30.5%, 26.2 25.4%, 1.21.11 19.8%, 26.1.2 7.4%, 1.21.4 3.1%, 1.21.10 2.6%. Fabric mod downloads (share of one week of downloads, Modrinth): 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. The download week runs from 17 October 2026 to 24 October 2026.](./images/paper-and-fabric.svg)
+
+## Forge
+
+Forge's most downloaded version is 1.20.1 at 66.30%, ahead of 1.20 at 13.02%. Forge [treats](https://forums.minecraftforge.net/topic/154387-forge-474-minecraft-1201/) 1.20.1 as its long-lived version.
+
+![Share of one week of Forge mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Forge mods (Modrinth only): 1.20.1 66.3%; 1.20 13.0%; 1.19.2 2.3%; 1.20.2 1.8%; 1.20.4 1.6%; 1.20.3 1.5%.](./images/loader-forge.svg)
+
+bStats counts a few servers that run Forge mods and plugins together. Mohist, a Forge hybrid, has 1,189 servers on a release, and 69.64% of them run 1.20.1, the same version Forge mods are downloaded for most. Ketting, also built on Forge, has 40, and 97.50% run 1.20.1.
+
+## NeoForge
+
+NeoForge's most downloaded version is 1.21.1 at 39.10%, followed by 1.20.1 at 21.71%. NeoForge [treats](https://neoforged.net/news/21.2release/) 1.21.1 as its long-lived version. In March 2026 NeoForge [said](https://neoforged.net/news/26.1release/) 26.1 would likely replace 1.21.1 as the next stable modding version. This week 26.x versions took 13.86% of NeoForge's Modrinth downloads, so that replacement has not happened yet.
+
+![Share of one week of NeoForge mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded NeoForge mods (Modrinth only): 1.21.1 39.1%; 1.20.1 21.7%; 1.21 8.6%; 26.3 8.2%; 1.20 4.6%; 26.2 3.5%.](./images/loader-neoforge.svg)
+
+Youer, a NeoForge hybrid that bStats counts, has 664 servers on a release, and 90.21% of them run 1.21.1, NeoForge's most downloaded version.
+
+## Quilt
+
+Quilt's most downloaded version is 26.3 at 20.00%. The next two are 1.20.1 at 16.80% and 1.21.11 at 12.69%.
+
+![Share of one week of Quilt mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Quilt mods (Modrinth only): 26.3 20.0%; 1.20.1 16.8%; 1.21.11 12.7%; 1.21.1 10.0%; 26.2 9.3%; 1.21 6.1%.](./images/loader-quilt.svg)
+
+Quilt's order rests on this week's updates: counting only releases that existed before the week, 1.20.1 edges ahead of 26.3.
+
+## Downloads across the four loaders
 
 A mod built for several loaders counts in each loader's row, so the rows are never added up or read as shares. CurseForge appears only here, because its per-version download counts did not update during the week.
 
@@ -158,7 +191,7 @@ A mod built for several loaders counts in each loader's row, so the rows are nev
 
 *The 500 most downloaded mods per loader, 17 October 2026 to 24 October 2026. A mod built for several loaders counts in each row, so the rows do not add up.*
 
-## The most used version since 2018
+## Version leaders on plugin servers since 2018
 
 The Internet Archive holds copies of the bStats global version chart going back to July 2018. We found 15 versions that led in those copies, starting with 1.12.2 at 49.40% in July 2018. The record share is 51.83%, held by 1.20.1 in September 2023. 1.21.11 reached 48.05% in March 2026.
 
@@ -176,7 +209,7 @@ The sources do not state why servers stayed on 1.8.
 
 ## Java runtimes and proxies
 
-Java 25 runs 66.34% of servers and Java 21 runs 23.78%. Every year-based version needs Java 25 ([Mojang](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1)), and more servers run Java 25 than run a year-based version (53.67%), so some servers still on 1.21 already use Java 25.
+Java 25 runs 66.34% of the servers that report to bStats and Java 21 runs 23.78%. Every year-based version needs Java 25 ([Mojang](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1)), and more servers run Java 25 than run a year-based version (53.67%), so some servers still on 1.21 already use Java 25.
 
 ![Java runtime of the 197,495 Bukkit-family servers reporting to bStats, read 24 October 2026: Java 25 66.3%; Java 21 23.8%; Java 17 2.7%; Java 8 2.3%; Java 26 2.3%; Java 22 0.8%; Everything else 1.7%.](./images/java-runtimes.svg)
 
@@ -210,7 +243,7 @@ The limits of this measurement are:
 
 **What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026.
 
-**Which versions do Fabric and Forge players use most?** On Modrinth this week, Fabric's most downloaded version was 26.3. Forge's was 1.20.1.
+**Which versions do Fabric and Forge players use most?** On Modrinth this week, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
 
 **Why do some servers still run 1.8?** The sources do not state a reason. Hypixel said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
 

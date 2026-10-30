@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="332" viewBox="0 0 760 332" role="img" aria-label="Share of one week of Fabric mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Fabric mods (Modrinth only): 26.3 22.1%; 1.20.1 16.2%; 1.21.1 14.9%; 1.21.11 13.0%; 26.2 9.4%; 1.21 4.9%." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Share of one week of Fabric mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Fabric mods (Modrinth only): 26.3 22.1%; 1.20.1 16.2%; 1.21.1 14.9%; 1.21.11 13.0%; 26.2 9.4%; 1.21 4.9%.</title>
+<rect x="0.5" y="0.5" width="759" height="331" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Which versions Fabric mods are downloaded for</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of one week of downloads, 17 October 2026 to 24 October 2026, top 500 Fabric mods, Modrinth only</text>
+<text x="28.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">26.3</text>
+<path d="M118.0,98.0 H672.0 Q676.0,98.0 676.0,102.0 V114.0 Q676.0,118.0 672.0,118.0 H118.0 Z" fill="#2a78d6"/>
+<text x="684.0" y="112.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">22.1%</text>
+<text x="28.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
+<path d="M118.0,132.0 H522.0 Q526.0,132.0 526.0,136.0 V148.0 Q526.0,152.0 522.0,152.0 H118.0 Z" fill="#2a78d6"/>
+<text x="534.0" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">16.2%</text>
+<text x="28.0" y="180.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
+<path d="M118.0,166.0 H489.3 Q493.3,166.0 493.3,170.0 V182.0 Q493.3,186.0 489.3,186.0 H118.0 Z" fill="#2a78d6"/>
+<text x="501.3" y="180.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">14.9%</text>
+<text x="28.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
+<path d="M118.0,200.0 H441.1 Q445.1,200.0 445.1,204.0 V216.0 Q445.1,220.0 441.1,220.0 H118.0 Z" fill="#2a78d6"/>
+<text x="453.1" y="214.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">13.0%</text>
+<text x="28.0" y="248.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
+<path d="M118.0,234.0 H351.9 Q355.9,234.0 355.9,238.0 V250.0 Q355.9,254.0 351.9,254.0 H118.0 Z" fill="#2a78d6"/>
+<text x="363.9" y="248.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">9.4%</text>
+<text x="28.0" y="282.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21</text>
+<path d="M118.0,268.0 H236.7 Q240.7,268.0 240.7,272.0 V284.0 Q240.7,288.0 236.7,288.0 H118.0 Z" fill="#2a78d6"/>
+<text x="248.7" y="282.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">4.9%</text>
+<text x="28.0" y="314.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: Modrinth download counts. GBTI Network research.</text>
+</svg>
