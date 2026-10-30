@@ -23,8 +23,6 @@ type: post
 author: gbtilabs
 ---
 
-On 24 October 2026, 26.3 was the most used version of Minecraft Java: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats. 1.21.11 and 26.2 were within 0.32 percentage points, at 23.12% and 23.06%. 26.2 had led 50 of the week's 55 readings from 17 October 2026 to 24 October 2026 before 26.3 moved ahead on the last day.
-
 This article shows which versions Minecraft Java servers run and how that differs between server software, including how soon each one shipped the newest versions. It also shows which versions Fabric, Forge, NeoForge and Quilt players and servers download mods for, how the most used version has changed since July 2018, and which Java runtimes and proxies servers run.
 
 The data comes from these sources:
@@ -41,6 +39,8 @@ The data comes from these sources:
 The article starts with which versions servers run, including Mojang's year-based version numbers. Next is the version mix on Paper, Purpur and the forks, with when each one shipped the new versions and the Forge and NeoForge hybrids. After that come the versions Fabric, Forge, NeoForge and Quilt players download, the most used version since July 2018 with the servers still on 1.8, and Java runtimes and proxies. It ends with how we measured (the full method sits behind a toggle there), short answers to three common questions, and the list of sources.
 
 ## Which Minecraft versions servers run
+
+On 24 October 2026, 26.3 was the most used version of Minecraft Java: it ran on 23.38% of the 196,558 servers that reported a Java release to bStats. 1.21.11 and 26.2 were within 0.32 percentage points, at 23.12% and 23.06%. 26.2 had led 50 of the week's 55 readings from 17 October 2026 to 24 October 2026 before 26.3 moved ahead on the last day.
 
 Three versions together hold 69.55%. Just over half run one of the new year-based versions (53.67%), the 1.21 line still has 36.46%, and 1.20.1 and 1.8.8 still hold 2.20% and 2.15%.
 
