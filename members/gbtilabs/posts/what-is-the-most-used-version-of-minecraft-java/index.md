@@ -1,5 +1,5 @@
 ---
-title: "What Is the Most Used Version of Minecraft Java?"
+title: "What Is the Most Used Version of Minecraft Java in 2026?"
 slug: what-is-the-most-used-version-of-minecraft-java
 status: draft
 visibility: public
@@ -15,6 +15,7 @@ tags:
   - minecraft-servers
   - mods
   - research
+coverImage: ./images/minecraft-java-versions-2026.webp
 layout: journal
 featured: false
 publishedAt: '2026-10-24T00:00:00.000Z'
