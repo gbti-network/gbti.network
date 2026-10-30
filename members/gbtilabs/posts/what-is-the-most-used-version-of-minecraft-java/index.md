@@ -23,7 +23,16 @@ type: post
 author: gbtilabs
 ---
 
-This article shows which versions Minecraft Java servers run and how that differs between server software, including how soon each one shipped the newest versions. It also shows which versions Fabric, Forge, NeoForge and Quilt players and servers download mods for, how the most used version has changed since July 2018, and which Java runtimes and proxies servers run.
+The article answers six questions about the versions of Minecraft Java people use in 2026:
+
+- Which versions do most servers run?
+- How does that change between Paper, Purpur and the other servers that run plugins?
+- How fast did each server software ship the new versions?
+- Which versions do Fabric, Forge, NeoForge and Quilt players download mods for?
+- How has the most used version changed since July 2018?
+- Which Java version do servers run, and which proxy software is most common?
+
+Fabric, Forge, NeoForge and Quilt servers do not report their version to any statistics service, so the article measures them by mod downloads.
 
 The data comes from these sources:
 
