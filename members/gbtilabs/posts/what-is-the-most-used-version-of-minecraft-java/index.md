@@ -23,14 +23,13 @@ type: post
 author: gbtilabs
 ---
 
-This article finds the most used version of Minecraft Java in 2026 by looking at the custom online servers people play it on. A player runs the version of the server they join, so the servers give the answer. It answers six questions:
+This article finds the most used version of Minecraft Java in 2026 by looking at the custom online servers people play it on. A player runs the version of the server they join, so the servers give the answer. It answers five questions:
 
-- Which version is most used on Paper-family servers, and on Fabric, Forge, NeoForge and Quilt servers?
-- Which versions do Paper, Purpur and the other Paper-family servers run?
-- How quickly did Paper, Purpur, Leaf and Folia release builds for each new Minecraft version?
-- How many mod downloads do Fabric, Forge, NeoForge and Quilt each get in a week?
-- How has the most used version on Paper-family servers changed over the years?
-- Which version of Java do servers run on, and which proxy is more common, Velocity or BungeeCord?
+- What is the most used version of Minecraft Java?
+- What version do most Minecraft servers use?
+- What is the most popular Minecraft version for mods?
+- Is Fabric or Forge more popular?
+- Which is more popular, Paper, Spigot or Purpur?
 
 Paper-family servers report their version to bStats, a statistics service built into Paper, so the article counts them directly. Fabric, Forge, NeoForge and Quilt servers report their version nowhere, so the article estimates their versions from how often mods for each version are downloaded.
 
@@ -180,7 +179,7 @@ Quilt's lead is not firm. Part of 26.3's share comes from mod updates released d
 
 ## Weekly mod downloads by platform
 
-This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge, the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
+Fabric mods are downloaded most on Modrinth and NeoForge mods on CurseForge, where Forge is second; Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge, the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
 
 | Platform | Modrinth, weekly downloads | CurseForge, weekly downloads |
 |---|---|---|
