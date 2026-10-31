@@ -23,7 +23,7 @@ type: post
 author: gbtilabs
 ---
 
-People play Minecraft Java on custom online servers, and to join a server, a player runs the version that server runs. That makes the servers the place to look for which versions people play. This article answers six questions about them in 2026:
+This article finds the most used version of Minecraft Java in 2026 by looking at the custom online servers people play it on. A player runs the version of the server they join, so the servers give the answer. It answers six questions:
 
 - Which version is most used on each kind of server: plugin servers such as Paper and Purpur, and Fabric, Forge, NeoForge and Quilt?
 - Which versions do Paper, Purpur and the other plugin servers run?
