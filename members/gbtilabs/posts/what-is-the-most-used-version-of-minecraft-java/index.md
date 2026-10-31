@@ -23,7 +23,7 @@ type: post
 author: gbtilabs
 ---
 
-Minecraft Java is the edition people play on custom online servers. A player who joins a server plays on the server's own version, and the game [turns away](https://minecraft.wiki/w/Server) a client that is older or newer than the server, unless the server runs a plugin such as [ViaVersion](https://github.com/ViaVersion/ViaVersion) that lets other versions in. Because a player's version follows the server's, the article measures which versions people use through servers: the versions servers report, and for modded servers, the versions their mods are downloaded for. It answers six questions about those versions in 2026:
+People play Minecraft Java on custom online servers, and to join a server, a player runs the version that server runs. That makes the servers the place to look for which versions people play. This article answers six questions about them in 2026:
 
 - Which version is most used on each major platform: Paper and its forks, Fabric, Forge, NeoForge and Quilt?
 - How does the version mix change between Paper, Purpur and the other servers that run plugins?
@@ -68,7 +68,7 @@ Mojang's own server software, the plain unmodded one, reports to no statistics s
 
 ### Mojang's year-based version numbers
 
-Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that both Java and Bedrock editions would move to year-based version numbers: the year first, then the release number, then the hotfix number. Java writes the hotfix as a separate third number, whereas Bedrock counts upwards from the release number itself. The last version to start with "1." was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
+Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that both Java and Bedrock would move to year-based version numbers: the year first, then the release number, then the hotfix number. Java writes the hotfix as a separate third number, whereas Bedrock counts upwards from the release number itself. The last version to start with "1." was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
 
 ## Paper and the other plugin servers
 
@@ -257,7 +257,6 @@ The limits of this measurement are:
 - [Mojang version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): Java release dates and strings.
 - [Mojang new-version numbering](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system): the year-based scheme and Java's hotfix format.
 - [Minecraft Wiki version formats](https://minecraft.wiki/w/Version_formats): 1.21.11 as the last "1." release.
-- [Minecraft Wiki, Server](https://minecraft.wiki/w/Server): the game turns away a client older or newer than the server.
 - [PaperMC downloads service](https://fill.papermc.io/v3/projects/paper): build dates and support status for Paper and Folia.
 - [Purpur downloads API](https://api.purpurmc.org/v2/purpur): Purpur build dates.
 - [Leaf downloads API](https://api.leafmc.one/v2/projects/leaf): Leaf build dates and release channels.
