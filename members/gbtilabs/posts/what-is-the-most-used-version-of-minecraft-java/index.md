@@ -31,7 +31,7 @@ This article finds the most used version of Minecraft Java in 2026 by looking at
 - Is Fabric or Forge more popular?
 - Which is more popular, Paper, Spigot or Purpur?
 
-Paper-family servers report their version to bStats, a statistics service built into Paper, so the article counts them directly. Fabric, Forge, NeoForge and Quilt servers report their version nowhere, so the article estimates their versions from how often mods for each version are downloaded.
+Paper-family servers report their Minecraft versions directly to bStats, a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version.
 
 The data comes from these sources:
 
