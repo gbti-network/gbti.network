@@ -39,9 +39,7 @@ Inside this article we will ask the following questions given the data currently
 
 Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version.
 
-The answer for each kind of server comes first, with a note on Mojang's year-based version numbers. Then come the Paper-family servers, the Fabric, Forge, NeoForge and Quilt servers one by one, how the most used version has changed over the years, and Java and proxies. The article ends with how we measured, short answers to three common questions, and the sources.
-
-## The most used Minecraft Java version on each kind of server
+## What is the most used version of Minecraft Java?
 
 Each kind of server is measured with the best public data that exists for it. For Paper-family servers, it is the servers reporting to bStats. The Paper family is Paper itself, Spigot, which Paper is built on, and the servers built on Paper, such as Purpur, Leaf and Folia. For Fabric, Forge, NeoForge and Quilt servers, it is one week of downloads, 17 October 2026 to 24 October 2026, of each platform's 500 most downloaded mods on Modrinth[^2], a mod hosting site. A share of servers and a share of downloads measure different things, so read each row on its own.
 
