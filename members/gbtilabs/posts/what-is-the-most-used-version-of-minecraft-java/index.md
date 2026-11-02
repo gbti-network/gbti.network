@@ -41,22 +41,19 @@ Paper-family servers report their Minecraft versions directly to bStats[^1], a s
 
 ## What is the most used version of Minecraft Java?
 
-Each kind of server is measured with the best public data that exists for it. For Paper-family servers, it is the servers reporting to bStats. The Paper family is Paper itself, Spigot, which Paper is built on, and the servers built on Paper, such as Purpur, Leaf and Folia. For Fabric, Forge, NeoForge and Quilt servers, it is one week of downloads, 17 October 2026 to 24 October 2026, of each platform's 500 most downloaded mods on Modrinth[^2], a mod hosting site. A share of servers and a share of downloads measure different things, so read each row on its own.
+![The four most used Minecraft Java versions on each kind of server. Paper family (servers, bStats): 26.3 23.4%, 1.21.11 23.1%, 26.2 23.1%, 26.1.2 6.9%. Fabric (mod downloads, Modrinth): 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%. Forge (mod downloads, Modrinth): 1.20.1 66.3%, 1.20 13.0%, 1.19.2 2.3%, 1.20.2 1.8%. NeoForge (mod downloads, Modrinth): 1.21.1 39.1%, 1.20.1 21.7%, 1.21 8.6%, 26.3 8.2%. Quilt (mod downloads, Modrinth): 26.3 20.0%, 1.20.1 16.8%, 1.21.11 12.7%, 1.21.1 10.0%. Servers read 24 October 2026; downloads from 17 October 2026 to 24 October 2026.](./images/most-used-by-kind.svg)
 
-<!-- sort: off -->
-| Server | Most used | Share | Measured by |
-|---|---|---|---|
-| Paper family | 26.3 | 23.38% | servers, bStats |
-| Fabric | 26.3 | 22.14% | mod downloads, Modrinth |
-| Forge | 1.20.1 | 66.30% | mod downloads, Modrinth |
-| NeoForge | 1.21.1 | 39.10% | mod downloads, Modrinth |
-| Quilt | 26.3 | 20.00% | mod downloads, Modrinth |
+26.3 is the most used version on Paper-family servers, at 23.38%, and the most downloaded version for Fabric and Quilt mods. Forge mods are downloaded most for 1.20.1, and NeoForge mods for 1.21.1.
 
-On 24 October 2026, 26.3 was the most used version on Paper-family servers: it ran on 23.38% of the 196,558 that reported a known Minecraft release to bStats. 1.21.11 and 26.2 were close behind, at 23.12% and 23.06%. We read bStats 55 times that week, and 26.2 led in 50 of those readings; 26.3 moved ahead only on the last day.
+### How this was gathered
 
-The download counts cover more than servers, so the Fabric, Forge, NeoForge and Quilt rows are estimates. Only each one's top version is certain. Many mod files support several Minecraft versions, so we split their downloads evenly between them; counted another way, the order below first place changes. For Quilt even first place is close, as the Quilt section explains.
+Paper-family servers report their version to bStats, so their figure is a share of the 196,558 servers that reported a known Minecraft release on 24 October 2026. The Paper family is Paper itself, Spigot, which Paper is built on, and the servers built on Paper, such as Purpur, Leaf and Folia. Fabric, Forge, NeoForge and Quilt servers report their version nowhere, so their figures are shares of one week of downloads, 17 October 2026 to 24 October 2026, of each platform's 500 most downloaded mods on Modrinth[^2], a mod hosting site. The download counts cover more than servers, so only each platform's top version is certain, and a share of servers and a share of downloads measure different things: read each kind of server on its own.
 
-Servers running Mojang's own server software report to no statistics service either, so they have no row.
+On Paper-family servers, 1.21.11 and 26.2 were close behind 26.3, at 23.12% and 23.06%. We read bStats 55 times that week, and 26.2 led in 50 of those readings; 26.3 moved ahead only on the last day.
+
+Many mod files support several Minecraft versions, so we split their downloads evenly between them; counted another way, the order below first place changes. For Quilt even first place is close, as the Quilt section explains.
+
+Servers running Mojang's own server software report to no statistics service either, so the chart has no panel for them.
 
 ### Mojang's year-based version numbers
 
