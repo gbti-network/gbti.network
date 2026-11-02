@@ -431,3 +431,13 @@ test('authorOf reads the row, else the path; authorsIn is sorted and unique; fil
   assert.equal(filterByAuthor(items, 'all').length, 4);
   assert.deepEqual(filterByAuthor(null, 'bob'), []);
 });
+
+// sow-489: a committed repo draft has nothing saved on top of it, so it must not open as a saved draft (the
+// "Staged draft" label, the "unpublished changes saved in this editor" banner, a change list against itself).
+import { opensAsSavedDraft } from '../client-ui/src/workspace-core.mjs';
+test('sow-489: a repo draft opens as a plain draft; a saved draft still opens as one', () => {
+  assert.equal(opensAsSavedDraft({ store: 'repo', path: 'members/gbtilabs/posts/x/index.md' }), false);
+  assert.equal(opensAsSavedDraft({ store: 'kv', path: 'members/gbtilabs/posts/x/index.md' }), true);
+  assert.equal(opensAsSavedDraft({ path: 'members/a/posts/x/index.md' }), true); // a fork-era row with no store is a saved draft
+  assert.equal(opensAsSavedDraft(null), false);
+});

@@ -302,6 +302,11 @@ export function failHint(err) {
 export function shouldPollPr(lifecycle) {
   return lifecycle?.phase === 'pending';
 }
+// sow-489: whether opening a draft row opens a SAVED draft (the private store) or the committed file. A repo draft
+// (store 'repo') is the file on main with nothing saved on top, so it opens as a plain draft: no "Staged draft" label,
+// no "unpublished changes saved in this editor" banner, and no change list comparing main with itself.
+export const opensAsSavedDraft = (d) => Boolean(d) && d.store !== 'repo';
+
 
 // SOW-082: a staged draft's lifecycle state. A draft is identified by its deterministic branch name
 // gbti/<type>-<slug> (sow-274: the private store keeps the name, no fork holds it); its state joins "a draft is

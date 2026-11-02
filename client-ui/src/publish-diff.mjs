@@ -21,10 +21,12 @@ import { parseBlocks, serializeBlocks } from './markdown-blocks.mjs';
  *   updatedAt   is stamped at the publish, so it ALWAYS differs and listing it would bury the real changes
  *   publishedAt is resolved by the publish from the committed file, so the editor's copy decides nothing
  *   status      is forced to published by the publish, so a difference here is not a change the author made
+ *   type        is fixed by the folder the item lives in; every committed post carries `type: post` and the
+ *               editor never gathers it, so it read "Type changed, was post, now empty" on every post (sow-489)
  *   the rest    are machine-managed (ciphertext pointers, credits, the rename trail)
  */
 export const IGNORED_FIELDS = Object.freeze(new Set([
-  'updatedAt', 'publishedAt', 'status', 'encryptedBody', 'encryptedSkill', 'contributors', 'redirectFrom', 'author',
+  'updatedAt', 'publishedAt', 'status', 'type', 'encryptedBody', 'encryptedSkill', 'contributors', 'redirectFrom', 'author',
 ]));
 
 /**
@@ -143,15 +145,20 @@ export const DIFF_CELL_CAP = 250000;
  * that is what editing a paragraph in place actually is, and two entries per edit makes the list unreadable.
  */
 export function blockChanges(liveBody, draftBody) {
-  const A = parseBlocks(liveBody ?? '').map((b) => ({ type: b.type, md: serializeBlocks([b]) }));
-  const B = parseBlocks(draftBody ?? '').map((b) => ({ type: b.type, md: serializeBlocks([b]) }));
+  // sow-489: compared with the block's trailing whitespace trimmed. A paragraph pasted into the preview ends in the two-space
+  // line-break marker, which renders nothing at the end of a block, and without the trim an untouched paragraph read
+  // as edited on every comparison. Only the END is trimmed, so a line break added inside a paragraph still counts.
+  // The shown text (`md`) keeps the source exactly.
+  const asBlock = (b) => { const md = serializeBlocks([b]); return { type: b.type, md, key: md.trimEnd() }; };
+  const A = parseBlocks(liveBody ?? '').map(asBlock);
+  const B = parseBlocks(draftBody ?? '').map(asBlock);
   // Trim the common head and tail first. Most edits touch a small middle, and this usually reduces the
   // table to a handful of cells before it is ever built.
   let head = 0;
-  while (head < A.length && head < B.length && A[head].md === B[head].md) head++;
+  while (head < A.length && head < B.length && A[head].key === B[head].key) head++;
   let tail = 0;
   while (tail < A.length - head && tail < B.length - head
-    && A[A.length - 1 - tail].md === B[B.length - 1 - tail].md) tail++;
+    && A[A.length - 1 - tail].key === B[B.length - 1 - tail].key) tail++;
   const a = A.slice(head, A.length - tail);
   const b = B.slice(head, B.length - tail);
   if (!a.length && !b.length) return [];
@@ -185,14 +192,14 @@ function editScript(a, b) {
   const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      L[i][j] = a[i].md === b[j].md ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+      L[i][j] = a[i].key === b[j].key ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
     }
   }
   const out = [];
   let i = 0;
   let j = 0;
   while (i < n && j < m) {
-    if (a[i].md === b[j].md) { out.push({ op: 'keep', ai: i, bi: j }); i++; j++; continue; }
+    if (a[i].key === b[j].key) { out.push({ op: 'keep', ai: i, bi: j }); i++; j++; continue; }
     // A removal is emitted before an addition at the same position, which is what makes the pairing above
     // recognise an in-place edit.
     if (L[i + 1][j] >= L[i][j + 1]) { out.push({ op: 'remove', ai: i, bi: j }); i++; }

@@ -180,13 +180,13 @@ export async function readDraft(ctx, { type, slug, store, path: repoPath } = {})
 
 
 /** Discard a staged draft (delete its record from the private store; idempotent, no pull request to strand). */
-export async function discardDraft(ctx, { type, slug, store } = {}) {
+export async function discardDraft(ctx, { type, slug, store, path } = {}) {
   requireIdentity(ctx);
   if (!type) throw new OperationError('bad-request', 'type is required');
   // sow-194: a repo draft is committed to the public repo; discarding it is a delete request, not a from-here
   // action. Refuse with a recognizable code (never a silent no-op, and never a delete of the wrong record).
   if (store === 'repo') throw new OperationError('unsupported', 'This draft is committed to the network and cannot be discarded here. Publish it, or open a removal request.');
-  await workerDeleteDraft({ type, slug, token: ctx.store?.get?.('githubToken'), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  await workerDeleteDraft({ type, slug, ...(path ? { path } : {}), token: ctx.store?.get?.('githubToken'), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   return { ok: true, branch: branchName(type, slug), hosted: true };
 }
 
@@ -220,7 +220,7 @@ export async function publishDraft(ctx, { type, slug, title, store, path } = {})
     ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}), // sow-109: a skill's file publishes with it
     ...(rec.pendingSlug && rec.path ? { path: rec.path } : {}), // a pending rename applies at the publish event (SOW-112)
   });
-  try { await workerDeleteDraft({ type, slug, ...opts }); } catch { /* best-effort; a stale staged copy is harmless */ }
+  try { await workerDeleteDraft({ type, slug, ...(rec.path ? { path: rec.path } : {}), ...opts }); } catch { /* best-effort; a stale staged copy is harmless */ }
   return { ...r, ok: true, hosted: true };
 }
 

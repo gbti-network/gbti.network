@@ -19135,8 +19135,8 @@ async function workerListDrafts(opts) {
 async function workerPutDraft({ draft, ...opts }) {
   return call2("POST", { op: "put", draft }, opts);
 }
-async function workerDeleteDraft({ type, slug, ...opts }) {
-  return call2("POST", { op: "delete", type, slug }, opts);
+async function workerDeleteDraft({ type, slug, path: path4, ...opts }) {
+  return call2("POST", { op: "delete", type, slug, ...path4 ? { path: path4 } : {} }, opts);
 }
 
 // client/src/repo-drafts-client.mjs
@@ -19646,11 +19646,11 @@ async function readDraft(ctx2, { type, slug, store, path: repoPath } = {}) {
   }
   return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "", ...typeof rec.skillFile === "string" ? { skillFile: rec.skillFile } : {} };
 }
-async function discardDraft(ctx2, { type, slug, store } = {}) {
+async function discardDraft(ctx2, { type, slug, store, path: path4 } = {}) {
   requireIdentity(ctx2);
   if (!type) throw new OperationError("bad-request", "type is required");
   if (store === "repo") throw new OperationError("unsupported", "This draft is committed to the network and cannot be discarded here. Publish it, or open a removal request.");
-  await workerDeleteDraft({ type, slug, token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  await workerDeleteDraft({ type, slug, ...path4 ? { path: path4 } : {}, token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   return { ok: true, branch: branchName(type, slug), hosted: true };
 }
 async function publishDraft(ctx2, { type, slug, title, store, path: path4 } = {}) {
@@ -19686,7 +19686,7 @@ async function publishDraft(ctx2, { type, slug, title, store, path: path4 } = {}
     // a pending rename applies at the publish event (SOW-112)
   });
   try {
-    await workerDeleteDraft({ type, slug, ...opts });
+    await workerDeleteDraft({ type, slug, ...rec.path ? { path: rec.path } : {}, ...opts });
   } catch {
   }
   return { ...r, ok: true, hosted: true };

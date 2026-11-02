@@ -268,3 +268,27 @@ test('a pending reassignment IS listed, from the picker rather than from the fro
   assert.deepEqual(publishChanges({ live: { frontmatter: {}, body: 'A.' }, draft: { frontmatter: {}, body: 'A.' }, reassign: null }).items, [],
     'no pick, no row');
 });
+
+// ---------------------------------------------------------------- sow-489
+
+test('sow-489: the type field is never listed, because the folder fixes it and the editor never gathers it', () => {
+  // Every committed post carries `type: post`; the editor's gathered frontmatter has no `type`. Before sow-489 this
+  // pair read "Type changed, was post, now empty" on every post.
+  assert.ok(IGNORED_FIELDS.has('type'));
+  assert.deepEqual(frontmatterChanges({ title: 'T', type: 'post', author: 'gbtilabs' }, { title: 'T' }), []);
+  const res = publishChanges({ live: { frontmatter: { title: 'T', type: 'post' }, body: 'One.' }, draft: { frontmatter: { title: 'T' }, body: 'One.' } });
+  assert.deepEqual(res.items, []);
+});
+
+test('sow-489: a paragraph ending in the two-space line-break marker is not an edit', () => {
+  // The shape a paste into the preview saved on 1 November 2026: each paragraph ends "  " with a "  " line between.
+  const live = 'One paragraph.\n\nTwo paragraph.\n\nThree.';
+  const saved = 'One paragraph.  \n  \nTwo paragraph.  \n  \nThree.  \n';
+  assert.deepEqual(blockChanges(live, saved), []);
+  assert.deepEqual(blockChanges(saved, live), []);
+});
+
+test('sow-489 POSITIVE CONTROL: a line break added INSIDE a paragraph still counts, and so does a changed word', () => {
+  assert.equal(blockChanges('One two three.', 'One two  \nthree.').length, 1);
+  assert.equal(blockChanges('One paragraph.  \n  \nTwo.', 'One paragraph, edited.  \n  \nTwo.').length, 1);
+});

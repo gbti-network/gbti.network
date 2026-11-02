@@ -75,6 +75,13 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
   let dirty = false;
   const setMsg = (t: string) => { if (editMsg) editMsg.textContent = t; };
   const markDirty = () => { dirty = true; if (saveBtn) saveBtn.hidden = false; setMsg('Unsaved changes.'); };
+  // sow-489: an edit typed into a block that still has focus, so not committed yet. Save used to appear only on the
+  // blur commit: an author who never clicked away saw no way to save, and the button appearing under the cursor took
+  // the click meant for Done editing. Typing now shows it, and leaving the page with anything unsaved asks first.
+  let pending = false;
+  const markPending = () => { if (pending || dirty) return; pending = true; if (saveBtn) saveBtn.hidden = false; setMsg('Unsaved changes.'); };
+  const unsaved = () => dirty || pending;
+  window.addEventListener('beforeunload', (ev: BeforeUnloadEvent) => { if (!unsaved()) return; ev.preventDefault(); ev.returnValue = ''; });
 
   // Commit one edited block back into the SOURCE, then re-render the whole document. Editing the source
   // rather than the DOM is what keeps footnotes, reference numbering and every other cross-block
@@ -100,10 +107,12 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
   // they fail differently: `committing` closes the async window, and isConnected refuses a node that a
   // re-render has already replaced.
   let committing = false;
-  const commitIn = async (doc: PvDoc, el: HTMLElement) => {
-    if (committing || !el.isConnected) return;
+  let inflight: Promise<void> = Promise.resolve(); // sow-489: the commit in progress, which Save waits for
+  const commitIn = (doc: PvDoc, el: HTMLElement): Promise<void> => {
+    if (committing || !el.isConnected) return inflight;
     committing = true;
-    try { await commitInner(doc, el); } finally { committing = false; }
+    inflight = (async () => { try { await commitInner(doc, el); } finally { committing = false; } })();
+    return inflight;
   };
   const commitInner = async (doc: PvDoc, el: HTMLElement) => {
     const range = doc.ranges[Number(el.dataset[doc.attr])];
@@ -465,6 +474,7 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
       el.addEventListener('focus', () => {
         if (el.dataset.pvSnap === undefined) el.dataset.pvSnap = readKey(el);
       });
+      el.addEventListener('input', markPending); // sow-489: Save shows while typing, before the blur commit
       // Backspace at the very start of an EMPTY block removes it. Without this the only way to dispose of an
       // empty paragraph was to click away and let the blur commit collapse it, which works but gives no
       // feedback at the moment the author presses the key, so the key reads as broken.
@@ -539,6 +549,7 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
       if (ev.key === 'Enter') { ev.preventDefault(); el.blur(); }
       if (ev.key === 'Escape') { ev.preventDefault(); el.textContent = String(fm.title || slug); el.blur(); }
     });
+    el.addEventListener('input', markPending); // sow-489
     el.addEventListener('blur', () => {
       // textContent, so pasted markup cannot survive the commit whatever the browser allowed on the way in.
       // What the value MEANS is planTitleEdit's decision, tested in test/preview-title.test.mjs.
@@ -592,7 +603,7 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
     editing = !editing;
     editBtn.textContent = editing ? 'Done editing' : 'Edit';
     editBtn.classList.toggle('on', editing);
-    setMsg(editing ? 'Click a block to edit it. Highlight text for formatting and links.' : (dirty ? 'Unsaved changes.' : ''));
+    setMsg(editing ? 'Click a block to edit it. Highlight text for formatting and links.' : (unsaved() ? 'Not saved yet. Press Save draft to keep these changes.' : ''));
     await renderFromSource();
     apply();
     renderNoteCard();
@@ -605,6 +616,10 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
     saveBtn.disabled = true;
     setMsg('Saving…');
     try {
+      // sow-489: a block still being edited is committed first and its commit awaited, so the save carries it.
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active !== saveBtn && active.isContentEditable) active.blur(); // a body block, the note card or the title
+      await inflight;
       // The client is identity-scoped, so it needs the signed-in member rather than being constructed
       // bare (getClient, shared with the image paste). Same source the rest of the site uses (sow-030's
       // member signal), so a save from here is attributed exactly as a save from the editor is.
@@ -615,6 +630,7 @@ export async function initPreviewEdit(ctx: PreviewEditContext) {
         ...(typeof draft.authorNote === 'string' ? { authorNote: draft.authorNote } : {}),
       });
       dirty = false;
+      pending = false;
       saveBtn.hidden = true;
       setMsg('Saved.');
     } catch (e: any) {

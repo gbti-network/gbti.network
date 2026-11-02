@@ -29,7 +29,8 @@ export async function workerPutDraft({ draft, ...opts }) {
   return call('POST', { op: 'put', draft }, opts);
 }
 
-/** Delete one hosted draft by type + slug (idempotent). */
-export async function workerDeleteDraft({ type, slug, ...opts }) {
-  return call('POST', { op: 'delete', type, slug }, opts);
+/** Delete one hosted draft by type + slug (idempotent). `path`, when known, picks the right copy for a superadmin
+ *  who has both their own draft and the network's shared one (sow-489). */
+export async function workerDeleteDraft({ type, slug, path, ...opts }) {
+  return call('POST', { op: 'delete', type, slug, ...(path ? { path } : {}) }, opts);
 }

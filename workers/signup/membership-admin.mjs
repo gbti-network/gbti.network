@@ -59,6 +59,17 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
     return fail(401, 'unauthorized', 'a GitHub bearer token is required');
   }
 
+  const m = await mirrorRole(env, githubId, { now });
+  return m.ok ? { ok: true, githubId, role: m.role, isNewsEditor: m.isNewsEditor, mirror: m.mirror } : m;
+}
+
+/**
+ * The caller's role from the SIGNUP_KV overrides mirror, for an identity ALREADY verified by the caller. Fail closed
+ * on a missing, stale or incomplete mirror and on a ban, exactly as every admin check here does. Split out of
+ * resolveCaller for sow-489, so the drafts store can ask "is this verified member a superadmin" without a second
+ * identity lookup. Returns { ok:true, role, isNewsEditor, mirror } or { ok:false, status, body }.
+ */
+export async function mirrorRole(env, githubId, { now = new Date() } = {}) {
   let mirror = null;
   try { mirror = await env.SIGNUP_KV.get(OVERRIDES_KV_KEY, 'json'); } catch { mirror = null; }
   if (!mirror || !mirror.generatedAt) return fail(403, 'forbidden', 'member overrides are unavailable right now');
@@ -74,7 +85,7 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   if (isBanned(githubId, bansFromParsed(mirror.bans))) return fail(403, 'forbidden', 'this account is not permitted');
 
   const role = roleOf(githubId, rolesFromParsed(mirror.roles));
-  return { ok: true, githubId, role, isNewsEditor: isNewsEditor(githubId, newsEditorsFromParsed(mirror.roles)), mirror };
+  return { ok: true, role, isNewsEditor: isNewsEditor(githubId, newsEditorsFromParsed(mirror.roles)), mirror };
 }
 
 /**

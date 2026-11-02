@@ -139,3 +139,82 @@ test('hostedPublishFiles: maps the gbti/ branch identity to the hosted itemId', 
   assert.equal(calls[0].body.itemId, 'share-20260725193000-my-share');
   assert.match(calls[0].url, /\/membership\/author$/);
 });
+
+// ---- sow-489: one saved copy of the network's own content ----
+
+import { isNetworkDraftPath, mergeSharedDrafts, NETWORK_DRAFT_PATH_SOURCE } from '../membership/member-drafts.mjs';
+import { NETWORK_CONTENT_PATH_RE } from '../client/src/operations-core.mjs';
+import { NETWORK_CONTENT_OWNER_ID } from '../client/src/content-ops.mjs';
+
+const NET = 'members/gbtilabs/posts/net-post/index.md';
+const OWN = 'members/atwellpub/posts/own-post/index.md';
+const superOk = async () => ({ ok: true, githubId: '42', status: 'active' });
+const asRole = (role) => async () => ({ ok: true, role });
+const failRole = async () => ({ ok: false, status: 403, body: {} });
+
+test('sow-489: the network path rule is the same one the client core uses', () => {
+  assert.equal(NETWORK_DRAFT_PATH_SOURCE, NETWORK_CONTENT_PATH_RE.source);
+  assert.equal(isNetworkDraftPath(NET), true);
+  assert.equal(isNetworkDraftPath(OWN), false);
+  assert.equal(isNetworkDraftPath('members/gbtilabs/shares/x/index.md'), false);
+});
+
+test("sow-489: a superadmin's save of a network item lands in the network store; their own item stays theirs", async () => {
+  const kv = fakeKv();
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'net-post', path: NET }) }), {}, { kv, authorize: superOk, roleOf: asRole('superadmin') });
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'own-post', path: OWN }) }), {}, { kv, authorize: superOk, roleOf: asRole('superadmin') });
+  const net = normalizeDrafts(await kv.get(DRAFTS_KEY(NETWORK_CONTENT_OWNER_ID)));
+  const own = normalizeDrafts(await kv.get(DRAFTS_KEY('42')));
+  assert.deepEqual(Object.keys(net.items), ['post:net-post']);
+  assert.deepEqual(Object.keys(own.items), ['post:own-post']);
+  // the list shows both, the network one marked shared
+  const list = await handleDrafts(req('GET'), {}, { kv, authorize: superOk, roleOf: asRole('superadmin') });
+  assert.deepEqual(list.body.drafts.map((d) => [d.slug, Boolean(d.shared)]).sort(), [['net-post', true], ['own-post', false]]);
+});
+
+test('sow-489: the network account opens the copy a superadmin saved, in its own store', async () => {
+  const kv = fakeKv();
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'net-post', path: NET, body: 'from a superadmin' }) }), {}, { kv, authorize: superOk, roleOf: asRole('superadmin') });
+  const networkCaller = async () => ({ ok: true, githubId: NETWORK_CONTENT_OWNER_ID, status: 'active' });
+  const list = await handleDrafts(req('GET'), {}, { kv, authorize: networkCaller, roleOf: asRole('superadmin') });
+  assert.equal(list.body.drafts.length, 1);
+  assert.equal(list.body.drafts[0].body, 'from a superadmin');
+});
+
+test('sow-489 FAIL CLOSED: a non-superadmin, or a role that cannot be read, never reaches the network store', async () => {
+  for (const roleOf of [asRole('admin'), asRole(null), failRole, async () => { throw new Error('kv down'); }]) {
+    const kv = fakeKv();
+    await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'net-post', path: NET }) }), {}, { kv, authorize: memberOk, roleOf });
+    assert.equal(await kv.get(DRAFTS_KEY(NETWORK_CONTENT_OWNER_ID)), null);
+    assert.ok(normalizeDrafts(await kv.get(DRAFTS_KEY('77'))).items['post:net-post']);
+    const list = await handleDrafts(req('GET'), {}, { kv, authorize: memberOk, roleOf });
+    assert.equal(list.body.drafts.some((d) => d.shared), false);
+  }
+});
+
+test('sow-489: a delete by path removes the network copy and leaves an own draft with the same slug', async () => {
+  const kv = fakeKv();
+  const opts = { kv, authorize: superOk, roleOf: asRole('superadmin') };
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'same', path: 'members/gbtilabs/posts/same/index.md' }) }), {}, opts);
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'same', path: 'members/atwellpub/posts/same/index.md' }) }), {}, opts);
+  await handleDrafts(req('POST', { op: 'delete', type: 'post', slug: 'same', path: 'members/gbtilabs/posts/same/index.md' }), {}, opts);
+  assert.equal(normalizeDrafts(await kv.get(DRAFTS_KEY(NETWORK_CONTENT_OWNER_ID))).items['post:same'], undefined);
+  assert.ok(normalizeDrafts(await kv.get(DRAFTS_KEY('42'))).items['post:same']);
+});
+
+test('sow-489: an older client deleting by type and slug alone reaches the shared copy only when its own store lacks it', async () => {
+  const kv = fakeKv();
+  const opts = { kv, authorize: superOk, roleOf: asRole('superadmin') };
+  await handleDrafts(req('POST', { op: 'put', draft: draft({ slug: 'net-post', path: NET }) }), {}, opts);
+  await handleDrafts(req('POST', { op: 'delete', type: 'post', slug: 'net-post' }), {}, opts);
+  assert.equal(normalizeDrafts(await kv.get(DRAFTS_KEY(NETWORK_CONTENT_OWNER_ID))).items['post:net-post'], undefined);
+});
+
+test('sow-489: mergeSharedDrafts shows an item once, preferring the shared copy over a stale own copy', () => {
+  const own = applyDraftPut(normalizeDrafts(null), draft({ slug: 'net-post', path: NET, body: 'stale own' }), { now: () => '2026-11-01T00:00:00Z' });
+  const net = applyDraftPut(normalizeDrafts(null), draft({ slug: 'net-post', path: NET, body: 'shared' }), { now: () => '2026-11-02T00:00:00Z' });
+  const out = mergeSharedDrafts(own, net);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].body, 'shared');
+  assert.equal(out[0].shared, true);
+});

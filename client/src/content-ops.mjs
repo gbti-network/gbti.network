@@ -28,6 +28,9 @@ export function resolveUsername(githubId, membersIndex) {
  * so the client core has a single source of truth, the way src/lib/authors.ts does for the rendered byline.
  */
 export const NETWORK_CONTENT_OWNER = 'gbtilabs';
+/** sow-489: that account's immutable GitHub id (house/roles.yml). Saved drafts of the network's content are kept
+ *  under it, so every superadmin opens the same saved copy rather than one each. */
+export const NETWORK_CONTENT_OWNER_ID = '125175036';
 
 // SOW-145: the content TARGET, decoupled from the ACTOR. A member scope writes members/<username>/ with the
 // member as author. The 'house' scope is the NETWORK's own content and, since sow-195, resolves to an

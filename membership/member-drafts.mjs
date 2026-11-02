@@ -5,6 +5,7 @@
 // Node-free pure transforms; the Worker handler does auth + the KV read-modify-write.
 
 import { SLUG_PATTERN } from './item-id.mjs';
+import { NETWORK_CONTENT_OWNER } from '../client/src/content-ops.mjs';
 
 export const DRAFTS_MAX_ITEMS = 50;
 export const DRAFT_MAX_BYTES = 150_000;
@@ -136,4 +137,28 @@ export function applyDraftDelete(state, { type, slug } = {}) {
 /** The list view, newest first. */
 export function listDraftRecords(state) {
   return Object.values(normalizeDrafts(state).items).sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+}
+
+// ---- sow-489: one saved copy of the network's own content ----
+// A superadmin works on the network's content (members/gbtilabs/...) from their own account, and saved drafts are
+// kept per account, so a save made as one superadmin was invisible to the network account and to every other
+// superadmin. Drafts of the network folder therefore live in the network account's store. The same pattern as
+// NETWORK_CONTENT_PATH_RE in client/src/operations-core.mjs (a test keeps the two equal); repeated here so this module
+// stays free of that one's dependencies.
+const NETWORK_DRAFT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|projects|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
+export const NETWORK_DRAFT_PATH_SOURCE = NETWORK_DRAFT_PATH_RE.source;
+
+/** Whether a draft's path is in the network's own content folder. */
+export const isNetworkDraftPath = (path) => NETWORK_DRAFT_PATH_RE.test(String(path ?? ''));
+
+/**
+ * A superadmin's list: their own drafts plus the network store's drafts of network paths, newest first. Each network
+ * record is marked `shared: true`. An own record of a network path that the network store also holds is dropped, so
+ * an item never appears twice (the network copy is the one every superadmin edits).
+ */
+export function mergeSharedDrafts(ownState, networkState) {
+  const shared = listDraftRecords(networkState).filter((r) => isNetworkDraftPath(r.path)).map((r) => ({ ...r, shared: true }));
+  const sharedKeys = new Set(shared.map((r) => draftKeyOf(r.type, r.slug)));
+  const own = listDraftRecords(ownState).filter((r) => !(isNetworkDraftPath(r.path) && sharedKeys.has(draftKeyOf(r.type, r.slug))));
+  return [...own, ...shared].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
 }

@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE, followPublishedItem } from '../workspace-core.mjs';
+import { classifyDraft, prLifecycle, prEvent, sortPullsByEvent, parseWorkspaceTab, editingFromHash, preparedRestore, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, buildingTag, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE, followPublishedItem, opensAsSavedDraft } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { readStored } from '../storage.mjs'; // sow-347: a stored-setting read that cannot throw
 
@@ -662,7 +662,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
       // sow-326: authorNote is carried onto the editing state. readDraft returns it; this object used to drop
       // it, which is where a saved from-the-author note disappeared between the store and the editor.
       const { behind, base } = await checkDraftBehind(this.client, full, d); // sow-482: draftKey is what "Discard this draft" removes
-      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null, base, behind, draftKey: d.store === 'repo' ? null : { type: d.type, slug: d.slug } };
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: opensAsSavedDraft(d), store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null, base, behind, draftKey: d.store === 'repo' ? null : { type: d.type, slug: d.slug, path: d.path } };
       this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
       // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
       // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.
@@ -699,7 +699,7 @@ class GbtiWorkspace extends withWorkspaceData(GbtiElement) {
     if (btn) { btn.disabled = true; btn.textContent = 'Discarding...'; }
     try {
       // sow-194: carry store (a repo draft has no Discard control, but a client refuses it with a typed error).
-      await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store });
+      await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path }); // sow-489: path picks the shared copy
       this._discardedPath = d.path || null; // sow-482: the row says "draft discarded" until the next discard or reload
       this._drafts = null;
       this._overview = null;

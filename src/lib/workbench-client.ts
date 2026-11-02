@@ -137,11 +137,11 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
   // and clears the same staged images, and still encrypts through the same cookie route, as it did inline.
   const publish = createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie, ownFileExists, stagedAudioBytes: audio.stagedAudioBytes, deleteStagedAudio: audio.deleteStagedAudio });
 
-  async function discardDraft({ type, slug, store }: any) {
+  async function discardDraft({ type, slug, store, path }: any) {
     // sow-194: a repo draft is committed to the public repo; discarding it is a delete request, not a KV delete.
     // Refuse with a recognizable code so the UI shows "unsupported" rather than a broken control.
     if (store === 'repo') throw err('unsupported', 'This draft is committed to the network and cannot be discarded here. Publish it, or open a removal request.');
-    await workerPost('/membership/drafts', { op: 'delete', type, slug });
+    await workerPost('/membership/drafts', { op: 'delete', type, slug, ...(path ? { path } : {}) }); // sow-489: path picks the shared copy
     return { ok: true };
   }
 
@@ -467,7 +467,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
         ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}), // sow-109: the skill file publishes with it
         ...(typeof rec.base === 'string' ? { bases: [rec.base] } : {}), // sow-482: refused if the article moved past the draft
       });
-      await discardDraft({ type, slug }).catch(() => {}); // best-effort: the draft is now a submitted PR
+      await discardDraft({ type, slug, path: rec.path || undefined }).catch(() => {}); // best-effort: the draft is now a submitted PR
       return { prNumber: res.prNumber, prUrl: res.prUrl };
     },
     // SOW-106: member self-unpublish/republish — flip status on the own canonical item via the gated hosted PR.

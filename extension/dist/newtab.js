@@ -3764,6 +3764,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function shouldPollPr(lifecycle) {
     return lifecycle?.phase === "pending";
   }
+  var opensAsSavedDraft = (d) => Boolean(d) && d.store !== "repo";
   function classifyDraft({ pull = null, status = null, store: store2 = null } = {}) {
     if (store2 === "repo") return { state: "repo", label: "Repo draft", tone: "" };
     if (!pull) return { state: "staged", label: "Staged", tone: "" };
@@ -17354,6 +17355,7 @@ ${listStyleProseCss(".doc-blocks")}
     "updatedAt",
     "publishedAt",
     "status",
+    "type",
     "encryptedBody",
     "encryptedSkill",
     "contributors",
@@ -17483,12 +17485,16 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var DIFF_CELL_CAP = 25e4;
   function blockChanges(liveBody, draftBody) {
-    const A2 = parseBlocks(liveBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
-    const B2 = parseBlocks(draftBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
+    const asBlock = (b2) => {
+      const md = serializeBlocks([b2]);
+      return { type: b2.type, md, key: md.trimEnd() };
+    };
+    const A2 = parseBlocks(liveBody ?? "").map(asBlock);
+    const B2 = parseBlocks(draftBody ?? "").map(asBlock);
     let head = 0;
-    while (head < A2.length && head < B2.length && A2[head].md === B2[head].md) head++;
+    while (head < A2.length && head < B2.length && A2[head].key === B2[head].key) head++;
     let tail = 0;
-    while (tail < A2.length - head && tail < B2.length - head && A2[A2.length - 1 - tail].md === B2[B2.length - 1 - tail].md) tail++;
+    while (tail < A2.length - head && tail < B2.length - head && A2[A2.length - 1 - tail].key === B2[B2.length - 1 - tail].key) tail++;
     const a = A2.slice(head, A2.length - tail);
     const b = B2.slice(head, B2.length - tail);
     if (!a.length && !b.length) return [];
@@ -17527,14 +17533,14 @@ ${listStyleProseCss(".doc-blocks")}
     const L2 = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i2 = n - 1; i2 >= 0; i2--) {
       for (let j3 = m - 1; j3 >= 0; j3--) {
-        L2[i2][j3] = a[i2].md === b[j3].md ? L2[i2 + 1][j3 + 1] + 1 : Math.max(L2[i2 + 1][j3], L2[i2][j3 + 1]);
+        L2[i2][j3] = a[i2].key === b[j3].key ? L2[i2 + 1][j3 + 1] + 1 : Math.max(L2[i2 + 1][j3], L2[i2][j3 + 1]);
       }
     }
     const out = [];
     let i = 0;
     let j2 = 0;
     while (i < n && j2 < m) {
-      if (a[i].md === b[j2].md) {
+      if (a[i].key === b[j2].key) {
         out.push({ op: "keep", ai: i, bi: j2 });
         i++;
         j2++;
@@ -30619,7 +30625,7 @@ ${BLOCKED_PILL_CSS}
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
         const { behind, base } = await checkDraftBehind(this.client, full, d);
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null, base, behind, draftKey: d.store === "repo" ? null : { type: d.type, slug: d.slug } };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: opensAsSavedDraft(d), store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null, base, behind, draftKey: d.store === "repo" ? null : { type: d.type, slug: d.slug, path: d.path } };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v2 = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
@@ -30664,7 +30670,7 @@ ${BLOCKED_PILL_CSS}
         btn.textContent = "Discarding...";
       }
       try {
-        await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store });
+        await this.client.discardDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
         this._discardedPath = d.path || null;
         this._drafts = null;
         this._overview = null;
