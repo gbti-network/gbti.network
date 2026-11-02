@@ -6307,6 +6307,7 @@ ${barWidthCss(s)}`;
     return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
   }
   var QUOTE_LINE = /^\s*>\s?/;
+  var COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
   function hardBreak(escaped, raw) {
     return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
   }
@@ -6457,6 +6458,11 @@ ${barWidthCss(s)}`;
         i++;
         continue;
       }
+      if (COMMENT_LINE.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
       if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
         flushList();
         while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
@@ -6474,7 +6480,7 @@ ${barWidthCss(s)}`;
       const paraStart = i;
       const para = [hardBreak(esc11, line)];
       i++;
-      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
+      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
         para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
         i++;
       }

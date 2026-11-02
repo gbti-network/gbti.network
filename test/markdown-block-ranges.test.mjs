@@ -93,9 +93,11 @@ test('WHY not positional: emitted blocks do not correspond one-to-one with parse
   assert.notEqual(emitted, parseBlocks(md).length, 'if these ever match it is a coincidence, not a contract');
 });
 
-// The reason sentinels were rejected.
-test('WHY not sentinels: a raw HTML comment is escaped to visible text', () => {
-  assert.match(renderMarkdown('<!--blk:0-->\n\ntext'), /&lt;!--blk:0--&gt;/);
+// Sentinels were rejected while a raw HTML comment rendered as visible text. Since sow-490 a line holding only a
+// comment renders nothing, as on the site (the table-sort marker had broken the Preview's tables), so this pins the
+// new behaviour; the reported ranges stay the mechanism, since a sentinel would still have to be stripped on save.
+test('WHY not sentinels (history): a comment line now renders nothing, as the site does (sow-490)', () => {
+  assert.equal(renderMarkdown('<!--blk:0-->\n\ntext'), '<p>text</p>');
 });
 
 // The editing round trip rests on this, so it is asserted against a real article rather than a fixture.

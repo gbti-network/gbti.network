@@ -306,6 +306,8 @@ export function tableAlignments(line) {
  */
 /** A quote line: optional indent, `>`, and one optional space that belongs to the marker. */
 const QUOTE_LINE = /^\s*>\s?/;
+/** A line holding only an HTML comment, such as the table-sort marker. */
+const COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
 
 export function renderMarkdownWithBlocks(md, opts = {}) {
   return renderDoc(md, true, opts);
@@ -451,6 +453,10 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       continue;
     }
     if (/^\s*$/.test(line)) { flushList(); i++; continue; }
+    // A line that is only an HTML comment renders nothing, as on the site. It is the `<!-- sort: off -->` table marker
+    // (sow-470, src/lib/remark-table-sort.mjs), and this renderer used to print it as text and glue the table rows under
+    // it into the same paragraph, so the Preview showed the table as a run of pipes (owner, 2026-11-02).
+    if (COMMENT_LINE.test(line)) { flushList(); i++; continue; }
     // sow-361: the definitions themselves are not content. The published page consumes them, so the read view
     // does too; the block editor keeps them as an ordinary paragraph, since a block with no element is a block
     // nobody can edit and the next commit would splice over it.
@@ -475,7 +481,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     const paraStart = i;
     const para = [hardBreak(esc, line)]; // the FIRST line can carry a hard break too
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !COMMENT_LINE.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && (bareVideoLine(lines[i]) || bareTweetLine(lines[i])))) {
       // CommonMark hard break: a line ending in TWO OR MORE spaces breaks the line. A marker is pushed rather
       // than a <br> because the line is about to go through inline(), and the marker carries no markdown
       // characters so nothing downstream can mangle it. Without this, every hard break in the repository was
