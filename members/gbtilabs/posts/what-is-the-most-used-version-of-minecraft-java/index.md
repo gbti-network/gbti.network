@@ -23,7 +23,13 @@ type: post
 author: gbtilabs
 ---
 
-This article finds the most used version of Minecraft Java in 2026 by looking at the custom online servers people play it on. A player runs the version of the server they join, so the servers give the answer. It answers five questions:
+In this article we take a look at the most played version of Minecraft Java in 2026 by looking at the many online servers people are playing on.
+
+When a Minecraft Java player joins a custom server, the player has to run the Minecraft version that the server supports.
+
+We wanted to build an understanding of not only which Minecraft Java version was most being played in 2026, but also what type of server software was being used since there are many unique frameworks being used to run Minecraft servers.
+
+Inside this article we will ask the following questions given the data currently available on the internet:
 
 - What is the most used version of Minecraft Java?
 - What version do most Minecraft servers use?
