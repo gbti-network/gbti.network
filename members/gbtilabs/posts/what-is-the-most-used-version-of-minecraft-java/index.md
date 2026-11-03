@@ -37,7 +37,7 @@ Inside this article we will ask the following questions given the data currently
 - Is Fabric or Forge more popular?
 - Which is more popular, Paper, Spigot or Purpur?
 
-Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version.
+Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version on Modrinth[^2], with each platform's weekly totals from CurseForge[^3].
 
 ## What is the most used version of Minecraft Java?
 
@@ -71,13 +71,13 @@ bStats also records which server software each server runs, in a separate chart 
 
 ![Server software of the 190,740 Paper-family servers reporting to bStats, read 24 October 2026: Paper 74.4%; Purpur 9.1%; Spigot 6.3%; Unknown 2.8%; Leaf 2.3%; UniverseSpigot 1.1%; Arclight 0.8%; Folia 0.7%; Mohist 0.5%; AdvancedSlimePaper 0.5%; 20 others together 1.6%.](./images/server-software.svg)
 
-Paper servers are the most up to date: 63.58% of them run a year-based version.[^3] Purpur sits close to the overall figures, with 53.72% on a year-based version and 1.21.11 narrowly its most used version at 24.81%. The others lag further: 1.21.11 is still the most used version on Leaf (51.14%), UniverseSpigot (42.42%) and Folia (33.47%), and Folia has another 22.64% on 26.1.2. Spigot has no version chart of its own, so its servers appear only in the overall figures.
+Paper servers are the most up to date: 63.58% of them run a year-based version.[^4] Purpur sits close to the overall figures, with 53.72% on a year-based version and 1.21.11 narrowly its most used version at 24.81%. The others lag further: 1.21.11 is still the most used version on Leaf (51.14%), UniverseSpigot (42.42%) and Folia (33.47%), and Folia has another 22.64% on 26.1.2. Spigot has no version chart of its own, so its servers appear only in the overall figures.
 
 ![Which Minecraft Java versions servers run, by server software, read 24 October 2026. All servers (196,558 servers): 26.3 23.4%, 26.2 23.1%, 26.1.x 7.2%, 1.21.11 23.1%, Older versions 23.2%. Paper (178,346 servers): 26.3 30.5%, 26.2 25.4%, 26.1.x 7.7%, 1.21.11 19.8%, Older versions 16.6%. Purpur (20,870 servers): 26.3 22.6%, 26.2 23.3%, 26.1.x 7.8%, 1.21.11 24.8%, Older versions 21.5%. Leaf (4,703 servers): 26.3 8.9%, 26.2 22.0%, 26.1.x 3.1%, 1.21.11 51.1%, Older versions 14.8%. UniverseSpigot (2,442 servers): 26.3 7.7%, 26.2 23.5%, 26.1.x 3.5%, 1.21.11 42.4%, Older versions 22.9%. Folia (2,160 servers): 26.3 11.8%, 26.2 25.6%, 26.1.x 22.6%, 1.21.11 33.5%, Older versions 6.5%. Mohist (1,189 servers): 26.3 0.0%, 26.2 0.0%, 26.1.x 0.0%, 1.21.11 0.0%, Older versions 100.0%.](./images/version-mix-by-software.svg)
 
 ### When each server software shipped the new versions
 
-The table counts the days from Mojang's release[^4] of each version to the first build each server software published for it[^5], and to its first build marked stable. Paper marked 26.3 stable 26 days after Mojang released it, and Folia's first 26.3 build, an early test build, came 29 days after. Leaf marks every build for the new year-based versions as experimental so far, and Purpur does not label its builds stable or unstable at all, so neither has a stable date.
+The table counts the days from Mojang's release[^5] of each version to the first build each server software published for it[^6], and to its first build marked stable. Paper marked 26.3 stable 26 days after Mojang released it, and Folia's first 26.3 build, an early test build, came 29 days after. Leaf marks every build for the new year-based versions as experimental so far, and Purpur does not label its builds stable or unstable at all, so neither has a stable date.
 
 <!-- sort: off -->
 | Version | Server software | First build | First stable build |
@@ -169,7 +169,7 @@ Quilt's lead is not firm. Part of 26.3's share comes from mod updates released d
 
 ## Weekly mod downloads by platform
 
-Fabric mods are downloaded most on Modrinth and NeoForge mods on CurseForge, where Forge is second; Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^6], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
+Fabric mods are downloaded most on Modrinth and NeoForge mods on CurseForge, where Forge is second; Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
 
 | Platform | Modrinth, weekly downloads | CurseForge, weekly downloads |
 |---|---|---|
@@ -264,13 +264,13 @@ The limits of this measurement are:
 
 [^2]: [Modrinth API](https://api.modrinth.com/v2): one week of downloads, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods of each platform, split by Minecraft version.
 
-[^3]: [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): the versions on each server software (Paper's page is the one linked; the others follow the same pattern).
+[^3]: [CurseForge API](https://api.curseforge.com): each platform's total downloads for the same week.
 
-[^4]: [Mojang's version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release dates and the list of every Java release.
+[^4]: [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): the versions on each server software (Paper's page is the one linked; the others follow the same pattern).
 
-[^5]: The build lists of [PaperMC](https://fill.papermc.io/v3/projects/paper), [Purpur](https://api.purpurmc.org/v2/purpur) and [Leaf](https://api.leafmc.one/v2/projects/leaf): when each one shipped a build for each new Minecraft version.
+[^5]: [Mojang's version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release dates and the list of every Java release.
 
-[^6]: [CurseForge API](https://api.curseforge.com): each platform's total downloads for the same week.
+[^6]: The build lists of [PaperMC](https://fill.papermc.io/v3/projects/paper), [Purpur](https://api.purpurmc.org/v2/purpur) and [Leaf](https://api.leafmc.one/v2/projects/leaf): when each one shipped a build for each new Minecraft version.
 
 [^7]: [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
 
