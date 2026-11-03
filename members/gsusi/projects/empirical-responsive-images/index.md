@@ -8,7 +8,7 @@ categories:
   - devops
   - frameworks
   - wordpress
-status: published
+status: draft
 visibility: public
 pricing: free
 version: 0.3.16
