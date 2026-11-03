@@ -25,7 +25,9 @@ licenses:
 
   # Copyleft
   GPL-2.0: { url: https://spdx.org/licenses/GPL-2.0-only.html }
+  GPL-2.0-or-later: { url: https://spdx.org/licenses/GPL-2.0-or-later.html }
   GPL-3.0: { url: https://spdx.org/licenses/GPL-3.0-only.html }
+  GPL-3.0-or-later: { url: https://spdx.org/licenses/GPL-3.0-or-later.html }
   LGPL-3.0: { url: https://spdx.org/licenses/LGPL-3.0-only.html }
   AGPL-3.0: { url: https://spdx.org/licenses/AGPL-3.0-only.html }
   MPL-2.0: { url: https://spdx.org/licenses/MPL-2.0.html }

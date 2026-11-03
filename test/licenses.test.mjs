@@ -15,10 +15,12 @@ import { previewSource } from './lib/preview-source.mjs'; // the Preview page pl
 const ROOT = new URL('../', import.meta.url);
 const DOC = yaml.load(fs.readFileSync(new URL('house/licenses.yml', ROOT), 'utf8'));
 
+// The two -or-later GPL ids were added by the owner on 2026-11-03: WordPress.org requires "GPLv2 or later" of
+// every plugin, and the first WordPress project published was drafted three times for declaring it.
 test('sow-305: the list the owner approved is the list in force', () => {
   assert.deepEqual(licenseIds(DOC), [
     'MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC',
-    'GPL-2.0', 'GPL-3.0', 'LGPL-3.0', 'AGPL-3.0', 'MPL-2.0',
+    'GPL-2.0', 'GPL-2.0-or-later', 'GPL-3.0', 'GPL-3.0-or-later', 'LGPL-3.0', 'AGPL-3.0', 'MPL-2.0',
     'Unlicense', 'CC0-1.0', 'Proprietary', 'Custom',
   ]);
 });
