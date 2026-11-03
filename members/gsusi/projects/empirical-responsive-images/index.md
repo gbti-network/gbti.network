@@ -8,7 +8,7 @@ categories:
   - devops
   - frameworks
   - wordpress
-status: draft
+status: published
 visibility: public
 pricing: free
 version: 0.3.16
@@ -39,8 +39,8 @@ links:
   - type: repository
     url: https://github.com/gsusI/empirical-responsive-images
     label: View on GitHub
-updatedAt: '2026-11-03T16:39:54.246Z'
-publishedAt: '2026-11-03T16:39:54.246Z'
+publishedAt: '2026-11-03T16:44:50.169Z'
+updatedAt: '2026-11-03T16:44:49.788Z'
 type: project
 author: gsusi
 ---
