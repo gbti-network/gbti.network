@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import yaml from 'js-yaml';
 
-import { licenseEntries, licenseIds, licenseUrlFor, licenseProblems, licenseRow, PROPRIETARY, CUSTOM } from '../membership/licenses.mjs';
+import { licenseEntries, licenseIds, licenseUrlFor, licenseProblems, licenseRow, PROPRIETARY, CUSTOM, projectFilesLicenseProblem, projectLicenseFields } from '../membership/licenses.mjs';
 import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const ROOT = new URL('../', import.meta.url);
@@ -178,4 +178,42 @@ test('sow-305: no project declares a licence that would fail the build', () => {
     const fm = yaml.load(txt.split('---')[1] ?? '') ?? {};
     assert.deepEqual(licenseProblems({ license: fm.license, licenseUrl: fm.licenseUrl }, DOC), [], rel);
   }
+});
+
+// ---- 2026-11-03: the licence is checked at publish (the signup Worker's author route) ------------------------------
+
+const PROJECT = 'members/gsusi/projects/empirical-responsive-images/index.md';
+const projectFile = (fm, path = PROJECT) => ({ path, content: `---\ntitle: A plugin\n${fm}---\nThe description.\n` });
+
+test('publish check: an unlisted licence is refused with the list a member can choose from', () => {
+  const msg = projectFilesLicenseProblem([projectFile('license: GPL-9.0\n')], DOC);
+  assert.match(msg, /^The license "GPL-9\.0" is not on the network's list of licenses\. Choose one of: MIT, /);
+  assert.ok(msg.includes('GPL-2.0-or-later'), 'the choices are read from the list itself');
+  assert.ok(!/house\/licenses\.yml|Add it there/.test(msg), 'a member cannot edit the list, so the message does not send them to it');
+});
+
+test('publish check: a listed licence, quoted or with a comment, and a project with none all pass', () => {
+  assert.equal(projectFilesLicenseProblem([projectFile('license: GPL-2.0-or-later\n')], DOC), null);
+  assert.equal(projectFilesLicenseProblem([projectFile("license: 'MIT'\n")], DOC), null);
+  assert.equal(projectFilesLicenseProblem([projectFile('license: Apache-2.0 # from the repo\n')], DOC), null);
+  assert.equal(projectFilesLicenseProblem([projectFile('')], DOC), null);
+});
+
+test('publish check: the other licence rules come through, named', () => {
+  assert.match(projectFilesLicenseProblem([projectFile('license: gpl-3.0\n')], DOC), /write "GPL-3\.0"/);
+  assert.match(projectFilesLicenseProblem([projectFile('license: Custom\n')], DOC), /"Custom" needs licenseUrl/);
+});
+
+test('publish check: only a project index.md is read, and only its frontmatter', () => {
+  const bad = 'license: GPL-9.0\n';
+  assert.equal(projectFilesLicenseProblem([projectFile(bad, 'members/gsusi/posts/hello/index.md')], DOC), null, 'a post is not checked');
+  assert.match(projectFilesLicenseProblem([projectFile(bad, 'members/gsusi/products/old/index.md')], DOC), /GPL-9\.0/, 'products/ is the retired name of projects/ and still a project');
+  assert.equal(projectFilesLicenseProblem([{ path: PROJECT, content: '---\ntitle: A\n---\nlicense: GPL-9.0\n' }], DOC), null, 'a body line is not frontmatter');
+  assert.equal(projectFilesLicenseProblem([{ path: PROJECT, content: null }, { path: PROJECT, contentBase64: 'eA==' }], DOC), null, 'deletes and binaries carry no licence');
+  assert.deepEqual(projectLicenseFields('---\nlicense: "MIT"\nlicenseUrl: https://x.example/l\n---\n'), { license: 'MIT', licenseUrl: 'https://x.example/l' });
+});
+
+test('publish check: without the list nothing is refused (CI stays the check)', () => {
+  assert.equal(projectFilesLicenseProblem([projectFile('license: GPL-9.0\n')], null), null);
+  assert.equal(projectFilesLicenseProblem([projectFile('license: GPL-9.0\n')], {}), null);
 });

@@ -435,3 +435,38 @@ test('sow-301: isCommentOnly fails closed on every degenerate input', () => {
   // A prefix-collision folder must not slip through: members/bobby is not members/bob.
   assert.equal(isCommentOnly([{ path: 'members/bobby/comments/a.md' }], 'bob'), false, 'prefix collision');
 });
+
+// 2026-11-03: a project whose licence is off house/licenses.yml is refused BEFORE anything is committed. Driven
+// through the real handler (the sow-203 lesson above): the list is read from main by the route, not handed in.
+const LICENSES_YML = 'licenses:\n  MIT: { url: https://spdx.org/licenses/MIT.html }\n  GPL-2.0-or-later: { url: https://spdx.org/licenses/GPL-2.0-or-later.html }\n';
+const projectBody = (license) => ({
+  itemId: 'project-plugin', title: 'Publish project: Plugin',
+  files: [{ path: 'members/atwellpub/projects/plugin/index.md', content: `---\ntitle: Plugin\nlicense: ${license}\n---\nbody` }],
+});
+const withLicenses = (rec, { status = 200 } = {}) => async (url, init = {}) => {
+  if (/\/contents\/house\/licenses\.yml\?ref=main$/.test(url)) {
+    return status === 200 ? { ok: true, status, async json() { return { content: b64(LICENSES_YML) }; } } : { ok: false, status, async json() { return {}; } };
+  }
+  return ghFetch(rec)(url, init);
+};
+
+test('licence at publish: an unlisted licence is a 400 naming the choices, and nothing is committed', async () => {
+  const rec = [];
+  const r = await membershipAuthor(req(projectBody('GPL-9.0')), env, { ...deps(rec), fetchImpl: withLicenses(rec) });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /The license "GPL-9\.0" is not on the network's list of licenses\. Choose one of: MIT, GPL-2\.0-or-later\./);
+  assert.equal(rec.length, 0, 'no branch, file or pull request');
+});
+
+test('licence at publish: a listed licence publishes', async () => {
+  const rec = [];
+  const r = await membershipAuthor(req(projectBody('GPL-2.0-or-later')), env, { ...deps(rec), fetchImpl: withLicenses(rec) });
+  assert.equal(r.status, 200);
+  assert.ok(rec.some((c) => c.method === 'PUT'), 'the project is committed');
+});
+
+test('licence at publish: an unreadable list does not block publishing (CI is the backstop)', async () => {
+  const rec = [];
+  const r = await membershipAuthor(req(projectBody('GPL-9.0')), env, { ...deps(rec), fetchImpl: withLicenses(rec, { status: 500 }) });
+  assert.equal(r.status, 200);
+});

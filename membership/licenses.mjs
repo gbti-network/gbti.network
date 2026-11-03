@@ -106,3 +106,46 @@ export function licenseRow({ license, licenseUrl, detected, repoLicenseHref } = 
   if (id === PROPRIETARY) return { id, href: repoHref || authorHref || null };
   return { id, href: repoHref || authorHref || licenseUrlFor(id, doc) };
 }
+
+// ---- 2026-11-03: the licence is checked when a project is PUBLISHED, not only when the site builds ----------------
+//
+// The editor's License field is free text (client/src/form-fields.mjs), and until this the only check was the
+// content check in CI, which runs after the publish has merged. A project declaring a licence off the list therefore
+// merged, failed CI, and was drafted by post-publish remediation without a word to its author, who published it
+// again. The first WordPress project here went round that loop three times in eight minutes (#906 to #911). The
+// signup Worker's author route now refuses the publish with this message, which names the list a member can use;
+// validate-content stays the backstop for anything committed by hand.
+
+const PROJECT_FILE_RE = /^members\/[a-z0-9][a-z0-9-]*\/(?:projects|products)\/[^/]+\/index\.md$/i;
+const SCALAR = (name) => new RegExp(`^${name}:[ \\t]*(?:"([^"\\n]*)"|'([^'\\n]*)'|([^\\s#][^\\n#]*?))?[ \\t]*(?:#.*)?$`, 'm');
+
+/** The `license` and `licenseUrl` a serialized project file's frontmatter states. Only the frontmatter is read. */
+export function projectLicenseFields(content) {
+  const fm = typeof content === 'string' ? /^---\r?\n([\s\S]*?)\r?\n---/.exec(content) : null;
+  if (!fm) return {};
+  const read = (name) => { const m = SCALAR(name).exec(fm[1]); return m ? (m[1] ?? m[2] ?? m[3] ?? '') : undefined; };
+  return { license: read('license'), licenseUrl: read('licenseUrl') };
+}
+
+/**
+ * The first reason a publish's project files cannot go out with the licence they declare, or null. `doc` is the
+ * parsed house/licenses.yml; without one (unreadable, or not passed) nothing is checked and CI stays the check.
+ * Deletes, images and every file that is not a project's index.md are skipped.
+ */
+export function projectFilesLicenseProblem(files, doc) {
+  const ids = licenseIds(doc);
+  if (!ids.length || !Array.isArray(files)) return null;
+  for (const f of files) {
+    if (!f || typeof f.content !== 'string' || !PROJECT_FILE_RE.test(String(f.path ?? ''))) continue;
+    const fields = projectLicenseFields(f.content);
+    const problems = licenseProblems(fields, doc);
+    if (!problems.length) continue;
+    const value = typeof fields.license === 'string' ? fields.license.trim() : '';
+    // The build's wording ("Add it there") is for whoever maintains the list; a member cannot, so name the choices.
+    if (value && !ids.some((id) => id.toLowerCase() === value.toLowerCase())) {
+      return `The license "${value}" is not on the network's list of licenses. Choose one of: ${ids.join(', ')}. Custom also needs a link to the license text.`;
+    }
+    return `The project's license cannot be published as it is: ${problems[0]}.`;
+  }
+  return null;
+}

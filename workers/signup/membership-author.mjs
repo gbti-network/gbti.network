@@ -24,6 +24,7 @@ import { validateHostedRequest, hostedBranchFor, contentItemsIn } from '../../me
 // there unchanged so the prepared-listing claim commits through the same path.
 import { readMembersIndex, commitHostedFiles } from './hosted-commit.mjs';
 import { readTopicsVocab } from './topic-suggest.mjs'; // the share category must be a real topic
+import { loadHouseYaml } from './membership-admin-files.mjs'; // a project's licence must be on house/licenses.yml
 import { checkAudioEntries, resolveAudioEntry } from './hosted-audio.mjs'; // sow-483: recordings travel by reference
 
 /**
@@ -122,7 +123,12 @@ export async function membershipAuthor(request, env, deps = {}) {
   // category is then checked for presence alone (validate-content still checks the key in CI).
   const hasShare = Array.isArray(payload?.files) && payload.files.some((f) => /\/shares\/[^/]+\.md$/.test(String(f?.path ?? '')));
   const topicKeys = hasShare && kv ? Object.keys(await readTopicsVocab(kv)) : null;
-  const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder, topicKeys });
+  // The licence list is read from main only when a project's index.md is in the request. An unreadable list checks
+  // nothing here, and the content check in CI still refuses an unlisted licence.
+  const hasProject = Array.isArray(payload?.files) && payload.files.some((f) => /\/(?:projects|products)\/[^/]+\/index\.md$/.test(String(f?.path ?? '')));
+  const licenseLoad = hasProject ? await loadHouseYaml(fetchImpl, instToken, upstream, 'house/licenses.yml').catch(() => null) : null;
+  const licenses = licenseLoad?.ok ? licenseLoad.parsed : null;
+  const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder, topicKeys, licenses });
   if (!check.ok) return { status: check.status ?? 400, body: { error: 'bad_request', message: check.error } };
   // sow-458 (owner, 2026-10-16): "It is published when the person publishes it." Editorial review is retired: no
   // audience rule refuses a public item and no review record is written. Who may publish at all is unchanged (paid,
