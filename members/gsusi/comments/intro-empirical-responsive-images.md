@@ -2,7 +2,7 @@
 id: intro-empirical-responsive-images
 targetType: project
 targetSlug: empirical-responsive-images
-createdAt: '2026-11-03T16:39:54.248Z'
+createdAt: '2026-11-03T16:44:50.171Z'
 status: published
 visibility: public
 authorNote: true
