@@ -51,6 +51,7 @@ import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; 
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
 import { WEEKLY_HEADER_LINE, CLOSING_LEAD, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
 import { memberAvatarUrl } from './member-avatar.mjs'; // sow-428: avatars by account number, addressed by folder
+import { isoWeek } from './iso-week.mjs'; // the ISO week, shared with the Social Queue post's {week} token
 // The web edition's social image: the engraved coffee cup in line and flat tone, chosen by the owner on 2026-09-29
 // (it replaced the first pick, og.png, the same day). Served from the site, 1200 x 630. A new design gets a NEW
 // file name: link previews cache the image by its address, so overwriting the old file would leave every preview
@@ -185,7 +186,6 @@ const COUNT_NOUNS = {
   article: ['article', 'articles'], prompt: ['prompt', 'prompts'], project: ['project', 'projects'],
   share: ['member share', 'member shares'], news: ['news pick', 'news picks'],
 };
-const DAY_MS = 24 * 3600 * 1000;
 
 function plural(n, key) {
   const [one, many] = COUNT_NOUNS[key];
@@ -206,24 +206,12 @@ function plural(n, key) {
 // the calendar year of the date. Those disagree for a few days each turn of the year: 2026-12-31 sits in
 // week 1 of 2027, and printing "WEEK 1, 2026" there would be worse than the disagreement it avoids.
 function coverageWeek(generatedAt) {
-  const ms = Number(generatedAt);
-  // `> 0` and not merely finite, because Number(null) is 0, not NaN. A null generatedAt would otherwise pass
-  // a bare finite check and head the email "WEEK 1, 1970". The span version this replaced had the same hole
-  // (it rendered "Dec 26, 1969 to Jan 1, 1970") and no test reached it; absent has to stay absent.
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const d = new Date(ms);
-  if (!Number.isFinite(d.getTime())) return null;
-  // Move to the Thursday of this week: the ISO year is whichever year that Thursday falls in.
-  const thursday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const mondayIndex = (thursday.getUTCDay() + 6) % 7; // Monday 0 ... Sunday 6
-  thursday.setUTCDate(thursday.getUTCDate() - mondayIndex + 3);
-  const isoYear = thursday.getUTCFullYear();
-  // January 4th is always in ISO week 1, so the Thursday of ITS week anchors the count.
-  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
-  const jan4Index = (jan4.getUTCDay() + 6) % 7;
-  const week1Thursday = new Date(Date.UTC(isoYear, 0, 4 - jan4Index + 3));
-  const week = 1 + Math.round((thursday.getTime() - week1Thursday.getTime()) / (7 * DAY_MS));
-  return { short: `Week ${week}`, mono: `WEEK ${week}, ${isoYear}`, date: dayLabel(d) };
+  // isoWeek (membership/iso-week.mjs) holds the arithmetic, shared with the Social Queue post's {week} token so the
+  // post and this email cannot name different weeks. It returns null for a null, zero or unparseable generatedAt,
+  // because Number(null) is 0, not NaN, and "WEEK 1, 1970" must stay absent, never printed.
+  const w = isoWeek(generatedAt);
+  if (!w) return null;
+  return { short: `Week ${w.week}`, mono: `WEEK ${w.week}, ${w.year}`, date: dayLabel(new Date(Number(generatedAt))) };
 }
 
 // "September 29th": the issue's own day, for the subject (owner, 2026-09-29). Read in UTC like the week above, so

@@ -210,9 +210,10 @@ const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or project deve
 // The token carries its own "From u/name:" label and its own quotes, so a note-less item renders NOTHING
 // rather than a dangling label over an empty quote. That specific defect has now happened twice here.
 const DEFAULT_REDDIT_COMMENT = '{author-note-attributed}';
-// sow-484 (owner-approved plan, 2026-10-27): the weekly issue, credited to nobody. {short-description} is the
-// email's own preheader ("4 articles, 2 projects and 3 news picks from the network this week.").
-export const DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
+// sow-484 (owner-approved plan, 2026-10-27): the weekly issue, credited to nobody.
+// Owner, 2026-11-04, from the post they made by hand for week 44 as the reference: the week number, the link and a
+// fixed set of hashtags, in place of the preheader sentence. {week} is the issue's ISO week (syndication-format.mjs).
+export const DEFAULT_NEWSLETTER_FORMAT = 'Week {week} Digest is out!\\n\\n{url} #digest #community #curation #makers #buildinpublic';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT, // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,

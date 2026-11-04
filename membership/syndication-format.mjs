@@ -3,7 +3,21 @@
 // text is sanitized so a crafted title cannot fire a mass mention from the brand account, and each channel's
 // character cap is enforced. No IO; fully unit-tested.
 
+import { isoWeek } from './iso-week.mjs';
+
 const TYPE_LABEL = { post: 'article', project: 'project', prompt: 'prompt', share: 'link', newsletter: 'newsletter' };
+
+// {week}: the ISO week of a weekly newsletter issue, read from its id ("weekly-2026-10-27" is week 44). The id is
+// the UTC date the issue was compiled on, and the email's own "WEEK 44, 2026" line is the ISO week of that same
+// compile, through the same helper, so the post and the email it announces always name the same week. Anything
+// that is not a newsletter item renders it empty, as an unknown token would.
+const WEEKLY_ID_RE = /^weekly-(\d{4}-\d{2}-\d{2})$/;
+function newsletterWeek(item) {
+  if (item?.source !== 'newsletter') return '';
+  const m = WEEKLY_ID_RE.exec(String(item.targetSlug || ''));
+  const w = m ? isoWeek(Date.parse(`${m[1]}T12:00:00Z`)) : null;
+  return w ? String(w.week) : '';
+}
 
 /** The link host without www (for a lead line when there is no title). */
 export function hostOf(u) {
@@ -212,6 +226,7 @@ function dropTrailingHashtagsToFit(text, limit) {
  *   A token written in ALL CAPS uppercases its value: {CONTENT-TYPE} -> "PROMPT" (mentions excluded).
  *   {shareurl} {url} the item's link
  *   {title} {category}  the item metadata
+ *   {week}           a weekly newsletter's ISO week number ("44"), from its issue id; empty for anything else
  * Every substitution EXCEPT the validated `<@id>` mention passes through sanitizeMentions, so an
  * author-controlled displayName/title can never fire a mass mention (the adapter's allowed_mentions guard
  * additionally caps pings to the author id). Unknown {tokens} render empty; whitespace collapses. Pure.
@@ -245,6 +260,7 @@ export function renderTemplate(template, item = {}, { limit = 2000, previewMenti
     url: String(item.url || ''),
     title: sanitizeMentions(item.title || ''),
     category: sanitizeMentions(item.category || ''),
+    week: newsletterWeek(item), // {week}: digits only, so it carries no mention risk
     authornote: sanitizeMentions(item.authorNote || ''), // {author-note}: the from-the-author intro (public items only)
     // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
     // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.

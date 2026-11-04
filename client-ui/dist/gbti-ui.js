@@ -20566,7 +20566,7 @@ ${SKILL_BOX_CSS}`;
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
-  var DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
+  var DEFAULT_NEWSLETTER_FORMAT = "Week {week} Digest is out!\\n\\n{url} #digest #community #curation #makers #buildinpublic";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit
@@ -20898,7 +20898,8 @@ ${SKILL_BOX_CSS}`;
     "{hashtags}",
     "{member-x-handle}",
     "{member-bluesky-handle}",
-    "{member-reddit-handle}"
+    "{member-reddit-handle}",
+    "{week}"
   ];
   var SYND_TABS = [
     { id: "activity", nm: "Publishing Activity", ic: "c-kanban", build: "activity" },
@@ -23839,6 +23840,9 @@ ${BLOCKED_PILL_CSS}
   function channelLimit(name) {
     return CHANNEL_LIMITS[name] ?? 280;
   }
+
+  // membership/iso-week.mjs
+  var DAY_MS2 = 24 * 3600 * 1e3;
 
   // membership/syndication-format.mjs
   function toHashtag(label) {

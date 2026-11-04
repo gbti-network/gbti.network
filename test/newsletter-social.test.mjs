@@ -29,7 +29,8 @@ const ID = 'weekly-2026-10-27';
 const ENV = { PUBLIC_BASE_URL: 'https://signup.gbti.network' };
 const WEB = `https://signup.gbti.network/digest/${ID}`;
 const MANUAL = ['x', 'linkedin', 'bluesky', 'dailydev', 'substack'];
-const LINE = (summary) => `The GBTI Digest is out: ${summary} Read this week's issue: ${WEB}`;
+// Owner, 2026-11-04: the post they made by hand for this very issue (week 44) is the reference format.
+const LINE = `Week 44 Digest is out!\n\n${WEB} #digest #community #curation #makers #buildinpublic`;
 
 function fakeKV(seed = {}, { throwOn = null } = {}) {
   const store = new Map(Object.entries(seed));
@@ -192,7 +193,7 @@ test('the live settings send the newsletter to the five hand-posted channels, wi
   assert.deepEqual(deliverChannelsForType(cfg, 'newsletter').sort(), [...MANUAL].sort());
   for (const ch of ['reddit', 'discord', 'discord-category', 'devto']) assert.equal(autoModeFor(cfg, 'newsletter', ch), 'off', ch);
   for (const ch of MANUAL) assert.equal(templateFor(cfg, 'newsletter', ch, { channelOnly: true }), DEFAULT_NEWSLETTER_FORMAT, ch);
-  assert.equal(DEFAULT_NEWSLETTER_FORMAT, "The GBTI Digest is out: {short-description} Read this week's issue: {url}");
+  assert.equal(DEFAULT_NEWSLETTER_FORMAT, 'Week {week} Digest is out!\\n\\n{url} #digest #community #curation #makers #buildinpublic');
 });
 
 test('end to end: the sent issue becomes five Social Queue tasks with the line and the link, and nothing else', async () => {
@@ -202,15 +203,28 @@ test('end to end: the sent issue becomes five Social Queue tasks with the line a
   await drainSyndication({}, { kv, now: at(NOW + 2 * 3600_000), adapters: {} });
   const tasks = [...kv.store.entries()].filter(([k]) => k.startsWith('social:task:')).map(([, v]) => JSON.parse(v));
   assert.deepEqual(tasks.map((t) => t.channel).sort(), [...MANUAL].sort());
-  const summary = issueHeadline(issue()).summary;
   for (const t of tasks) {
     assert.equal(t.status, 'pending');
     assert.equal(t.source, 'newsletter');
     assert.equal(t.url, WEB);
-    assert.equal(t.text, LINE(summary), t.channel);
+    assert.equal(t.text, LINE, t.channel);
   }
   const item = [...kv.store.entries()].filter(([k]) => k.startsWith('synd:item:')).map(([, v]) => JSON.parse(v))[0];
   for (const ch of ['reddit', 'discord-category', 'devto']) assert.equal(item.perChannel?.[ch]?.status, 'skipped', ch);
+});
+
+test('{week} is the ISO week of the issue id, the same week the email it announces prints', () => {
+  const week = (id) => renderTemplate('{week}', { source: 'newsletter', targetSlug: id });
+  assert.equal(week('weekly-2026-10-27'), '44');
+  assert.equal(week('weekly-2026-11-03'), '45');
+  assert.equal(week('weekly-2026-12-29'), '53', 'the last week of a 53-week ISO year');
+  assert.equal(week('weekly-2027-01-05'), '1');
+  for (const id of ['weekly-2026-10-27', 'weekly-2026-12-29', 'weekly-2027-01-05']) {
+    const email = renderIssue(issue(id), {});
+    assert.ok(email.html.includes(`WEEK ${week(id)}, `), `the email for ${id} names week ${week(id)}`);
+  }
+  assert.equal(week('welcome-2026-10-27'), '', 'only a canonical weekly id has a week');
+  assert.equal(renderTemplate('{week}', { source: 'post', targetSlug: 'weekly-2026-10-27' }), '', 'and only a newsletter item');
 });
 
 // ---------------------------------------------------------------- the wiring

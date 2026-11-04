@@ -21604,7 +21604,7 @@ var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supp
 var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
-var DEFAULT_NEWSLETTER_FORMAT = "The GBTI Digest is out: {short-description} Read this week's issue: {url}";
+var DEFAULT_NEWSLETTER_FORMAT = "Week {week} Digest is out!\\n\\n{url} #digest #community #curation #makers #buildinpublic";
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT,
   // sow-180: content-first, no member credit
