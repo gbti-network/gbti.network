@@ -11,8 +11,12 @@
 <text x="173.8" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">26.1.2</text>
 <rect x="236.1" y="81" width="10" height="10" rx="2" fill="#eda100"/>
 <text x="252.1" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">1.21.11</text>
-<rect x="321.1" y="81" width="10" height="10" rx="2" fill="#a8a69d"/>
-<text x="337.1" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">other versions</text>
+<rect x="321.1" y="81" width="10" height="10" rx="2" fill="#008300"/>
+<text x="337.1" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">1.21.1</text>
+<rect x="399.4" y="81" width="10" height="10" rx="2" fill="#e87ba4"/>
+<text x="415.4" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">1.20.1</text>
+<rect x="477.8" y="81" width="10" height="10" rx="2" fill="#a8a69d"/>
+<text x="493.8" y="90.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">other versions</text>
 <text x="28.0" y="117.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">Paper family</text>
 <text x="28.0" y="134.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">servers, bStats</text>
 <text x="28.0" y="160.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">26.3</text>
@@ -33,10 +37,10 @@
 <path d="M458.0,146.0 H523.0 Q527.0,146.0 527.0,150.0 V160.0 Q527.0,164.0 523.0,164.0 H458.0 Z" fill="#2a78d6"/>
 <text x="533.0" y="160.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">22.1%</text>
 <text x="392.0" y="187.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
-<path d="M458.0,173.0 H504.4 Q508.4,173.0 508.4,177.0 V187.0 Q508.4,191.0 504.4,191.0 H458.0 Z" fill="#a8a69d"/>
+<path d="M458.0,173.0 H504.4 Q508.4,173.0 508.4,177.0 V187.0 Q508.4,191.0 504.4,191.0 H458.0 Z" fill="#e87ba4"/>
 <text x="514.4" y="187.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">16.2%</text>
 <text x="392.0" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
-<path d="M458.0,200.0 H500.4 Q504.4,200.0 504.4,204.0 V214.0 Q504.4,218.0 500.4,218.0 H458.0 Z" fill="#a8a69d"/>
+<path d="M458.0,200.0 H500.4 Q504.4,200.0 504.4,204.0 V214.0 Q504.4,218.0 500.4,218.0 H458.0 Z" fill="#008300"/>
 <text x="510.4" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">14.9%</text>
 <text x="392.0" y="241.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
 <path d="M458.0,227.0 H494.4 Q498.4,227.0 498.4,231.0 V241.0 Q498.4,245.0 494.4,245.0 H458.0 Z" fill="#eda100"/>
@@ -44,7 +48,7 @@
 <text x="28.0" y="291.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">Forge</text>
 <text x="28.0" y="308.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">mod downloads, Modrinth</text>
 <text x="28.0" y="334.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.20.1</text>
-<path d="M94.0,320.0 H296.5 Q300.5,320.0 300.5,324.0 V334.0 Q300.5,338.0 296.5,338.0 H94.0 Z" fill="#a8a69d"/>
+<path d="M94.0,320.0 H296.5 Q300.5,320.0 300.5,324.0 V334.0 Q300.5,338.0 296.5,338.0 H94.0 Z" fill="#e87ba4"/>
 <text x="306.5" y="334.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">66.3%</text>
 <text x="28.0" y="361.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20</text>
 <path d="M94.0,347.0 H130.5 Q134.5,347.0 134.5,351.0 V361.0 Q134.5,365.0 130.5,365.0 H94.0 Z" fill="#a8a69d"/>
@@ -58,10 +62,10 @@
 <text x="392.0" y="291.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">NeoForge</text>
 <text x="392.0" y="308.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">mod downloads, Modrinth</text>
 <text x="392.0" y="334.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21.1</text>
-<path d="M458.0,320.0 H575.8 Q579.8,320.0 579.8,324.0 V334.0 Q579.8,338.0 575.8,338.0 H458.0 Z" fill="#a8a69d"/>
+<path d="M458.0,320.0 H575.8 Q579.8,320.0 579.8,324.0 V334.0 Q579.8,338.0 575.8,338.0 H458.0 Z" fill="#008300"/>
 <text x="585.8" y="334.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">39.1%</text>
 <text x="392.0" y="361.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
-<path d="M458.0,347.0 H521.6 Q525.6,347.0 525.6,351.0 V361.0 Q525.6,365.0 521.6,365.0 H458.0 Z" fill="#a8a69d"/>
+<path d="M458.0,347.0 H521.6 Q525.6,347.0 525.6,351.0 V361.0 Q525.6,365.0 521.6,365.0 H458.0 Z" fill="#e87ba4"/>
 <text x="531.6" y="361.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">21.7%</text>
 <text x="392.0" y="388.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21</text>
 <path d="M458.0,374.0 H480.9 Q484.9,374.0 484.9,378.0 V388.0 Q484.9,392.0 480.9,392.0 H458.0 Z" fill="#a8a69d"/>
@@ -75,13 +79,13 @@
 <path d="M94.0,494.0 H152.3 Q156.3,494.0 156.3,498.0 V508.0 Q156.3,512.0 152.3,512.0 H94.0 Z" fill="#2a78d6"/>
 <text x="162.3" y="508.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">20.0%</text>
 <text x="28.0" y="535.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.20.1</text>
-<path d="M94.0,521.0 H142.3 Q146.3,521.0 146.3,525.0 V535.0 Q146.3,539.0 142.3,539.0 H94.0 Z" fill="#a8a69d"/>
+<path d="M94.0,521.0 H142.3 Q146.3,521.0 146.3,525.0 V535.0 Q146.3,539.0 142.3,539.0 H94.0 Z" fill="#e87ba4"/>
 <text x="152.3" y="535.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">16.8%</text>
 <text x="28.0" y="562.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
 <path d="M94.0,548.0 H129.5 Q133.5,548.0 133.5,552.0 V562.0 Q133.5,566.0 129.5,566.0 H94.0 Z" fill="#eda100"/>
 <text x="139.5" y="562.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">12.7%</text>
 <text x="28.0" y="589.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
-<path d="M94.0,575.0 H121.2 Q125.2,575.0 125.2,579.0 V589.0 Q125.2,593.0 121.2,593.0 H94.0 Z" fill="#a8a69d"/>
+<path d="M94.0,575.0 H121.2 Q125.2,575.0 125.2,579.0 V589.0 Q125.2,593.0 121.2,593.0 H94.0 Z" fill="#008300"/>
 <text x="131.2" y="589.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">10.0%</text>
 <text x="28.0" y="628.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026; Modrinth download counts, 17 October 2026 to 24 October 2026. GBTI Network research.</text>
 </svg>
