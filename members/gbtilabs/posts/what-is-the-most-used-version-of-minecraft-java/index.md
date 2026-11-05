@@ -43,7 +43,12 @@ Inside this article we will ask the following questions given the data currently
 
 Averaged across the five kinds of server, 1.20.1 is the most used version of Minecraft Java, at 24.64%. It is the most downloaded version for Forge mods, with 66.30% of their downloads, and the second for Fabric, NeoForge and Quilt mods. 26.3 comes next at 15.01%, and it is the top version on Paper-family servers and for Fabric and Quilt mods.
 
-Each kind counts the same in this average, so a share of servers and a share of mod downloads are weighed alike. The next section shows each kind on its own.
+```callout info small
+**How the average is calculated.** A version's average is its share on each of the five kinds of server, added together and divided by five:
+`average = (Paper family + Fabric + Forge + NeoForge + Quilt) ÷ 5`
+For 1.20.1: (2.20% + 16.19% + 66.30% + 21.71% + 16.80%) ÷ 5 = 123.20% ÷ 5 = 24.64%.
+The Paper-family figure is a share of servers and the other four are shares of one week of mod downloads. Each kind counts the same, however many servers or downloads stand behind it, and each kind's shares add up to 100%, so the averages do too. The next section shows each kind on its own.
+```
 
 ## What version do most Minecraft servers use?
 
