@@ -9,7 +9,8 @@ tags:
   - guitar-bots
   - mr-fastfinger
   - awaki-waki
-image: https://i.ytimg.com/vi/XsELXCsbNa8/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20261105175221-mr-fastfinger-awaki-waki-stringweaver-guitarbots-2a53b916.webp
+imageSource: https://i.ytimg.com/vi/XsELXCsbNa8/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@MikaFastfinger
 creatorName: Mr. Fastfinger - Mika Tyyskä
 sourceName: YouTube
