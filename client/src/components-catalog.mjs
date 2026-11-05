@@ -11,8 +11,8 @@ export const COMPONENTS = Object.freeze([
   {
     name: 'callout',
     kind: 'fence',
-    purpose: 'A highlighted box for a tip, a warning, a note or extra information.',
-    syntax: `${F}callout <info|note|warning|tip>\nText of the callout. **Bold**, *italic*, \`code\` and [links](https://example.com) work.\n${F}`,
+    purpose: 'A highlighted box for a tip, a warning, a note or extra information. Add the word small after the variant to set the box in smaller type, for example a calculation beside a chart.',
+    syntax: `${F}callout <info|note|warning|tip> [small]\nText of the callout. **Bold**, *italic*, \`code\` and [links](https://example.com) work.\n${F}`,
     example: `${F}callout tip\nSave your work before you update a plugin.\n${F}`,
     renders: 'Site, preview and extension reader: a coloured box. Cross-posts: a code block.',
   },

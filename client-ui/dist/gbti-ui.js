@@ -1186,7 +1186,7 @@ ${String(lines2[i]).trimStart()}`;
         return fence + (b.lang ?? "") + "\n" + code + "\n" + fence;
       }
       case "callout":
-        return "```callout " + normalizeVariant(b.variant) + "\n" + (b.text ?? "") + "\n```";
+        return "```callout " + normalizeVariant(b.variant) + (b.small ? " small" : "") + "\n" + (b.text ?? "") + "\n```";
       case "quote":
         return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
       case "list": {
@@ -1250,7 +1250,7 @@ ${String(lines2[i]).trimStart()}`;
           i++;
         }
         i++;
-        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), ...info.slice(2).includes("small") ? { small: true } : {}, text: code.join("\n") });
         else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim(), ...info[1] === "lightbox" ? { lightbox: true } : {} });
         else if (info[0] === "audio") blocks.push({ type: "audio", lang, code: code.join("\n") });
         else blocks.push({ type: "code", lang, code: code.join("\n") });
@@ -5578,8 +5578,9 @@ ${listStyleProseCss(".doc-blocks")}
     const body = buf.join("\n");
     if (info[0] === "callout") {
       const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const small = info.slice(2).includes("small") ? " md-callout-small" : "";
       const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
-      return `<div class="md-callout md-callout-${v2}"><div class="md-callout-body">${html}</div></div>`;
+      return `<div class="md-callout md-callout-${v2}${small}"><div class="md-callout-body">${html}</div></div>`;
     }
     if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
     if (DATA_BLOCKS.includes(info[0])) {
@@ -30283,6 +30284,7 @@ ${BLOCKED_PILL_CSS}
   .body .md-callout-note::before { background:var(--muted); }
   .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
+  .body .md-callout-small { font-size:.875em; }
   ${dataBlocksCss(".body", { fg: "var(--fg)", soft: "var(--muted)", mute: "var(--muted)", line: "var(--line)", line2: "var(--line)", rest: "var(--line)", green: "var(--accent)", green700: "var(--accent)", green700Solid: "#0f6f40", greenTint: "rgba(31,158,95,.12)", greenBorder: "rgba(31,158,95,.4)", surface: "var(--bg, transparent)", card: "var(--panel)", mono: "ui-monospace, SFMono-Regular, Menlo, monospace" })}
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }

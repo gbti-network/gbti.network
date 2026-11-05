@@ -21007,8 +21007,9 @@ function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, r
   const body = buf.join("\n");
   if (info[0] === "callout") {
     const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : "note";
+    const small = info.slice(2).includes("small") ? " md-callout-small" : "";
     const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
-    return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+    return `<div class="md-callout md-callout-${v}${small}"><div class="md-callout-body">${html}</div></div>`;
   }
   if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
   if (DATA_BLOCKS.includes(info[0])) {

@@ -18855,7 +18855,11 @@ function checkComponentBlocks(md) {
       break;
     }
     const text = body.join("\n");
-    if (name === "callout" && meta3 && !["info", "note", "warning", "tip"].includes(meta3)) warn(`callout variant "${meta3}" is not one of info, note, warning, tip; it shows as note`);
+    if (name === "callout" && meta3) {
+      const [variant, ...flags] = meta3.split(/\s+/);
+      if (!["info", "note", "warning", "tip"].includes(variant)) warn(`callout variant "${variant}" is not one of info, note, warning, tip; it shows as note`);
+      for (const f of flags) if (f !== "small") warn(`callout option "${f}" is not known; only "small" is`);
+    }
     if (name === "embed") {
       if (meta3 && meta3 !== "lightbox") warn(`embed option "${meta3}" is not known; only "lightbox" is`);
       if (!/^https?:\/\//.test(text.trim())) warn("embed needs one video URL on its own line");
@@ -20453,8 +20457,8 @@ var COMPONENTS = Object.freeze([
   {
     name: "callout",
     kind: "fence",
-    purpose: "A highlighted box for a tip, a warning, a note or extra information.",
-    syntax: `${F}callout <info|note|warning|tip>
+    purpose: "A highlighted box for a tip, a warning, a note or extra information. Add the word small after the variant to set the box in smaller type, for example a calculation beside a chart.",
+    syntax: `${F}callout <info|note|warning|tip> [small]
 Text of the callout. **Bold**, *italic*, \`code\` and [links](https://example.com) work.
 ${F}`,
     example: `${F}callout tip

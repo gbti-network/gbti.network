@@ -234,8 +234,9 @@ function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, r
   const body = buf.join('\n');
   if (info[0] === 'callout') {
     const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : 'note';
+    const small = info.slice(2).includes('small') ? ' md-callout-small' : ''; // as src/lib/remark-content-blocks.mjs
     const html = body.split('\n').map((l) => inline(escapeHtml(l), fn)).join('<br/>');
-    return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+    return `<div class="md-callout md-callout-${v}${small}"><div class="md-callout-body">${html}</div></div>`;
   }
   // sow-452: a sortable list placeholder. The WorkBench preview upgrades it (src/lib/sort-list.mjs); the reader
   // leaves it empty, so the entries after it read in their source order.

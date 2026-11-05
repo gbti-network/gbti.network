@@ -88,7 +88,7 @@ function serializeBlock(b) {
       const fence = '`'.repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
       return fence + (b.lang ?? '') + '\n' + code + '\n' + fence;
     }
-    case 'callout': return '```callout ' + normalizeVariant(b.variant) + '\n' + (b.text ?? '') + '\n```';
+    case 'callout': return '```callout ' + normalizeVariant(b.variant) + (b.small ? ' small' : '') + '\n' + (b.text ?? '') + '\n```';
     case 'quote': return String(b.text ?? '').split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n');
     case 'list': {
       // A string item is a top-level item with the list's marker; an object carries its own depth and marker
@@ -143,7 +143,8 @@ export function parseBlocks(md) {
       }
       i++; // skip the closing fence
       // SOW-062: ```callout <variant> and ```embed are first-class blocks; anything else stays a code block.
-      if (info[0] === 'callout') blocks.push({ type: 'callout', variant: normalizeVariant(info[1]), text: code.join('\n') });
+      // `small` (a note in smaller type) rides along as a flag, like an embed's lightbox, so a save never drops it.
+      if (info[0] === 'callout') blocks.push({ type: 'callout', variant: normalizeVariant(info[1]), ...(info.slice(2).includes('small') ? { small: true } : {}), text: code.join('\n') });
       else if (info[0] === 'embed') blocks.push({ type: 'embed', url: code.join('\n').trim(), ...(info[1] === 'lightbox' ? { lightbox: true } : {}) });
       // sow-483: ```audio <label> is the podcast block. It keeps the code block's two fields (the info string and the
       // lines) untouched, and the WorkBench form rewrites single lines of them (client/src/audio-block-edit.mjs).

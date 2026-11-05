@@ -446,7 +446,11 @@ export function checkComponentBlocks(md) {
     const warn = (message) => out.push({ line: at, block: name, message });
     if (j >= src.length) { if (KNOWN_FENCES.includes(name)) warn('the block is never closed with ```'); break; }
     const text = body.join('\n');
-    if (name === 'callout' && meta && !['info', 'note', 'warning', 'tip'].includes(meta)) warn(`callout variant "${meta}" is not one of info, note, warning, tip; it shows as note`);
+    if (name === 'callout' && meta) {
+      const [variant, ...flags] = meta.split(/\s+/); // ```callout <variant> [small] (small: 2026-11-05)
+      if (!['info', 'note', 'warning', 'tip'].includes(variant)) warn(`callout variant "${variant}" is not one of info, note, warning, tip; it shows as note`);
+      for (const f of flags) if (f !== 'small') warn(`callout option "${f}" is not known; only "small" is`);
+    }
     if (name === 'embed') {
       if (meta && meta !== 'lightbox') warn(`embed option "${meta}" is not known; only "lightbox" is`);
       if (!/^https?:\/\//.test(text.trim())) warn('embed needs one video URL on its own line');

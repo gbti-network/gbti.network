@@ -22,10 +22,12 @@ const inline = (escaped) => escaped
 
 function renderBlock(node) {
   if (node.lang === 'callout') {
-    const meta = String(node.meta || '').trim();
-    const v = CALLOUT_VARIANTS.includes(meta) ? meta : 'note';
+    // ```callout <variant> [small]: `small` sets the note in smaller type (2026-11-05), e.g. a calculation beside a chart.
+    const [variant, ...flags] = String(node.meta || '').trim().split(/\s+/);
+    const v = CALLOUT_VARIANTS.includes(variant) ? variant : 'note';
+    const small = flags.includes('small') ? ' callout-small' : '';
     const body = String(node.value || '').split('\n').map((l) => inline(esc(l))).join('<br/>');
-    return `<div class="callout callout-${v}" role="note"><div class="callout-body">${body}</div></div>`;
+    return `<div class="callout callout-${v}${small}" role="note"><div class="callout-body">${body}</div></div>`;
   }
   // embed
   const url = String(node.value || '').trim();
