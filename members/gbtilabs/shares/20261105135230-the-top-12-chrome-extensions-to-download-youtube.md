@@ -12,8 +12,8 @@ tags:
   - chrome-extensions
   - video-downloading
   - creator-tools
-image: >-
-  https://cdnimg.co/33aa4e92-80a1-45bb-8566-6d67dc77fe6b/f154736d-ee2a-4ba8-9c9e-db6eaaabc8a5/chrome-extensions-to-download-youtube-videos-title-card.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261105135230-the-top-12-chrome-extensions-to-download-youtube-9f31ddb5.webp
+imageSource: https://cdnimg.co/33aa4e92-80a1-45bb-8566-6d67dc77fe6b/f154736d-ee2a-4ba8-9c9e-db6eaaabc8a5/chrome-extensions-to-download-youtube-videos-title-card.jpg
 id: 20261105135230-the-top-12-chrome-extensions-to-download-youtube
 createdAt: '2026-11-05T13:52:30.215Z'
 type: share
