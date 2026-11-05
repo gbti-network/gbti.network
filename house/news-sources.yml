@@ -679,3 +679,8 @@ sources:
     url: https://rennwick.com/insights/feed/
     description: rennwick.com
     enabled: true
+  - id: vidito-ai
+    name: Vidito.ai
+    url: https://www.vidito.ai/blog/
+    description: www.vidito.ai
+    enabled: true
