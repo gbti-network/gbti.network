@@ -244,6 +244,10 @@ covers:
     file: 20261105175221-mr-fastfinger-awaki-waki-stringweaver-guitarbots-2a53b916.webp
     sha256: 2a53b916dedb4a1c92c4ccfd55335eb96eac80bcb9619f189839c1ca03aa639f
     copiedAt: '2026-11-05'
+  atwellpub/20261106220730-the-openssh-bug-hiding-in-musl-for-nearly-a-deca:
+    lookup: https://sshhole.com/
+    failed: no-preview
+    triedAt: '2026-11-06'
   bomsn/20260928191738-chatgpt-no-longer-reads-your-page-before-recomme:
     source: https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
     file: 20260928191738-chatgpt-no-longer-reads-your-page-before-recomme-60d9158d.webp
