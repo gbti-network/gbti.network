@@ -12,7 +12,8 @@ tags:
   - cybersecurity
   - north-korea
   - binance
-image: https://i.ytimg.com/vi/yU8JpuK5NZs/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261107170732-north-korea-robbed-binance-can-anyone-get-the-mo-9198f333.webp
+imageSource: https://i.ytimg.com/vi/yU8JpuK5NZs/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@PBoyle
 creatorName: Patrick Boyle
 sourceName: YouTube
