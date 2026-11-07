@@ -132,6 +132,25 @@ const RETIRED = [
   '@cf/meta/llama-3.2-1b-instruct', '@cf/meta/llama-3.2-3b-instruct',
 ];
 
+// THE ROLLBACK (2026-11-07). The replacement failed live, so production went back to the old model while the next
+// candidate is proven. This one retired id is allowed in these two files only, and only BEFORE the day it stops
+// answering. From 2026-11-20 this guard fails again, because from then on the setting names a model that is gone.
+const ROLLBACK = { id: '@cf/meta/llama-3.2-3b-instruct', until: '2026-11-20', files: ['membership/ai-text.mjs', 'workers/signup/wrangler.toml'] };
+function rollbackOpen(day = new Date().toISOString().slice(0, 10)) { return day < ROLLBACK.until; }
+const allowedHit = (rel, id) => rollbackOpen() && id === ROLLBACK.id && ROLLBACK.files.includes(rel.split(path.sep).join('/'));
+
+test('the rollback window closes on the day the old model stops answering', () => {
+  assert.equal(rollbackOpen('2026-11-07'), true);
+  assert.equal(rollbackOpen('2026-11-19'), true);
+  assert.equal(rollbackOpen('2026-11-20'), false);
+  assert.equal(rollbackOpen('2027-01-01'), false);
+  assert.ok(RETIRED.includes(ROLLBACK.id), 'the rollback names a retired model, or it would not need an exception');
+  // The exception covers one id in two files, never another retired id and never another file.
+  assert.equal(allowedHit('membership/ai-text.mjs', '@cf/meta/llama-3.2-1b-instruct'), false);
+  assert.equal(allowedHit('workers/signup/wrangler.toml', '@cf/qwen/qwq-32b'), false);
+  assert.equal(allowedHit('workers/signup/topic-suggest.mjs', ROLLBACK.id), false);
+});
+
 const SCAN_ROOTS = ['membership', 'workers', 'scripts', 'src', 'client/src', 'client-ui/src', 'extension/src', 'clients', 'house', '.github'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.wt', '.astro', '.git', '.wrangler']);
 const SCAN_EXT = /\.(mjs|cjs|js|ts|astro|toml|json|jsonc|ya?ml)$/;
@@ -157,11 +176,12 @@ test('no source file names a Workers AI model Cloudflare retires on 2026-11-20',
     for (const id of RETIRED) {
       // A whole id only: `@cf/meta/llama-3.2-3b-instruct` must not match a longer, current id that starts with it.
       const re = new RegExp(`${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.-])`);
-      if (re.test(text)) hits.push(`${path.relative(ROOT, f)}: ${id}`);
+      if (re.test(text) && !allowedHit(path.relative(ROOT, f), id)) hits.push(`${path.relative(ROOT, f)}: ${id}`);
     }
   }
   assert.deepEqual(hits, []);
-  assert.ok(!RETIRED.includes(AI_TEXT_MODEL), 'the default model is not itself retired');
+  assert.ok(!RETIRED.includes(AI_TEXT_MODEL) || (rollbackOpen() && AI_TEXT_MODEL === ROLLBACK.id),
+    `the default model ${AI_TEXT_MODEL} is retired: prove a replacement with POST /membership/admin/ai-probe and set it`);
 });
 
 test('both Worker environments set AI_MODEL to AI_TEXT_MODEL', () => {

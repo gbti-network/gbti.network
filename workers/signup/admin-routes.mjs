@@ -10,6 +10,7 @@ import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } 
 import { membershipPreparedGet, membershipPreparedPost } from './membership-prepared-admin.mjs'; // sow-427: prepared project listings (superadmin)
 import { preparedFinalizeHook } from './membership-claim.mjs'; // sow-427: finalize claims as the manager loads
 import { newsItemDecide, newsRemovedList } from './membership-admin-news.mjs'; // sow-338: superadmin news removal
+import { membershipAdminAiProbe } from './membership-admin-ai-probe.mjs'; // sow-493: one Workers AI call, raw reply shown (superadmin)
 import { membershipMemberLookup } from './membership-member-lookup.mjs'; // sow-331: the superadmin member lookup
 import { membershipAdminCtaPool } from './membership-admin-ctas.mjs'; // sow-281: the CTA registry pool read (superadmin)
 import { membershipAdminSkillInstallPool } from './membership-admin-skills.mjs'; // sow-109: Skill install, every tool and its steps (superadmin)
@@ -157,6 +158,17 @@ export async function handleAdminRoutes(request, env, ctx, { pathname, method })
     }
     if (method === 'POST') {
       const r = await membershipPreparedPost(request, env, { allowCookie: true });
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+    }
+  }
+
+  // sow-493: run one Workers AI call against a fixed sample story and return the raw reply, so a replacement model
+  // can be proven against the real binding before production news uses it. Superadmin only, writes nothing.
+  if (pathname === '/membership/admin/ai-probe') {
+    const cors = corsHeaders(request, env, { credentials: true, methods: 'POST, OPTIONS' });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (method === 'POST') {
+      const r = await membershipAdminAiProbe(request, env, { allowCookie: true });
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
     }
   }

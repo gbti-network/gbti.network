@@ -3,14 +3,19 @@
 // retirement would have shown as nothing more than news losing its AI categories and summaries.
 //
 // THE ONE MODEL SETTING. Every Workers AI text call defaults to AI_TEXT_MODEL; the Worker's `AI_MODEL` variable
-// (workers/signup/wrangler.toml) overrides it. Change both together when Cloudflare retires this one.
+// (workers/signup/wrangler.toml) overrides it. Change both together when Cloudflare retires this one, after proving
+// the replacement with POST /membership/admin/ai-probe (workers/signup/membership-admin-ai-probe.mjs).
 //
 // THE ONE REPLY READER. Models differ in what they return: the older ones put the text in `response`, the newer ones
 // reply OpenAI-style with `choices[0].message.content`. A caller that read only `response` got nothing from a newer
 // model and fell back without a word, which is exactly the failure a model swap would have caused. aiText reads every
 // shape, and strips a reasoning model's <think> notes so they never reach a label or a summary. Pure, no IO.
 
-export const AI_TEXT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+// ROLLED BACK 2026-11-07 (sow-493). The replacement, gemma-4-26b-a4b-it, was deployed at 16:11 UTC and the 17:00
+// news run stored every story without an AI category or summary, so production returned to the old model, which
+// answers until 2026-11-20. test/ai-text.test.mjs allows this one retired id only until that date. Prove the next
+// candidate with POST /membership/admin/ai-probe before setting it here.
+export const AI_TEXT_MODEL = '@cf/meta/llama-3.2-3b-instruct';
 
 const THINK_RE = /<think>[\s\S]*?(?:<\/think>|$)/gi;
 
