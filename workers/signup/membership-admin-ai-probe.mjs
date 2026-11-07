@@ -12,7 +12,7 @@
 // token budget is capped, and only the handful of parameters a text call takes are passed through.
 
 import { authorizeSuperadmin } from './membership-admin.mjs';
-import { aiText, AI_TEXT_MODEL } from '../../membership/ai-text.mjs';
+import { aiText, aiTextInput, AI_TEXT_MODEL } from '../../membership/ai-text.mjs';
 import { buildMessages, normalizeLabel, buildAnalysisMessages, parseAnalysis } from './news/src/classify.mjs';
 import { buildTagMessages, normalizeSuggestedTags } from './topic-suggest.mjs';
 
@@ -52,8 +52,9 @@ export function probeInput(body) {
   if (typeof model !== 'string' || !MODEL_RE.test(model)) return { error: 'model must be a Workers AI id such as @cf/vendor/name.' };
   const task = body.task === undefined ? 'classify' : body.task;
   if (!Object.hasOwn(TASKS, task)) return { error: "task must be 'classify', 'analyze' or 'tags'." };
-  const input = { messages: TASKS[task].messages(), temperature: 0 };
-  if (body.max_tokens === undefined && body.max_completion_tokens === undefined) input.max_tokens = TASKS[task].budget;
+  // Production's own input is the starting point (aiTextInput), so a probe with no settings shows what news sends.
+  const input = aiTextInput(TASKS[task].messages(), TASKS[task].budget);
+  if (body.max_tokens !== undefined || body.max_completion_tokens !== undefined) delete input.max_tokens;
   for (const k of ['max_tokens', 'max_completion_tokens']) {
     if (body[k] === undefined) continue;
     if (!intIn(body[k], 1, PROBE_MAX_TOKENS)) return { error: `${k} must be a whole number from 1 to ${PROBE_MAX_TOKENS}.` };

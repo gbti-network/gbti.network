@@ -7,7 +7,7 @@
 
 import { CATEGORIES, CATEGORY_NAMES, DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { cutAtWord } from './text-fit.mjs'; // sow-402: shared word-boundary cut
-import { AI_TEXT_MODEL, aiText } from '../../../../membership/ai-text.mjs'; // sow-493: the one model setting + reply reader
+import { AI_TEXT_MODEL, aiText, aiTextInput } from '../../../../membership/ai-text.mjs'; // sow-493: the one model setting + reply reader
 
 // Lightweight keyword fallback. First matching pattern wins; order matters (most specific first).
 // Used only when the AI call fails — keeps quota exhaustion graceful instead of dumping to "Other".
@@ -71,11 +71,7 @@ export function buildMessages(item) {
 export async function classifyItem(env, item) {
   const model = env.AI_MODEL || AI_TEXT_MODEL;
   try {
-    const out = await env.AI.run(model, {
-      messages: buildMessages(item),
-      max_tokens: 64, // sow-493: room for a reasoning model to reach the label (was 12)
-      temperature: 0,
-    });
+    const out = await env.AI.run(model, aiTextInput(buildMessages(item), 64)); // sow-493: reasoning off; budget was 12
     const label = normalizeLabel(aiText(out));
     if (label) return { category: label, classified: true };
   } catch (err) {
@@ -160,11 +156,7 @@ export function parseAnalysis(raw) {
 export async function analyzeItem(env, item) {
   const model = env.AI_MODEL || AI_TEXT_MODEL;
   try {
-    const out = await env.AI.run(model, {
-      messages: buildAnalysisMessages(item),
-      max_tokens: 160,
-      temperature: 0,
-    });
+    const out = await env.AI.run(model, aiTextInput(buildAnalysisMessages(item), 160)); // sow-493: reasoning off
     const { category, digest } = parseAnalysis(out);
     return {
       category: category || keywordCategory(item) || DEFAULT_CATEGORY,

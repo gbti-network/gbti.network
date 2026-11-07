@@ -37,7 +37,7 @@ test('the probe returns the raw reply, the text read from it, and what the calle
   assert.deepEqual(r.body.parsed, { label: 'DevOps/Cloud' });
   assert.match(r.body.raw, /<think>a release note<\/think>/, 'the raw reply is shown as it came, reasoning included');
   assert.equal(r.body.ms, 250);
-  assert.deepEqual(r.body.settings, { temperature: 0, max_tokens: 64 });
+  assert.deepEqual(r.body.settings, { max_tokens: 64, temperature: 0, chat_template_kwargs: { enable_thinking: false } }, 'production defaults');
   assert.equal(calls[0].model, GEMMA);
   assert.ok(Array.isArray(calls[0].input.messages) && calls[0].input.messages.length === 2);
 });
@@ -64,12 +64,12 @@ test('a call that throws comes back as the result, with the error text', async (
 
 test('settings under test reach the model exactly, and replace the default budget', async () => {
   const { env, calls } = aiEnv({ response: 'x' });
-  await membershipAdminAiProbe(req({ model: GEMMA, max_completion_tokens: 300, temperature: 0.2, chat_template_kwargs: { enable_thinking: false } }), env, { authorize: allow });
+  await membershipAdminAiProbe(req({ model: GEMMA, max_completion_tokens: 300, temperature: 0.2, chat_template_kwargs: { enable_thinking: true } }), env, { authorize: allow });
   const input = calls[0].input;
   assert.equal(input.max_completion_tokens, 300);
   assert.equal(input.max_tokens, undefined, 'the default budget is not sent beside an explicit one');
   assert.equal(input.temperature, 0.2);
-  assert.deepEqual(input.chat_template_kwargs, { enable_thinking: false });
+  assert.deepEqual(input.chat_template_kwargs, { enable_thinking: true }, 'an explicit setting replaces the production default');
 });
 
 test('probeInput refuses what it cannot pass through faithfully', () => {

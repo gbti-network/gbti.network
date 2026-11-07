@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeSuggestedTags, buildTagMessages } from '../workers/signup/topic-suggest.mjs';
-import { AI_TEXT_MODEL, aiText } from '../membership/ai-text.mjs'; // sow-493
+import { AI_TEXT_MODEL, aiText, aiTextInput } from '../membership/ai-text.mjs'; // sow-493
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -85,7 +85,7 @@ async function runAi(messages) {
     const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${MODEL}`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ messages, max_tokens: 96, temperature: 0 }),
+      body: JSON.stringify(aiTextInput(messages, 96)), // sow-493: reasoning off
     });
     if (!res.ok) return '';
     const json = await res.json();

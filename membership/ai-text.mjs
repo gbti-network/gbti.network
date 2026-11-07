@@ -11,11 +11,23 @@
 // model and fell back without a word, which is exactly the failure a model swap would have caused. aiText reads every
 // shape, and strips a reasoning model's <think> notes so they never reach a label or a summary. Pure, no IO.
 
-// ROLLED BACK 2026-11-07 (sow-493). The replacement, gemma-4-26b-a4b-it, was deployed at 16:11 UTC and the 17:00
-// news run stored every story without an AI category or summary, so production returned to the old model, which
-// answers until 2026-11-20. test/ai-text.test.mjs allows this one retired id only until that date. Prove the next
-// candidate with POST /membership/admin/ai-probe before setting it here.
-export const AI_TEXT_MODEL = '@cf/meta/llama-3.2-3b-instruct';
+// History, 2026-11-07. Gemma went live at 16:11 UTC WITHOUT the reasoning switch below, and the 17:00 news run stored
+// every story with no AI category or summary, so production went back to the old model for an hour. The probe
+// (POST /membership/admin/ai-probe) then showed why: Gemma reasons by default, and spent the whole budget on it.
+// With the switch it answered every task correctly. Prove any future candidate with the probe before setting it here.
+export const AI_TEXT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+
+/**
+ * The input every text call sends: the messages, a token budget, temperature 0, and REASONING OFF.
+ *
+ * Gemma reasons by default. Live, with a 64-token budget, it returned `content: ''` with its notes in
+ * `reasoning_content` and `finish_reason: 'length'`, so every caller fell back. `chat_template_kwargs:
+ * { enable_thinking: false }` is the switch: proven with the probe, where an unknown key or `true` left reasoning on.
+ * The old model accepts the same input, so a rollback before its retirement is a change of model id only. Pure.
+ */
+export function aiTextInput(messages, maxTokens) {
+  return { messages, max_tokens: maxTokens, temperature: 0, chat_template_kwargs: { enable_thinking: false } };
+}
 
 const THINK_RE = /<think>[\s\S]*?(?:<\/think>|$)/gi;
 

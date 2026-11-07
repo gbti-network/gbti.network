@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AI_TEXT_MODEL, aiText } from '../membership/ai-text.mjs';
+import { AI_TEXT_MODEL, aiText, aiTextInput } from '../membership/ai-text.mjs';
 import { classifyItem, analyzeItem } from '../workers/signup/news/src/classify.mjs';
 import { suggestTopic, suggestTags } from '../workers/signup/topic-suggest.mjs';
 import { TOPICS_MIRROR_KEY } from '../membership/topics-vocab.mjs';
@@ -101,6 +101,29 @@ test('every caller asks for AI_TEXT_MODEL by default, and the AI_MODEL setting o
   assert.deepEqual(seen, ['@cf/test/override']);
 });
 
+test('aiTextInput sends reasoning OFF, temperature 0, and the budget given', () => {
+  const messages = [{ role: 'user', content: 'x' }];
+  assert.deepEqual(aiTextInput(messages, 64), { messages, max_tokens: 64, temperature: 0, chat_template_kwargs: { enable_thinking: false } });
+  assert.notEqual(aiTextInput(messages, 1).chat_template_kwargs, aiTextInput(messages, 1).chat_template_kwargs, 'a fresh object per call');
+});
+
+test('every caller sends reasoning OFF (live, Gemma spent a whole budget reasoning and answered nothing)', async () => {
+  const inputs = {};
+  const run = (name) => async (_m, opts) => { inputs[name] = opts; return legacy(''); };
+  const store = new Map([[TOPICS_MIRROR_KEY, { generatedAt: 'T0', topics: { ai: { label: 'AI' } } }], ['synd:config', { classify: 'ai' }]]);
+  const kv = { get: async (k) => store.get(k) ?? null };
+  await classifyItem({ AI: { run: run('classify') } }, { title: 't' });
+  await analyzeItem({ AI: { run: run('analyze') } }, { title: 't' });
+  await suggestTopic({ SIGNUP_KV: kv, AI: { run: run('topic') } }, { title: 't' });
+  await suggestTags({ SIGNUP_KV: kv, AI: { run: run('tags') } }, { title: 't' });
+  assert.deepEqual(Object.keys(inputs).sort(), ['analyze', 'classify', 'tags', 'topic']);
+  for (const [name, opts] of Object.entries(inputs)) {
+    assert.deepEqual(opts.chat_template_kwargs, { enable_thinking: false }, name);
+    assert.equal(opts.temperature, 0, name);
+    assert.ok(Array.isArray(opts.messages) && opts.messages.length === 2, name);
+  }
+});
+
 test('the label calls leave a reasoning model room to answer', async () => {
   const budgets = {};
   const run = (name) => async (_m, opts) => { budgets[name] = opts.max_tokens; return legacy(''); };
@@ -132,9 +155,10 @@ const RETIRED = [
   '@cf/meta/llama-3.2-1b-instruct', '@cf/meta/llama-3.2-3b-instruct',
 ];
 
-// THE ROLLBACK (2026-11-07). The replacement failed live, so production went back to the old model while the next
-// candidate is proven. This one retired id is allowed in these two files only, and only BEFORE the day it stops
-// answering. From 2026-11-20 this guard fails again, because from then on the setting names a model that is gone.
+// THE ROLLBACK WINDOW (2026-11-07). Gemma first went live without the reasoning switch and failed, and production
+// went back to the old model for an hour. The exception stays so that a rollback before the old model is retired is
+// a change of model id and nothing else: this one retired id, in these two files, only BEFORE 2026-11-20. From that
+// day the guard is strict again, because from then on that id names a model that is gone.
 const ROLLBACK = { id: '@cf/meta/llama-3.2-3b-instruct', until: '2026-11-20', files: ['membership/ai-text.mjs', 'workers/signup/wrangler.toml'] };
 function rollbackOpen(day = new Date().toISOString().slice(0, 10)) { return day < ROLLBACK.until; }
 const allowedHit = (rel, id) => rollbackOpen() && id === ROLLBACK.id && ROLLBACK.files.includes(rel.split(path.sep).join('/'));
