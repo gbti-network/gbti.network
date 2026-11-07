@@ -1,12 +1,13 @@
 // Classify an item into one of the file-defined categories (config/categories.mjs) using Workers AI.
 //
 // The model is told to reply with ONLY a label; we then VALIDATE that string against the allowlist
-// (CF Llama models have no reliable guided-JSON mode, so we constrain by prompt + validation). If the
+// (the small Workers AI models have no reliable guided-JSON mode, so we constrain by prompt + validation). If the
 // AI is unavailable, over quota, or returns something off-list, we fall back to a cheap keyword guess
 // and finally to the DEFAULT_CATEGORY. Ingestion must never block on classification.
 
 import { CATEGORIES, CATEGORY_NAMES, DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { cutAtWord } from './text-fit.mjs'; // sow-402: shared word-boundary cut
+import { AI_TEXT_MODEL, aiText } from '../../../../membership/ai-text.mjs'; // sow-493: the one model setting + reply reader
 
 // Lightweight keyword fallback. First matching pattern wins; order matters (most specific first).
 // Used only when the AI call fails — keeps quota exhaustion graceful instead of dumping to "Other".
@@ -68,14 +69,14 @@ export function buildMessages(item) {
  * valid label (false means we used a keyword/default fallback and it should be retried later).
  */
 export async function classifyItem(env, item) {
-  const model = env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct';
+  const model = env.AI_MODEL || AI_TEXT_MODEL;
   try {
     const out = await env.AI.run(model, {
       messages: buildMessages(item),
-      max_tokens: 12,
+      max_tokens: 64, // sow-493: room for a reasoning model to reach the label (was 12)
       temperature: 0,
     });
-    const label = normalizeLabel(out?.response ?? out?.result ?? '');
+    const label = normalizeLabel(aiText(out));
     if (label) return { category: label, classified: true };
   } catch (err) {
     console.error(JSON.stringify({ at: 'classify', guid: item.guid, error: String(err?.message || err) }));
@@ -137,7 +138,7 @@ export function buildAnalysisMessages(item) {
  * never hijack the label), then validated against the allowlist via normalizeLabel.
  */
 export function parseAnalysis(raw) {
-  const s = typeof raw === 'string' ? raw : (raw?.response ?? raw?.result ?? '');
+  const s = aiText(raw); // sow-493: any reply shape, reasoning notes removed
   const catMatch = typeof s === 'string' ? s.match(/CATEGORY\s*:\s*(.+)/i) : null;
   const sumMatch = typeof s === 'string' ? s.match(/SUMMARY\s*:\s*([\s\S]+)/i) : null;
   const category = catMatch ? normalizeLabel(catMatch[1].split(/\r?\n/)[0]) : null;
@@ -157,14 +158,14 @@ export function parseAnalysis(raw) {
  * summary yields digest:null (summarized:false) and the caller falls back to the feed excerpt for display.
  */
 export async function analyzeItem(env, item) {
-  const model = env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct';
+  const model = env.AI_MODEL || AI_TEXT_MODEL;
   try {
     const out = await env.AI.run(model, {
       messages: buildAnalysisMessages(item),
       max_tokens: 160,
       temperature: 0,
     });
-    const { category, digest } = parseAnalysis(out?.response ?? out?.result ?? '');
+    const { category, digest } = parseAnalysis(out);
     return {
       category: category || keywordCategory(item) || DEFAULT_CATEGORY,
       classified: Boolean(category),

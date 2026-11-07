@@ -11,6 +11,7 @@
 
 import { TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
 import { classifyMode } from '../../membership/syndication-config-core.mjs';
+import { AI_TEXT_MODEL, aiText } from '../../membership/ai-text.mjs'; // sow-493: the one model setting + reply reader
 import { readSyndicationConfig } from './syndication-store.mjs';
 
 /** Read the mirrored topic vocabulary ({ key: { label, group? } }) from KV. Missing/invalid = {} (no suggestion). */
@@ -187,12 +188,12 @@ export async function suggestTags(env, { title, description, tags, kv = env?.SIG
   if (mode === 'off') return [];
   if (mode === 'ai' && env?.AI?.run) {
     try {
-      const out = await env.AI.run(env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct', {
+      const out = await env.AI.run(env.AI_MODEL || AI_TEXT_MODEL, {
         messages: buildTagMessages({ title, description, tags }),
-        max_tokens: 40,
+        max_tokens: 96, // sow-493: room for a reasoning model to reach the list (was 40)
         temperature: 0,
       });
-      const got = normalizeSuggestedTags(out?.response ?? out?.result ?? '', { max });
+      const got = normalizeSuggestedTags(aiText(out), { max });
       if (got.length) return got;
     } catch { /* fall through to the declared tags */ }
   }
@@ -212,12 +213,12 @@ export async function suggestTopic(env, { title, description, tags, kv = env?.SI
   const input = { title, description, tags };
   if (mode === 'ai' && env?.AI?.run) {
     try {
-      const out = await env.AI.run(env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct', {
+      const out = await env.AI.run(env.AI_MODEL || AI_TEXT_MODEL, {
         messages: buildTopicMessages(input, vocab),
-        max_tokens: 12,
+        max_tokens: 64, // sow-493: room for a reasoning model to reach the key (was 12)
         temperature: 0,
       });
-      const key = normalizeTopic(out?.response ?? out?.result ?? '', vocab);
+      const key = normalizeTopic(aiText(out), vocab);
       if (key) return key;
     } catch { /* fall through to the free keyword guess */ }
   }

@@ -122,7 +122,8 @@ MEMBER_CONTENT_KID = "1"
 
 # UnifiedWorker: the news ingest engine (folded in from the retired gbti-news worker) reads these each cron. AI is
 # the shared Workers AI binding above; NEWS_SOURCES_URL is the public source-pool artifact the site publishes.
-AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+# sow-493: Workers AI retires models on a schedule; this must match AI_TEXT_MODEL in membership/ai-text.mjs.
+AI_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 SOURCE_CHUNK = "16"
 RETENTION_DAYS = "30"
 MAX_CLASSIFY = "16"
@@ -264,7 +265,8 @@ MEMBERSHIP_AUTHOR_ENABLED = "true"   # SOW-157 rollout: hosted authoring is the 
 UPSTREAM_REPO = "gbti-network/gbti.network"   # SOW-026: canonical repo the App opens PRs into
 # UnifiedWorker: the news ingest engine (folded in) reads these each cron. The old NEWS_API_BASE HTTP hop +
 # NEWS_API_KEY secret are gone (the news reads are in-process now); NEWS_CHANNELS below still drives the curator publish.
-AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+# sow-493: Workers AI retires models on a schedule; this must match AI_TEXT_MODEL in membership/ai-text.mjs.
+AI_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 SOURCE_CHUNK = "16"
 RETENTION_DAYS = "30"
 MAX_CLASSIFY = "16"

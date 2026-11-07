@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeSuggestedTags, buildTagMessages } from '../workers/signup/topic-suggest.mjs';
+import { AI_TEXT_MODEL, aiText } from '../membership/ai-text.mjs'; // sow-493
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -37,7 +38,7 @@ const LIMIT = (() => {
   const n = i >= 0 ? Number(argv[i + 1]) : NaN;
   return Number.isFinite(n) && n > 0 ? n : Infinity;
 })();
-const MODEL = process.env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct';
+const MODEL = process.env.AI_MODEL || AI_TEXT_MODEL;
 
 /** Every share file on disk, as repo-relative paths. */
 function shareFiles() {
@@ -84,11 +85,11 @@ async function runAi(messages) {
     const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${MODEL}`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ messages, max_tokens: 40, temperature: 0 }),
+      body: JSON.stringify({ messages, max_tokens: 96, temperature: 0 }),
     });
     if (!res.ok) return '';
     const json = await res.json();
-    return String(json?.result?.response ?? '');
+    return aiText(json); // sow-493: the REST reply wraps the model's reply in `result`, in any shape
   } catch {
     return '';
   }
