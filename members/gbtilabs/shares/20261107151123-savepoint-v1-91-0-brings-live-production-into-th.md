@@ -11,7 +11,8 @@ tags:
   - savepoint-blog
   - dj-mode
   - streaming
-image: https://savepoint.fm/blog-images/savepoint-v1-91-0-release-notes/hero.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261107151123-savepoint-v1-91-0-brings-live-production-into-th-fac84765.webp
+imageSource: https://savepoint.fm/blog-images/savepoint-v1-91-0-release-notes/hero.jpg
 id: 20261107151123-savepoint-v1-91-0-brings-live-production-into-th
 createdAt: '2026-11-07T15:11:23.059Z'
 type: share
