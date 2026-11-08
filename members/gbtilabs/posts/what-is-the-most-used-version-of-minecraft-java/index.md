@@ -1,7 +1,7 @@
 ---
 title: "What Is the Most Used Version of Minecraft Java in 2026?"
 slug: what-is-the-most-used-version-of-minecraft-java
-status: draft
+status: published
 visibility: public
 publicStub: false
 excerpt: "26.3 leads on Paper-family servers and in Fabric and Quilt mod downloads; Forge mods are downloaded most for 1.20.1 and NeoForge mods for 1.21.1."
@@ -18,7 +18,7 @@ tags:
 coverImage: ./images/minecraft-java-versions-2026.webp
 layout: journal
 featured: false
-publishedAt: '2026-10-24T00:00:00.000Z'
+publishedAt: '2026-11-08T00:00:00.000Z'
 type: post
 author: gbtilabs
 ---
