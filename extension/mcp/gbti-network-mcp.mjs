@@ -18693,7 +18693,7 @@ function embedProblem(provider, raw) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18790,6 +18790,21 @@ function parseReveal(body, meta3 = "") {
     else out.unknown.push(l);
   }
   return out;
+}
+var FAQ_Q = /^\s*Q:\s*(.*)$/;
+function parseFaq(body) {
+  const items = [];
+  const lead = [];
+  for (const raw of String(body ?? "").split("\n")) {
+    const q2 = raw.match(FAQ_Q);
+    if (q2) {
+      items.push({ q: q2[1].trim(), lines: [] });
+      continue;
+    }
+    if (items.length) items[items.length - 1].lines.push(raw);
+    else if (raw.trim()) lead.push(raw.trim());
+  }
+  return { items: items.map((it) => ({ q: it.q, answer: it.lines.join("\n").trim() })), lead };
 }
 var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
@@ -18912,6 +18927,17 @@ function checkComponentBlocks(md) {
       for (const u of r.unknown) warn(`reveal line "${u}" is not weights: or note:`);
       if (!r.hasCut) warn("reveal needs a line with --- before the part that opens on request");
       else if (!r.body) warn("reveal has nothing after ---, so there is nothing to open");
+    }
+    if (name === "faq") {
+      const f = parseFaq(text);
+      if (meta3) warn(`faq takes no options after its name (got "${meta3}")`);
+      if (!f.items.length) warn('faq needs at least one question: a line starting with "Q:", with its answer on the lines below');
+      if (f.lead.length) warn(`faq line "${f.lead[0]}" comes before the first "Q:" and belongs to no question; it is left out`);
+      for (const it of f.items) {
+        if (!it.q) warn('faq has a "Q:" line with no question after it; it is left out');
+        else if (!it.answer) warn(`faq question "${it.q}" has no answer under it`);
+        if (/\[\^[^\]]+\]/.test(it.q)) warn(`faq question "${it.q}" has a footnote marker, which shows as text in a question; put it in the answer`);
+      }
     }
     i = j;
   }
@@ -20905,6 +20931,26 @@ src: /media/podcasts/how-ai-agents-replace-web-dashboards.ogg
 src: /media/podcasts/how-ai-agents-replace-web-dashboards.mp3
 ${F}`,
     renders: "Site, preview and reader: the label and length with the link out beside them (under the player on a phone), then the browser player, the card, or the provider's own player. Cross-posts: the label as a link to the MP3 file or the provider page, with the length and the link out."
+  },
+  {
+    name: "faq",
+    kind: "fence",
+    purpose: "Questions and answers as an accordion: each question is a row with a plus sign, and its answer opens under it while the question stays in view. Every answer starts closed. A question is a line starting with Q:, and its answer is the lines below it up to the next Q:. An answer is ordinary markdown: paragraphs, lists, bold, links, and footnote markers, which number with the rest of the article.",
+    syntax: `${F}faq
+Q: <question>
+<answer>
+
+Q: <question>
+<answer>
+${F}`,
+    example: `${F}faq
+Q: What is the latest version of Minecraft Java?
+The latest release is 26.3. Mojang shipped it on 15 September 2026.
+
+Q: Why do some servers still run 1.8?
+The sources do not state a reason.
+${F}`,
+    renders: "Site, preview and reader: the questions as rows between rules, each answer closed until its question is clicked. Cross-posts: every question in bold with its answer written out under it."
   },
   {
     name: "image layout",

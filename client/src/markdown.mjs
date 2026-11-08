@@ -229,7 +229,7 @@ function codeOpen(lang) {
 // provider iframe instead of a code block; everything else stays a normal code block. HTML is still escaped, and the
 // iframe src is a NORMALIZED provider URL (never author HTML), so no author script executes.
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
-function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
+function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false, nested = null } = {}) {
   const info = String(lang || '').trim().split(/\s+/);
   const body = buf.join('\n');
   if (info[0] === 'callout') {
@@ -244,7 +244,7 @@ function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, r
   // sow-453: tags, bar, facts, button, through the one module the site uses too. The origin makes an audio block's
   // /media/ sources load from gbti.network on the extension's chrome-extension:// pages too.
   // sow-483: audioBase resolves an uploaded recording (`./audio/<file>`) to the route serving it for this item.
-  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' '), { origin: SITE_ORIGIN, audioBase, relativeAudio }); if (html != null) return html; }
+  if (DATA_BLOCKS.includes(info[0])) { const html = renderDataBlock(info[0], body, info.slice(1).join(' '), { origin: SITE_ORIGIN, audioBase, relativeAudio, answerHtml: nested }); if (html != null) return html; }
   if (info[0] === 'embed') {
     const url = body.trim();
     // Frame the SOW-092 relay, never the provider directly. This renderer only ever runs off-https (the
@@ -358,6 +358,9 @@ function renderDoc(md, ids, opts = {}, nest = null) {
   // Lists are taken as whole runs where they start (see the list branch below), so there is nothing left to flush
   // at a block boundary; the calls stay as the seams they mark.
   const flushList = () => {};
+  // sow-495: an ```faq answer is rendered as a document nested in this one, as a quote is, so it shares the footnote
+  // state (a marker in an answer is numbered and listed with the rest) and the link store.
+  const nested = (inner) => renderDoc(inner, false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
 
   let i = 0;
   while (i < lines.length) {
@@ -367,7 +370,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       if (!inCode) { inCode = true; fenceStart = i; codeBuf = []; codeFence = fence[1].length; codeLang = fence[2]; i++; continue; }
       // CommonMark: a fence closes only on a fence of >= the OPENING length with no info string, so a
       // ````markdown block can carry ``` fences as CONTENT (the /ci skill prompt broke on this).
-      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i); codeLang = ''; i++; continue; }
+      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio, nested }), fenceStart, i); codeLang = ''; i++; continue; }
       codeBuf.push(line); i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
@@ -496,7 +499,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     emit(`<p>${inline(joined, fn, defs).replace(/\u0000BR\u0000\s*/g, '<br />')}</p>`, paraStart, i - 1);
   }
   flushList();
-  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines.length - 1);
+  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio, nested }), fenceStart, lines.length - 1);
   if (nest) return { html: out.join('\n'), blocks: ranges }; // sow-350: the outer document finishes the job
   // The footnote section: only REFERENCED definitions render (GFM drops the rest), with one back arrow per
   // reference occurrence (matching the disambiguated fnref ids), so every jump down has a jump back.

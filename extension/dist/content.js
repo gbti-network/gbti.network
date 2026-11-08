@@ -2535,6 +2535,26 @@ ${String(lines2[i]).trimStart()}`;
     flush();
     return out.join("");
   }
+  function parseFaq(body) {
+    const items = [];
+    const lead = [];
+    for (const raw of String(body ?? "").split("\n")) {
+      const q2 = raw.match(FAQ_Q);
+      if (q2) {
+        items.push({ q: q2[1].trim(), lines: [] });
+        continue;
+      }
+      if (items.length) items[items.length - 1].lines.push(raw);
+      else if (raw.trim()) lead.push(raw.trim());
+    }
+    return { items: items.map((it2) => ({ q: it2.q, answer: it2.lines.join("\n").trim() })), lead };
+  }
+  function renderFaq(body, answerHtml) {
+    const items = parseFaq(body).items.filter((it2) => it2.q);
+    if (!items.length) return null;
+    const answer2 = typeof answerHtml === "function" ? answerHtml : revealBodyHtml;
+    return FAQ_OPEN + items.map((it2) => faqItemOpen(it2.q) + answer2(it2.answer) + FAQ_ITEM_CLOSE).join("") + FAQ_CLOSE;
+  }
   function audioBaseFor(itemPath) {
     const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
     return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
@@ -2639,6 +2659,7 @@ ${String(lines2[i]).trimStart()}`;
   }
   function renderDataBlock(name, body, meta = "", opts = {}) {
     if (name === "reveal") return renderReveal(body, meta);
+    if (name === "faq") return renderFaq(body, opts.answerHtml);
     if (name === "audio") return renderAudio(body, meta, opts);
     if (name === "tags") {
       const { tags } = parseTags(body);
@@ -2736,6 +2757,20 @@ ${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:
 ${s} .gbti-reveal-body p{margin:8px 0 12px}
 ${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
 ${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-faq{margin:1.2em 0;border-top:1px solid ${t.line2}}
+${s} .gbti-faq-item{border-bottom:1px solid ${t.line2}}
+${s} .gbti-faq-q{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:56px;padding:14px 0;box-sizing:border-box;cursor:pointer;list-style:none;font-weight:700;font-size:.98em;line-height:1.4;color:${t.fg}}
+${s} .gbti-faq-q::-webkit-details-marker{display:none}
+${s} .gbti-faq-q::marker{content:''}
+${s} .gbti-faq-q:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-faq-icon{position:relative;flex:none;width:20px;height:20px}
+${s} .gbti-faq-icon::before,${s} .gbti-faq-icon::after{content:'';position:absolute;top:9px;left:4px;width:12px;height:2px;border-radius:1px;background:${t.green700}}
+${s} .gbti-faq-icon::after{transform:rotate(90deg);transition:transform .15s}
+${s} .gbti-faq-item[open] .gbti-faq-icon::after{transform:rotate(0deg)}
+${s} .gbti-faq-a{padding:0 44px 18px 0;font-size:.93em;line-height:1.7;color:${t.soft}}
+${s} .gbti-faq-a p{margin:0 0 10px}
+${s} .gbti-faq-a ul{margin:0 0 10px}
+${s} .gbti-faq-a > :last-child{margin-bottom:0}
 ${s} .gbti-audio{margin:1.2em 0}
 ${s} > .gbti-audio:first-child{margin-top:14px}
 ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
@@ -2791,18 +2826,23 @@ ${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
 }
 ${barWidthCss(s)}`;
   }
-  var DATA_BLOCKS, esc3, lines, safeUrl, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
+  var DATA_BLOCKS, esc3, lines, safeUrl, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, FAQ_Q, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE, faqItemOpen, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
   var init_content_blocks = __esm({
     "client/src/content-blocks.mjs"() {
       "use strict";
       init_audio_embed();
-      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
       esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
       safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
       REVEAL_MAX_PARTS = 6;
       REVEAL_DEFAULT_LABEL = "Show more";
       inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      FAQ_Q = /^\s*Q:\s*(.*)$/;
+      FAQ_OPEN = '<div class="gbti-faq">';
+      FAQ_ITEM_CLOSE = "</div></details>";
+      FAQ_CLOSE = "</div>";
+      faqItemOpen = (q2) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc3(q2))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
       AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
       ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
       AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
@@ -3191,7 +3231,7 @@ ${barWidthCss(s)}`;
     const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
     return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
   }
-  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
+  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false, nested = null } = {}) {
     const info = String(lang || "").trim().split(/\s+/);
     const body = buf.join("\n");
     if (info[0] === "callout") {
@@ -3202,7 +3242,7 @@ ${barWidthCss(s)}`;
     }
     if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
     if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio, answerHtml: nested });
       if (html != null) return html;
     }
     if (info[0] === "embed") {
@@ -3270,6 +3310,7 @@ ${barWidthCss(s)}`;
     const defs = nest ? nest.defs : collectLinkDefs(lines2);
     const flushList = () => {
     };
+    const nested = (inner) => renderDoc(inner, false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
     let i = 0;
     while (i < lines2.length) {
       const line = lines2[i];
@@ -3287,7 +3328,7 @@ ${barWidthCss(s)}`;
         if (fence[1].length >= codeFence && !fence[2].trim()) {
           inCode = false;
           flushList();
-          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio, nested }), fenceStart, i);
           codeLang2 = "";
           i++;
           continue;
@@ -3421,7 +3462,7 @@ ${barWidthCss(s)}`;
       emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
     }
     flushList();
-    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio, nested }), fenceStart, lines2.length - 1);
     if (nest) return { html: out.join("\n"), blocks: ranges };
     const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
     if (referenced.length) {

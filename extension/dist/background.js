@@ -18355,7 +18355,7 @@ function audioEmbed(provider, raw) {
 }
 
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
 var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
@@ -18499,6 +18499,31 @@ function revealBodyHtml(md) {
   flush();
   return out.join("");
 }
+var FAQ_Q = /^\s*Q:\s*(.*)$/;
+function parseFaq(body) {
+  const items = [];
+  const lead = [];
+  for (const raw of String(body ?? "").split("\n")) {
+    const q = raw.match(FAQ_Q);
+    if (q) {
+      items.push({ q: q[1].trim(), lines: [] });
+      continue;
+    }
+    if (items.length) items[items.length - 1].lines.push(raw);
+    else if (raw.trim()) lead.push(raw.trim());
+  }
+  return { items: items.map((it) => ({ q: it.q, answer: it.lines.join("\n").trim() })), lead };
+}
+var FAQ_OPEN = '<div class="gbti-faq">';
+var FAQ_ITEM_CLOSE = "</div></details>";
+var FAQ_CLOSE = "</div>";
+var faqItemOpen = (q) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc2(q))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
+function renderFaq(body, answerHtml) {
+  const items = parseFaq(body).items.filter((it) => it.q);
+  if (!items.length) return null;
+  const answer = typeof answerHtml === "function" ? answerHtml : revealBodyHtml;
+  return FAQ_OPEN + items.map((it) => faqItemOpen(it.q) + answer(it.answer) + FAQ_ITEM_CLOSE).join("") + FAQ_CLOSE;
+}
 var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
 var ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
 function audioBaseFor(itemPath) {
@@ -18610,6 +18635,7 @@ function renderReveal(body, meta3) {
 }
 function renderDataBlock(name, body, meta3 = "", opts = {}) {
   if (name === "reveal") return renderReveal(body, meta3);
+  if (name === "faq") return renderFaq(body, opts.answerHtml);
   if (name === "audio") return renderAudio(body, meta3, opts);
   if (name === "tags") {
     const { tags } = parseTags(body);
@@ -21049,7 +21075,7 @@ function codeOpen(lang) {
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
 }
 var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
+function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false, nested = null } = {}) {
   const info = String(lang || "").trim().split(/\s+/);
   const body = buf.join("\n");
   if (info[0] === "callout") {
@@ -21060,7 +21086,7 @@ function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, r
   }
   if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
   if (DATA_BLOCKS.includes(info[0])) {
-    const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
+    const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio, answerHtml: nested });
     if (html != null) return html;
   }
   if (info[0] === "embed") {
@@ -21130,6 +21156,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
   const defs = nest ? nest.defs : collectLinkDefs(lines2);
   const flushList = () => {
   };
+  const nested = (inner) => renderDoc(inner, false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
   let i = 0;
   while (i < lines2.length) {
     const line = lines2[i];
@@ -21147,7 +21174,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       if (fence[1].length >= codeFence && !fence[2].trim()) {
         inCode = false;
         flushList();
-        emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
+        emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio, nested }), fenceStart, i);
         codeLang = "";
         i++;
         continue;
@@ -21281,7 +21308,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
   }
   flushList();
-  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
+  if (inCode) emit(renderFence(codeLang, codeBuf, fn, { audioBase, relativeAudio, nested }), fenceStart, lines2.length - 1);
   if (nest) return { html: out.join("\n"), blocks: ranges };
   const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
   if (referenced.length) {

@@ -8,7 +8,7 @@ import { embedUrl, bareVideoLine, embedPoster } from '../../client/src/video-emb
 import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';
-import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
+import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor, parseFaq, faqItemOpen, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -198,8 +198,41 @@ export function applyListStyle(list) {
   list.data.hProperties = { ...(list.data.hProperties || {}), className: task ? [cls, 'contains-task-list'] : [cls] };
 }
 
+// sow-495: an ```faq block becomes raw HTML around REAL markdown nodes. Each answer is parsed by this same processor
+// (so with GFM), and the nodes are spliced in between the question's opening and closing tags, which rehype-raw joins
+// back together. That is what makes a footnote marker in an answer a real footnote: as a code block's text it was
+// never a reference, so the site printed "[^2]" and dropped its note (measured 2026-11-08 on a callout). micromark
+// only reads [^x] as a reference when the definition is in the same parse, so each label that the PAGE defines gets a
+// stand-in definition for the parse, which is then thrown away; remark-rehype numbers the reference against the page's
+// own definition. A label the page does not define stays text, as it would anywhere else.
+function footnoteIds(tree) {
+  const ids = new Set();
+  const visit = (n) => {
+    if (!n) return;
+    if (n.type === 'footnoteDefinition' && n.identifier) ids.add(String(n.identifier).toLowerCase());
+    if (Array.isArray(n.children)) n.children.forEach(visit);
+  };
+  visit(tree);
+  return ids;
+}
+function faqNodes(value, proc, ids) {
+  const items = parseFaq(value).items.filter((it) => it.q);
+  if (!items.length) return null;
+  const answer = (md) => {
+    const labels = [...new Set([...md.matchAll(/\[\^([^\]\s]+)\]/g)].map((m) => m[1]))].filter((l) => ids.has(l.toLowerCase()));
+    const parsed = proc.parse(md + labels.map((l) => `\n\n[^${l}]: -`).join(''));
+    return parsed.children.filter((c) => c.type !== 'footnoteDefinition');
+  };
+  const out = [{ type: 'html', value: FAQ_OPEN }];
+  for (const it of items) out.push({ type: 'html', value: faqItemOpen(it.q) }, ...answer(it.answer), { type: 'html', value: FAQ_ITEM_CLOSE });
+  out.push({ type: 'html', value: FAQ_CLOSE });
+  return out;
+}
+
 export function remarkContentBlocks() {
+  const proc = this; // the processor (unified binds it), for parsing an faq answer with the page's own parser
   return (tree, file) => {
+    const fnIds = footnoteIds(tree);
     const autoEmbed = isCommentSource(file);
     // sow-483: an ```audio block's uploaded recording (`./audio/<file>`) plays from the route serving this item's
     // recordings, worked out from the file Astro is rendering (members/<author>/<dir>/<slug>/index.md).
@@ -215,6 +248,10 @@ export function remarkContentBlocks() {
           applyImageLayouts(n);
           const fig = figureForCaptionedImage(n);
           if (fig) { node.children[i] = fig; continue; }
+        }
+        if (n && n.type === 'code' && n.lang === 'faq' && proc && typeof proc.parse === 'function') {
+          const rep = faqNodes(n.value, proc, fnIds);
+          if (rep) { node.children.splice(i, 1, ...rep); i += rep.length - 1; continue; }
         }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };

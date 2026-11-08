@@ -89,6 +89,14 @@ export const COMPONENTS = Object.freeze([
     renders: 'Site, preview and reader: the label and length with the link out beside them (under the player on a phone), then the browser player, the card, or the provider\'s own player. Cross-posts: the label as a link to the MP3 file or the provider page, with the length and the link out.',
   },
   {
+    name: 'faq',
+    kind: 'fence',
+    purpose: 'Questions and answers as an accordion: each question is a row with a plus sign, and its answer opens under it while the question stays in view. Every answer starts closed. A question is a line starting with Q:, and its answer is the lines below it up to the next Q:. An answer is ordinary markdown: paragraphs, lists, bold, links, and footnote markers, which number with the rest of the article.',
+    syntax: `${F}faq\nQ: <question>\n<answer>\n\nQ: <question>\n<answer>\n${F}`,
+    example: `${F}faq\nQ: What is the latest version of Minecraft Java?\nThe latest release is 26.3. Mojang shipped it on 15 September 2026.\n\nQ: Why do some servers still run 1.8?\nThe sources do not state a reason.\n${F}`,
+    renders: 'Site, preview and reader: the questions as rows between rules, each answer closed until its question is clicked. Cross-posts: every question in bold with its answer written out under it.',
+  },
+  {
     name: 'image layout',
     kind: 'suffix',
     purpose: `Place an image. Add words in braces after the image line: ${IMAGE_LAYOUT_WORDS.join(', ')} (wrap goes with left or right).`,

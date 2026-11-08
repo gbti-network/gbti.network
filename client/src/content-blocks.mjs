@@ -9,7 +9,7 @@
 
 import { AUDIO_PROVIDERS, PROVIDER_NAMES, DEFAULT_LINK_LABELS, audioEmbed, embedProblem } from './audio-embed.mjs';
 
-export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26
+export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio', 'faq']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26; faq: sow-495
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lines = (body) => String(body ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -163,6 +163,45 @@ function revealBodyHtml(md) {
   }
   flush();
   return out.join('');
+}
+
+// sow-495: an FAQ accordion (owner, 2026-11-08, option A "ruled rows" on the FAQ accordion canvas). The question stays
+// visible when its answer opens, which a reveal cannot do (its label turns into "Hide"). Every answer starts closed.
+//   ```faq
+//   Q: What is the latest version of Minecraft Java?
+//   The latest release is 26.3.
+//
+//   Q: Why do some servers still run 1.8?
+//   The sources do not state a reason.
+//   ```
+// A question is a line starting with "Q:"; its answer is every line after it, up to the next "Q:". Lines before the
+// first question belong to none (the checker warns). An answer is markdown: the site parses it with the rest of the
+// page, so a footnote marker in it is a real footnote (src/lib/remark-content-blocks.mjs), and the preview renders it
+// as a nested document for the same reason (client/src/markdown.mjs). Everywhere else it goes through the reveal
+// body's renderer (paragraphs, lists, inline formatting).
+const FAQ_Q = /^\s*Q:\s*(.*)$/;
+export function parseFaq(body) {
+  const items = [];
+  const lead = [];
+  for (const raw of String(body ?? '').split('\n')) {
+    const q = raw.match(FAQ_Q);
+    if (q) { items.push({ q: q[1].trim(), lines: [] }); continue; }
+    if (items.length) items[items.length - 1].lines.push(raw);
+    else if (raw.trim()) lead.push(raw.trim());
+  }
+  return { items: items.map((it) => ({ q: it.q, answer: it.lines.join('\n').trim() })), lead };
+}
+export const FAQ_OPEN = '<div class="gbti-faq">';
+export const FAQ_ITEM_CLOSE = '</div></details>';
+export const FAQ_CLOSE = '</div>';
+/** The opening of one question: the summary row (the question and its plus sign), then the answer's container. */
+export const faqItemOpen = (q) => '<details class="gbti-faq-item"><summary class="gbti-faq-q">'
+  + `<span class="gbti-faq-q-text">${inlineMd(esc(q))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
+function renderFaq(body, answerHtml) {
+  const items = parseFaq(body).items.filter((it) => it.q);
+  if (!items.length) return null;
+  const answer = typeof answerHtml === 'function' ? answerHtml : revealBodyHtml;
+  return FAQ_OPEN + items.map((it) => faqItemOpen(it.q) + answer(it.answer) + FAQ_ITEM_CLOSE).join('') + FAQ_CLOSE;
 }
 
 // The podcast player (owner, 2026-10-26, option A on the article podcast canvas: the browser's own player under a
@@ -340,6 +379,7 @@ function renderReveal(body, meta) {
  *  item's own recordings are served (audioBaseFor), for a `./audio/` source. */
 export function renderDataBlock(name, body, meta = '', opts = {}) {
   if (name === 'reveal') return renderReveal(body, meta);
+  if (name === 'faq') return renderFaq(body, opts.answerHtml); // opts.answerHtml: the preview's nested renderer
   if (name === 'audio') return renderAudio(body, meta, opts);
   if (name === 'tags') {
     const { tags } = parseTags(body);
@@ -380,6 +420,9 @@ export function dataBlockToMarkdown(name, body, meta = '', opts = {}) {
   if (name === 'reveal') { // everything written out open: a cross-post cannot fold it
     const r = parseReveal(body, meta);
     return [r.weights ? r.weights.map((w) => `**${w.name}** ${w.n}%`).join(' · ') : r.weightsRaw, r.note, r.body].filter(Boolean).join('\n\n');
+  }
+  if (name === 'faq') { // every answer written out under its question in bold: a cross-post cannot fold it
+    return parseFaq(body).items.filter((it) => it.q).map((it) => [`**${it.q}**`, it.answer].filter(Boolean).join('\n\n')).join('\n\n');
   }
   if (name === 'audio') { // a cross-post cannot play it: a link to the provider's page, or to the MP3 every browser plays
     const a = parseAudio(body, meta);
@@ -504,6 +547,17 @@ export function checkComponentBlocks(md) {
       if (!r.hasCut) warn('reveal needs a line with --- before the part that opens on request');
       else if (!r.body) warn('reveal has nothing after ---, so there is nothing to open');
     }
+    if (name === 'faq') {
+      const f = parseFaq(text);
+      if (meta) warn(`faq takes no options after its name (got "${meta}")`);
+      if (!f.items.length) warn('faq needs at least one question: a line starting with "Q:", with its answer on the lines below');
+      if (f.lead.length) warn(`faq line "${f.lead[0]}" comes before the first "Q:" and belongs to no question; it is left out`);
+      for (const it of f.items) {
+        if (!it.q) warn('faq has a "Q:" line with no question after it; it is left out');
+        else if (!it.answer) warn(`faq question "${it.q}" has no answer under it`);
+        if (/\[\^[^\]]+\]/.test(it.q)) warn(`faq question "${it.q}" has a footnote marker, which shows as text in a question; put it in the answer`);
+      }
+    }
     i = j;
   }
   return out;
@@ -573,6 +627,20 @@ ${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:
 ${s} .gbti-reveal-body p{margin:8px 0 12px}
 ${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
 ${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-faq{margin:1.2em 0;border-top:1px solid ${t.line2}}
+${s} .gbti-faq-item{border-bottom:1px solid ${t.line2}}
+${s} .gbti-faq-q{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:56px;padding:14px 0;box-sizing:border-box;cursor:pointer;list-style:none;font-weight:700;font-size:.98em;line-height:1.4;color:${t.fg}}
+${s} .gbti-faq-q::-webkit-details-marker{display:none}
+${s} .gbti-faq-q::marker{content:''}
+${s} .gbti-faq-q:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-faq-icon{position:relative;flex:none;width:20px;height:20px}
+${s} .gbti-faq-icon::before,${s} .gbti-faq-icon::after{content:'';position:absolute;top:9px;left:4px;width:12px;height:2px;border-radius:1px;background:${t.green700}}
+${s} .gbti-faq-icon::after{transform:rotate(90deg);transition:transform .15s}
+${s} .gbti-faq-item[open] .gbti-faq-icon::after{transform:rotate(0deg)}
+${s} .gbti-faq-a{padding:0 44px 18px 0;font-size:.93em;line-height:1.7;color:${t.soft}}
+${s} .gbti-faq-a p{margin:0 0 10px}
+${s} .gbti-faq-a ul{margin:0 0 10px}
+${s} .gbti-faq-a > :last-child{margin-bottom:0}
 ${s} .gbti-audio{margin:1.2em 0}
 ${s} > .gbti-audio:first-child{margin-top:14px}
 ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
