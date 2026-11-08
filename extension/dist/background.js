@@ -20491,6 +20491,53 @@ async function triggerAdminOp2(ctx, { action, params } = {}) {
   }
 }
 
+// membership/community-shared.mjs
+var KINDS = Object.freeze(["poll", "typed", "topic"]);
+var KIND_LABEL2 = Object.freeze({ poll: "Poll", typed: "Typed poll", topic: "Topic" });
+var STATUSES = Object.freeze(["draft", "live", "closed", "published"]);
+var STATUS_LABEL = Object.freeze({ draft: "Draft", live: "Live", closed: "Closed", published: "Results" });
+var ACCESS_MODES = Object.freeze(["all", "chosen"]);
+var REACTIONS = Object.freeze([
+  ["+1", "👍"],
+  ["-1", "👎"],
+  ["laugh", "😄"],
+  ["hooray", "🎉"],
+  ["confused", "😕"],
+  ["heart", "❤️"],
+  ["rocket", "🚀"],
+  ["eyes", "👀"]
+]);
+var REACTION_NAMES = Object.freeze(REACTIONS.map((r) => r[0]));
+var REACTION_EMOJI = Object.freeze(Object.fromEntries(REACTIONS));
+var LIMITS = Object.freeze({
+  title: 200,
+  promptBytes: 8e3,
+  optionsMin: 2,
+  optionsMax: 8,
+  option: 120,
+  hint: 80,
+  typedShort: 80,
+  typedLong: 280,
+  meetingLabel: 80,
+  chosenMax: 300,
+  postBytes: 8e3,
+  // the prose editor's cap (client-ui/src/prose-editor-core.mjs COMMENT_MAX_BYTES)
+  postImages: 6,
+  promptImages: 6,
+  imageBytes: 1048576,
+  // 1 MB, the site-wide image cap
+  imageName: 80,
+  groupLabel: 120,
+  unattachedImageHours: 24
+});
+var ENC = new TextEncoder();
+var MAX_IMAGE_BASE64 = Math.ceil(LIMITS.imageBytes / 3) * 4 + 4;
+
+// client/src/operations-community.mjs
+var STATUS_ACTIONS = Object.freeze(["open", "close", "publish", "unpublish", "lock", "unlock", "delete"]);
+var MODERATE_ACTIONS = Object.freeze(["pin", "unpin", "hide", "unhide", "remove-image"]);
+var TIDY_ACTIONS = Object.freeze(["rename", "merge", "hide", "unhide"]);
+
 // client/src/video-embed.mjs
 function embedUrl(v) {
   const s = String(v || "").trim();

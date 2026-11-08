@@ -109,3 +109,9 @@ export {
   itemImagesDir,
   stageImage,
 } from './operations-admin.mjs';
+// sow-494: Community, the polls and topics from our meetings (members; the host ops are superadmin, Worker-checked).
+export {
+  listCommunityOp, readCommunityEntryOp, answerCommunityPollOp, postCommunityOp, reactCommunityPostOp, editCommunityPostOp,
+  deleteCommunityPostOp, createCommunityEntryOp, manageCommunityEntryOp, setCommunityAccessOp, moderateCommunityPostOp,
+  tidyCommunityAnswersOp,
+} from './operations-community.mjs';

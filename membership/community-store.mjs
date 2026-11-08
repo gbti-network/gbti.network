@@ -327,7 +327,16 @@ export class CommunityStore {
   editEntry(viewer, id, input) {
     requireSuperadmin(viewer);
     const { v, row } = this.visible(viewer, id);
-    const r = validateEntryInput({ ...input, kind: row.kind });
+    // A field the edit leaves out keeps its current value. Without this, an edit that only fixed a typo in the title
+    // reset access to the default, all members, and opened a private entry to everyone.
+    const current = {
+      title: row.title, prompt: row.prompt, options: parseJson(row.options, []), settings: parseJson(row.settings, {}),
+      meeting: { label: row.meeting_label, date: row.meeting_date },
+      access: { mode: row.access_mode, members: this.q('SELECT github_id FROM entry_members WHERE entry_id = ?', id).map((m) => m.github_id) },
+    };
+    const given = Object.fromEntries(Object.entries(input || {}).filter(([, val]) => val !== undefined));
+    if (!given.access) input = { ...input, access: { ...current.access, logins: Object.fromEntries(this.q('SELECT github_id, login FROM entry_members WHERE entry_id = ?', id).map((m) => [m.github_id, m.login])) } };
+    const r = validateEntryInput({ ...current, ...given, access: given.access ?? input.access, kind: row.kind });
     if (!r.ok) throw bad(r.problem);
     const e = r.value;
     const answered = isPollKind(row.kind) && this.one('SELECT COUNT(*) AS n FROM answers WHERE entry_id = ?', id).n > 0;

@@ -29,6 +29,9 @@ import {
   discardDraft,
   publishDraft,
   prepareListingOp,
+  listCommunityOp, readCommunityEntryOp, answerCommunityPollOp, postCommunityOp, reactCommunityPostOp, editCommunityPostOp, // sow-494
+  deleteCommunityPostOp, createCommunityEntryOp, manageCommunityEntryOp, setCommunityAccessOp, moderateCommunityPostOp,
+  tidyCommunityAnswersOp,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
 import { listComponents } from './components-catalog.mjs';
@@ -277,6 +280,89 @@ export const TOOLS = [
     description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, limit: { type: 'integer' } }, ['targetType', 'targetSlug']),
     handler: (ctx, args) => listComments(ctx, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit }),
+  },
+  // sow-494: COMMUNITY, the polls and topics from our meetings. An agent takes part as its member does on the page.
+  // Members only (effective paid); each entry is shared with all members or with chosen ones, and an entry the member
+  // is not on answers not-found, exactly like one that does not exist. The last five are superadmin only.
+  {
+    name: 'list_community',
+    description: 'List the Community entries (polls and topics from our meetings) you can see, live ones first. Optional kind ("poll" for both poll kinds, or "topic") and meeting (a meeting key from the result, or "-" for between meetings). Returns { entries: [{ id, kind, title, status, meeting, access, answers, posts, leading, lastPost, url }], meetings }.',
+    inputSchema: obj({ kind: { type: 'string', enum: ['', 'poll', 'topic'] }, meeting: { type: 'string' } }),
+    handler: (ctx, args) => listCommunityOp(ctx, args ?? {}),
+  },
+  {
+    name: 'read_community_entry',
+    description: 'Read one Community entry: the question or the host\'s prompt, the choices, your own answer, the results once published (a superadmin sees live tallies), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.',
+    inputSchema: obj({ id: { type: 'string' } }, ['id']),
+    handler: (ctx, args) => readCommunityEntryOp(ctx, args ?? {}),
+  },
+  {
+    name: 'answer_community_poll',
+    description: 'Answer a live Community poll as your member. A poll with choices takes choice, the 0-based index of an answer; a typed poll takes text. Answering again changes your answer while the poll allows it. Only answer with what your member actually chose; never invent their opinion.',
+    inputSchema: obj({ id: { type: 'string' }, choice: { type: 'integer' }, text: { type: 'string' } }, ['id']),
+    handler: (ctx, args) => answerCommunityPollOp(ctx, args ?? {}),
+  },
+  {
+    name: 'post_community',
+    description: 'Post in a Community entry\'s discussion as your member: markdown body, and optional images as { name, dataBase64 } (PNG, JPG, GIF or WebP, 1 MB each, up to 6). Pass parentId (a top-level post id) to reply. Everyone on the entry sees it within seconds. Post only what your member asked you to say.',
+    inputSchema: obj({
+      id: { type: 'string' }, body: { type: 'string' }, parentId: { type: 'string' },
+      images: { type: 'array', items: obj({ name: { type: 'string' }, dataBase64: { type: 'string' } }, ['name', 'dataBase64']) },
+    }, ['id']),
+    handler: (ctx, args) => postCommunityOp(ctx, args ?? {}),
+  },
+  {
+    name: 'react_community_post',
+    description: 'Toggle one of the standard reactions on a Community post: +1, -1, laugh, hooray, confused, heart, rocket, eyes. Calling it again removes it.',
+    inputSchema: obj({ id: { type: 'string' }, postId: { type: 'string' }, reaction: { type: 'string', enum: ['+1', '-1', 'laugh', 'hooray', 'confused', 'heart', 'rocket', 'eyes'] } }, ['id', 'postId', 'reaction']),
+    handler: (ctx, args) => reactCommunityPostOp(ctx, args ?? {}),
+  },
+  {
+    name: 'edit_community_post',
+    description: 'Replace the text of one of your own Community posts. Its images stay. Marked as edited.',
+    inputSchema: obj({ id: { type: 'string' }, postId: { type: 'string' }, body: { type: 'string' } }, ['id', 'postId', 'body']),
+    handler: (ctx, args) => editCommunityPostOp(ctx, args ?? {}),
+  },
+  {
+    name: 'delete_community_post',
+    description: 'Delete one of your own Community posts. Replies to it stay, under a note that the post was removed.',
+    inputSchema: obj({ id: { type: 'string' }, postId: { type: 'string' } }, ['id', 'postId']),
+    handler: (ctx, args) => deleteCommunityPostOp(ctx, args ?? {}),
+  },
+  {
+    name: 'create_community_entry',
+    description: 'SUPERADMIN ONLY. Start a Community entry. kind is "poll" (options: 2 to 8 answers), "typed" (members type an answer; settings.hint, settings.answerLength "short" or "long", settings.countMatching) or "topic" (a markdown prompt, optional images as { name, dataBase64 }, settings.imagesAllowed). Poll settings: changeable, publishOnClose. meeting is { label, date: YYYY-MM-DD } (for example { label: "Shop Talk", date: "2026-11-14" }), or leave it out for between meetings. access is { mode: "all" } (the default) or { mode: "chosen", members: [GBTI names or GitHub ids] }. It is saved as a draft only superadmins see unless open is true.',
+    inputSchema: obj({
+      kind: { type: 'string', enum: ['poll', 'typed', 'topic'] }, title: { type: 'string' }, prompt: { type: 'string' },
+      options: { type: 'array', items: { type: 'string' } }, settings: { type: 'object' }, meeting: { type: 'object' }, access: { type: 'object' },
+      images: { type: 'array', items: obj({ name: { type: 'string' }, dataBase64: { type: 'string' } }, ['name', 'dataBase64']) },
+      open: { type: 'boolean' },
+    }, ['kind', 'title']),
+    handler: (ctx, args) => createCommunityEntryOp(ctx, args ?? {}),
+  },
+  {
+    name: 'manage_community_entry',
+    description: 'SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll\'s results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll\'s question and answers lock once a member has answered.',
+    inputSchema: obj({ id: { type: 'string' }, action: { type: 'string', enum: ['edit', 'open', 'close', 'publish', 'unpublish', 'lock', 'unlock', 'delete'] }, input: { type: 'object' } }, ['id', 'action']),
+    handler: (ctx, args) => manageCommunityEntryOp(ctx, args ?? {}),
+  },
+  {
+    name: 'set_community_access',
+    description: 'SUPERADMIN ONLY. Decide who can see a Community entry: mode "all" (every paid member) or "chosen" with members (GBTI names or GitHub ids). Someone removed stops seeing the entry at once; what they posted stays for the others.',
+    inputSchema: obj({ id: { type: 'string' }, mode: { type: 'string', enum: ['all', 'chosen'] }, members: { type: 'array', items: { type: 'string' } } }, ['id', 'mode']),
+    handler: (ctx, args) => setCommunityAccessOp(ctx, args ?? {}),
+  },
+  {
+    name: 'moderate_community_post',
+    description: 'SUPERADMIN ONLY. Moderate a Community post: "pin" or "unpin" (top-level posts), "hide" (others see a short note in its place and replies stay) or "unhide", or "remove-image" with imageId.',
+    inputSchema: obj({ id: { type: 'string' }, postId: { type: 'string' }, action: { type: 'string', enum: ['pin', 'unpin', 'hide', 'unhide', 'remove-image'] }, imageId: { type: 'string' } }, ['id', 'postId', 'action']),
+    handler: (ctx, args) => moderateCommunityPostOp(ctx, args ?? {}),
+  },
+  {
+    name: 'tidy_community_answers',
+    description: 'SUPERADMIN ONLY. Tidy a typed poll\'s answers before publishing. answer is any spelling in the group to change. action: "rename" (give the group a label), "merge" with into (a spelling or label of the group to merge into), "hide" (left out of the results) or "unhide". Returns the regrouped results.',
+    inputSchema: obj({ id: { type: 'string' }, action: { type: 'string', enum: ['rename', 'merge', 'hide', 'unhide'] }, answer: { type: 'string' }, label: { type: 'string' }, into: { type: 'string' } }, ['id', 'action', 'answer']),
+    handler: (ctx, args) => tidyCommunityAnswersOp(ctx, args ?? {}),
   },
   // sow-427 (decision 9): the owner's agent prepares a project listing for someone who is not a member yet and
   // gets back the invitation link, the way one was prepared by hand on 2026-09-28. Superadmin only, checked here

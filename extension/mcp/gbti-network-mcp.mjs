@@ -18938,8 +18938,8 @@ async function call(method, path4, body, { token, signupBase, fetch = globalThis
   return data;
 }
 async function getCommentEchoes({ targetType, targetSlug, ...opts }) {
-  const q = `?targetType=${encodeURIComponent(targetType)}&targetSlug=${encodeURIComponent(targetSlug)}`;
-  return call("GET", q, null, opts);
+  const q2 = `?targetType=${encodeURIComponent(targetType)}&targetSlug=${encodeURIComponent(targetSlug)}`;
+  return call("GET", q2, null, opts);
 }
 async function addCommentEcho({ echo, ...opts }) {
   return call("POST", "", { action: "add", echo }, opts);
@@ -20309,6 +20309,299 @@ async function prStatus(ctx2, { number: number4 } = {}) {
   return repo.gateStatus(n);
 }
 
+// client/src/member-community-client.mjs
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var CommunityClientError = class extends Error {
+  constructor(status, code, message) {
+    super(message || code || `request failed (${status})`);
+    this.name = "CommunityClientError";
+    this.status = status;
+    this.code = code || "";
+  }
+};
+async function communityRequest({ token, signupBase, path: path4, method = "GET", body, fetch = globalThis.fetch }) {
+  if (!token) throw new CommunityClientError(401, "unauthorized", "Sign in first (call login).");
+  if (!signupBase) throw new CommunityClientError(0, "misconfigured", "The network address is not configured.");
+  let res;
+  try {
+    res = await fetch(trimBase6(signupBase) + path4, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, ...body === void 0 ? {} : { "Content-Type": "application/json" } },
+      ...body === void 0 ? {} : { body: JSON.stringify(body) }
+    });
+  } catch {
+    throw new CommunityClientError(0, "unavailable", "The network could not be reached. Try again in a moment.");
+  }
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) throw new CommunityClientError(res.status, data?.error, data?.message || data?.error || `request failed (${res.status})`);
+  return data ?? {};
+}
+
+// membership/community-shared.mjs
+var KINDS = Object.freeze(["poll", "typed", "topic"]);
+var KIND_LABEL2 = Object.freeze({ poll: "Poll", typed: "Typed poll", topic: "Topic" });
+var STATUSES = Object.freeze(["draft", "live", "closed", "published"]);
+var STATUS_LABEL = Object.freeze({ draft: "Draft", live: "Live", closed: "Closed", published: "Results" });
+var ACCESS_MODES = Object.freeze(["all", "chosen"]);
+var REACTIONS = Object.freeze([
+  ["+1", "👍"],
+  ["-1", "👎"],
+  ["laugh", "😄"],
+  ["hooray", "🎉"],
+  ["confused", "😕"],
+  ["heart", "❤️"],
+  ["rocket", "🚀"],
+  ["eyes", "👀"]
+]);
+var REACTION_NAMES = Object.freeze(REACTIONS.map((r) => r[0]));
+var REACTION_EMOJI = Object.freeze(Object.fromEntries(REACTIONS));
+var LIMITS = Object.freeze({
+  title: 200,
+  promptBytes: 8e3,
+  optionsMin: 2,
+  optionsMax: 8,
+  option: 120,
+  hint: 80,
+  typedShort: 80,
+  typedLong: 280,
+  meetingLabel: 80,
+  chosenMax: 300,
+  postBytes: 8e3,
+  // the prose editor's cap (client-ui/src/prose-editor-core.mjs COMMENT_MAX_BYTES)
+  postImages: 6,
+  promptImages: 6,
+  imageBytes: 1048576,
+  // 1 MB, the site-wide image cap
+  imageName: 80,
+  groupLabel: 120,
+  unattachedImageHours: 24
+});
+var ID_RE = /^[abcdefghjkmnpqrstuvwxyz23456789]{16}$/;
+var isId = (id) => typeof id === "string" && ID_RE.test(id);
+var ENC = new TextEncoder();
+var MAX_IMAGE_BASE64 = Math.ceil(LIMITS.imageBytes / 3) * 4 + 4;
+
+// client/src/operations-community.mjs
+var R = "/membership/community";
+var A = "/membership/admin/community";
+var q = (v) => encodeURIComponent(String(v ?? ""));
+var iso = (ms) => Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+var STATUS_ACTIONS = Object.freeze(["open", "close", "publish", "unpublish", "lock", "unlock", "delete"]);
+var MODERATE_ACTIONS = Object.freeze(["pin", "unpin", "hide", "unhide", "remove-image"]);
+var TIDY_ACTIONS = Object.freeze(["rename", "merge", "hide", "unhide"]);
+function communityOpError(e) {
+  if (!(e instanceof CommunityClientError)) return e;
+  const s = e.status;
+  if (s === 401) return new OperationError("not-authenticated", "Sign in first (call login).");
+  if (s === 403 && /paid membership/i.test(e.message)) return new OperationError("membership-required", "Community is for paid members.");
+  if (s === 403) return new OperationError("forbidden", e.message);
+  if (s === 404) return new OperationError("not-found", "That entry or post was not found, or it is not shared with you.");
+  if (s === 409) return new OperationError("conflict", e.message);
+  if (s === 400 || s === 413) return new OperationError("bad-request", e.message);
+  if (s === 429) return new OperationError("rate-limited", e.message);
+  return new OperationError("network-error", e.message);
+}
+async function call3(ctx2, path4, { method = "GET", body } = {}) {
+  const token = ctx2?.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "Sign in first (call login).");
+  try {
+    return await communityRequest({ token, signupBase: SIGNUP_BASE, path: path4, method, body, fetch: ctx2.fetch ?? globalThis.fetch });
+  } catch (e) {
+    throw communityOpError(e);
+  }
+}
+var needId = (v, what = "id") => {
+  const s = String(v ?? "").trim();
+  if (!isId(s)) throw new OperationError("bad-request", `${what} must be a Community id from list_community or read_community_entry.`);
+  return s;
+};
+var entryUrl = (id) => `${SITE_BASE}/community/entry/?id=${q(id)}`;
+function row(e) {
+  return {
+    id: e.id,
+    kind: e.kind,
+    title: e.title,
+    status: e.status,
+    locked: !!e.locked,
+    meeting: e.meeting?.label ? { label: e.meeting.label, date: e.meeting.date || null, key: e.meeting.key } : null,
+    access: e.access?.mode === "chosen" ? { mode: "chosen", count: e.access.count ?? 0 } : { mode: "all" },
+    answers: e.counts?.answers ?? 0,
+    posts: e.counts?.posts ?? 0,
+    leading: e.lead ? { answer: e.lead.label, count: e.lead.count, total: e.lead.total } : null,
+    lastPost: e.lastPost ? { by: e.lastPost.login, at: iso(e.lastPost.at) } : null,
+    url: entryUrl(e.id)
+  };
+}
+function post(p) {
+  return {
+    id: p.id,
+    parentId: p.parentId || null,
+    by: p.author?.login ?? null,
+    at: iso(p.at),
+    edited: !!p.editedAt,
+    body: p.body,
+    images: (p.images || []).map((i) => ({ id: i.id, name: i.name })),
+    pinned: !!p.pinned,
+    hidden: !!p.hidden,
+    removed: !!p.deleted,
+    yours: !!p.own,
+    reactions: (p.reactions || []).map((r) => ({ reaction: r.name, count: r.count, yours: !!r.mine, by: r.who })),
+    ...p.replies ? { replies: p.replies.map(post) } : {}
+  };
+}
+async function listCommunityOp(ctx2, { kind = "", meeting = "" } = {}) {
+  if (kind && !["poll", "topic"].includes(kind)) throw new OperationError("bad-request", 'kind is "poll" (both poll kinds), "topic", or empty for everything.');
+  const r = await call3(ctx2, `${R}/entries?kind=${q(kind)}&meeting=${q(meeting)}`);
+  return { entries: (r.entries || []).map(row), meetings: (r.meetings || []).map((m) => ({ key: m.key, label: m.label, date: m.date || null })) };
+}
+async function readCommunityEntryOp(ctx2, { id } = {}) {
+  const r = await call3(ctx2, `${R}/entry?id=${q(needId(id))}`);
+  const e = r.entry || {};
+  return {
+    ...row(e),
+    prompt: e.prompt || "",
+    options: e.options || [],
+    settings: e.settings || {},
+    promptImages: (e.promptImages || []).map((i) => ({ id: i.id, name: i.name })),
+    sharedWith: e.access?.mode === "chosen" ? (e.access.members || []).map((m) => m.login) : "all members",
+    yourAnswer: r.mine ?? null,
+    results: r.results ?? null,
+    discussion: { locked: !!r.discussion?.locked, count: r.discussion?.count ?? 0, posts: (r.discussion?.posts || []).map(post) },
+    youAreHost: r.viewer?.superadmin === true
+  };
+}
+async function answerCommunityPollOp(ctx2, { id, choice, text } = {}) {
+  const hasChoice = choice !== void 0 && choice !== null && choice !== "";
+  if (hasChoice === (text !== void 0 && text !== null && text !== "")) throw new OperationError("bad-request", "Pass choice (the 0-based index of an answer) for a poll with choices, or text for a typed poll.");
+  const body = { id: needId(id), ...hasChoice ? { choice: Number(choice) } : { text: String(text) } };
+  const r = await call3(ctx2, `${R}/answer`, { method: "POST", body });
+  return { saved: true, yourAnswer: r.mine ?? null };
+}
+async function uploadImages(ctx2, id, images, max) {
+  if (images == null) return [];
+  if (!Array.isArray(images)) throw new OperationError("bad-request", "images is a list of { name, dataBase64 }.");
+  if (images.length > max) throw new OperationError("bad-request", `Up to ${max} images.`);
+  const ids = [];
+  for (const [i, img] of images.entries()) {
+    const name = String(img?.name ?? "").trim();
+    const dataBase64 = String(img?.dataBase64 ?? "");
+    if (!name || !dataBase64) throw new OperationError("bad-request", `images[${i}] needs a name and dataBase64.`);
+    const r = await call3(ctx2, `${R}/image`, { method: "POST", body: { id, name, dataBase64 } });
+    ids.push(r.id);
+  }
+  return ids;
+}
+async function postCommunityOp(ctx2, { id, body = "", images, parentId } = {}) {
+  const entry = needId(id);
+  const parent = parentId ? needId(parentId, "parentId") : null;
+  if (!String(body).trim() && !(Array.isArray(images) && images.length)) throw new OperationError("bad-request", "Write a body, or attach an image.");
+  const ids = await uploadImages(ctx2, entry, images, LIMITS.postImages);
+  try {
+    const r = await call3(ctx2, `${R}/post`, { method: "POST", body: { id: entry, body: String(body), images: ids, parentId: parent } });
+    return { posted: true, postId: r.id, url: entryUrl(entry) };
+  } catch (e) {
+    for (const img of ids) await call3(ctx2, `${R}/image-drop`, { method: "POST", body: { id: entry, img } }).catch(() => {
+    });
+    throw e;
+  }
+}
+async function reactCommunityPostOp(ctx2, { id, postId, reaction } = {}) {
+  if (!REACTION_NAMES.includes(reaction)) throw new OperationError("bad-request", `reaction is one of ${REACTION_NAMES.join(", ")}.`);
+  const r = await call3(ctx2, `${R}/react`, { method: "POST", body: { id: needId(id), postId: needId(postId, "postId"), name: reaction } });
+  return { reaction, on: r.on ?? r.added ?? null };
+}
+async function editCommunityPostOp(ctx2, { id, postId, body } = {}) {
+  if (typeof body !== "string") throw new OperationError("bad-request", "body is the new text of your post.");
+  await call3(ctx2, `${R}/post-edit`, { method: "POST", body: { id: needId(id), postId: needId(postId, "postId"), body } });
+  return { edited: true };
+}
+async function deleteCommunityPostOp(ctx2, { id, postId } = {}) {
+  await call3(ctx2, `${R}/post-delete`, { method: "POST", body: { id: needId(id), postId: needId(postId, "postId") } });
+  return { deleted: true };
+}
+async function resolveMembers(ctx2, list) {
+  if (!Array.isArray(list) || !list.length) throw new OperationError("bad-request", "Chosen access needs members: a list of GBTI names or GitHub ids.");
+  const r = await call3(ctx2, `${A}/members`);
+  const all = r.members || [];
+  const byName = new Map(all.map((m) => [String(m.username).toLowerCase(), m]));
+  const byId = new Map(all.map((m) => [String(m.githubId), m]));
+  const members = [];
+  const logins = {};
+  for (const raw of list) {
+    const s = String(raw ?? "").trim().replace(/^@/, "");
+    const m = /^\d+$/.test(s) ? byId.get(s) || { githubId: s, username: "" } : byName.get(s.toLowerCase());
+    if (!m) throw new OperationError("bad-request", `No member named ${s}. Use their GBTI name or GitHub id.`);
+    if (!members.includes(m.githubId)) {
+      members.push(m.githubId);
+      logins[m.githubId] = m.username;
+    }
+  }
+  return { members, logins };
+}
+async function accessArg(ctx2, access) {
+  if (access == null) return { mode: "all", members: [] };
+  const mode = access.mode || "all";
+  if (mode === "all") return { mode: "all", members: [] };
+  if (mode !== "chosen") throw new OperationError("bad-request", 'access.mode is "all" or "chosen".');
+  return { mode: "chosen", ...await resolveMembers(ctx2, access.members) };
+}
+var admin = (ctx2, body) => call3(ctx2, A, { method: "POST", body });
+async function createCommunityEntryOp(ctx2, args = {}) {
+  if (!KINDS.includes(args.kind)) throw new OperationError("bad-request", `kind is one of ${KINDS.join(", ")}.`);
+  const input = {
+    kind: args.kind,
+    title: args.title,
+    prompt: args.prompt || "",
+    options: args.options || [],
+    settings: args.settings || {},
+    meeting: args.meeting || { label: "", date: "" },
+    access: await accessArg(ctx2, args.access)
+  };
+  const images = Array.isArray(args.images) && args.images.length ? args.images : null;
+  if (images && args.kind !== "topic") throw new OperationError("bad-request", "Only a topic carries images with its prompt.");
+  const r = await admin(ctx2, { op: "create", input, open: args.open === true && !images });
+  if (images) {
+    const promptImages = await uploadImages(ctx2, r.id, images, LIMITS.promptImages);
+    await admin(ctx2, { op: "edit", id: r.id, input: { ...input, promptImages } });
+    if (args.open === true) await admin(ctx2, { op: "open", id: r.id });
+  }
+  return { id: r.id, status: args.open === true ? "live" : "draft", url: entryUrl(r.id) };
+}
+async function manageCommunityEntryOp(ctx2, { id, action, input } = {}) {
+  const entry = needId(id);
+  if (action === "edit") {
+    if (!input || typeof input !== "object") throw new OperationError("bad-request", "edit needs input: the whole entry as create_community_entry takes it (title, prompt, options, settings, meeting, access).");
+    const body = { ...input, access: input.access ? await accessArg(ctx2, input.access) : void 0 };
+    await admin(ctx2, { op: "edit", id: entry, input: body });
+    return { id: entry, edited: true };
+  }
+  if (!STATUS_ACTIONS.includes(action)) throw new OperationError("bad-request", `action is edit or one of ${STATUS_ACTIONS.join(", ")}.`);
+  const r = await admin(ctx2, { op: action, id: entry });
+  return { id: entry, ...action === "delete" ? { deleted: true } : { status: r.status ?? null } };
+}
+async function setCommunityAccessOp(ctx2, { id, mode, members } = {}) {
+  const access = await accessArg(ctx2, { mode, members });
+  const r = await admin(ctx2, { op: "access", id: needId(id), access });
+  return { id: r.id ?? id, access: access.mode, members: access.mode === "chosen" ? Object.values(access.logins || {}) : "all members" };
+}
+async function moderateCommunityPostOp(ctx2, { id, postId, action, imageId } = {}) {
+  if (!MODERATE_ACTIONS.includes(action)) throw new OperationError("bad-request", `action is one of ${MODERATE_ACTIONS.join(", ")}.`);
+  if (action === "remove-image") needId(imageId, "imageId");
+  await admin(ctx2, { op: "moderate", id: needId(id), postId: needId(postId, "postId"), action, ...imageId ? { imageId: String(imageId) } : {} });
+  return { done: action };
+}
+async function tidyCommunityAnswersOp(ctx2, { id, action, answer, label, into } = {}) {
+  if (!TIDY_ACTIONS.includes(action)) throw new OperationError("bad-request", `action is one of ${TIDY_ACTIONS.join(", ")}.`);
+  if (!String(answer ?? "").trim()) throw new OperationError("bad-request", "answer is the typed answer (any spelling in its group) to change.");
+  const r = await admin(ctx2, { op: "tidy", id: needId(id), action, norm: String(answer), label, into });
+  return { results: r.groups ? { total: r.total, groups: r.groups.map((g) => ({ label: g.label, count: g.count, spellings: g.spellings })), hidden: r.hidden || [] } : null };
+}
+
 // client/src/mcp-auth.mjs
 import fs3 from "node:fs";
 import path3 from "node:path";
@@ -20657,11 +20950,11 @@ async function resolveDraftRow(ctx2, { type, slug }) {
 async function draftTarget(ctx2, args, { require: mustResolve = true } = {}) {
   const type = args?.type;
   const slug = args?.slug;
-  const row = await resolveDraftRow(ctx2, { type, slug });
-  if (!row && mustResolve) {
+  const row2 = await resolveDraftRow(ctx2, { type, slug });
+  if (!row2 && mustResolve) {
     throw new OperationError("not-found", `no draft found for ${type}/${slug}. Call list_drafts to see what exists; refusing to act on an unidentified draft.`);
   }
-  return { type, slug, store: row?.store ?? args?.store ?? void 0, path: row?.path ?? args?.path ?? void 0 };
+  return { type, slug, store: row2?.store ?? args?.store ?? void 0, path: row2?.path ?? args?.path ?? void 0 };
 }
 var TOOLS = [
   {
@@ -20846,6 +21139,96 @@ var TOOLS = [
     description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: "string" }, limit: { type: "integer" } }, ["targetType", "targetSlug"]),
     handler: (ctx2, args) => listComments(ctx2, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit })
+  },
+  // sow-494: COMMUNITY, the polls and topics from our meetings. An agent takes part as its member does on the page.
+  // Members only (effective paid); each entry is shared with all members or with chosen ones, and an entry the member
+  // is not on answers not-found, exactly like one that does not exist. The last five are superadmin only.
+  {
+    name: "list_community",
+    description: 'List the Community entries (polls and topics from our meetings) you can see, live ones first. Optional kind ("poll" for both poll kinds, or "topic") and meeting (a meeting key from the result, or "-" for between meetings). Returns { entries: [{ id, kind, title, status, meeting, access, answers, posts, leading, lastPost, url }], meetings }.',
+    inputSchema: obj({ kind: { type: "string", enum: ["", "poll", "topic"] }, meeting: { type: "string" } }),
+    handler: (ctx2, args) => listCommunityOp(ctx2, args ?? {})
+  },
+  {
+    name: "read_community_entry",
+    description: "Read one Community entry: the question or the host's prompt, the choices, your own answer, the results once published (a superadmin sees live tallies), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.",
+    inputSchema: obj({ id: { type: "string" } }, ["id"]),
+    handler: (ctx2, args) => readCommunityEntryOp(ctx2, args ?? {})
+  },
+  {
+    name: "answer_community_poll",
+    description: "Answer a live Community poll as your member. A poll with choices takes choice, the 0-based index of an answer; a typed poll takes text. Answering again changes your answer while the poll allows it. Only answer with what your member actually chose; never invent their opinion.",
+    inputSchema: obj({ id: { type: "string" }, choice: { type: "integer" }, text: { type: "string" } }, ["id"]),
+    handler: (ctx2, args) => answerCommunityPollOp(ctx2, args ?? {})
+  },
+  {
+    name: "post_community",
+    description: "Post in a Community entry's discussion as your member: markdown body, and optional images as { name, dataBase64 } (PNG, JPG, GIF or WebP, 1 MB each, up to 6). Pass parentId (a top-level post id) to reply. Everyone on the entry sees it within seconds. Post only what your member asked you to say.",
+    inputSchema: obj({
+      id: { type: "string" },
+      body: { type: "string" },
+      parentId: { type: "string" },
+      images: { type: "array", items: obj({ name: { type: "string" }, dataBase64: { type: "string" } }, ["name", "dataBase64"]) }
+    }, ["id"]),
+    handler: (ctx2, args) => postCommunityOp(ctx2, args ?? {})
+  },
+  {
+    name: "react_community_post",
+    description: "Toggle one of the standard reactions on a Community post: +1, -1, laugh, hooray, confused, heart, rocket, eyes. Calling it again removes it.",
+    inputSchema: obj({ id: { type: "string" }, postId: { type: "string" }, reaction: { type: "string", enum: ["+1", "-1", "laugh", "hooray", "confused", "heart", "rocket", "eyes"] } }, ["id", "postId", "reaction"]),
+    handler: (ctx2, args) => reactCommunityPostOp(ctx2, args ?? {})
+  },
+  {
+    name: "edit_community_post",
+    description: "Replace the text of one of your own Community posts. Its images stay. Marked as edited.",
+    inputSchema: obj({ id: { type: "string" }, postId: { type: "string" }, body: { type: "string" } }, ["id", "postId", "body"]),
+    handler: (ctx2, args) => editCommunityPostOp(ctx2, args ?? {})
+  },
+  {
+    name: "delete_community_post",
+    description: "Delete one of your own Community posts. Replies to it stay, under a note that the post was removed.",
+    inputSchema: obj({ id: { type: "string" }, postId: { type: "string" } }, ["id", "postId"]),
+    handler: (ctx2, args) => deleteCommunityPostOp(ctx2, args ?? {})
+  },
+  {
+    name: "create_community_entry",
+    description: 'SUPERADMIN ONLY. Start a Community entry. kind is "poll" (options: 2 to 8 answers), "typed" (members type an answer; settings.hint, settings.answerLength "short" or "long", settings.countMatching) or "topic" (a markdown prompt, optional images as { name, dataBase64 }, settings.imagesAllowed). Poll settings: changeable, publishOnClose. meeting is { label, date: YYYY-MM-DD } (for example { label: "Shop Talk", date: "2026-11-14" }), or leave it out for between meetings. access is { mode: "all" } (the default) or { mode: "chosen", members: [GBTI names or GitHub ids] }. It is saved as a draft only superadmins see unless open is true.',
+    inputSchema: obj({
+      kind: { type: "string", enum: ["poll", "typed", "topic"] },
+      title: { type: "string" },
+      prompt: { type: "string" },
+      options: { type: "array", items: { type: "string" } },
+      settings: { type: "object" },
+      meeting: { type: "object" },
+      access: { type: "object" },
+      images: { type: "array", items: obj({ name: { type: "string" }, dataBase64: { type: "string" } }, ["name", "dataBase64"]) },
+      open: { type: "boolean" }
+    }, ["kind", "title"]),
+    handler: (ctx2, args) => createCommunityEntryOp(ctx2, args ?? {})
+  },
+  {
+    name: "manage_community_entry",
+    description: `SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll's results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll's question and answers lock once a member has answered.`,
+    inputSchema: obj({ id: { type: "string" }, action: { type: "string", enum: ["edit", "open", "close", "publish", "unpublish", "lock", "unlock", "delete"] }, input: { type: "object" } }, ["id", "action"]),
+    handler: (ctx2, args) => manageCommunityEntryOp(ctx2, args ?? {})
+  },
+  {
+    name: "set_community_access",
+    description: 'SUPERADMIN ONLY. Decide who can see a Community entry: mode "all" (every paid member) or "chosen" with members (GBTI names or GitHub ids). Someone removed stops seeing the entry at once; what they posted stays for the others.',
+    inputSchema: obj({ id: { type: "string" }, mode: { type: "string", enum: ["all", "chosen"] }, members: { type: "array", items: { type: "string" } } }, ["id", "mode"]),
+    handler: (ctx2, args) => setCommunityAccessOp(ctx2, args ?? {})
+  },
+  {
+    name: "moderate_community_post",
+    description: 'SUPERADMIN ONLY. Moderate a Community post: "pin" or "unpin" (top-level posts), "hide" (others see a short note in its place and replies stay) or "unhide", or "remove-image" with imageId.',
+    inputSchema: obj({ id: { type: "string" }, postId: { type: "string" }, action: { type: "string", enum: ["pin", "unpin", "hide", "unhide", "remove-image"] }, imageId: { type: "string" } }, ["id", "postId", "action"]),
+    handler: (ctx2, args) => moderateCommunityPostOp(ctx2, args ?? {})
+  },
+  {
+    name: "tidy_community_answers",
+    description: `SUPERADMIN ONLY. Tidy a typed poll's answers before publishing. answer is any spelling in the group to change. action: "rename" (give the group a label), "merge" with into (a spelling or label of the group to merge into), "hide" (left out of the results) or "unhide". Returns the regrouped results.`,
+    inputSchema: obj({ id: { type: "string" }, action: { type: "string", enum: ["rename", "merge", "hide", "unhide"] }, answer: { type: "string" }, label: { type: "string" }, into: { type: "string" } }, ["id", "action", "answer"]),
+    handler: (ctx2, args) => tidyCommunityAnswersOp(ctx2, args ?? {})
   },
   // sow-427 (decision 9): the owner's agent prepares a project listing for someone who is not a member yet and
   // gets back the invitation link, the way one was prepared by hand on 2026-09-28. Superadmin only, checked here

@@ -335,3 +335,20 @@ test('a prompt image stays on an edit by the other superadmin, and a stranger ca
   assert.deepEqual(store.getEntry(SUPER, id).entry.promptImages.map((i) => i.id), [img], 'a member upload is never pulled onto the prompt');
 });
 
+
+test('an edit keeps every field it leaves out, above all who can see the entry', () => {
+  const { store } = makeStore();
+  const { id } = store.createEntry(SUPER, { kind: 'poll', title: 'Q', options: ['a', 'b'], settings: { publishOnClose: true }, meeting: { label: 'Circle', date: '2026-11-08' },
+    access: { mode: 'chosen', members: [PRIYA.githubId], logins: { [PRIYA.githubId]: 'priya' } } }, { open: true });
+  store.editEntry(SUPER, id, { title: 'Q, with the typo fixed' });
+  const e = store.getEntry(SUPER, id).entry;
+  assert.equal(e.title, 'Q, with the typo fixed');
+  assert.deepEqual(e.options, ['a', 'b']);
+  assert.equal(e.settings.publishOnClose, true);
+  assert.equal(e.meeting.key, 'Circle|2026-11-08');
+  assert.equal(e.access.mode, 'chosen', 'still private');
+  assert.deepEqual(e.access.members, [{ githubId: PRIYA.githubId, login: 'priya' }], 'and still named');
+  assert.throws(() => store.getEntry(BEN, id), /not found/i, 'Ben still never meets it');
+  store.editEntry(SUPER, id, { access: { mode: 'all' } });
+  assert.equal(store.getEntry(BEN, id).entry.access.mode, 'all', 'an access the edit does give still applies');
+});
