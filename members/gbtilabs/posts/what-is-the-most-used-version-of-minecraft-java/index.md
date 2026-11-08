@@ -129,11 +129,16 @@ A proxy joins several servers into one network that players move between. Veloci
 
 ## Short answers about Minecraft Java versions
 
-**What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026[^8].
+```faq
+Q: What is the latest version of Minecraft Java?
+The latest release is 26.3. Mojang shipped it on 15 September 2026[^8].
 
-**Which versions do Fabric and Forge players use most?** On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
+Q: Which versions do Fabric and Forge players use most?
+On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
 
-**Why do some servers still run 1.8?** The sources do not state a reason. Hypixel[^9] said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
+Q: Why do some servers still run 1.8?
+The sources do not state a reason. Hypixel[^9] said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
+```
 
 Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version on Modrinth[^2], with each platform's weekly totals from CurseForge[^4].
 
