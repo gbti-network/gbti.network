@@ -34,8 +34,7 @@ Inside this article we will ask the following questions given the data currently
 - What is the most used version of Minecraft Java?
 - What version do most Minecraft servers use?
 - What is the most popular Minecraft version for mods?
-- Is Fabric or Forge more popular?
-- Which is more popular, Paper, Spigot or Purpur?
+- Which Minecraft server software is most popular?
 
 ## What is the most used version of Minecraft Java?
 
@@ -95,75 +94,36 @@ Fabric API is a library mod that most Fabric mods need, according to Fabric's ow
 
 *Fabric API on Modrinth, 17 October 2026 to 24 October 2026.*
 
-## Is Fabric or Forge more popular?
+## Which Minecraft server software is most popular?
 
-It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
+Paper is the most used server software by far: 74.39% of the 190,740 servers that report their software to bStats run it, against 9.05% for Purpur and 6.30% for Spigot. For mods it depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both.
 
-| Platform | Modrinth, weekly downloads | CurseForge, weekly downloads |
-|---|---|---|
-| Fabric | 263,147,623 | 241,759,579 |
-| Forge | 206,867,186 | 275,835,894 |
-| NeoForge | 237,817,761 | 289,926,225 |
-| Quilt | 168,295,563 | 124,002,301 |
+This table gives each mod platform's total downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured, and each server software's count of servers reporting to bStats. A mod made for several platforms counts in each of their rows, so the download rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
 
-*The 500 most downloaded mods per platform, 17 October 2026 to 24 October 2026.*
+| Platform | Modrinth downloads | CurseForge downloads | Servers on bStats |
+|---|---|---|---|
+| Fabric | 263,147,623 | 241,759,579 | not measured |
+| Forge | 206,867,186 | 275,835,894 | not measured |
+| NeoForge | 237,817,761 | 289,926,225 | not measured |
+| Quilt | 168,295,563 | 124,002,301 | not measured |
+| Paper | not measured | not measured | 141,897 (74.39%) |
+| Purpur | not measured | not measured | 17,261 (9.05%) |
+| Spigot | not measured | not measured | 12,023 (6.30%) |
+| Leaf | not measured | not measured | 4,412 (2.31%) |
+| UniverseSpigot | not measured | not measured | 2,093 (1.10%) |
+| Arclight | not measured | not measured | 1,519 (0.80%) |
+| Folia | not measured | not measured | 1,361 (0.71%) |
+| Mohist | not measured | not measured | 927 (0.49%) |
+| AdvancedSlimePaper | not measured | not measured | 926 (0.49%) |
+| Other or not recognized | not measured | not measured | 8,321 (4.36%) |
+
+*Downloads: the 500 most downloaded mods per platform, 17 October 2026 to 24 October 2026. Servers: bStats, read 24 October 2026, out of the 190,740 servers that report their software.*
 
 ![Weekly mod downloads by platform, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per platform. Modrinth: Fabric 263,147,623, Forge 206,867,186, NeoForge 237,817,761, Quilt 168,295,563. CurseForge: Fabric 241,759,579, Forge 275,835,894, NeoForge 289,926,225, Quilt 124,002,301. A mod made for several platforms counts for each of them.](./images/downloads-by-platform.svg)
 
-## Which is more popular, Paper, Spigot or Purpur?
-
-Paper is the most popular by far. bStats records which server software each server runs, in a separate chart that counts 190,740 servers. Paper runs on 74.39% of them, Purpur on 9.05% and Spigot on 6.30%. After them come Leaf on 2.31%, UniverseSpigot on 1.10%, [Arclight](https://github.com/IzzelAliz/Arclight) on 0.80% and Folia on 0.71%. Another 2.77% report a name bStats does not recognize.
-
-![Server software of the 190,740 Paper-family servers reporting to bStats, read 24 October 2026: Paper 74.4%; Purpur 9.1%; Spigot 6.3%; Unknown 2.8%; Leaf 2.3%; UniverseSpigot 1.1%; Arclight 0.8%; Folia 0.7%; Mohist 0.5%; AdvancedSlimePaper 0.5%; 20 others together 1.6%.](./images/server-software.svg)
-
-Paper servers are the most up to date: 63.58% of them run a year-based version.[^4] Purpur sits close to the overall figures, with 53.72% on a year-based version and 1.21.11 narrowly its most used version at 24.81%. The others lag further: 1.21.11 is still the most used version on Leaf (51.14%), UniverseSpigot (42.42%) and Folia (33.47%), and Folia has another 22.64% on 26.1.2. Spigot has no version chart of its own, so its servers appear only in the overall figures.
-
-![Which Minecraft Java versions servers run, by server software, read 24 October 2026. All servers (196,558 servers): 26.3 23.4%, 26.2 23.1%, 26.1.x 7.2%, 1.21.11 23.1%, Older versions 23.2%. Paper (178,346 servers): 26.3 30.5%, 26.2 25.4%, 26.1.x 7.7%, 1.21.11 19.8%, Older versions 16.6%. Purpur (20,870 servers): 26.3 22.6%, 26.2 23.3%, 26.1.x 7.8%, 1.21.11 24.8%, Older versions 21.5%. Leaf (4,703 servers): 26.3 8.9%, 26.2 22.0%, 26.1.x 3.1%, 1.21.11 51.1%, Older versions 14.8%. UniverseSpigot (2,442 servers): 26.3 7.7%, 26.2 23.5%, 26.1.x 3.5%, 1.21.11 42.4%, Older versions 22.9%. Folia (2,160 servers): 26.3 11.8%, 26.2 25.6%, 26.1.x 22.6%, 1.21.11 33.5%, Older versions 6.5%. Mohist (1,189 servers): 26.3 0.0%, 26.2 0.0%, 26.1.x 0.0%, 1.21.11 0.0%, Older versions 100.0%.](./images/version-mix-by-software.svg)
-
-### When each server software shipped the new versions
-
-The table counts the days from Mojang's release[^5] of each version to the first build each server software published for it[^6], and to its first build marked stable. Paper marked 26.3 stable 26 days after Mojang released it, and Folia's first 26.3 build, an early test build, came 29 days after. Leaf marks every build for the new year-based versions as experimental so far, and Purpur does not label its builds stable or unstable at all, so neither has a stable date.
-
-<!-- sort: off -->
-| Version | Server software | First build | First stable build |
-|---|---|---|---|
-| 26.1.2 | Paper | 2.1 days (alpha) | 21.9 days |
-| 26.1.2 | Purpur | 3.5 days (build result only) | no release channel |
-| 26.1.2 | Leaf | 67.4 days (experimental) | none yet |
-| 26.1.2 | Folia | 26.9 days (stable) | 26.9 days |
-| 26.2 | Paper | 0.1 days (alpha) | 40.2 days |
-| 26.2 | Purpur | 1.6 days (build result only) | no release channel |
-| 26.2 | Leaf | 1.3 days (experimental) | none yet |
-| 26.2 | Folia | 41.8 days (beta) | none yet |
-| 26.3 | Paper | 0.2 days (alpha) | 26.2 days |
-| 26.3 | Purpur | 0.6 days (build result only) | no release channel |
-| 26.3 | Leaf | 17 days (experimental) | none yet |
-| 26.3 | Folia | 29.4 days (alpha) | none yet |
-
-*Days from Mojang's release. Build lists read 17 October 2026.*
-
-PaperMC, the team behind Paper, lists only 26.3 and 26.2 as supported, and it ended support for 1.21.11 on 15 June 2026, yet about one Paper server in five (19.80%) still runs it.
-
-### Forge and NeoForge hybrids
-
-Hybrid servers run Paper-family plugins and Forge or NeoForge mods together. bStats counts six of them, and each runs mostly one version:
-
-| Hybrid | Servers reporting a version | Main version | Share on it |
-|---|---|---|---|
-| Mohist | 1,189 | 1.20.1 | 69.64% |
-| Youer | 664 | 1.21.1 | 90.21% |
-| Magma | 26 | 1.12.2 | 80.77% |
-| Magma Maintained | 47 | 1.12.2 | 85.11% |
-| Ketting | 40 | 1.20.1 | 97.50% |
-| LoliServer | 35 | 1.16.5 | 88.57% |
-
-*bStats, read 24 October 2026. Mohist and Youer are read from their own version strings.*
-
-Arclight, the largest hybrid at 0.80% of servers, has no bStats page of its own, so its versions cannot be counted.
-
 ## Version leaders on Paper-family servers since 2018
 
-The oldest copy of bStats' version chart in the Internet Archive[^7] is from July 2018, so that is where this history starts. In the archived copies, 15 different versions held the top spot, starting with 1.12.2 at 49.40% in July 2018. The highest share any version reached was 51.83%, by 1.20.1 in September 2023, and 1.21.11 reached 48.05% in March 2026.
+The oldest copy of bStats' version chart in the Internet Archive[^4] is from July 2018, so that is where this history starts. In the archived copies, 15 different versions held the top spot, starting with 1.12.2 at 49.40% in July 2018. The highest share any version reached was 51.83%, by 1.20.1 in September 2023, and 1.21.11 reached 48.05% in March 2026.
 
 1.21.4 held the top spot longest, in nine copies in a row from February 2025 to August 2025. Leaders have held between 19.61% and 51.83%, so 26.3's 23.38% is within the usual range. The archive has no copies from August 2018 to July 2020, which the chart marks, and other months it missed may hide versions that led briefly.
 
@@ -181,7 +141,7 @@ Minecraft servers run on Java, the programming language. Of the servers reportin
 
 ![Java runtime of the 197,495 Paper-family servers reporting to bStats, read 24 October 2026: Java 25 66.3%; Java 21 23.8%; Java 17 2.7%; Java 8 2.3%; Java 26 2.3%; Java 22 0.8%; Everything else 1.7%.](./images/java-runtimes.svg)
 
-A proxy joins several servers into one network that players move between. Velocity passed BungeeCord in July 2024, by monthly average, and in October 2026 Velocity averaged 13,391 proxies to BungeeCord's 2,115, counting only proxies that run at least one bStats plugin.[^8]
+A proxy joins several servers into one network that players move between. Velocity passed BungeeCord in July 2024, by monthly average, and in October 2026 Velocity averaged 13,391 proxies to BungeeCord's 2,115, counting only proxies that run at least one bStats plugin.[^5]
 
 ![Proxies running at least one bStats plugin, monthly average: Jan 2024: Velocity 4,246, BungeeCord 7,265; Jul 2024: Velocity 6,452, BungeeCord 6,056; Jan 2025: Velocity 7,863, BungeeCord 5,284; Jul 2025: Velocity 9,547, BungeeCord 4,327; Jan 2026: Velocity 11,258, BungeeCord 3,488; Jul 2026: Velocity 12,953, BungeeCord 2,607; Oct 2026: Velocity 13,391, BungeeCord 2,115.](./images/proxies.svg)
 
@@ -249,12 +209,6 @@ Paper-family servers report their Minecraft versions directly to bStats[^1], a s
 
 [^3]: [CurseForge API](https://api.curseforge.com): each platform's total downloads for the same week.
 
-[^4]: [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): the versions on each server software (Paper's page is the one linked; the others follow the same pattern).
+[^4]: [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
 
-[^5]: [Mojang's version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release dates and the list of every Java release.
-
-[^6]: The build lists of [PaperMC](https://fill.papermc.io/v3/projects/paper), [Purpur](https://api.purpurmc.org/v2/purpur) and [Leaf](https://api.leafmc.one/v2/projects/leaf): when each one shipped a build for each new Minecraft version.
-
-[^7]: [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
-
-[^8]: [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
+[^5]: [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
