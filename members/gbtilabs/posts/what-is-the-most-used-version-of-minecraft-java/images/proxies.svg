@@ -3,9 +3,9 @@
 <rect x="0.5" y="0.5" width="759" height="381" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Velocity has overtaken BungeeCord</text>
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Proxies that run at least one bStats plugin, average for the month (the last month runs to 24 October 2026)</text>
-<rect x="28.0" y="89" width="10" height="10" rx="2" fill="#2a78d6"/>
+<rect x="28.0" y="89" width="10" height="10" rx="2" fill="#1f9e5f"/>
 <text x="44.0" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Velocity</text>
-<rect x="119.8" y="89" width="10" height="10" rx="2" fill="#eb6834"/>
+<rect x="119.8" y="89" width="10" height="10" rx="2" fill="#2b5fb8"/>
 <text x="135.8" y="98.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">BungeeCord</text>
 <line x1="80" y1="324.0" x2="732" y2="324.0" stroke="#c3c2b7" stroke-width="1"/>
 <text x="72.0" y="328.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">0</text>
@@ -15,27 +15,27 @@
 <text x="72.0" y="194.7" font-size="11" font-weight="400" fill="#898781" text-anchor="end">10K</text>
 <line x1="80" y1="124.0" x2="732" y2="124.0" stroke="#e1e0d9" stroke-width="1"/>
 <text x="72.0" y="128.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">15K</text>
-<path d="M84.0,324.0 V271.4 Q84.0,267.4 88.0,267.4 H121.6 Q125.6,267.4 125.6,271.4 V324.0 Z" fill="#2a78d6"/>
-<path d="M127.6,324.0 V231.1 Q127.6,227.1 131.6,227.1 H165.1 Q169.1,227.1 169.1,231.1 V324.0 Z" fill="#eb6834"/>
+<path d="M84.0,324.0 V271.4 Q84.0,267.4 88.0,267.4 H121.6 Q125.6,267.4 125.6,271.4 V324.0 Z" fill="#1f9e5f"/>
+<path d="M127.6,324.0 V231.1 Q127.6,227.1 131.6,227.1 H165.1 Q169.1,227.1 169.1,231.1 V324.0 Z" fill="#2b5fb8"/>
 <text x="126.6" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jan 2024</text>
-<path d="M177.1,324.0 V242.0 Q177.1,238.0 181.1,238.0 H214.7 Q218.7,238.0 218.7,242.0 V324.0 Z" fill="#2a78d6"/>
-<path d="M220.7,324.0 V247.3 Q220.7,243.3 224.7,243.3 H258.3 Q262.3,243.3 262.3,247.3 V324.0 Z" fill="#eb6834"/>
+<path d="M177.1,324.0 V242.0 Q177.1,238.0 181.1,238.0 H214.7 Q218.7,238.0 218.7,242.0 V324.0 Z" fill="#1f9e5f"/>
+<path d="M220.7,324.0 V247.3 Q220.7,243.3 224.7,243.3 H258.3 Q262.3,243.3 262.3,247.3 V324.0 Z" fill="#2b5fb8"/>
 <text x="219.7" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jul 2024</text>
-<path d="M270.3,324.0 V223.2 Q270.3,219.2 274.3,219.2 H307.9 Q311.9,219.2 311.9,223.2 V324.0 Z" fill="#2a78d6"/>
-<path d="M313.9,324.0 V257.5 Q313.9,253.5 317.9,253.5 H351.4 Q355.4,253.5 355.4,257.5 V324.0 Z" fill="#eb6834"/>
+<path d="M270.3,324.0 V223.2 Q270.3,219.2 274.3,219.2 H307.9 Q311.9,219.2 311.9,223.2 V324.0 Z" fill="#1f9e5f"/>
+<path d="M313.9,324.0 V257.5 Q313.9,253.5 317.9,253.5 H351.4 Q355.4,253.5 355.4,257.5 V324.0 Z" fill="#2b5fb8"/>
 <text x="312.9" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jan 2025</text>
-<path d="M363.4,324.0 V200.7 Q363.4,196.7 367.4,196.7 H401.0 Q405.0,196.7 405.0,200.7 V324.0 Z" fill="#2a78d6"/>
-<path d="M407.0,324.0 V270.3 Q407.0,266.3 411.0,266.3 H444.6 Q448.6,266.3 448.6,270.3 V324.0 Z" fill="#eb6834"/>
+<path d="M363.4,324.0 V200.7 Q363.4,196.7 367.4,196.7 H401.0 Q405.0,196.7 405.0,200.7 V324.0 Z" fill="#1f9e5f"/>
+<path d="M407.0,324.0 V270.3 Q407.0,266.3 411.0,266.3 H444.6 Q448.6,266.3 448.6,270.3 V324.0 Z" fill="#2b5fb8"/>
 <text x="406.0" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jul 2025</text>
-<path d="M456.6,324.0 V177.9 Q456.6,173.9 460.6,173.9 H494.1 Q498.1,173.9 498.1,177.9 V324.0 Z" fill="#2a78d6"/>
-<path d="M500.1,324.0 V281.5 Q500.1,277.5 504.1,277.5 H537.7 Q541.7,277.5 541.7,281.5 V324.0 Z" fill="#eb6834"/>
+<path d="M456.6,324.0 V177.9 Q456.6,173.9 460.6,173.9 H494.1 Q498.1,173.9 498.1,177.9 V324.0 Z" fill="#1f9e5f"/>
+<path d="M500.1,324.0 V281.5 Q500.1,277.5 504.1,277.5 H537.7 Q541.7,277.5 541.7,281.5 V324.0 Z" fill="#2b5fb8"/>
 <text x="499.1" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jan 2026</text>
-<path d="M549.7,324.0 V155.3 Q549.7,151.3 553.7,151.3 H587.3 Q591.3,151.3 591.3,155.3 V324.0 Z" fill="#2a78d6"/>
-<path d="M593.3,324.0 V293.2 Q593.3,289.2 597.3,289.2 H630.9 Q634.9,289.2 634.9,293.2 V324.0 Z" fill="#eb6834"/>
+<path d="M549.7,324.0 V155.3 Q549.7,151.3 553.7,151.3 H587.3 Q591.3,151.3 591.3,155.3 V324.0 Z" fill="#1f9e5f"/>
+<path d="M593.3,324.0 V293.2 Q593.3,289.2 597.3,289.2 H630.9 Q634.9,289.2 634.9,293.2 V324.0 Z" fill="#2b5fb8"/>
 <text x="592.3" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Jul 2026</text>
-<path d="M642.9,324.0 V149.5 Q642.9,145.5 646.9,145.5 H680.4 Q684.4,145.5 684.4,149.5 V324.0 Z" fill="#2a78d6"/>
+<path d="M642.9,324.0 V149.5 Q642.9,145.5 646.9,145.5 H680.4 Q684.4,145.5 684.4,149.5 V324.0 Z" fill="#1f9e5f"/>
 <text x="663.6" y="139.5" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">13,391</text>
-<path d="M686.4,324.0 V299.8 Q686.4,295.8 690.4,295.8 H724.0 Q728.0,295.8 728.0,299.8 V324.0 Z" fill="#eb6834"/>
+<path d="M686.4,324.0 V299.8 Q686.4,295.8 690.4,295.8 H724.0 Q728.0,295.8 728.0,299.8 V324.0 Z" fill="#2b5fb8"/>
 <text x="707.2" y="289.8" font-size="11" font-weight="600" fill="#0b0b0b" text-anchor="middle">2,115</text>
 <text x="685.4" y="342.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Oct 2026</text>
 <text x="28.0" y="364.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026. GBTI Network research.</text>

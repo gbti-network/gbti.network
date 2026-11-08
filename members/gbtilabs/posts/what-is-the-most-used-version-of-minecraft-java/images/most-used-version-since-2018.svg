@@ -5,68 +5,68 @@
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Each bar is the leading version, at its highest share while it led</text>
 <text x="28.0" y="123.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.12.2</text>
 <text x="92.0" y="123.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Jul 2018</text>
-<path d="M278.0,98.0 H653.3 Q657.3,98.0 657.3,102.0 V134.0 Q657.3,138.0 653.3,138.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,98.0 H653.3 Q657.3,98.0 657.3,102.0 V134.0 Q657.3,138.0 653.3,138.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="665.3" y="123.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">49.4%</text>
 <text x="28.0" y="162.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">The archive has no copies from August 2018 to July 2020.</text>
 <text x="28.0" y="207.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.16.1</text>
 <text x="92.0" y="207.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Aug 2020 to Sep 2020</text>
-<path d="M278.0,182.0 H579.9 Q583.9,182.0 583.9,186.0 V218.0 Q583.9,222.0 579.9,222.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,182.0 H579.9 Q583.9,182.0 583.9,186.0 V218.0 Q583.9,222.0 579.9,222.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="591.9" y="207.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">39.8%</text>
 <text x="28.0" y="259.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.16.5</text>
 <text x="92.0" y="259.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Feb 2021</text>
-<path d="M278.0,234.0 H571.1 Q575.1,234.0 575.1,238.0 V270.0 Q575.1,274.0 571.1,274.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,234.0 H571.1 Q575.1,234.0 575.1,238.0 V270.0 Q575.1,274.0 571.1,274.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="583.1" y="259.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">38.7%</text>
 <text x="28.0" y="311.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.17.1</text>
 <text x="92.0" y="311.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Sep 2021</text>
-<path d="M278.0,286.0 H621.2 Q625.2,286.0 625.2,290.0 V322.0 Q625.2,326.0 621.2,326.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,286.0 H621.2 Q625.2,286.0 625.2,290.0 V322.0 Q625.2,326.0 621.2,326.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="633.2" y="311.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">45.2%</text>
 <text x="28.0" y="363.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.18.2</text>
 <text x="92.0" y="363.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Apr 2022 to Jun 2022</text>
-<path d="M278.0,338.0 H626.1 Q630.1,338.0 630.1,342.0 V374.0 Q630.1,378.0 626.1,378.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,338.0 H626.1 Q630.1,338.0 630.1,342.0 V374.0 Q630.1,378.0 626.1,378.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="638.1" y="363.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">45.9%</text>
 <text x="28.0" y="415.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.19</text>
 <text x="92.0" y="415.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Jul 2022 to Aug 2022</text>
-<path d="M278.0,390.0 H534.9 Q538.9,390.0 538.9,394.0 V426.0 Q538.9,430.0 534.9,430.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,390.0 H534.9 Q538.9,390.0 538.9,394.0 V426.0 Q538.9,430.0 534.9,430.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="546.9" y="415.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">34.0%</text>
 <text x="28.0" y="467.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.19.2</text>
 <text x="92.0" y="467.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Oct 2022 to Nov 2022</text>
-<path d="M278.0,442.0 H626.8 Q630.8,442.0 630.8,446.0 V478.0 Q630.8,482.0 626.8,482.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,442.0 H626.8 Q630.8,442.0 630.8,446.0 V478.0 Q630.8,482.0 626.8,482.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="638.8" y="467.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">45.9%</text>
 <text x="28.0" y="519.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.19.3</text>
 <text x="92.0" y="519.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Feb 2023 to Mar 2023</text>
-<path d="M278.0,494.0 H565.8 Q569.8,494.0 569.8,498.0 V530.0 Q569.8,534.0 565.8,534.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,494.0 H565.8 Q569.8,494.0 569.8,498.0 V530.0 Q569.8,534.0 565.8,534.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="577.8" y="519.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">38.0%</text>
 <text x="28.0" y="571.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.20.1</text>
 <text x="92.0" y="571.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Jul 2023 to Jan 2024</text>
-<path d="M278.0,546.0 H672.0 Q676.0,546.0 676.0,550.0 V582.0 Q676.0,586.0 672.0,586.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,546.0 H672.0 Q676.0,546.0 676.0,550.0 V582.0 Q676.0,586.0 672.0,586.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="684.0" y="571.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">51.8%</text>
 <text x="28.0" y="623.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.20.4</text>
 <text x="92.0" y="623.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Mar 2024 to Jun 2024</text>
-<path d="M278.0,598.0 H596.7 Q600.7,598.0 600.7,602.0 V634.0 Q600.7,638.0 596.7,638.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,598.0 H596.7 Q600.7,598.0 600.7,602.0 V634.0 Q600.7,638.0 596.7,638.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="608.7" y="623.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">42.0%</text>
 <text x="28.0" y="675.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21</text>
 <text x="92.0" y="675.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Aug 2024 to Sep 2024</text>
-<path d="M278.0,650.0 H536.3 Q540.3,650.0 540.3,654.0 V686.0 Q540.3,690.0 536.3,690.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,650.0 H536.3 Q540.3,650.0 540.3,654.0 V686.0 Q540.3,690.0 536.3,690.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="548.3" y="675.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">34.2%</text>
 <text x="28.0" y="727.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21.1</text>
 <text x="92.0" y="727.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Sep 2024</text>
-<path d="M278.0,702.0 H459.7 Q463.7,702.0 463.7,706.0 V738.0 Q463.7,742.0 459.7,742.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,702.0 H459.7 Q463.7,702.0 463.7,706.0 V738.0 Q463.7,742.0 459.7,742.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="471.7" y="727.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">24.2%</text>
 <text x="28.0" y="779.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21.4</text>
 <text x="92.0" y="779.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Feb 2025 to Aug 2025</text>
-<path d="M278.0,754.0 H583.1 Q587.1,754.0 587.1,758.0 V790.0 Q587.1,794.0 583.1,794.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,754.0 H583.1 Q587.1,754.0 587.1,758.0 V790.0 Q587.1,794.0 583.1,794.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="595.1" y="779.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">40.2%</text>
 <text x="28.0" y="831.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21.8</text>
 <text x="92.0" y="831.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Oct 2025 to Nov 2025</text>
-<path d="M278.0,806.0 H471.9 Q475.9,806.0 475.9,810.0 V842.0 Q475.9,846.0 471.9,846.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,806.0 H471.9 Q475.9,806.0 475.9,810.0 V842.0 Q475.9,846.0 471.9,846.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="483.9" y="831.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">25.8%</text>
 <text x="28.0" y="883.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.21.11</text>
 <text x="92.0" y="883.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Mar 2026</text>
-<path d="M278.0,858.0 H643.0 Q647.0,858.0 647.0,862.0 V894.0 Q647.0,898.0 643.0,898.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,858.0 H643.0 Q647.0,858.0 647.0,862.0 V894.0 Q647.0,898.0 643.0,898.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="655.0" y="883.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">48.0%</text>
 <text x="28.0" y="935.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">26.3</text>
 <text x="92.0" y="935.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">our reading, Oct 2026</text>
-<path d="M278.0,910.0 H453.5 Q457.5,910.0 457.5,914.0 V946.0 Q457.5,950.0 453.5,950.0 H278.0 Z" fill="#2a78d6"/>
+<path d="M278.0,910.0 H453.5 Q457.5,910.0 457.5,914.0 V946.0 Q457.5,950.0 453.5,950.0 H278.0 Z" fill="#1f9e5f"/>
 <text x="465.5" y="935.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">23.4%</text>
 <text x="28.0" y="974.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, Internet Archive copies 2018 to 2026 and our reading of 24 October 2026. GBTI Network research.</text>
 </svg>

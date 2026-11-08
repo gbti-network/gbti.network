@@ -4,25 +4,25 @@
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Which Java the servers run on</text>
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of the 197,495 servers in bStats&#x27; global Bukkit statistics, by Java version</text>
 <text x="28.0" y="123.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">Java 25</text>
-<path d="M168.0,98.0 H672.0 Q676.0,98.0 676.0,102.0 V134.0 Q676.0,138.0 672.0,138.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,98.0 H672.0 Q676.0,98.0 676.0,102.0 V134.0 Q676.0,138.0 672.0,138.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="684.0" y="123.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">66.3%</text>
 <text x="28.0" y="177.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Java 21</text>
-<path d="M168.0,152.0 H346.1 Q350.1,152.0 350.1,156.0 V188.0 Q350.1,192.0 346.1,192.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,152.0 H346.1 Q350.1,152.0 350.1,156.0 V188.0 Q350.1,192.0 346.1,192.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="358.1" y="177.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">23.8%</text>
 <text x="28.0" y="231.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Java 17</text>
-<path d="M168.0,206.0 H184.8 Q188.8,206.0 188.8,210.0 V242.0 Q188.8,246.0 184.8,246.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,206.0 H184.8 Q188.8,206.0 188.8,210.0 V242.0 Q188.8,246.0 184.8,246.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="196.8" y="231.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.7%</text>
 <text x="28.0" y="285.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Java 8</text>
-<path d="M168.0,260.0 H181.8 Q185.8,260.0 185.8,264.0 V296.0 Q185.8,300.0 181.8,300.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,260.0 H181.8 Q185.8,260.0 185.8,264.0 V296.0 Q185.8,300.0 181.8,300.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="193.8" y="285.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.3%</text>
 <text x="28.0" y="339.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Java 26</text>
-<path d="M168.0,314.0 H181.6 Q185.6,314.0 185.6,318.0 V350.0 Q185.6,354.0 181.6,354.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,314.0 H181.6 Q185.6,314.0 185.6,318.0 V350.0 Q185.6,354.0 181.6,354.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="193.6" y="339.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2.3%</text>
 <text x="28.0" y="393.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Java 22</text>
-<path d="M168.0,368.0 H171.2 Q174.4,368.0 174.4,371.2 V404.8 Q174.4,408.0 171.2,408.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,368.0 H171.2 Q174.4,368.0 174.4,371.2 V404.8 Q174.4,408.0 171.2,408.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="182.4" y="393.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">0.8%</text>
 <text x="28.0" y="447.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Everything else</text>
-<path d="M168.0,422.0 H177.1 Q181.1,422.0 181.1,426.0 V458.0 Q181.1,462.0 177.1,462.0 H168.0 Z" fill="#2a78d6"/>
+<path d="M168.0,422.0 H177.1 Q181.1,422.0 181.1,426.0 V458.0 Q181.1,462.0 177.1,462.0 H168.0 Z" fill="#1f9e5f"/>
 <text x="189.1" y="447.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1.7%</text>
 <text x="28.0" y="492.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: bStats, read 24 October 2026. GBTI Network research.</text>
 </svg>
