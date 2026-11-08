@@ -111,9 +111,9 @@ It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Fo
 
 ## Version leaders on Paper-family servers since 2018
 
-The oldest copy of bStats' version chart in the Internet Archive[^4] is from July 2018, so that is where this history starts. In the archived copies, 15 different versions held the top spot, starting with 1.12.2 at 49.40% in July 2018. The highest share any version reached was 51.83%, by 1.20.1 in September 2023, and 1.21.11 reached 48.05% in March 2026.
+The oldest Internet Archive[^4] copy of bStats' version chart is from July 2018. Across the archived copies, 15 versions led. 1.21.4 held the top spot longest, leading in nine consecutive copies from February 2025 to August 2025.
 
-1.21.4 held the top spot longest, in nine copies in a row from February 2025 to August 2025. Leaders have held between 19.61% and 51.83%, so 26.3's 23.38% is within the usual range. The archive has no copies from August 2018 to July 2020, which the chart marks, and other months it missed may hide versions that led briefly.
+Leaders held between 19.61% and 51.83%, putting 26.3's 23.38% within the usual range. The chart marks the archive's gap from August 2018 to July 2020; other missing months may hide versions that led briefly.
 
 ![The most used Minecraft Java version on servers reporting to bStats, at each archived reading from 2018 to 2026 and our reading of 24 October 2026, with its highest share while it led: 1.12.2 (Jul 2018) 49.4%; 1.16.1 (Aug 2020 to Sep 2020) 39.8%; 1.16.5 (Feb 2021) 38.7%; 1.17.1 (Sep 2021) 45.2%; 1.18.2 (Apr 2022 to Jun 2022) 45.9%; 1.19 (Jul 2022 to Aug 2022) 34.0%; 1.19.2 (Oct 2022 to Nov 2022) 45.9%; 1.19.3 (Feb 2023 to Mar 2023) 38.0%; 1.20.1 (Jul 2023 to Jan 2024) 51.8%; 1.20.4 (Mar 2024 to Jun 2024) 42.0%; 1.21 (Aug 2024 to Sep 2024) 34.2%; 1.21.1 (Sep 2024) 24.2%; 1.21.4 (Feb 2025 to Aug 2025) 40.2%; 1.21.8 (Oct 2025 to Nov 2025) 25.8%; 1.21.11 (Mar 2026) 48.0%; 26.3 (our reading, Oct 2026) 23.4%. The archive has no copies from August 2018 to July 2020.](./images/most-used-version-since-2018.svg)
 
