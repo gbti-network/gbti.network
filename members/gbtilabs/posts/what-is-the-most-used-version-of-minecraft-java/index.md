@@ -34,7 +34,7 @@ Inside this article we will ask the following questions given the data currently
 - What is the most used version of Minecraft Java?
 - What version do most Minecraft servers use?
 - What is the most popular Minecraft version for mods?
-- Which Minecraft server software is most popular?
+- Is Fabric or Forge more popular?
 
 ## What is the most used version of Minecraft Java?
 
@@ -94,30 +94,18 @@ Fabric API is a library mod that most Fabric mods need, according to Fabric's ow
 
 *Fabric API on Modrinth, 17 October 2026 to 24 October 2026.*
 
-## Which Minecraft server software is most popular?
+## Is Fabric or Forge more popular?
 
-Paper is the most used server software by far: 74.39% of the 190,740 servers that report their software to bStats run it, against 9.05% for Purpur and 6.30% for Spigot. For mods it depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both.
+It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
 
-This table gives each mod platform's total downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured, and each server software's count of servers reporting to bStats. A mod made for several platforms counts in each of their rows, so the download rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
+| Platform | Modrinth, weekly downloads | CurseForge, weekly downloads |
+|---|---|---|
+| Fabric | 263,147,623 | 241,759,579 |
+| Forge | 206,867,186 | 275,835,894 |
+| NeoForge | 237,817,761 | 289,926,225 |
+| Quilt | 168,295,563 | 124,002,301 |
 
-| Platform | Modrinth downloads | CurseForge downloads | Servers on bStats |
-|---|---|---|---|
-| Fabric | 263,147,623 | 241,759,579 | not measured |
-| Forge | 206,867,186 | 275,835,894 | not measured |
-| NeoForge | 237,817,761 | 289,926,225 | not measured |
-| Quilt | 168,295,563 | 124,002,301 | not measured |
-| Paper | not measured | not measured | 141,897 (74.39%) |
-| Purpur | not measured | not measured | 17,261 (9.05%) |
-| Spigot | not measured | not measured | 12,023 (6.30%) |
-| Leaf | not measured | not measured | 4,412 (2.31%) |
-| UniverseSpigot | not measured | not measured | 2,093 (1.10%) |
-| Arclight | not measured | not measured | 1,519 (0.80%) |
-| Folia | not measured | not measured | 1,361 (0.71%) |
-| Mohist | not measured | not measured | 927 (0.49%) |
-| AdvancedSlimePaper | not measured | not measured | 926 (0.49%) |
-| Other or not recognized | not measured | not measured | 8,321 (4.36%) |
-
-*Downloads: the 500 most downloaded mods per platform, 17 October 2026 to 24 October 2026. Servers: bStats, read 24 October 2026, out of the 190,740 servers that report their software.*
+*The 500 most downloaded mods per platform, 17 October 2026 to 24 October 2026.*
 
 ![Weekly mod downloads by platform, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per platform. Modrinth: Fabric 263,147,623, Forge 206,867,186, NeoForge 237,817,761, Quilt 168,295,563. CurseForge: Fabric 241,759,579, Forge 275,835,894, NeoForge 289,926,225, Quilt 124,002,301. A mod made for several platforms counts for each of them.](./images/downloads-by-platform.svg)
 
