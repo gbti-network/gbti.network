@@ -3,25 +3,25 @@
 <rect x="0.5" y="0.5" width="759" height="451" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
 <text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">The most used versions, averaged across five kinds of server</text>
 <text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Each counted equally: Paper-family servers, and Fabric, Forge, NeoForge and Quilt mod downloads</text>
-<path d="M178.0,252.0 L178.0,102.0 A150,150 0 0 1 328.0,248.6 Z" fill="#2a8fbf" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.20.1: 24.6%</title></path>
-<path d="M178.0,252.0 L328.0,248.6 A150,150 0 0 1 279.9,362.0 Z" fill="#d1495b" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.21.1: 13.5%</title></path>
-<path d="M178.0,252.0 L279.9,362.0 A150,150 0 0 1 192.7,401.3 Z" fill="#b04fc0" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.21.11: 10.3%</title></path>
-<path d="M178.0,252.0 L192.7,401.3 A150,150 0 0 1 28.2,244.7 Z" fill="#a8a69d" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>other versions: 27.3%</title></path>
-<path d="M178.0,252.0 L28.2,244.7 A150,150 0 0 1 56.6,163.9 Z" fill="#2b5fb8" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>26.2: 9.2%</title></path>
-<path d="M178.0,252.0 L56.6,163.9 A150,150 0 0 1 178.0,102.0 Z" fill="#1f9e5f" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>26.3: 15.0%</title></path>
-<rect x="384" y="150" width="16" height="16" rx="3" fill="#2a8fbf"/>
+<path d="M178.0,252.0 L178.0,102.0 A150,150 0 0 1 328.0,248.6 Z" fill="#0b4a2a" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.20.1: 24.6%</title></path>
+<path d="M178.0,252.0 L328.0,248.6 A150,150 0 0 1 268.8,371.4 Z" fill="#137a47" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>26.3: 15.0%</title></path>
+<path d="M178.0,252.0 L268.8,371.4 A150,150 0 0 1 148.8,399.1 Z" fill="#1f9e5f" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.21.1: 13.5%</title></path>
+<path d="M178.0,252.0 L148.8,399.1 A150,150 0 0 1 65.8,351.5 Z" fill="#45b37c" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>1.21.11: 10.3%</title></path>
+<path d="M178.0,252.0 L65.8,351.5 A150,150 0 0 1 29.6,273.9 Z" fill="#6fc394" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>26.2: 9.2%</title></path>
+<path d="M178.0,252.0 L29.6,273.9 A150,150 0 0 1 178.0,102.0 Z" fill="#a8a69d" stroke="#fcfcfb" stroke-width="2" stroke-linejoin="round"><title>other versions: 27.3%</title></path>
+<rect x="384" y="150" width="16" height="16" rx="3" fill="#0b4a2a"/>
 <text x="412.0" y="164.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">1.20.1</text>
 <text x="606.2" y="164.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="end">24.6%</text>
-<rect x="384" y="184" width="16" height="16" rx="3" fill="#1f9e5f"/>
+<rect x="384" y="184" width="16" height="16" rx="3" fill="#137a47"/>
 <text x="412.0" y="198.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="start">26.3</text>
 <text x="606.2" y="198.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="end">15.0%</text>
-<rect x="384" y="218" width="16" height="16" rx="3" fill="#d1495b"/>
+<rect x="384" y="218" width="16" height="16" rx="3" fill="#1f9e5f"/>
 <text x="412.0" y="232.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.1</text>
 <text x="606.2" y="232.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="end">13.5%</text>
-<rect x="384" y="252" width="16" height="16" rx="3" fill="#b04fc0"/>
+<rect x="384" y="252" width="16" height="16" rx="3" fill="#45b37c"/>
 <text x="412.0" y="266.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="start">1.21.11</text>
 <text x="606.2" y="266.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="end">10.3%</text>
-<rect x="384" y="286" width="16" height="16" rx="3" fill="#2b5fb8"/>
+<rect x="384" y="286" width="16" height="16" rx="3" fill="#6fc394"/>
 <text x="412.0" y="300.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="start">26.2</text>
 <text x="606.2" y="300.0" font-size="16" font-weight="400" fill="#0b0b0b" text-anchor="end">9.2%</text>
 <rect x="384" y="320" width="16" height="16" rx="3" fill="#a8a69d"/>
