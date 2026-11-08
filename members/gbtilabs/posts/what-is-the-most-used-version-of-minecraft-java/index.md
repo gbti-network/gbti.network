@@ -95,30 +95,6 @@ Fabric API is a library mod that most Fabric mods need, according to Fabric's ow
 
 *Fabric API on Modrinth, 17 October 2026 to 24 October 2026.*
 
-### Forge servers
-
-Forge's most downloaded version is 1.20.1 at 66.30%, ahead of 1.20 at 13.02%. Forge [treats](https://forums.minecraftforge.net/topic/154387-forge-474-minecraft-1201/) 1.20.1 as its long-term version.
-
-![Share of one week of Forge mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Forge mods (Modrinth only): 1.20.1 66.3%; 1.20 13.0%; 1.19.2 2.3%; 1.20.2 1.8%; 1.20.4 1.6%; 1.20.3 1.5%.](./images/loader-forge.svg)
-
-bStats does count a few Forge servers: hybrids that run Paper-family plugins alongside Forge mods. Mohist, one of them, has 1,189 servers reporting a version, and 69.64% of them run 1.20.1, the version Forge mods are downloaded for most. Ketting, another, has 40, and 97.50% run 1.20.1.
-
-### NeoForge servers
-
-NeoForge's most downloaded version is 1.21.1 at 39.10%, followed by 1.20.1 at 21.71%. NeoForge [treats](https://neoforged.net/news/21.2release/) 1.21.1 as its long-term version. In March 2026 NeoForge [said](https://neoforged.net/news/26.1release/) 26.1 would likely replace 1.21.1 as the next stable modding version. In the week we measured, the year-based versions took 13.86% of NeoForge's Modrinth downloads, so that switch has not happened yet.
-
-![Share of one week of NeoForge mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded NeoForge mods (Modrinth only): 1.21.1 39.1%; 1.20.1 21.7%; 1.21 8.6%; 26.3 8.2%; 1.20 4.6%; 26.2 3.5%.](./images/loader-neoforge.svg)
-
-Youer, a NeoForge hybrid that bStats counts, has 664 servers reporting a version, and 90.21% of them run 1.21.1, NeoForge's most downloaded version.
-
-### Quilt servers
-
-Quilt's most downloaded version is 26.3 at 20.00%. The next two are 1.20.1 at 16.80% and 1.21.11 at 12.69%.
-
-![Share of one week of Quilt mod downloads by Minecraft version, 17 October 2026 to 24 October 2026, for the 500 most downloaded Quilt mods (Modrinth only): 26.3 20.0%; 1.20.1 16.8%; 1.21.11 12.7%; 1.21.1 10.0%; 26.2 9.3%; 1.21 6.1%.](./images/loader-quilt.svg)
-
-Quilt's lead is not firm. Part of 26.3's share comes from mod updates released during the week; counting only mod files that existed before the week, 1.20.1 comes out narrowly ahead of 26.3.
-
 ## Is Fabric or Forge more popular?
 
 It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
