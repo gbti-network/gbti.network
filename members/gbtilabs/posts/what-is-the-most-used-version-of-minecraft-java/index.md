@@ -163,7 +163,7 @@ meta: Minecraft 1.21.1
 link: https://gbti.network/projects/travelers-journal/
 label: See the plugin
 ---
-![A Traveler's Lectern book with a Take Book button](./images/travelers-lectern.webp)
+![A Traveler's Lectern holding its open book](./images/travelers-lectern.webp)
 title: Traveler's Lectern
 text: Lecterns whose book comes back after a player takes it.
 meta: Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11, 26.1 to 26.3
