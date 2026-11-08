@@ -81,7 +81,7 @@ Fabric's most downloaded version is 26.3 at 22.14%. The next two are 1.20.1 at 1
 
 #### Fabric API by version
 
-Fabric API is a library mod that most Fabric mods need, according to Fabric's own [documentation](https://docs.fabricmc.net/players/installing-mods), so its downloads are the clearest single sign of which versions Fabric runs on.
+Fabric API is a library mod that most Fabric mods need, according to Fabric's own documentation[^3], so its downloads are the clearest single sign of which versions Fabric runs on.
 
 | Minecraft version | Weekly downloads | Share of the week |
 |---|---|---|
@@ -96,7 +96,7 @@ Fabric API is a library mod that most Fabric mods need, according to Fabric's ow
 
 ## Is Fabric or Forge more popular?
 
-It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^3], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
+It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Forge. On CurseForge, NeoForge mods are downloaded most and Forge is second, ahead of Fabric. Quilt is fourth on both. This table gives each platform's total mod downloads for the week on Modrinth and on CurseForge[^4], the two mod sites we measured. A mod made for several platforms counts in each of their rows, so the rows cannot be added together. CurseForge appears only here, because its per-version download counts barely moved during the week.
 
 | Platform | Modrinth, weekly downloads | CurseForge, weekly downloads |
 |---|---|---|
@@ -111,7 +111,7 @@ It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Fo
 
 ## Version leaders on Paper-family servers since 2018
 
-The oldest Internet Archive[^4] copy of bStats' version chart is from July 2018. Across the archived copies, 15 versions led. 1.21.4 held the top spot longest, leading in nine consecutive copies from February 2025 to August 2025.
+The oldest Internet Archive[^5] copy of bStats' version chart is from July 2018. Across the archived copies, 15 versions led. 1.21.4 held the top spot longest, leading in nine consecutive copies from February 2025 to August 2025.
 
 Leaders held between 19.61% and 51.83%, putting 26.3's 23.38% within the usual range. The chart marks the archive's gap from August 2018 to July 2020; other missing months may hide versions that led briefly.
 
@@ -119,56 +119,38 @@ Leaders held between 19.61% and 51.83%, putting 26.3's 23.38% within the usual r
 
 ## Java runtimes and proxies
 
-Minecraft servers run on Java, the programming language. Of the servers reporting to bStats, 66.34% run Java 25 and 23.78% run Java 21. Every year-based version needs Java 25 ([Mojang](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1)), and more servers run Java 25 than run a year-based version (53.67%), so some servers still on 1.21 already use Java 25.
+Minecraft servers run on Java, the programming language. Of the servers reporting to bStats, 66.34% run Java 25 and 23.78% run Java 21. Every year-based version needs Java 25[^6], and more servers run Java 25 than run a year-based version (53.67%), so some servers still on 1.21 already use Java 25.
 
 ![Java runtime of the 197,495 Paper-family servers reporting to bStats, read 24 October 2026: Java 25 66.3%; Java 21 23.8%; Java 17 2.7%; Java 8 2.3%; Java 26 2.3%; Java 22 0.8%; Everything else 1.7%.](./images/java-runtimes.svg)
 
-A proxy joins several servers into one network that players move between. Velocity passed BungeeCord in July 2024, by monthly average, and in October 2026 Velocity averaged 13,391 proxies to BungeeCord's 2,115, counting only proxies that run at least one bStats plugin.[^5]
+A proxy joins several servers into one network that players move between. Velocity passed BungeeCord in July 2024, by monthly average, and in October 2026 Velocity averaged 13,391 proxies to BungeeCord's 2,115, counting only proxies that run at least one bStats plugin.[^7]
 
 ![Proxies running at least one bStats plugin, monthly average: Jan 2024: Velocity 4,246, BungeeCord 7,265; Jul 2024: Velocity 6,452, BungeeCord 6,056; Jan 2025: Velocity 7,863, BungeeCord 5,284; Jul 2025: Velocity 9,547, BungeeCord 4,327; Jan 2026: Velocity 11,258, BungeeCord 3,488; Jul 2026: Velocity 12,953, BungeeCord 2,607; Oct 2026: Velocity 13,391, BungeeCord 2,115.](./images/proxies.svg)
 
 ## Short answers about Minecraft Java versions
 
-**What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026.
+**What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026[^8].
 
 **Which versions do Fabric and Forge players use most?** On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
 
-**Why do some servers still run 1.8?** The sources do not state a reason. Hypixel said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
+**Why do some servers still run 1.8?** The sources do not state a reason. Hypixel[^9] said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
 
-Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version on Modrinth[^2], with each platform's weekly totals from CurseForge[^3].
-
-## Sources
-
-- [bStats global Bukkit charts](https://bstats.org/global/bukkit): server versions, software, Java runtimes and historical counts.
-- [bStats Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord) charts: proxy counts.
-- [bStats per-software pages](https://bstats.org/plugin/server-implementation/paper/580): versions on each server software (Paper's page shown; the others follow the same address pattern).
-- [bStats software API](https://bstats.org/api/v2/software): per-IP submission caps.
-- [Internet Archive](https://web.archive.org/): archived bStats charts from 2018 to 2026.
-- [Mojang version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): Java release dates and strings.
-- [Mojang new-version numbering](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system): the year-based scheme and Java's hotfix format.
-- [Minecraft Wiki version formats](https://minecraft.wiki/w/Version_formats): 1.21.11 as the last "1." release.
-- [PaperMC downloads service](https://fill.papermc.io/v3/projects/paper): build dates and support status for Paper and Folia.
-- [Purpur downloads API](https://api.purpurmc.org/v2/purpur): Purpur build dates.
-- [Leaf downloads API](https://api.leafmc.one/v2/projects/leaf): Leaf build dates and release channels.
-- [Mojang 26.1 release notes](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1): Java 25 requirement.
-- [Mojang 1.9 combat update](https://web.archive.org/web/20161218214458/http://mojang.com/2016/02/minecraft-19-combat-update/): attack cooldown.
-- [Hypixel 1.8.9 statement](https://hypixel.net/threads/hypixel-now-supports-minecraft-version-1-13.1698790/): optimization for 1.8.9.
-- [ViaVersion](https://github.com/ViaVersion/ViaVersion): version proxying between client and server.
-- [Modrinth API](https://api.modrinth.com/v2): mod downloads by platform and version.
-- [Modrinth Labrinth server code](https://github.com/modrinth/code): download counting rules.
-- [CurseForge API](https://api.curseforge.com): weekly download totals per platform.
-- [Forge 1.20.1 policy](https://forums.minecraftforge.net/topic/154387-forge-474-minecraft-1201/): long-term version plan.
-- [NeoForge 21.2 release](https://neoforged.net/news/21.2release/): 1.21.1 as the recommended maintenance version.
-- [NeoForge 26.1 release](https://neoforged.net/news/26.1release/): 26.1 as the expected next stable version.
-- [Fabric API docs](https://docs.fabricmc.net/players/installing-mods): majority of mods require Fabric API.
-- [Arclight](https://github.com/IzzelAliz/Arclight): hybrid server implementation.
+Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version on Modrinth[^2], with each platform's weekly totals from CurseForge[^4].
 
 [^1]: [bStats global charts](https://bstats.org/global/bukkit): bStats collects usage statistics from Minecraft servers, and its charts give the share of servers on each Minecraft version, server software and Java runtime, read several times a day from 17 October 2026 to 24 October 2026.
 
 [^2]: [Modrinth API](https://api.modrinth.com/v2): one week of downloads, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods of each platform, split by Minecraft version.
 
-[^3]: [CurseForge API](https://api.curseforge.com): each platform's total downloads for the same week.
+[^3]: [Fabric documentation](https://docs.fabricmc.net/players/installing-mods): most Fabric mods need Fabric API installed.
 
-[^4]: [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
+[^4]: [CurseForge API](https://api.curseforge.com): each platform's total downloads for the same week.
 
-[^5]: [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
+[^5]: [Internet Archive](https://web.archive.org/): archived copies of the bStats version chart since July 2018, for the most used version over time.
+
+[^6]: [Mojang 26.1 release notes](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1): every year-based version needs Java 25.
+
+[^7]: [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
+
+[^8]: [Mojang version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release date of every Minecraft Java version.
+
+[^9]: [Hypixel's 2018 announcement](https://hypixel.net/threads/hypixel-now-supports-minecraft-version-1-13.1698790/): Hypixel said it was still optimized for 1.8.9.
