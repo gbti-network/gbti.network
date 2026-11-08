@@ -1,24 +1,4777 @@
 "use strict";
 (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
+  // client-ui/src/assets.mjs
+  function pinnedRef(sha) {
+    const s = String(sha ?? "").trim().toLowerCase();
+    return FULL_SHA.test(s) ? s : DEFAULT_REF;
+  }
+  function setContentRef(sha) {
+    currentRef = pinnedRef(sha);
+  }
+  function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
+    return `${RAW_HOST}/${repo}/${pinnedRef(ref)}`;
+  }
+  function cdnRetryUrl(src, repo = CONTENT_REPO) {
+    const s = String(src || "");
+    const r = escapeRe(repo);
+    const pinned = s.match(new RegExp(`^${escapeRe(RAW_HOST)}/${r}/[0-9a-f]{40}/(.+)$`));
+    if (pinned) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${pinned[1]}`;
+    const legacy = s.match(new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${r}@[^/]+/(.+)$`));
+    if (legacy) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${legacy[1]}`;
+    return "";
+  }
+  function attachCdnFallback(root, repo = CONTENT_REPO) {
+    if (!root || typeof root.addEventListener !== "function") return () => {
+    };
+    const onError = (ev) => {
+      const el = ev.target;
+      if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
+      const next = cdnRetryUrl(el.getAttribute("src"), repo);
+      if (!next) return;
+      el.dataset.cdnRetried = "1";
+      el.setAttribute("src", next);
+    };
+    root.addEventListener("error", onError, true);
+    return () => root.removeEventListener("error", onError, true);
+  }
+  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, ref = currentRef) {
+    const md = String(markdown ?? "");
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (!folder2) return md;
+    const base = cdnBase(repo, ref);
+    return md.replace(
+      /(!\[[^\]]*\]\()(\.\/)([^\s)]+)/g,
+      (_m, pre, _dot, rest) => `${pre}${base}/${folder2}/${rest}`
+    );
+  }
+  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE2, ref = currentRef) {
+    if (!value) return "";
+    const s = String(value);
+    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (folder2) return `${cdnBase(repo, ref)}/${folder2}/${s.replace(/^\.?\/+/, "")}`;
+    if (/^\.{1,2}\//.test(s)) return "";
+    return resolveAsset(s, site) || "";
+  }
+  function resolveAsset(thumb, site = SITE2) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+  var SITE2, CONTENT_REPO, RAW_HOST, FULL_SHA, DEFAULT_REF, currentRef, escapeRe;
+  var init_assets = __esm({
+    "client-ui/src/assets.mjs"() {
+      "use strict";
+      SITE2 = "https://gbti.network";
+      CONTENT_REPO = "gbti-network/gbti.network";
+      RAW_HOST = "https://raw.githubusercontent.com";
+      FULL_SHA = /^[0-9a-f]{40}$/;
+      DEFAULT_REF = "main";
+      currentRef = DEFAULT_REF;
+      escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  });
+
+  // client-ui/src/tokens.mjs
+  var TOKENS, EDITOR_SURFACE, BASE_CSS;
+  var init_tokens = __esm({
+    "client-ui/src/tokens.mjs"() {
+      "use strict";
+      TOKENS = `
+:host {
+  --bg: #faf9f8; --panel: #ffffff;
+  --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
+  /* Owner, 2026-09-28: text ON an --accent fill. White on brand green is 3.4:1, under AA, so a filled control uses
+     --accent with --on-accent: 6.2:1 here (white on the dark green), 9.6:1 in dark (ink on the mint). */
+  --on-accent: #ffffff;
+  --text: #24222a; --fg: #24222a; --muted: #57545e;
+  --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
+  /* sow-227: three website tokens (src/styles/gbti-v3.css), pinned here like the rest. Until now a shared component
+     that named them INHERITED them from whichever page hosted it (custom properties cross the shadow boundary), so
+     the extension's older values (extension/shell.css, e.g. --fg-mute #84818c, which fails AA) leaked in there while
+     the website got its own. Pinning them makes the extension follow the website. */
+  --line-2: #ddd9d4; --green-tint: #e9f6ef; --fg-mute: #6c6976;
+  --radius: 12px;
+  --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
+  --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
+  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens; the rules are in gbti-v3-theme.css) -- a dark bubble on the light surface */
+  --tooltip-bg: #1c1a21; --tooltip-fg: #f5f4f2; --tooltip-border: rgba(255,255,255,.10);
+}
+:host-context([data-theme="dark"]) {
+  --bg: #1c1a21; --panel: #2d2a34;
+  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a; --on-accent: #17151c;
+  --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
+  --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
+  /* sow-227: --fg-mute is the site's .50 lifted to .62, because .50 measures about 4.3:1 on the dark panel, under AA
+     for the small text it labels (owner-approved in the category picker design). */
+  --line-2: rgba(255,255,255,.20); --green-tint: rgba(31,158,95,.13); --fg-mute: rgba(243,242,240,.62);
+  /* tooltip flips to a light bubble on dark surfaces, same inversion as the site's own CSS */
+  --tooltip-bg: #f3f2f0; --tooltip-fg: #24222a; --tooltip-border: rgba(0,0,0,.12);
+}
+/* SOW-070: the GLASS layout skin (opt-in: data-layout="glass" on an ancestor). Re-points the surface tokens to
+   translucent values + defines --glass-blur, so any surface class that reads backdrop-filter: var(--glass-blur)
+   frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
+   are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
+:host-context([data-layout="glass"]) {
+  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1.7)));
+  --glass-blur: blur(20px) saturate(150%);
+}
+:host-context([data-layout="glass"][data-theme="dark"]) {
+  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1.7)));
+}
+`;
+      EDITOR_SURFACE = `
+:host {
+  --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
+  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css (--fg-mute) already uses site-side for the identical reason. */
+  --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
+  --s-amber-fg:#8a5500; /* sow-184: a readable amber for TEXT (the Staged pill) -- the golden #d9a13c fails AA on a light tint */
+  --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);
+  --s-shadow-md:0 12px 30px rgba(37,35,43,.10),0 3px 8px rgba(37,35,43,.06);
+  --s-pop:0 14px 40px rgba(37,35,43,.18),0 4px 10px rgba(37,35,43,.10);
+  --s-sel:rgba(31,158,95,.16); --ink:#201d27;
+}
+:host-context([data-theme="dark"]) {
+  --s-app:#18161d; --s-surface:#232029; --s-surface-2:#2a2731; --s-surface-3:#322f3a;
+  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#9a96a1; /* sow-249: was #847f8d, 3.37:1 on --s-surface-3. Lightened (dark theme) to clear AA. */
+  --s-green:#28b06d; --s-green-fg:#5fd49a; --s-tint:rgba(95,212,154,.13); --s-tint-2:rgba(95,212,154,.22); --s-canvas:#201d27;
+  --s-amber-fg:#e6b45c; /* sow-184: light amber text for the Staged pill on the dark card tint */
+  --s-shadow:none; --s-shadow-md:0 18px 40px rgba(0,0,0,.4); --s-pop:0 18px 50px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
+  --s-sel:rgba(95,212,154,.22); --ink:#17151c;
+}
+`;
+      BASE_CSS = `
+:host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
+h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+a { color: var(--accent); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+input, select, textarea {
+  width: 100%; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; color: var(--text); font: inherit;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); }
+textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, monospace; }
+button {
+  background: var(--brand); color: #08231a; border: 0; border-radius: 8px;
+  padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
+}
+button:hover { background: var(--brand-dark); }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+button[disabled] { opacity: .5; cursor: default; }
+.muted { color: var(--muted); }
+.danger { color: var(--danger); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--hover); font-size: 12px; color: var(--muted); }
+.tag.ok { background: rgba(31,158,95,.14); color: var(--accent); }
+.tag.bad { background: rgba(224,108,108,.16); color: var(--danger); }
+ul.list { list-style: none; margin: 0; padding: 0; }
+ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+
+/* Tooltips (mirrors src/styles/gbti-v3-theme.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
+   page's global CSS, so any component wanting the site's hover-label treatment needs this rule INSIDE its own
+   tree; defined once here (BASE_CSS is included via this.css() in every component) rather than per-component.
+   Usage: add data-tooltip="..." to a focusable control AND keep an aria-label (data-tooltip is presentational,
+   not announced to assistive tech). */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after, [data-tooltip]::before {
+  position: absolute; left: 50%; opacity: 0; pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease; z-index: 60;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip); bottom: calc(100% + 8px); transform: translateX(-50%) translateY(4px);
+  background: var(--tooltip-bg); color: var(--tooltip-fg); border: 1px solid var(--tooltip-border);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500; line-height: 1.3; letter-spacing: .1px;
+  text-align: center; white-space: normal; width: max-content; max-width: 220px; padding: 5px 9px;
+  border-radius: 6px; box-shadow: 0 12px 30px rgba(37,35,43,.10), 0 3px 8px rgba(37,35,43,.06);
+}
+[data-tooltip]::before {
+  content: ""; bottom: calc(100% + 3px); transform: translateX(-50%) translateY(4px);
+  border: 5px solid transparent; border-top-color: var(--tooltip-bg);
+}
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after,
+[data-tooltip]:hover::before, [data-tooltip]:focus-visible::before { opacity: 1; transform: translateX(-50%) translateY(0); }
+[data-tooltip-pos="below"]::after { bottom: auto; top: calc(100% + 8px); }
+[data-tooltip-pos="below"]::before { bottom: auto; top: calc(100% + 3px); border-top-color: transparent; border-bottom-color: var(--tooltip-bg); }
+@media (hover: none) { [data-tooltip]::after, [data-tooltip]::before { display: none; } }
+`;
+    }
+  });
+
+  // membership/member-avatar.mjs
+  function isFolder(v2) {
+    return FOLDER_RE.test(String(v2 ?? ""));
+  }
+  function idAvatarUrl(githubId, size = 128) {
+    const id = String(githubId ?? "").trim();
+    return ID_RE.test(id) ? `https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4` : "";
+  }
+  function memberAvatarUrl(folder2, { site = SITE3 } = {}) {
+    const f = String(folder2 ?? "").trim().toLowerCase();
+    return isFolder(f) ? `${site}${AVATAR_ROUTE}${f}` : "";
+  }
+  var SITE3, AVATAR_ROUTE, NETWORK_FOLDERS, FOLDER_RE, ID_RE;
+  var init_member_avatar = __esm({
+    "membership/member-avatar.mjs"() {
+      "use strict";
+      SITE3 = "https://gbti.network";
+      AVATAR_ROUTE = "/avatar/";
+      NETWORK_FOLDERS = Object.freeze(["gbtilabs", "gbti", "house"]);
+      FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+      ID_RE = /^\d{1,20}$/;
+    }
+  });
+
+  // node_modules/blobatar/dist/uri.js
+  function v({ l: t, c: e, h: n }) {
+    let a = n * Math.PI / 180, o = e * Math.cos(a), r = e * Math.sin(a), s = t + 0.3963377774 * o + 0.2158037573 * r, c = t - 0.1055613458 * o - 0.0638541728 * r, i = t - 0.0894841775 * o - 1.291485548 * r, l = s * s * s, m = c * c * c, u = i * i * i;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * u, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * u, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * u];
+  }
+  function V(t) {
+    let e = v(t);
+    if (!q(e)) {
+      let n = 0, a = t.c;
+      for (let o = 0; o < 12; o++) {
+        let r = (n + a) / 2;
+        if (q(v({ ...t, c: r }))) n = r;
+        else a = r;
+      }
+      e = v({ ...t, c: n });
+    }
+    return e.map((n) => Math.min(1, Math.max(0, n)));
+  }
+  function U(t) {
+    let [e, n, a] = V(t);
+    return 0.2126 * e + 0.7152 * n + 0.0722 * a;
+  }
+  function B(t, e) {
+    let n = U(t), a = U(e);
+    return (Math.max(n, a) + 0.05) / (Math.min(n, a) + 0.05);
+  }
+  function w(t, e, n) {
+    if (B(t, e) >= n) return t;
+    let a = t.l >= e.l ? 1 : -1;
+    for (let s of [a, -a]) {
+      let c = { ...t };
+      for (let i = 0; i < 60; i++) {
+        if (c.l = Math.min(1, Math.max(0, c.l + s * 0.02)), B(c, e) >= n) return c;
+        if (c.l === 0 || c.l === 1) break;
+      }
+    }
+    let o = { ...t, l: 0, c: 0 }, r = { ...t, l: 1, c: 0 };
+    return B(o, e) >= B(r, e) ? o : r;
+  }
+  function T(t) {
+    return "#" + V(t).map((e) => {
+      let n = e <= 31308e-7 ? 12.92 * e : 1.055 * Math.pow(e, 0.4166666666666667) - 0.055;
+      return Math.round(n * 255).toString(16).padStart(2, "0");
+    }).join("");
+  }
+  function It(t, e = true, n = 0) {
+    let a = Et(t, n);
+    if (e) for (let [o, r, s] of vt) a[o] = w(a[o], a[r], s);
+    return a;
+  }
+  function G(t, e = true, n = 0) {
+    let a = It(t, e, n), o = {};
+    for (let r in a) o[r] = T(a[r]);
+    return o;
+  }
+  function P({ cx: t, cy: e, rx: n, ry: a, n: o = 4, rot: r = 0 }) {
+    let s = Math.min(1, (8 * Math.pow(2, -1 / o) - 4) / 3), c = n, i = a, l = c * s, m = i * s, u = [[c, 0], [c, m], [l, i], [0, i], [-l, i], [-c, m], [-c, 0], [-c, -m], [-l, -i], [0, -i], [l, -i], [c, -m], [c, 0]], b = r * Math.PI / 180, p = Math.cos(b), d = Math.sin(b), h = (x) => {
+      let [g, k] = u[x];
+      return `${y(t + g * p - k * d)} ${y(e + g * d + k * p)}`;
+    }, f = `M${h(0)}`;
+    for (let x = 1; x < 13; x += 3) f += `C${h(x)} ${h(x + 1)} ${h(x + 2)}`;
+    return f + "Z";
+  }
+  function J(t, e, n, a, o, r = 0) {
+    let s = o.length, c = r * Math.PI / 180, i = o.map((u, b) => {
+      let p = c + 2 * Math.PI * b / s;
+      return [t + n * u * Math.cos(p), e + a * u * Math.sin(p)];
+    }), l = (u) => i[(u % s + s) % s], m = `M${y(l(0)[0])} ${y(l(0)[1])}`;
+    for (let u = 0; u < s; u++) {
+      let [b, p] = l(u - 1), [d, h] = l(u), [f, x] = l(u + 1), [g, k] = l(u + 2);
+      m += `C${y(d + (f - b) / 6)} ${y(h + (x - p) / 6)} ${y(f - (g - d) / 6)} ${y(x - (k - h) / 6)} ${y(f)} ${y(x)}`;
+    }
+    return m + "Z";
+  }
+  function W({ cx: t, cy: e, rx: n, ry: a, sides: o, round: r = 0.3, rot: s = 0 }) {
+    let c = r > 0 ? r < 1 ? r / 2 : 0.5 : 0, i = s * Math.PI / 180 - Math.PI / 2, l = Array.from({ length: o }, (p, d) => {
+      let h = i + 2 * Math.PI * d / o;
+      return [t + n * Math.cos(h), e + a * Math.sin(h)];
+    }), m = (p) => l[(p % o + o) % o], u = (p, d) => {
+      let [h, f] = m(p), [x, g] = m(d);
+      return `${y(h + (x - h) * c)} ${y(f + (g - f) * c)}`;
+    }, b = `M${u(0, -1)}`;
+    for (let p = 0; p < o; p++) {
+      let [d, h] = m(p);
+      if (b += `Q${y(d)} ${y(h)} ${u(p, p + 1)}`, c < 0.5) b += `L${u(p + 1, p)}`;
+    }
+    return b + "Z";
+  }
+  function tt(t, e, n, a) {
+    let o = y(t - n), r = y(t + n);
+    return `M${o} ${y(e - a)}H${r}V${y(e + a)}H${o}Z`;
+  }
+  function et(t, e, n, a, o) {
+    let r = Math.max(1.05, o), s = n * Math.sqrt(1 - 1 / (r * r)), c = e - a / r, i = e - r * a, l = s * 0.14, m = c + 0.86 * (i - c);
+    return `M${y(t - s)} ${y(c)}L${y(t - l)} ${y(m)}Q${y(t)} ${y(i)} ${y(t + l)} ${y(m)}L${y(t + s)} ${y(c)}Z`;
+  }
+  function I(t, e) {
+    for (let n = 0; n < e.length; n++) t = Math.imul(t ^ e[n], 3432918353), t = t << 13 | t >>> 19;
+    return t;
+  }
+  function At(t) {
+    return t = Math.imul(t ^ t >>> 16, 2246822507), t = Math.imul(t ^ t >>> 13, 3266489909), (t ^ t >>> 16) >>> 0;
+  }
+  function Rt(t) {
+    return t.normalize("NFC").trim().toLowerCase();
+  }
+  function rt(t, e = true) {
+    let n = e ? Rt(t) : t;
+    return I(1779033703 ^ n.length, nt.encode(n));
+  }
+  function A(t, e) {
+    return At(I(I(t, Uint8Array.of(255)), nt.encode(e))) / 4294967296;
+  }
+  function ot(t, e = true, n) {
+    let a = rt(t, e), o = (r) => {
+      let s = n?.[r], c = Array.isArray(s) ? s[Math.floor(A(a, r) * s.length)] : s;
+      return c === void 0 ? A(a, r) : c > 0 ? c < 1 ? c : 0.999999 : 0;
+    };
+    return o.num = (r, s, c) => s + o(r) * (c - s), o.int = (r, s, c) => s + Math.floor(o(r) * (c - s + 1)), o.pick = (r, s) => s[Math.floor(o(r) * s.length)], o.bool = (r, s = 0.5) => o(r) < s, o.jitter = (r, s) => (o(r) * 2 - 1) * s, o;
+  }
+  function E(t, e, n) {
+    let a = e.expression;
+    if (n || !a) return { l: t, wrap: "" };
+    return a.bake(t, a.p);
+  }
+  function S(t, e) {
+    let n = ot(t, e.normalize ?? true, e.traits);
+    return { t: n, palette: { ...G(e.hue ?? n.num("hue", 0, 360), e.contrast ?? true, e.tone ?? n("tone")), ...e.palette } };
+  }
+  function L(t, e, n) {
+    let a = e.background ?? t.background;
+    if (a === false) return;
+    return { d: a === "square" ? "M0 0H100V100H0Z" : P({ cx: 50, cy: 50, rx: 50, ry: 50, n: a === "circle" ? 2 : 6 }), fill: n.bg };
+  }
+  function st(t) {
+    return (e, n = {}) => {
+      let { t: a, palette: o } = S(e, n), r = R(o, n.expression), s = n.size ? ` width="${n.size}" height="${n.size}"` : "", c = E(t.layout(a), n), i = jt(n) + Ct(L(t, n, r)) + at(t.render(c.l, r), c.wrap);
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"${s}>${i}</svg>`;
+    };
+  }
+  function ut(t, e) {
+    let n = (r) => (t.find(([, s]) => r < s) ?? t[t.length - 1])[0];
+    function a(r) {
+      let s = n(r("shape")), c = r.num("body.r", 31, 38) * s.core, i = { cx: 50 + r.jitter("body.x", 1.5), cy: 50 + r.jitter("body.y", 1.5), rx: c, ry: c * r.num("body.ratio", 0.92, 1.08), n: r.num("body.n", 1.9, 2.5), rot: 0, radii: Array.from({ length: r.int("body.pts", 6, 8) }, (u, b) => 1 + r.jitter(`body.r${b}`, 0.16)) };
+      s.body?.(r, i);
+      let l = s.face?.(i) ?? i, m = { petals: [], extra: [] };
+      return s.decorate?.(r, i, m), { shape: s.name, draw: s.path, body: i, face: l, petals: m.petals, extra: m.extra, eyes: e(r, i, l) };
+    }
+    function o(r, s, c) {
+      let i = (u) => Math.round(u * 100) / 100, l = (u, b) => {
+        let p = `<path d="${P(u)}"/>`;
+        return c ? `<g class="mo-eye" style="--mo-wrap:${b ? 1 : -1};--mo-lean:${i(u.rot)};transform-origin:${i(u.cx)}px ${i(u.cy)}px">${p}</g>` : p;
+      }, m = `<g fill="${s.head}">` + r.petals.map((u) => `<circle cx="${i(u.cx)}" cy="${i(u.cy)}" r="${i(u.r)}"/>`).join("") + r.extra.map((u) => `<path d="${u}"/>`).join("") + `<path d="${r.draw ? r.draw(r.body) : P(r.body)}"/></g><g fill="${s.eye}"${c ? ' class="mo-eyes"' : ""}>` + r.eyes.map(l).join("") + "</g>";
+      return c ? `<g class="mo-breathe"><g class="mo-bob">${m}</g></g>` : m;
+    }
+    return { layout: a, render: o, background: false };
+  }
+  function ke(t, e) {
+    return "data:image/svg+xml," + Pt(t, e).replace(/"/g, "'").replace(/[%#<>{}|\\^[\]`]/g, (a) => "%" + a.charCodeAt(0).toString(16).toUpperCase()).replace(/\s+/g, " ");
+  }
+  var q, N, wt, K, Q, Et, vt, y, nt, R, at, Ft, jt, Ct, it, lt, mt, j, pt, _t, yt, bt, xt, ht, dt, ft, gt, Mt, kt, $t, Ht, M, Pt;
+  var init_uri = __esm({
+    "node_modules/blobatar/dist/uri.js"() {
+      q = (t) => t.every((e) => e >= -1e-4 && e <= 1.0001);
+      N = [[0.2, { l: 0.86, c: 0.085 }], [0.36, { l: 0.9, c: 0.028 }], [0.62, { l: 0.73, c: 0.135 }], [0.8, { l: 0.62, c: 0.165 }], [0.93, { l: 0.87, c: 0.16 }], [1, { l: 0.34, c: 0.035 }]];
+      wt = (t) => N.find(([e]) => t < e)?.[1] ?? N[0][1];
+      K = { l: 0.145, c: 0, h: 0 };
+      Q = 1.5;
+      Et = (t, e) => {
+        let n = wt(e), a = w({ l: n.l, c: n.c, h: t }, K, Q);
+        return { bg: { l: 0.965, c: 0.01, h: t }, head: a, eye: a.l >= 0.5 ? { l: 0.17, c: 0.02, h: t } : { l: 0.97, c: 0.012, h: t } };
+      };
+      vt = [["head", "bg", 1.25], ["eye", "head", 4.5]];
+      y = (t) => {
+        let e = Math.round(t * 100) / 100;
+        return Object.is(e, -0) ? "0" : String(e);
+      };
+      nt = new TextEncoder();
+      R = (t, e) => e?.tint ? e.tint(t, e.p) : t;
+      at = (t, e) => e ? `<g transform="${e}">${t}</g>` : t;
+      Ft = (t) => t.replace(/[&<>]/g, (e) => e === "&" ? "&amp;" : e === "<" ? "&lt;" : "&gt;");
+      jt = (t) => t.title ? `<title>${Ft(t.title)}</title>` : "";
+      Ct = (t) => t ? `<path d="${t.d}" fill="${t.fill}"/>` : "";
+      it = (t, e, n) => {
+        let a = e.rx, o = t.num("eye.rx", 0.075, 0.105) * a, r = t.num("eye.ratio", 1.9, 3.2), s = t.num("eye.scale", 0.78, 1.24), c = t.num("eye.stretch", 0.85, 1.18), i = t.num("eye.gap", 0.1, 0.24) * a, l = o * Math.max(1, s), m = o * r * Math.max(1, s * c), u = l + a * 0.03 + i, b = t.jitter("gaze.x", 0.09) * n.rx, p = t.num("gaze.y", -0.2, 0.08) * n.ry, d = t.jitter("eye.dy", 0.04) * n.ry, h = Math.hypot(l, m), f = Math.hypot((Math.abs(b) + u + h) / n.rx, (Math.abs(p) + Math.abs(d) + h) / n.ry), x = f > 0.9 ? 0.9 / f : 1, g = o * x, k = g * r, C2 = u * x, Ot = Math.max(0, Math.min(1, i / m)), St = Math.min(12, Math.asin(Ot) * 180 / Math.PI), _ = t.num("eye.lean", -1, 1) * St, Bt = Math.max(-12, Math.min(12, _ + t.jitter("eye.lean2", 3.5))), H = n.cx + b * x, z = n.cy + p * x;
+        return [{ cx: H - C2, cy: z, rx: g, ry: k, n: t.num("eye.n", 3.5, 6), rot: _ }, { cx: H + C2, cy: z + d * x, rx: g * s, ry: k * s * c, n: t.num("eye.n", 3.5, 6), rot: Bt }];
+      };
+      lt = (t) => W(t);
+      mt = (t) => J(t.cx, t.cy, t.rx, t.ry, t.radii, t.rot);
+      j = (t) => (e) => ({ cx: e.cx, cy: e.cy, rx: e.rx * t, ry: e.ry * t });
+      pt = (t) => j(Math.min(...t.radii) * 0.95)(t);
+      _t = (t) => j(0.84)(t);
+      yt = { name: "round", core: 1 };
+      bt = { name: "organic", core: 0.98, path: mt, face: pt };
+      xt = { name: "boxy", core: 0.86, body: (t, e) => {
+        e.n = t.num("body.n", 3.4, 6), e.rot = t.num("body.rot", -20, 20);
+      } };
+      ht = { name: "capsule", core: 1.02, body: (t, e) => {
+        e.ry *= t.num("capsule.squat", 0.55, 0.68);
+      }, face: j(0.94), decorate: (t, e, n) => {
+        for (let a of [-1, 1]) n.petals.push({ cx: e.cx + a * (e.rx - e.ry), cy: e.cy, r: e.ry });
+      }, path: (t) => tt(t.cx, t.cy, t.rx - t.ry, t.ry) };
+      dt = { name: "nub", core: 0.88, decorate: (t, e, n) => {
+        let a = t.int("nub.n", 1, 2);
+        for (let o = 0; o < a; o++) {
+          let r = t.num(`nub.a${o}`, 0, 2 * Math.PI);
+          n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.88, cy: e.cy + Math.sin(r) * e.rx * 0.88, r: e.rx * t.num(`nub.r${o}`, 0.24, 0.4) });
+        }
+      } };
+      ft = { name: "cloud", core: 0.78, face: pt, path: mt, decorate: (t, e, n) => {
+        let a = t.int("cloud.n", 4, 6);
+        for (let o = 0; o < a; o++) {
+          let r = Math.PI + Math.PI * (o + 0.5) / a;
+          n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.8, cy: e.cy + Math.sin(r) * e.rx * 0.5, r: e.rx * t.num(`cloud.r${o}`, 0.44, 0.62) });
+        }
+      } };
+      gt = { name: "droplet", core: 0.78, body: (t, e) => {
+        e.cy += 0.22 * e.ry, e.n = 2;
+      }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.05, rx: t.rx * 0.88, ry: t.ry * 0.88 }), decorate: (t, e, n) => {
+        n.extra.push(et(e.cx, e.cy, e.rx, e.ry, t.num("droplet.tip", 1.4, 1.65)));
+      } };
+      Mt = { name: "hexagon", core: 1.05, path: lt, face: _t, body: (t, e) => {
+        e.sides = 6, e.rot = t.num("body.rot", -12, 12), e.round = t.num("poly.round", 0.24, 0.5);
+      } };
+      kt = { name: "sun", core: 0.7, decorate: (t, e, n) => {
+        let a = t.int("sun.n", 6, 9), o = e.rx * t.num("sun.dist", 1, 1.08), r = e.rx * t.num("sun.r", 0.2, 0.26), s = t.num("sun.rot", 0, 2 * Math.PI);
+        for (let c = 0; c < a; c++) {
+          let i = s + 2 * Math.PI * c / a;
+          n.petals.push({ cx: e.cx + Math.cos(i) * o, cy: e.cy + Math.sin(i) * o, r });
+        }
+      } };
+      $t = { name: "triangle", core: 1.15, path: lt, body: (t, e) => {
+        e.sides = 3, e.rot = t.num("body.rot", -5, 5), e.round = t.num("poly.round", 0.24, 0.5);
+      }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.1, rx: t.rx * 0.54, ry: t.ry * 0.36 }) };
+      Ht = [[yt, 0.22], [bt, 0.48], [xt, 0.6], [ht, 0.7], [dt, 0.79], [ft, 0.86], [gt, 0.915], [Mt, 0.95], [kt, 0.98], [$t, 1]];
+      M = ut(Ht, it);
+      Pt = st(M);
+    }
+  });
+
+  // membership/member-blob.mjs
+  function memberBlob(name) {
+    return ke(seedOf(name), OPTIONS);
+  }
+  var OPTIONS, seedOf;
+  var init_member_blob = __esm({
+    "membership/member-blob.mjs"() {
+      "use strict";
+      init_uri();
+      OPTIONS = Object.freeze({ background: "square" });
+      seedOf = (name) => String(name ?? "").trim() || "gbti";
+    }
+  });
+
+  // client-ui/src/member-avatars.mjs
+  function avatarLayers(seed, photo) {
+    const src = photo === void 0 ? memberAvatarUrl(seed) : String(photo || "");
+    return `<img data-blob src="${esc(memberBlob(seed))}" alt="" aria-hidden="true">` + (src ? `<img data-avphoto src="${esc(src)}" alt="" loading="lazy">` : "");
+  }
+  function attachAvatarFallback(root) {
+    if (!root || typeof root.addEventListener !== "function") return () => {
+    };
+    const onError = (ev) => {
+      const el = ev.target;
+      if (el && el.tagName === "IMG" && el.hasAttribute?.("data-avphoto")) el.remove();
+    };
+    root.addEventListener("error", onError, true);
+    return () => root.removeEventListener("error", onError, true);
+  }
+  var esc, AVATAR_LAYER_CSS;
+  var init_member_avatars = __esm({
+    "client-ui/src/member-avatars.mjs"() {
+      "use strict";
+      init_member_avatar();
+      init_member_blob();
+      esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      AVATAR_LAYER_CSS = `img[data-blob], img[data-avphoto] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border:0; margin:0; max-width:none; }`;
+    }
+  });
+
+  // client-ui/src/base.mjs
+  function setClient(client) {
+    CLIENT = client;
+    IDENTITY = null;
+    for (const fn of SUBSCRIBERS) {
+      try {
+        fn();
+      } catch {
+      }
+    }
+  }
+  function getClient() {
+    return CLIENT;
+  }
+  async function getIdentity() {
+    if (IDENTITY) return IDENTITY;
+    if (!CLIENT) return null;
+    try {
+      const s = await CLIENT.status();
+      IDENTITY = s?.identity ?? null;
+      return IDENTITY;
+    } catch {
+      return null;
+    }
+  }
+  function define(tag, ctor) {
+    const ce = HAS_DOM ? globalThis.customElements : null;
+    if (!ce || ce.get(tag)) return;
+    ce.define(tag, ctor);
+  }
+  function esc2(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  var HAS_DOM, CLIENT, IDENTITY, SUBSCRIBERS, Base, GbtiElement;
+  var init_base = __esm({
+    "client-ui/src/base.mjs"() {
+      "use strict";
+      init_assets();
+      init_tokens();
+      init_member_avatars();
+      HAS_DOM = typeof HTMLElement !== "undefined";
+      CLIENT = null;
+      IDENTITY = null;
+      SUBSCRIBERS = /* @__PURE__ */ new Set();
+      Base = HAS_DOM ? HTMLElement : class {
+      };
+      GbtiElement = class extends Base {
+        constructor() {
+          super();
+          if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
+          this._ownClient = null;
+          this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
+        }
+        connectedCallback() {
+          SUBSCRIBERS.add(this._onClient);
+          if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
+          if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
+          this.render?.();
+        }
+        disconnectedCallback() {
+          SUBSCRIBERS.delete(this._onClient);
+          this._detachCdnFallback?.();
+          this._detachCdnFallback = null;
+          this._detachAvatarFallback?.();
+          this._detachAvatarFallback = null;
+        }
+        get client() {
+          return this._ownClient || getClient();
+        }
+        /**
+         * sow-399: give ONE element its own client. The website has many independent components that each call
+         * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
+         * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
+         * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
+         * The Worker re-checks the role on every call; this only decides which methods the element can reach.
+         */
+        set client(c) {
+          this._ownClient = c || null;
+          if (this.isConnected) this.render?.();
+        }
+        /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
+        css(extra = "") {
+          return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
+        }
+        set(markup) {
+          if (this.root) this.root.innerHTML = markup;
+        }
+        $(sel) {
+          return this.root?.querySelector(sel) ?? null;
+        }
+        $$(sel) {
+          return this.root ? [...this.root.querySelectorAll(sel)] : [];
+        }
+        on(sel, event, handler) {
+          const el = this.$(sel);
+          if (el) el.addEventListener(event, handler);
+        }
+        emit(name, detail) {
+          this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+        }
+      };
+    }
+  });
+
+  // client/src/image-attrs.mjs
+  function cleanCaption(s) {
+    return String(s ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+  }
+  function imageTitleSuffix(caption) {
+    const c = cleanCaption(caption);
+    return c ? ` "${c}"` : "";
+  }
+  function parseImageLayout(suffix) {
+    if (suffix == null) return {};
+    const words = String(suffix).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    const out = {};
+    for (const w2 of words) {
+      if (!IMAGE_LAYOUT_WORDS.includes(w2)) return null;
+      if (w2 === "full") out.width = "full";
+      else if (w2 === "wrap") out.wrap = true;
+      else if (ALIGNS.has(w2)) {
+        if (out.align && out.align !== w2) return null;
+        out.align = w2;
+      }
+    }
+    return out;
+  }
+  function normalizeImageLayout(layout) {
+    const out = {};
+    if (layout?.width === "full") out.width = "full";
+    if (ALIGNS.has(layout?.align)) out.align = layout.align;
+    if (layout?.wrap === true) out.wrap = true;
+    return out;
+  }
+  function imageLayoutSuffix(layout) {
+    const n = normalizeImageLayout(layout);
+    const words = [];
+    if (n.width) words.push(n.width);
+    if (n.align) words.push(n.align);
+    if (n.wrap) words.push("wrap");
+    return words.length ? `{${words.join(" ")}}` : "";
+  }
+  function imageLayoutClasses(layout) {
+    const n = normalizeImageLayout(layout);
+    const out = [];
+    if (n.width) out.push("img-full");
+    if (n.align) out.push(`img-${n.align}`);
+    if (n.wrap && (n.align === "left" || n.align === "right")) out.push("img-wrap");
+    return out;
+  }
+  function parseImageLine(line) {
+    const m = IMAGE_LINE_RE.exec(String(line ?? ""));
+    if (!m) return null;
+    const layout = parseImageLayout(m[4]);
+    if (!layout) return null;
+    return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
+  }
+  function applyImageLayoutAction(layout, action) {
+    const n = normalizeImageLayout(layout);
+    switch (String(action || "")) {
+      case "natural":
+        delete n.width;
+        break;
+      case "full":
+        n.width = "full";
+        break;
+      case "left":
+      case "right":
+        n.align = action;
+        break;
+      case "center":
+        n.align = "center";
+        delete n.wrap;
+        break;
+      case "wrap":
+        if (n.align === "left" || n.align === "right") {
+          if (n.wrap) delete n.wrap;
+          else n.wrap = true;
+        }
+        break;
+      default:
+        break;
+    }
+    return n;
+  }
+  var IMAGE_LAYOUT_WORDS, ALIGNS, IMAGE_LINE_RE;
+  var init_image_attrs = __esm({
+    "client/src/image-attrs.mjs"() {
+      "use strict";
+      IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
+      ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
+      IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
+    }
+  });
+
+  // client/src/list-attrs.mjs
+  function styleKind(word) {
+    const w2 = String(word ?? "");
+    if (BULLET_WORDS.includes(w2)) return "bullet";
+    if (NUMBER_WORDS.includes(w2)) return "number";
+    return null;
+  }
+  function isDefaultStyle(word) {
+    const kind2 = styleKind(word);
+    return !!kind2 && LIST_STYLE_DEFAULTS[kind2] === String(word);
+  }
+  function normalizeListStyle(word, ordered) {
+    const kind2 = styleKind(word);
+    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
+    return isDefaultStyle(word) ? null : String(word);
+  }
+  function listStyleClass(style) {
+    return style && LIST_STYLE_CLASS_RE.test(`list-${style}`) ? `list-${style}` : null;
+  }
+  function listStyleFromClass(className) {
+    const tokens = Array.isArray(className) ? className : String(className ?? "").split(/\s+/);
+    for (const t of tokens) {
+      const m = LIST_STYLE_CLASS_RE.exec(String(t));
+      if (m) return m[1];
+    }
+    return null;
+  }
+  function splitListSuffix(text2, ordered, { bare = false } = {}) {
+    const m = SUFFIX_RE.exec(String(text2 ?? ""));
+    if (!m) return null;
+    const kind2 = styleKind(m[2]);
+    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
+    const rest = m[1];
+    if (!bare && rest.trim() === "") return null;
+    return { style: normalizeListStyle(m[2], !!ordered), rest };
+  }
+  function stripListStyleSuffix(line) {
+    const m = LINE_RE.exec(String(line ?? ""));
+    if (!m) return String(line ?? "");
+    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
+    if (!split) return String(line);
+    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
+  }
+  var BULLET_WORDS, NUMBER_WORDS, LIST_STYLE_WORDS, LIST_STYLE_DEFAULTS, LIST_STYLE_CLASS_RE, SUFFIX_RE, LINE_RE;
+  var init_list_attrs = __esm({
+    "client/src/list-attrs.mjs"() {
+      "use strict";
+      BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
+      NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
+      LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
+      LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
+      LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
+      SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
+      LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
+    }
+  });
+
+  // client/src/list-items.mjs
+  function isThematicBreak(line) {
+    return THEMATIC_BREAK_RE.test(String(line ?? ""));
+  }
+  function isListLine(line) {
+    const s = String(line ?? "");
+    return LIST_ITEM_RE.test(s) && !THEMATIC_BREAK_RE.test(s);
+  }
+  function opensRunBefore(items, i, depth, ordered) {
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (items[j2].depth < depth) return true;
+      if (items[j2].depth === depth) return items[j2].ordered !== ordered;
+    }
+    return true;
+  }
+  function opensRun(items, i) {
+    const it2 = items[i];
+    return !!it2 && opensRunBefore(items, i, it2.depth, it2.ordered);
+  }
+  function runOf(items, i) {
+    const d = items[i].depth;
+    const o = items[i].ordered;
+    let start = i;
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (items[j2].depth < d) break;
+      if (items[j2].depth === d) {
+        if (items[j2].ordered !== o) break;
+        start = j2;
+      }
+    }
+    const out = [];
+    for (let j2 = start; j2 < items.length; j2++) {
+      if (j2 > start && items[j2].depth < d) break;
+      if (items[j2].depth === d) {
+        if (items[j2].ordered !== o) break;
+        out.push(j2);
+      }
+    }
+    return out;
+  }
+  function continuesItem(line, markerIndent) {
+    const s = String(line ?? "");
+    if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
+    const lead = /^[ \t]*/.exec(s)[0].replace(/\t/g, "    ").length;
+    return lead > markerIndent && !BLOCK_OPENER_RE.test(s.trimStart());
+  }
+  function takeListRun(lines2, from = 0) {
+    const items = [];
+    let start = 1;
+    const stack = [0];
+    let topOrdered = null;
+    let i = from;
+    while (i < lines2.length) {
+      const m = LIST_ITEM_RE.exec(String(lines2[i] ?? ""));
+      if (!m || THEMATIC_BREAK_RE.test(String(lines2[i] ?? ""))) break;
+      const indent = m[1].replace(/\t/g, "    ").length;
+      const ordered = /^\d/.test(m[2]);
+      while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
+      if (indent > stack[stack.length - 1]) stack.push(indent);
+      const depth = stack.length - 1;
+      if (depth === 0) {
+        if (topOrdered === null) topOrdered = ordered;
+        else if (ordered !== topOrdered) break;
+      }
+      const item = { text: m[3], depth, ordered };
+      if (!items.length && ordered && depth === 0) start = Number.parseInt(m[2], 10) || 1;
+      items.push(item);
+      i++;
+      while (i < lines2.length && continuesItem(lines2[i], indent)) {
+        item.text += `
+${String(lines2[i]).trimStart()}`;
+        i++;
+      }
+    }
+    for (let k = 0; k < items.length; k++) {
+      if (!opensRun(items, k)) continue;
+      const [first, ...more] = items[k].text.split("\n");
+      const split = splitListSuffix(first, items[k].ordered);
+      if (!split) continue;
+      items[k].text = [split.rest, ...more].join("\n");
+      if (split.style) items[k].style = split.style;
+    }
+    return { items, next: i, start };
+  }
+  function normalizeListItems(items, ordered = false) {
+    const out = [];
+    let prevDepth = -1;
+    for (const raw of Array.isArray(items) ? items : []) {
+      const it2 = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
+      let depth = Math.max(0, Math.floor(Number(it2.depth) || 0));
+      if (depth > prevDepth + 1) depth = prevDepth + 1;
+      const own = typeof it2.ordered === "boolean" ? it2.ordered : false;
+      const isOrdered = depth === 0 ? !!ordered : own;
+      const item = { text: String(it2.text ?? ""), depth, ordered: isOrdered };
+      const style = it2.style ? normalizeListStyle(it2.style, isOrdered) : null;
+      if (style && opensRunBefore(out, out.length, depth, isOrdered)) item.style = style;
+      out.push(item);
+      prevDepth = depth;
+    }
+    return out;
+  }
+  function isFlatList(items) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return true;
+    const first = list[0];
+    const firstOrdered = first && typeof first === "object" ? !!first.ordered : null;
+    return list.every((it2) => {
+      if (!it2 || typeof it2 !== "object") return firstOrdered === null;
+      return (Number(it2.depth) || 0) === 0 && !!it2.ordered === firstOrdered && !it2.style;
+    });
+  }
+  function serializeListItems(items, ordered = false, { start = 1 } = {}) {
+    const norm3 = normalizeListItems(items, ordered);
+    const lines2 = [];
+    const counters = [];
+    const indents = [];
+    const markerWidth = [];
+    let prevDepth = -1;
+    let prevOrderedAtDepth = [];
+    for (const it2 of norm3) {
+      if (it2.depth > prevDepth) {
+        counters[it2.depth] = it2.depth === 0 ? Math.max(0, Math.floor(Number(start) || 1) - 1) : 0;
+        indents[it2.depth] = it2.depth === 0 ? "" : indents[it2.depth - 1] + " ".repeat(markerWidth[it2.depth - 1] || 2);
+        prevOrderedAtDepth[it2.depth] = it2.ordered;
+      } else if (it2.depth < prevDepth) {
+        counters.length = it2.depth + 1;
+        prevOrderedAtDepth.length = it2.depth + 1;
+      }
+      if (prevOrderedAtDepth[it2.depth] !== it2.ordered) {
+        counters[it2.depth] = 0;
+        prevOrderedAtDepth[it2.depth] = it2.ordered;
+      }
+      counters[it2.depth] = (counters[it2.depth] || 0) + 1;
+      const marker = it2.ordered ? `${counters[it2.depth]}. ` : "- ";
+      markerWidth[it2.depth] = marker.length;
+      const suffix = it2.style && it2.text.trim() !== "" ? ` {${it2.style}}` : "";
+      const [first, ...more] = it2.text.split("\n");
+      lines2.push(`${indents[it2.depth]}${marker}${first}${suffix}`);
+      for (const l of more) lines2.push(`${indents[it2.depth]}${" ".repeat(marker.length)}${l}`);
+      prevDepth = it2.depth;
+    }
+    return lines2;
+  }
+  function withClass(attrs, cls) {
+    const a = String(attrs || "");
+    if (!cls) return a;
+    if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v2) => `class="${v2 ? `${v2} ` : ""}${cls}"`);
+    return `${a ? `${a} ` : ""}class="${cls}"`;
+  }
+  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+    const norm3 = normalizeListItems(items, ordered);
+    let html = "";
+    const open = [];
+    const openList = (it2) => {
+      const tag = it2.ordered ? "ol" : "ul";
+      const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it2.style));
+      html += `<${tag}${attrs ? ` ${attrs}` : ""}>`;
+      open.push({ tag, ordered: it2.ordered });
+    };
+    const closeList = () => {
+      html += `</li></${open.pop().tag}>`;
+    };
+    for (const it2 of norm3) {
+      while (open.length > it2.depth + 1) closeList();
+      if (open.length === it2.depth + 1) {
+        const cur = open[open.length - 1];
+        if (cur.ordered !== it2.ordered) {
+          closeList();
+          openList(it2);
+          html += `<li>${inline4(it2.text)}`;
+        } else html += `</li><li>${inline4(it2.text)}`;
+      } else {
+        openList(it2);
+        html += `<li>${inline4(it2.text)}`;
+      }
+    }
+    while (open.length) closeList();
+    return html;
+  }
+  function indentListItem(items, index, delta, ordered = false) {
+    const norm3 = normalizeListItems(items, ordered);
+    const i = Number(index);
+    if (!(i >= 0 && i < norm3.length) || !delta) return null;
+    const oldDepth = norm3[i].depth;
+    const maxDepth = i === 0 ? 0 : norm3[i - 1].depth + 1;
+    const newDepth = Math.max(0, Math.min(maxDepth, oldDepth + (delta > 0 ? 1 : -1)));
+    if (newDepth === oldDepth) return null;
+    const shift = newDepth - oldDepth;
+    const out = norm3.map((it2) => ({ ...it2 }));
+    if (out[i].style) {
+      for (let j2 = i + 1; j2 < out.length; j2++) {
+        if (out[j2].depth < oldDepth) break;
+        if (out[j2].depth === oldDepth) {
+          if (out[j2].ordered === out[i].ordered) out[j2].style = out[i].style;
+          break;
+        }
+      }
+      delete out[i].style;
+    }
+    out[i].depth = newDepth;
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (out[j2].depth < newDepth) break;
+      if (out[j2].depth === newDepth) {
+        out[i].ordered = out[j2].ordered;
+        break;
+      }
+    }
+    for (let j2 = i + 1; j2 < out.length && out[j2].depth > oldDepth; j2++) out[j2].depth = Math.max(0, out[j2].depth + shift);
+    return normalizeListItems(out, ordered);
+  }
+  function listRunState(items, ordered = false, index = 0) {
+    const norm3 = normalizeListItems(items, ordered);
+    if (!norm3.length) return { ordered: !!ordered, style: null, depth: 0 };
+    const i = Math.min(Math.max(0, Number(index) || 0), norm3.length - 1);
+    const run = runOf(norm3, i);
+    return { ordered: norm3[i].ordered, style: norm3[run[0]].style || null, depth: norm3[i].depth };
+  }
+  function applyListAction(list, index, action) {
+    const ordered = !!list?.ordered;
+    const norm3 = normalizeListItems(list?.items, ordered);
+    const i = Number(index);
+    if (!(i >= 0 && i < norm3.length)) return null;
+    const act = String(action || "");
+    let wantOrdered = null;
+    let wantStyle;
+    if (act === "ordered" || act === "unordered") wantOrdered = act === "ordered";
+    else if (act.startsWith("style:")) {
+      const word = act.slice("style:".length);
+      if (word === "default") wantStyle = null;
+      else {
+        const kind2 = styleKind(word);
+        if (!kind2) return null;
+        wantOrdered = kind2 === "number";
+        wantStyle = normalizeListStyle(word, wantOrdered);
+      }
+    } else return null;
+    const out = norm3.map((it2) => ({ ...it2 }));
+    if (wantOrdered !== null) for (const j2 of runOf(out, i)) out[j2].ordered = wantOrdered;
+    if (wantStyle !== void 0) {
+      const run = runOf(out, i);
+      for (const j2 of run) delete out[j2].style;
+      if (wantStyle) out[run[0]].style = wantStyle;
+    }
+    const topOrdered = out[0].ordered;
+    const next = normalizeListItems(out, topOrdered);
+    if (JSON.stringify(next) === JSON.stringify(norm3)) return null;
+    return { ordered: topOrdered, items: next };
+  }
+  var LIST_ITEM_RE, THEMATIC_BREAK_RE, BLOCK_OPENER_RE;
+  var init_list_items = __esm({
+    "client/src/list-items.mjs"() {
+      "use strict";
+      init_list_attrs();
+      LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+      THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+      BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
+    }
+  });
+
+  // client/src/underscore-emphasis.mjs
+  function tokenize(src) {
+    const out = [];
+    let i = 0;
+    while (i < src.length) {
+      OPAQUE.lastIndex = i;
+      const m = OPAQUE.exec(src);
+      if (m) {
+        out.push({ opaque: m[0] });
+        i += m[0].length;
+        continue;
+      }
+      const cp = src.codePointAt(i);
+      const ch = String.fromCodePoint(cp);
+      out.push({ ch });
+      i += ch.length;
+    }
+    return out;
+  }
+  function kind(tok) {
+    if (!tok) return "ws";
+    if (tok.opaque !== void 0) return "punct";
+    if (WS.test(tok.ch)) return "ws";
+    if (PUNCT.test(tok.ch)) return "punct";
+    return "word";
+  }
+  function underscoreEmphasis(html, { em = "<em>", strong = "<strong>", keepEscapes = false } = {}) {
+    const src = String(html ?? "");
+    if (!src.includes("_")) return src;
+    const toks = tokenize(src);
+    const runs = [];
+    for (let i = 0; i < toks.length; i++) {
+      if (toks[i].ch !== "_") continue;
+      let j2 = i;
+      while (j2 + 1 < toks.length && toks[j2 + 1].ch === "_") j2++;
+      const before = kind(toks[i - 1]);
+      const after = kind(toks[j2 + 1]);
+      const left = after !== "ws" && (after !== "punct" || before === "ws" || before === "punct");
+      const right = before !== "ws" && (before !== "punct" || after === "ws" || after === "punct");
+      runs.push({
+        at: i,
+        len: j2 - i + 1,
+        count: j2 - i + 1,
+        canOpen: left && (!right || before === "punct"),
+        canClose: right && (!left || after === "punct"),
+        opens: [],
+        closes: []
+      });
+      i = j2;
+    }
+    if (!runs.length) return render(toks, /* @__PURE__ */ new Map(), keepEscapes);
+    const emClose = em.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
+    const strongClose = strong.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
+    const stack = [];
+    for (const r of runs) {
+      if (r.canClose) {
+        while (r.count > 0) {
+          let k = stack.length - 1;
+          for (; k >= 0; k--) {
+            const o2 = stack[k];
+            if (o2.count === 0) continue;
+            const oddMatch = (o2.canClose || r.canOpen) && (o2.len + r.len) % 3 === 0 && !(o2.len % 3 === 0 && r.len % 3 === 0);
+            if (!oddMatch) break;
+          }
+          if (k < 0) break;
+          const o = stack[k];
+          const use = o.count >= 2 && r.count >= 2 ? 2 : 1;
+          o.count -= use;
+          r.count -= use;
+          o.opens.unshift(use === 2 ? strong : em);
+          r.closes.push(use === 2 ? strongClose : emClose);
+          stack.length = o.count > 0 ? k + 1 : k;
+        }
+      }
+      if (r.count > 0 && r.canOpen) stack.push(r);
+    }
+    return render(toks, new Map(runs.map((r) => [r.at, r])), keepEscapes);
+  }
+  function render(toks, runAt, keepEscapes) {
+    let out = "";
+    for (let i = 0; i < toks.length; i++) {
+      const r = runAt.get(i);
+      if (r) {
+        out += r.closes.join("") + "_".repeat(r.count) + r.opens.join("");
+        i += r.len - 1;
+        continue;
+      }
+      const t = toks[i];
+      if (t.opaque !== void 0) out += t.opaque === "\\_" && !keepEscapes ? "_" : t.opaque;
+      else out += t.ch;
+    }
+    return out;
+  }
+  var OPAQUE, WS, PUNCT, UNDERSCORE_MARK;
+  var init_underscore_emphasis = __esm({
+    "client/src/underscore-emphasis.mjs"() {
+      "use strict";
+      OPAQUE = /\u0000A\d+\u0000|\uE000\d+\uE001|<[^>]*>|&(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);|`[^`\n]*`|\\_/giy;
+      WS = /\s/u;
+      PUNCT = /[\p{P}\p{S}]/u;
+      UNDERSCORE_MARK = 'data-md="_"';
+    }
+  });
+
+  // client-ui/src/markdown-blocks.mjs
+  function splitTableRow(line) {
+    let s = String(line).trim();
+    if (s.startsWith("|")) s = s.slice(1);
+    if (s.endsWith("|")) s = s.slice(0, -1);
+    return s.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+  }
+  function tableAlign(spec) {
+    const s = String(spec).trim();
+    const l = s.startsWith(":");
+    const r = s.endsWith(":");
+    return l && r ? "center" : r ? "right" : l ? "left" : "";
+  }
+  function serializeBlocks(blocks2) {
+    const list = Array.isArray(blocks2) ? blocks2 : [];
+    let next = 1;
+    return list.map((b, i) => {
+      if (b && b.type === "list" && b.ordered) {
+        const prev = list[i - 1];
+        const start = prev && prev.type === "list" && prev.ordered ? next : 1;
+        const items = listBlockItems(b);
+        next = start + items.filter((it2) => !(it2 && typeof it2 === "object" && Number(it2.depth) > 0)).length;
+        return serializeListItems(items, true, { start }).join("\n");
+      }
+      return serializeBlock(b);
+    }).join("\n\n");
+  }
+  function serializeBlock(b) {
+    if (!b || typeof b !== "object") return "";
+    switch (b.type) {
+      case "members":
+        return MEMBERS_MARKER;
+      case "heading":
+        return `${"#".repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ""}`;
+      case "code":
+      case "audio": {
+        const code = b.code ?? "";
+        const runs = code.match(/^`{3,}/gm) || [];
+        const fence = "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
+        return fence + (b.lang ?? "") + "\n" + code + "\n" + fence;
+      }
+      case "callout":
+        return "```callout " + normalizeVariant(b.variant) + (b.small ? " small" : "") + "\n" + (b.text ?? "") + "\n```";
+      case "quote":
+        return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
+      case "list": {
+        return serializeListItems(listBlockItems(b), !!b.ordered).join("\n");
+      }
+      case "table": {
+        const head = Array.isArray(b.head) ? b.head : [];
+        const aligns = Array.isArray(b.aligns) ? b.aligns : [];
+        const rows = Array.isArray(b.rows) ? b.rows : [];
+        const cols = Math.max(1, head.length);
+        const cell = (c) => String(c ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+        const pad = (arr) => {
+          const a = arr.slice(0, cols);
+          while (a.length < cols) a.push("");
+          return a;
+        };
+        const line = (cells) => "| " + pad(cells).map(cell).join(" | ") + " |";
+        const delim = "| " + pad(head).map((_, i) => {
+          const a = aligns[i] || "";
+          return a === "center" ? ":---:" : a === "right" ? "---:" : a === "left" ? ":---" : "---";
+        }).join(" | ") + " |";
+        return [line(head), delim, ...rows.map(line)].join("\n");
+      }
+      case "image":
+        return `![${b.alt ?? ""}](${b.url ?? ""}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
+      case "embed":
+        return "```embed" + (b.lightbox ? " lightbox" : "") + "\n" + (b.url ?? "") + "\n```";
+      // lightbox: owner 2026-10-13
+      case "paragraph":
+      default:
+        return String(b.text ?? "");
+    }
+  }
+  function parseBlocks(md) {
+    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+    const blocks2 = [];
+    const n = lines2.length;
+    let i = 0;
+    while (i < n) {
+      const line = lines2[i];
+      if (line.trim() === "") {
+        i++;
+        continue;
+      }
+      if (isMarker(line)) {
+        blocks2.push({ type: "members" });
+        i++;
+        continue;
+      }
+      if (isFence(line)) {
+        const open = /^(`{3,})(.*)$/.exec(line);
+        const fenceLen = open[1].length;
+        const lang = open[2].trim();
+        const info = lang.split(/\s+/);
+        const code = [];
+        i++;
+        while (i < n) {
+          const close = /^(`{3,})\s*$/.exec(lines2[i]);
+          if (close && close[1].length >= fenceLen) break;
+          code.push(lines2[i]);
+          i++;
+        }
+        i++;
+        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), ...info.slice(2).includes("small") ? { small: true } : {}, text: code.join("\n") });
+        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim(), ...info[1] === "lightbox" ? { lightbox: true } : {} });
+        else if (info[0] === "audio") blocks2.push({ type: "audio", lang, code: code.join("\n") });
+        else blocks2.push({ type: "code", lang, code: code.join("\n") });
+        continue;
+      }
+      let m = line.match(/^(#{1,6})\s+(.*)$/);
+      if (m) {
+        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
+        i++;
+        continue;
+      }
+      if (isQuote(line)) {
+        const q2 = [];
+        while (i < n && isQuote(lines2[i])) {
+          q2.push(lines2[i].replace(/^>\s?/, ""));
+          i++;
+        }
+        blocks2.push({ type: "quote", text: q2.join("\n") });
+        continue;
+      }
+      if (isListItem(line)) {
+        const run = takeListRun(lines2, i);
+        if (run.next <= i) {
+          blocks2.push({ type: "paragraph", text: line });
+          i++;
+          continue;
+        }
+        const ordered = !!run.items[0]?.ordered;
+        const items = isFlatList(run.items) ? run.items.map((it2) => it2.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
+        blocks2.push({ type: "list", ordered, items });
+        i = run.next;
+        continue;
+      }
+      if (isTableStart(lines2, i)) {
+        const head = splitTableRow(lines2[i]);
+        const cols = Math.max(1, head.length);
+        const aligns = splitTableRow(lines2[i + 1]).map(tableAlign).slice(0, cols);
+        while (aligns.length < cols) aligns.push("");
+        i += 2;
+        const rows = [];
+        while (i < n && lines2[i].trim() !== "" && lines2[i].includes("|") && !isMarker(lines2[i]) && !isFence(lines2[i]) && !isHeading(lines2[i]) && !isQuote(lines2[i])) {
+          const row = splitTableRow(lines2[i]).slice(0, cols);
+          while (row.length < cols) row.push("");
+          rows.push(row);
+          i++;
+        }
+        blocks2.push({ type: "table", head, aligns, rows });
+        continue;
+      }
+      const im = parseImageLine(line);
+      if (im) {
+        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
+        i++;
+        continue;
+      }
+      if (isBareUrl(line) && isVideoUrl(line)) {
+        blocks2.push({ type: "embed", url: line.trim() });
+        i++;
+        continue;
+      }
+      const para = [];
+      while (i < n) {
+        const l = lines2[i];
+        if (l.trim() === "" || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || isBareUrl(l) && isVideoUrl(l) || isTableStart(lines2, i)) break;
+        para.push(l);
+        i++;
+      }
+      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
+      else i++;
+    }
+    return blocks2;
+  }
+  function emptyBlock(type) {
+    switch (type) {
+      case "heading":
+        return { type: "heading", level: 2, text: "" };
+      case "code":
+        return { type: "code", lang: "", code: "" };
+      case "quote":
+        return { type: "quote", text: "" };
+      case "list":
+        return { type: "list", ordered: false, items: [""] };
+      case "table":
+        return { type: "table", head: ["Column 1", "Column 2"], aligns: ["", ""], rows: [["", ""], ["", ""]] };
+      case "image":
+        return { type: "image", alt: "", url: "" };
+      case "embed":
+        return { type: "embed", url: "" };
+      case "callout":
+        return { type: "callout", variant: "note", text: "" };
+      case "members":
+        return { type: "members" };
+      case "audio":
+        return { type: "audio", lang: "audio", code: "" };
+      default:
+        return { type: "paragraph", text: "" };
+    }
+  }
+  function isDangerousUrl(url) {
+    const decoded = decodeEnt(String(url ?? "")).replace(/[\x00-\x20]+/g, "");
+    return DANGEROUS_SCHEME.test(decoded) || DANGEROUS_SCHEME.test(String(url ?? ""));
+  }
+  function sanitizeRel(rel) {
+    const kept = [];
+    for (const tok of String(rel || "").trim().split(/\s+/)) {
+      const t = tok.toLowerCase();
+      if (REL_ALLOWED.has(t) && !kept.includes(t)) kept.push(t);
+    }
+    return kept;
+  }
+  function parseLinkAttrs(attrs) {
+    const rawHref = decodeEnt(attrOf(attrs, "href"));
+    const href = isDangerousUrl(rawHref) ? "" : rawHref;
+    const rel = sanitizeRel(attrOf(attrs, "rel"));
+    const blank2 = attrOf(attrs, "target").toLowerCase() === "_blank";
+    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
+    return { href, rel, blank: blank2, attributed: rel.length > 0 || blank2 };
+  }
+  function sanitizeInner(html) {
+    return String(html ?? "").replace(
+      /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
+      (_m, slash, tag) => SAFE_INNER_TAG.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
+    );
+  }
+  function rawAnchor(href, rel, blank2, inner) {
+    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
+    const tgtAttr = blank2 ? ' target="_blank"' : "";
+    return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
+  }
+  function emphasisMark(attrs, all, at3, len, star) {
+    if (!/\bdata-md="_"/.test(attrs)) return star;
+    const before = all[at3 - 1] ?? "";
+    const after = all[at3 + len] ?? "";
+    return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, "_");
+  }
+  function inlineMdToHtml(md) {
+    let src = String(md ?? "");
+    const keep = [];
+    src = src.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      const a = parseLinkAttrs(attrs);
+      keep.push(a.href ? rawAnchor(a.href, a.rel, a.blank, inner) : inner);
+      return `\0A${keep.length - 1}\0`;
+    });
+    let h = src.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    h = h.replace(FN_REF_RE, (_m, id) => {
+      keep.push(`<sup class="md-fnchip" contenteditable="false" data-fn="${id}">${id}</sup>`);
+      return `\0A${keep.length - 1}\0`;
+    });
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text2, url) => isDangerousUrl(url) ? text2 : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text2}</a>`);
+    h = h.replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>");
+    h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    h = underscoreEmphasis(h, { em: EM_US, strong: STRONG_US, keepEscapes: true });
+    h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
+    h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+    h = h.replace(/ {2,}\n/g, "<br>");
+    h = h.replace(new RegExp(`\\n(?=\\[\\^${FN_REF_ID}\\]:)`, "g"), '<br data-md="fn">');
+    h = h.replace(/\n/g, " ");
+    return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
+  }
+  function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
+    let s = String(html ?? "");
+    const keep = [];
+    s = s.replace(new RegExp(`<sup\\b[^>]*\\bdata-fn="(${FN_REF_ID})"[^>]*>[\\s\\S]*?<\\/sup>`, "gi"), (_m, id) => {
+      keep.push(`[^${id}]`);
+      return `\0A${keep.length - 1}\0`;
+    });
+    s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      const a = parseLinkAttrs(attrs);
+      if (!a.href) return inner;
+      if (!a.attributed) return `[${inner}](${a.href})`;
+      const rendererShaped = a.blank && a.rel.length === 1 && a.rel[0] === "noopener" && !/</.test(inner);
+      if (rendererAnchors && rendererShaped) return `[${inner}](${a.href})`;
+      keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
+      return `\0A${keep.length - 1}\0`;
+    });
+    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
+      const d = emphasisMark(attrs, all, at3, m.length, "**");
+      return `${d}${inner}${d}`;
+    });
+    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
+      const d = emphasisMark(attrs, all, at3, m.length, "*");
+      return `${d}${inner}${d}`;
+    });
+    s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
+    s = s.replace(/<code>([\s\S]*?)<\/code>/gi, "`$1`");
+    s = s.replace(/<br\b[^>]*\bdata-md="fn"[^>]*>/gi, "\n");
+    s = s.replace(/<br\s*\/?>/gi, "  \n");
+    s = s.replace(/^\s*<div>/i, "");
+    s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
+    s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
+      const at3 = (name) => {
+        const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(attrs);
+        return m ? m[1] ?? m[2] ?? "" : "";
+      };
+      const ref = at3("data-ref") || at3("src");
+      if (!/^(https?:\/\/|\.\/)/i.test(ref)) return "";
+      return `![${at3("alt").replace(/[\[\]]/g, "")}](${ref})`;
+    });
+    s = s.replace(/<[^>]+>/g, "");
+    s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
+  }
+  function textBlockToHtml(text2) {
+    return String(text2 ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
+  }
+  function textBlockFromHtml(html) {
+    const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
+    return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join("\n\n");
+  }
+  var MEMBERS_MARKER, isTableDelimLine, isTableStart, CALLOUT_VARIANTS, normalizeVariant, isMarker, isFence, isHeading, isQuote, isListItem, isImageOnly, isBareUrl, isVideoUrl, listBlockItems, REL_ALLOWED, DANGEROUS_SCHEME, attrOf, decodeEntOnce, decodeEnt, escAttr, SAFE_INNER_TAG, FN_REF_ID, FN_REF_RE, EM_US, STRONG_US, WORD_CHAR;
+  var init_markdown_blocks = __esm({
+    "client-ui/src/markdown-blocks.mjs"() {
+      "use strict";
+      init_image_attrs();
+      init_list_items();
+      init_underscore_emphasis();
+      MEMBERS_MARKER = "<!-- members-only -->";
+      isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
+      isTableStart = (lines2, i) => i + 1 < lines2.length && lines2[i].includes("|") && isTableDelimLine(lines2[i + 1]);
+      CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
+      normalizeVariant = (v2) => CALLOUT_VARIANTS.includes(v2) ? v2 : "note";
+      isMarker = (l) => l.trim() === MEMBERS_MARKER;
+      isFence = (l) => /^```/.test(l);
+      isHeading = (l) => /^#{1,6}\s+/.test(l);
+      isQuote = (l) => /^>\s?/.test(l);
+      isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
+      isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
+      isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
+      isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
+      listBlockItems = (b) => Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
+      REL_ALLOWED = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+      DANGEROUS_SCHEME = /^\s*(?:javascript|data|vbscript):/i;
+      attrOf = (attrs, name) => {
+        const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+        return m ? m[1] : "";
+      };
+      decodeEntOnce = (s) => String(s ?? "").replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
+      decodeEnt = (s) => {
+        let p = String(s ?? "");
+        for (let i = 0; i < 4; i += 1) {
+          const n = decodeEntOnce(p);
+          if (n === p) break;
+          p = n;
+        }
+        return p;
+      };
+      escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
+      FN_REF_ID = "[A-Za-z0-9_-]+";
+      FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, "g");
+      EM_US = `<em ${UNDERSCORE_MARK}>`;
+      STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
+      WORD_CHAR = /[\p{L}\p{N}]/u;
+    }
+  });
+
+  // client/src/video-embed.mjs
+  function embedUrl(v2) {
+    const s = String(v2 || "").trim();
+    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}`;
+    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+    if (m) return `https://rumble.com/embed/${m[1]}/`;
+    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+    return null;
+  }
+  function bareVideoLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return embedUrl(s) ? s : null;
+  }
+  function embedPoster(url) {
+    const src = embedUrl(url);
+    if (!src) return null;
+    const yt2 = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+    const provider = yt2 ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+    return { src, thumb: yt2 ? `https://i.ytimg.com/vi/${yt2[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+  }
+  function embedPosterHtml(url, { frameSrc } = {}) {
+    const p = embedPoster(url);
+    if (!p) return "";
+    const src = frameSrc || p.src;
+    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr2(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr2(p.provider)}</span>`;
+    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr2(src)}" data-embed-url="${escAttr2(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+  }
+  function audioEmbedUrl(v2) {
+    let u;
+    try {
+      u = new URL(String(v2 || "").trim());
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
+    const seg2 = u.pathname.split("/").filter(Boolean);
+    if (seg2.length !== 2) return null;
+    const [account, mix] = seg2;
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
+    if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
+    return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
+  }
+  function shareEmbed(url) {
+    const video = embedUrl(url);
+    if (video) return { src: video, kind: isPortraitEmbed(video) ? "portrait" : "video" };
+    const audio = audioEmbedUrl(url);
+    return audio ? { src: audio, kind: "audio" } : null;
+  }
+  function isPortraitEmbed(src) {
+    return /tiktok\.com\/embed\//.test(String(src || ""));
+  }
+  var escAttr2, MIXCLOUD_SITE_PAGES, MIXCLOUD_ACCOUNT_PAGES, AUDIO_EMBED_HEIGHT;
+  var init_video_embed = __esm({
+    "client/src/video-embed.mjs"() {
+      "use strict";
+      escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      MIXCLOUD_SITE_PAGES = /* @__PURE__ */ new Set([
+        "about",
+        "account",
+        "api",
+        "categories",
+        "dashboard",
+        "developers",
+        "discover",
+        "genres",
+        "help",
+        "live",
+        "login",
+        "media",
+        "messages",
+        "notifications",
+        "oembed",
+        "player",
+        "pricing",
+        "pro",
+        "search",
+        "select",
+        "settings",
+        "signup",
+        "tag",
+        "tags",
+        "upload",
+        "widget"
+      ]);
+      MIXCLOUD_ACCOUNT_PAGES = /* @__PURE__ */ new Set([
+        "favorites",
+        "followers",
+        "following",
+        "hosts",
+        "listens",
+        "playlists",
+        "reposts",
+        "shows",
+        "stream",
+        "uploads"
+      ]);
+      AUDIO_EMBED_HEIGHT = 120;
+    }
+  });
+
+  // client/src/audio-embed.mjs
+  function audioEmbed(provider, raw) {
+    const u = parse(raw);
+    if (!u) return null;
+    const host = u.hostname.toLowerCase().replace(/^(www|m)\./, "");
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (provider === "soundcloud") {
+      if (host !== "soundcloud.com") return null;
+      const [account, second, third, fourth] = parts;
+      if (!account || SOUNDCLOUD_RESERVED.has(account.toLowerCase()) || !/^[A-Za-z0-9_-]+$/.test(account)) return null;
+      let kind2 = null;
+      let pagePath = null;
+      if (second === "sets" && third && /^[A-Za-z0-9_-]+$/.test(third) && (!fourth || /^s-[A-Za-z0-9]+$/.test(fourth)) && parts.length <= 4) {
+        kind2 = "playlist";
+        pagePath = parts.join("/");
+      } else if (second && second !== "sets" && /^[A-Za-z0-9_-]+$/.test(second) && (!third || /^s-[A-Za-z0-9]+$/.test(third)) && parts.length <= 3 && !["tracks", "albums", "reposts", "likes", "followers", "following", "comments", "popular-tracks"].includes(second)) {
+        kind2 = "track";
+        pagePath = parts.join("/");
+      }
+      if (!kind2) return null;
+      const page = `https://soundcloud.com/${pagePath}`;
+      const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(page)}&color=%231f9e5f&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
+      return { provider, kind: kind2, page, src, height: kind2 === "playlist" ? 300 : 166 };
+    }
+    if (provider === "spotify") {
+      if (host !== "open.spotify.com") return null;
+      const p = /^intl-[a-z-]+$/i.test(parts[0] || "") ? parts.slice(1) : parts;
+      const [kind2, id] = p;
+      if (!["episode", "show"].includes(kind2) || !/^[A-Za-z0-9]{22}$/.test(id || "") || p.length !== 2) return null;
+      return { provider, kind: kind2, page: `https://open.spotify.com/${kind2}/${id}`, src: `https://open.spotify.com/embed/${kind2}/${id}`, height: 152 };
+    }
+    if (provider === "apple") {
+      if (host !== "podcasts.apple.com") return null;
+      const [cc, word, ...rest] = parts;
+      if (!/^[a-z]{2}$/i.test(cc || "") || word !== "podcast") return null;
+      const idSeg = rest[rest.length - 1] || "";
+      const name = rest.length === 2 ? rest[0] : null;
+      if (!/^id\d+$/.test(idSeg) || rest.length > 2 || name !== null && !/^[A-Za-z0-9%_.-]+$/.test(name)) return null;
+      const episode = u.searchParams.get("i");
+      if (episode !== null && !/^\d+$/.test(episode)) return null;
+      const pathPart = `${cc.toLowerCase()}/podcast/${name ? `${name}/` : ""}${idSeg}${episode ? `?i=${episode}` : ""}`;
+      return { provider, kind: episode ? "episode" : "show", page: `https://podcasts.apple.com/${pathPart}`, src: `https://embed.podcasts.apple.com/${pathPart}`, height: episode ? 175 : 450 };
+    }
+    return null;
+  }
+  function embedProblem(provider, raw) {
+    const name = PROVIDER_NAMES[provider] || "this service";
+    const wants = { soundcloud: "a SoundCloud track or playlist link", spotify: "a Spotify episode or show link", apple: "an Apple Podcasts episode or show link" }[provider] || "a link";
+    const u = parse(raw);
+    if (!u) return `"${String(raw ?? "").trim()}" is not a web address. Paste ${wants}.`;
+    const host = u.hostname.toLowerCase();
+    if (/^on\.soundcloud\.com$|^spotify\.link$|^spoti\.fi$/.test(host)) return `This is a short link. Open it, then copy the full ${name} address from the page.`;
+    const known = KNOWN_HOSTS.find(([re]) => re.test(host.replace(/^(www|m)\./, "")));
+    if (known && known[1] !== name && !(provider === "apple" && known[1] === "Apple")) {
+      const video = ["YouTube", "Vimeo", "TikTok"].includes(known[1]) ? ", or add the video with a Video block" : "";
+      return `This is a ${known[1]} link. Paste ${wants}${video}.`;
+    }
+    return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
+  }
+  var AUDIO_PROVIDERS, PROVIDER_NAMES, DEFAULT_LINK_LABELS, SOUNDCLOUD_RESERVED, parse, KNOWN_HOSTS;
+  var init_audio_embed = __esm({
+    "client/src/audio-embed.mjs"() {
+      "use strict";
+      AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
+      PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
+      DEFAULT_LINK_LABELS = { soundcloud: "Listen on SoundCloud", spotify: "Listen on Spotify", apple: "Open in Apple Podcasts" };
+      SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
+        "discover",
+        "search",
+        "charts",
+        "stations",
+        "you",
+        "upload",
+        "settings",
+        "messages",
+        "notifications",
+        "pages",
+        "people",
+        "popular",
+        "terms-of-use",
+        "imprint",
+        "jobs",
+        "mobile",
+        "pro",
+        "feed",
+        "player",
+        "widget"
+      ]);
+      parse = (raw) => {
+        try {
+          const u = new URL(String(raw ?? "").trim());
+          return /^https?:$/.test(u.protocol) ? u : null;
+        } catch {
+          return null;
+        }
+      };
+      KNOWN_HOSTS = [
+        [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
+        [/(^|\.)vimeo\.com$/, "Vimeo"],
+        [/(^|\.)tiktok\.com$/, "TikTok"],
+        [/(^|\.)mixcloud\.com$/, "Mixcloud"],
+        [/(^|\.)soundcloud\.com$/, "SoundCloud"],
+        [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
+        [/(^|\.)apple\.com$/, "Apple"]
+      ];
+    }
+  });
+
+  // client/src/content-blocks.mjs
+  function parsePercent(v2) {
+    const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return n >= 0 && n <= 100 ? n : null;
+  }
+  function keyValue(line) {
+    const i = line.indexOf(":");
+    if (i <= 0) return { k: null, v: line };
+    return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
+  }
+  function parseTags(body) {
+    return { tags: lines(body) };
+  }
+  function parseBar(body) {
+    const out = { label: "", value: null, raw: "", note: "", unknown: [] };
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "label") out.label = v2;
+      else if (key === "value") {
+        out.raw = v2;
+        out.value = parsePercent(v2);
+      } else if (key === "note") out.note = v2;
+      else out.unknown.push(l);
+    }
+    return out;
+  }
+  function parseFacts(body) {
+    const rows = [];
+    const bad = [];
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      if (!k) {
+        bad.push(l);
+        continue;
+      }
+      const m = v2.match(/^(.*?)\s*\{bar\}\s*$/);
+      const value = m ? m[1].trim() : v2;
+      rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
+    }
+    return { rows, bad };
+  }
+  function parseStats(body) {
+    let caption = "";
+    const stats = [];
+    const bad = [];
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      if (k && k.toLowerCase() === "caption") {
+        caption = v2;
+        continue;
+      }
+      if (!k || !v2) {
+        bad.push(l);
+        continue;
+      }
+      stats.push({ value: k, label: v2 });
+    }
+    return { caption, stats, bad };
+  }
+  function parseButton(body) {
+    const ls = lines(body);
+    let label = ls[0] ?? "";
+    let url = ls[1] ?? "";
+    if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
+    return { label, url: safeUrl(url), rawUrl: url };
+  }
+  function parseWeights(v2) {
+    const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const out = [];
+    for (const p of parts) {
+      const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
+      if (!m || !m[1].trim()) return null;
+      out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
+    }
+    return out;
+  }
+  function parseReveal(body, meta = "") {
+    const src = String(body ?? "").split("\n");
+    const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
+    const head = cut < 0 ? [] : src.slice(0, cut);
+    const rest = cut < 0 ? src : src.slice(cut + 1);
+    const out = { label: String(meta ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
+    for (const l of head.map((x) => x.trim()).filter(Boolean)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "weights") {
+        out.weightsRaw = v2;
+        out.weights = parseWeights(v2);
+      } else if (key === "note") out.note = v2;
+      else out.unknown.push(l);
+    }
+    return out;
+  }
+  function revealBodyHtml(md) {
+    const out = [];
+    let para = [];
+    let list = [];
+    let blank2 = false;
+    const flush = () => {
+      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
+      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
+      para = [];
+      list = [];
+    };
+    for (const raw of String(md).split("\n")) {
+      const l = raw.trim();
+      if (!l) {
+        if (list.length) blank2 = true;
+        else flush();
+        continue;
+      }
+      if (list.length && /^\s{2,}\S/.test(raw)) {
+        const it2 = list[list.length - 1];
+        if (blank2) it2.sub.push("");
+        it2.sub.push(raw.replace(/^\s{2,4}/, ""));
+        blank2 = false;
+        continue;
+      }
+      if (blank2) {
+        flush();
+        blank2 = false;
+      }
+      const item = l.match(/^[-*]\s+(.*)$/);
+      if (item) {
+        if (para.length) flush();
+        list.push({ text: item[1], sub: [] });
+        continue;
+      }
+      if (list.length) flush();
+      para.push(l);
+    }
+    flush();
+    return out.join("");
+  }
+  function audioBaseFor(itemPath) {
+    const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
+    return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
+  }
+  function audioServedPath(src, audioBase) {
+    const s = String(src ?? "");
+    if (!s.startsWith("./audio/")) return s;
+    return audioBase ? `${audioBase}/${s.slice("./audio/".length)}` : null;
+  }
+  function parseAudio(body, meta = "") {
+    const out = {
+      label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL,
+      length: "",
+      style: "bar",
+      badStyle: "",
+      sources: [],
+      bad: [],
+      unknown: [],
+      providers: [],
+      embed: null,
+      embedBad: null,
+      link: "",
+      linkBad: "",
+      linkLabel: ""
+    };
+    for (const l of lines(body)) {
+      const { k, v: v2 } = keyValue(l);
+      const key = (k || "").toLowerCase();
+      if (key === "length") out.length = v2;
+      else if (AUDIO_PROVIDERS.includes(key)) {
+        out.providers.push(key);
+        const e = audioEmbed(key, v2);
+        if (e && !out.embed) out.embed = e;
+        else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v2 };
+      } else if (key === "link") {
+        if (safeUrl(v2)) out.link = safeUrl(v2);
+        else out.linkBad = v2;
+      } else if (key === "link-label") out.linkLabel = v2;
+      else if (key === "style") {
+        if (AUDIO_STYLES.includes(v2.toLowerCase())) out.style = v2.toLowerCase();
+        else out.badStyle = v2;
+      } else if (key === "src") {
+        const m = v2.match(AUDIO_SRC_RE);
+        if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
+        else out.bad.push(v2);
+      } else out.unknown.push(l);
+    }
+    return out;
+  }
+  function setAudioStyle(body, style) {
+    const kept = String(body ?? "").split("\n").filter((l) => !/^\s*style\s*:/i.test(l));
+    return style === "card" ? ["style: card", ...kept].join("\n") : kept.join("\n");
+  }
+  function audioLinkLabel(link, label = "") {
+    if (String(label ?? "").trim()) return String(label).trim();
+    let host = "";
+    try {
+      host = new URL(String(link)).hostname.toLowerCase().replace(/^(www|m)\./, "");
+    } catch {
+      return "Listen elsewhere";
+    }
+    if (host === "soundcloud.com") return DEFAULT_LINK_LABELS.soundcloud;
+    if (host === "open.spotify.com" || host === "spotify.com") return DEFAULT_LINK_LABELS.spotify;
+    if (host === "podcasts.apple.com") return DEFAULT_LINK_LABELS.apple;
+    return `Listen on ${host}`;
+  }
+  function renderAudio(body, meta, { origin = "", audioBase = null, relativeAudio = false } = {}) {
+    const a = parseAudio(body, meta);
+    const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
+    const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
+    if (a.embed) {
+      const e = a.embed;
+      const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
+      return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
+    }
+    if (!a.sources.length) return null;
+    const served = a.sources.map((x) => {
+      const path = audioServedPath(x.src, audioBase);
+      return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
+    }).filter((x) => x.url);
+    if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + served.map((x) => `<source src="${esc3(x.url)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
+  }
+  function weightWidths(weights) {
+    const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
+    const ws = weights.map((w2) => Math.round(100 * w2.n / total));
+    ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
+    return ws;
+  }
+  function renderReveal(body, meta) {
+    const r = parseReveal(body, meta);
+    if (!r.body && !r.weights && !r.note) return null;
+    const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
+    let top = "";
+    if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
+      const ws = weightWidths(r.weights);
+      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
+    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
+    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
+    if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
+    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+  }
+  function renderDataBlock(name, body, meta = "", opts = {}) {
+    if (name === "reveal") return renderReveal(body, meta);
+    if (name === "audio") return renderAudio(body, meta, opts);
+    if (name === "tags") {
+      const { tags } = parseTags(body);
+      if (!tags.length) return null;
+      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
+    }
+    if (name === "bar") {
+      const b = parseBar(body);
+      if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
+      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
+    }
+    if (name === "facts") {
+      const { rows } = parseFacts(body);
+      if (!rows.length) return null;
+      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
+    }
+    if (name === "button") {
+      const b = parseButton(body);
+      if (!b.label) return null;
+      const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
+      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
+    }
+    if (name === "stats") {
+      const s = parseStats(body);
+      if (!s.stats.length) return null;
+      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
+    }
+    return null;
+  }
+  function barWidthCss(scope = "") {
+    let css = "";
+    for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
+    return css;
+  }
+  function sortListPlaceholder(meta = "") {
+    const style = String(meta ?? "").trim();
+    return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
+  }
+  function dataBlocksCss(scope, t) {
+    const s = scope;
+    return `${s} .gbti-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 .9em}
+${s} .gbti-tag{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid ${t.line2};color:${t.soft};font-family:${t.mono};font-size:12px;font-weight:500;line-height:1.2}
+${s} .gbti-tag-primary{background:${t.greenTint};color:${t.green700};border-color:${t.greenBorder}}
+${s} .gbti-bar{margin:1.1em 0 .9em}
+${s} .gbti-bar-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+${s} .gbti-bar-label{font-size:14px;color:${t.soft}}
+${s} .gbti-bar-value{font-family:${t.mono};font-weight:600;font-size:16px;color:${t.fg}}
+${s} .gbti-bar-track{display:block;height:10px;margin-top:6px;border-radius:4px;overflow:hidden;background:${t.rest}}
+${s} .gbti-bar-fill{display:block;height:100%;background:${t.green};box-shadow:2px 0 0 ${t.surface}}
+${s} .gbti-bar-note{margin-top:10px;font-family:${t.mono};font-size:13px;line-height:1.5;color:${t.mute}}
+${s} .gbti-facts{margin:1em 0;border-top:1px solid ${t.line}}
+${s} .gbti-fact{display:grid;grid-template-columns:minmax(90px,30%) minmax(0,1fr);gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid ${t.line}}
+${s} .gbti-fact dt{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute};margin:0}
+${s} .gbti-fact dd{margin:0;display:flex;align-items:center;gap:10px;font-size:15px;color:${t.fg}}
+${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
+${s} .gbti-button-row{margin:1em 0}
+${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
+${s} a.gbti-button:hover{background:${t.greenTint}}
+${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
+${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
+${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
+${s} .gbti-stats{margin:1em 0}
+${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
+${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
+${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
+${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
+${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
+${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
+${s} .gbti-reveal{margin:1.2em 0;padding:16px;border:1px solid ${t.line};border-radius:10px}
+${s} .gbti-reveal-weights{display:flex;gap:2px;height:14px;margin:0 0 12px}
+${s} .gbti-reveal-seg{display:block;flex:0 1 auto;min-width:4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:first-child{border-radius:4px 0 0 4px}
+${s} .gbti-reveal-weights .gbti-reveal-seg:last-child{border-radius:0 4px 4px 0}
+${s} .gbti-reveal-seg-1{background:#0f6f40}
+${s} .gbti-reveal-seg-2{background:#1f9e5f}
+${s} .gbti-reveal-seg-3{background:#4fbf86}
+${s} .gbti-reveal-seg-4{background:#93d9b4}
+${s} .gbti-reveal-seg-5{background:#c4ebd5}
+${s} .gbti-reveal-seg-6{background:#0b4f2e}
+${s} .gbti-reveal-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px;margin:0 0 12px;font-size:.9em}
+${s} .gbti-reveal-key{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow-wrap:normal}
+${s} .gbti-reveal-swatch{flex:none;width:10px;height:10px;border-radius:3px}
+${s} .gbti-reveal-name{font-weight:700;color:${t.fg}}
+${s} .gbti-reveal-pct{font-family:${t.mono};font-size:.85em;color:${t.soft}}
+${s} .gbti-reveal-note{margin:0 0 4px;font-size:.9em;color:${t.soft}}
+${s} .gbti-reveal-note strong{color:${t.fg}}
+${s} .gbti-reveal-more{margin:0}
+${s} .gbti-reveal-toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;list-style:none;font-size:.9em;font-weight:700;color:${t.green700}}
+${s} .gbti-reveal-toggle::-webkit-details-marker{display:none}
+${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
+${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
+${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:.9em}
+${s} .gbti-reveal-body p{margin:8px 0 12px}
+${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
+${s} .gbti-reveal-body ul{margin:0 0 12px}
+${s} .gbti-audio{margin:1.2em 0}
+${s} > .gbti-audio:first-child{margin-top:14px}
+${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
+${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
+${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
+${s} .gbti-audio-card{display:flex;flex-direction:column;gap:12px;padding:14px 18px;border:1px solid ${t.line};border-radius:12px;background:${t.card};box-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04)}
+${s} .gbti-audio-card .gbti-audio-head{flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+${s} .gbti-audio-card .gbti-audio-label{font-size:16px}
+${s} .gbti-audio-card .gbti-audio-player{margin-top:0}
+${s} .gbti-audio-card[data-enhanced] .gbti-audio-player{display:none}
+${s} .gbti-audio-row{display:flex;align-items:center;gap:16px;min-width:0}
+${s} button.gbti-audio-play{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:0;padding:0;border:0;border-radius:999px;background:#1f9e5f;color:#fff;box-shadow:0 6px 16px rgba(31,158,95,.28);cursor:pointer}
+${s} button.gbti-audio-play:hover{background:#178a51;color:#fff}
+${s} button.gbti-audio-play:focus-visible{outline:2px solid ${t.green};outline-offset:3px}
+${s} .gbti-audio-play svg{display:block;width:22px;height:22px}
+${s} .gbti-audio-progress{display:flex;align-items:center;gap:10px}
+${s} .gbti-audio-progress[hidden]{display:none}
+${s} input.gbti-audio-seek{flex:1;min-width:0;width:auto;height:20px;margin:0;padding:0;border:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+${s} input.gbti-audio-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,${t.green700} var(--p,0%),${t.line2} var(--p,0%))}
+${s} input.gbti-audio-seek::-moz-range-track{height:4px;border-radius:2px;background:${t.line2}}
+${s} input.gbti-audio-seek::-moz-range-progress{height:4px;border-radius:2px;background:${t.green700}}
+${s} input.gbti-audio-seek::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:${t.green700};opacity:0}
+${s} input.gbti-audio-seek:hover::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-webkit-slider-thumb{opacity:1}
+${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
+${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
+${s} .gbti-audio:not(.gbti-audio-card){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px}
+${s} .gbti-audio:not(.gbti-audio-card)>*{grid-column:1/-1}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-head{grid-column:1;grid-row:1;align-self:baseline}
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:2;grid-row:1;align-self:baseline}
+${s} a.gbti-audio-link{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;font-weight:600;line-height:1.2;color:${t.green700};text-decoration:none;white-space:nowrap}
+${s} a.gbti-audio-link::after{content:"\\2197";font-size:.95em}
+${s} a.gbti-audio-link:hover{text-decoration:underline;text-underline-offset:3px}
+${s} a.gbti-audio-link:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
+${s} .gbti-audio-row .gbti-audio-link{margin-left:auto}
+${s} .gbti-audio-row{flex-wrap:wrap}
+${s} .gbti-audio-row .gbti-audio-head{flex:1 1 0;min-width:0}
+${s} .gbti-audio-embed{margin-top:10px}
+${s} .gbti-audio-embed iframe{display:block;width:100%;max-width:100%;margin:0;border:0;aspect-ratio:auto}
+${s} .gbti-audio-embed-soundcloud iframe{height:166px;border-radius:0}
+${s} .gbti-audio-embed-soundcloud-tall iframe{height:300px;border-radius:0}
+${s} .gbti-audio-embed-spotify iframe{height:152px;border-radius:12px}
+${s} .gbti-audio-embed-apple iframe{height:175px;border-radius:10px}
+${s} .gbti-audio-embed-apple-tall iframe{height:450px;border-radius:10px}
+@media (max-width:560px){
+${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:1/-1;grid-row:auto;justify-self:start;margin-top:6px}
+${s} a.gbti-audio-link{min-height:32px}
+${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
+}
+${barWidthCss(s)}`;
+  }
+  var DATA_BLOCKS, esc3, lines, safeUrl, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
+  var init_content_blocks = __esm({
+    "client/src/content-blocks.mjs"() {
+      "use strict";
+      init_audio_embed();
+      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+      esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+      safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+      REVEAL_MAX_PARTS = 6;
+      REVEAL_DEFAULT_LABEL = "Show more";
+      inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+      ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
+      AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+      AUDIO_STYLES = ["bar", "card"];
+      AUDIO_DEFAULT_LABEL = "Listen";
+      EMBED_ALLOW = {
+        soundcloud: "autoplay",
+        spotify: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
+        apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
+      };
+      APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
+      DIRECTORY_STYLES = ["youtube"];
+      KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
+    }
+  });
+
+  // client/src/tweet-embed.mjs
+  function tweetId(url) {
+    const m = String(url ?? "").trim().match(TWEET_RE);
+    return m ? m[1] : null;
+  }
+  function bareTweetLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return tweetId(s) ? s : null;
+  }
+  function tweetFrameUrl(idOrUrl, { theme = "light" } = {}) {
+    const raw = String(idOrUrl ?? "").trim();
+    const id = /^\d{5,25}$/.test(raw) ? raw : tweetId(raw);
+    if (!id) return null;
+    return `${TWEET_FRAME_ORIGIN}/embed/Tweet.html?id=${id}&theme=${tweetTheme(theme)}&dnt=true`;
+  }
+  function tweetBlockHtml(url) {
+    const u = String(url ?? "").trim();
+    if (!tweetId(u)) return "";
+    const e = escAttr3(u);
+    return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
+  }
+  function parseTweetMessage(data) {
+    let d = data;
+    if (typeof d === "string") {
+      if (d.length > 2e4 || !d.includes("twttr.embed") && !d.includes("gbtiTweet")) return null;
+      try {
+        d = JSON.parse(d);
+      } catch {
+        return null;
+      }
+    }
+    if (!d || typeof d !== "object") return null;
+    const fwd = d.gbtiTweet;
+    if (fwd && typeof fwd === "object") return shaped(fwd.method, fwd.height);
+    const rpc = d["twttr.embed"];
+    if (!rpc || typeof rpc !== "object" || typeof rpc.method !== "string") return null;
+    const method = rpc.method.replace(/^twttr\.private\./, "");
+    const p = Array.isArray(rpc.params) ? rpc.params[0] : null;
+    return shaped(method, p && p.height);
+  }
+  function shaped(method, height) {
+    if (method === "rendered" || method === "no_results") return { method };
+    if (method !== "resize") return null;
+    const h = Number(height);
+    return Number.isFinite(h) && h > 0 && h < 2e4 ? { method, height: Math.ceil(h) } : null;
+  }
+  var TWEET_FRAME_ORIGIN, TWEET_RE, tweetTheme, escAttr3;
+  var init_tweet_embed = __esm({
+    "client/src/tweet-embed.mjs"() {
+      "use strict";
+      TWEET_FRAME_ORIGIN = "https://platform.twitter.com";
+      TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
+      tweetTheme = (t) => t === "dark" ? "dark" : "light";
+      escAttr3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    }
+  });
+
+  // client/src/markdown.mjs
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  function decodeEntities(s) {
+    let p = String(s ?? "");
+    for (let i = 0; i < 4; i++) {
+      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&amp;/gi, "&");
+      if (n === p) break;
+      p = n;
+    }
+    return p;
+  }
+  function emphasis(t) {
+    const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
+  }
+  function rawAnchorHtml(attrs, inner) {
+    const href = decodeEntities(attrOf2(attrs, "href"));
+    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
+    const rel = [];
+    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
+    const blank2 = attrOf2(attrs, "target").toLowerCase() === "_blank";
+    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
+    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
+    const tgtAttr = blank2 ? ' target="_blank"' : "";
+    return `<a href="${escAttr4(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  }
+  function escapeKeepingLinks(s, keep) {
+    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      keep.push(rawAnchorHtml(attrs, inner));
+      return `${keep.length - 1}`;
+    });
+    return escapeHtml(stripped);
+  }
+  function collectFootnoteIds(lines2) {
+    const ids = /* @__PURE__ */ new Set();
+    let fence = 0;
+    for (const line of lines2) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+      if (d) ids.add(d[1]);
+    }
+    return ids;
+  }
+  function collectLinkDefs(lines2) {
+    const defs = /* @__PURE__ */ new Map();
+    let fence = 0;
+    for (const line of lines2) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = LINK_DEF_RE.exec(line);
+      if (!d || d[1].startsWith("^")) continue;
+      if (!/^https?:\/\//.test(d[2])) continue;
+      const key = defKey(d[1]);
+      if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? "" });
+    }
+    return defs;
+  }
+  function refAnchor(text2, def) {
+    const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
+    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text2}</a>`;
+  }
+  function inline(escaped, fn = null, defs = null) {
+    let t = escaped;
+    const codes = [];
+    t = t.replace(/`([^`]+)`/g, (_m, c) => {
+      codes.push(c);
+      return `${codes.length - 1}`;
+    });
+    if (fn) {
+      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
+        if (!fn.ids.has(id)) return m;
+        const n = (fn.counts.get(id) ?? 0) + 1;
+        fn.counts.set(id, n);
+        return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+      });
+    }
+    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
+      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+      const titleAttr = title ? ` title="${title}"` : "";
+      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
+      const cls = imageLayoutClasses(layout);
+      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+    });
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+    if (defs && defs.size) {
+      t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
+        const def = defs.get(defKey(label || alt));
+        return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text2, label) => {
+        const def = defs.get(defKey(label || text2));
+        return def ? refAnchor(text2, def) : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text2) => {
+        if (text2.startsWith("^")) return m;
+        const def = defs.get(defKey(text2));
+        return def ? refAnchor(text2, def) : m;
+      });
+    }
+    t = emphasis(t);
+    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
+    return t;
+  }
+  function codeOpen(lang) {
+    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
+    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+  }
+  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
+    const info = String(lang || "").trim().split(/\s+/);
+    const body = buf.join("\n");
+    if (info[0] === "callout") {
+      const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const small = info.slice(2).includes("small") ? " md-callout-small" : "";
+      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
+      return `<div class="md-callout md-callout-${v2}${small}"><div class="md-callout-body">${html}</div></div>`;
+    }
+    if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
+    if (DATA_BLOCKS.includes(info[0])) {
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
+      if (html != null) return html;
+    }
+    if (info[0] === "embed") {
+      const url = body.trim();
+      const src = embedUrl(url);
+      if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
+      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
+    }
+    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
+  }
+  function splitTableRow2(line) {
+    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
+    const cells = [];
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\" && s[i + 1] === "|") {
+        cur += "|";
+        i++;
+        continue;
+      }
+      if (ch === "|") {
+        cells.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+  function tableAlignments(line) {
+    if (!/\|/.test(String(line ?? ""))) return null;
+    const cells = splitTableRow2(line);
+    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
+    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+  }
+  function hardBreak(escaped, raw) {
+    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
+  }
+  function renderMarkdown(md, opts = {}) {
+    return renderDoc(md, false, opts).html;
+  }
+  function renderDoc(md, ids, opts = {}, nest = null) {
+    const autoEmbed = !!opts.autoEmbed;
+    const audioBase = audioBaseFor(opts.itemPath);
+    const relativeAudio = !!opts.relativeAudio;
+    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    const ranges = [];
+    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
+    const emit = (html2, start, end) => {
+      out.push(stamp(html2, out.length));
+      ranges.push(start == null ? null : { start, end });
+    };
+    let codeFence = 3;
+    let fenceStart = 0;
+    let inCode = false;
+    let codeBuf = [];
+    let codeLang2 = "";
+    const footnotes = nest ? nest.footnotes : [];
+    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines2), counts: /* @__PURE__ */ new Map() };
+    const linkKeep = nest ? nest.linkKeep : [];
+    const defs = nest ? nest.defs : collectLinkDefs(lines2);
+    const flushList = () => {
+    };
+    let i = 0;
+    while (i < lines2.length) {
+      const line = lines2[i];
+      const fence = /^(`{3,})(.*)$/.exec(line);
+      if (fence) {
+        if (!inCode) {
+          inCode = true;
+          fenceStart = i;
+          codeBuf = [];
+          codeFence = fence[1].length;
+          codeLang2 = fence[2];
+          i++;
+          continue;
+        }
+        if (fence[1].length >= codeFence && !fence[2].trim()) {
+          inCode = false;
+          flushList();
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
+          codeLang2 = "";
+          i++;
+          continue;
+        }
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      if (inCode) {
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+      if (def) {
+        flushList();
+        const parts = [def[2].trim()];
+        i++;
+        while (i < lines2.length && /^ {4,}\S/.test(lines2[i])) {
+          parts.push(lines2[i].trim());
+          i++;
+        }
+        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
+        continue;
+      }
+      if (autoEmbed) {
+        const videoUrl = bareVideoLine(line);
+        if (videoUrl) {
+          flushList();
+          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
+          i++;
+          continue;
+        }
+        const tweetUrl = bareTweetLine(line);
+        if (tweetUrl) {
+          flushList();
+          emit(tweetBlockHtml(tweetUrl), i, i);
+          i++;
+          continue;
+        }
+      }
+      const esc11 = escapeKeepingLinks(line, linkKeep);
+      let m;
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc11)) {
+        flushList();
+        emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
+        i++;
+        continue;
+      }
+      if (isThematicBreak(line)) {
+        flushList();
+        emit("<hr />", i, i);
+        i++;
+        continue;
+      }
+      if (isListLine(line)) {
+        const run = takeListRun(lines2, i);
+        const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
+        const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
+        emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
+        i = run.next;
+        continue;
+      }
+      if (QUOTE_LINE.test(line)) {
+        flushList();
+        const quoteStart = i;
+        const inner = [];
+        while (i < lines2.length && QUOTE_LINE.test(lines2[i])) {
+          inner.push(lines2[i].replace(QUOTE_LINE, ""));
+          i++;
+        }
+        const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
+        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
+        continue;
+      }
+      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+        flushList();
+        emit("<hr/>", i, i);
+        i++;
+        continue;
+      }
+      const aligns = i + 1 < lines2.length ? tableAlignments(lines2[i + 1]) : null;
+      if (aligns && line.includes("|")) {
+        const tableStart = i;
+        flushList();
+        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
+        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
+        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
+        i += 2;
+        const rows = [];
+        while (i < lines2.length && lines2[i].includes("|") && !/^\s*$/.test(lines2[i])) {
+          rows.push(splitTableRow2(lines2[i]));
+          i++;
+        }
+        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
+        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
+        continue;
+      }
+      if (/^\s*$/.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      if (COMMENT_LINE.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
+        flushList();
+        while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
+        continue;
+      }
+      const fig = parseImageLine(line);
+      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+        flushList();
+        const cls = imageLayoutClasses(fig.layout);
+        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
+        i++;
+        continue;
+      }
+      flushList();
+      const paraStart = i;
+      const para = [hardBreak(esc11, line)];
+      i++;
+      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
+        para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
+        i++;
+      }
+      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
+      emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
+    }
+    flushList();
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
+    if (nest) return { html: out.join("\n"), blocks: ranges };
+    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
+    if (referenced.length) {
+      const items = referenced.map((f) => {
+        const n = fn.counts.get(f.id);
+        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
+      }).join("");
+      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
+    }
+    const joined = out.join("\n");
+    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
+    return { html, blocks: ranges };
+  }
+  var EMBED_RELAY, SITE_ORIGIN, REL_ALLOWED2, DANGEROUS_SCHEME2, isDangerousAnchorHref, attrOf2, escAttr4, SAFE_INNER_TAG2, sanitizeAnchorInner, FN_ID, LINK_DEF_RE, defKey, CALLOUT_VARIANTS2, QUOTE_LINE, COMMENT_LINE;
+  var init_markdown = __esm({
+    "client/src/markdown.mjs"() {
+      "use strict";
+      init_video_embed();
+      init_content_blocks();
+      init_tweet_embed();
+      init_image_attrs();
+      init_list_items();
+      init_underscore_emphasis();
+      EMBED_RELAY = "https://gbti.network/embed/";
+      SITE_ORIGIN = "https://gbti.network";
+      REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+      DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
+      isDangerousAnchorHref = (url) => {
+        const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
+        return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
+      };
+      attrOf2 = (attrs, name) => {
+        const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+        return m ? m[1] : "";
+      };
+      escAttr4 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
+      sanitizeAnchorInner = (html) => String(html ?? "").replace(
+        /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
+        (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
+      );
+      FN_ID = "[A-Za-z0-9_-]+";
+      LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
+      defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+      CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
+      QUOTE_LINE = /^\s*>\s?/;
+      COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
+    }
+  });
+
+  // client-ui/src/image-layout-ui.mjs
+  function imageLayoutPressed(layout, action) {
+    const n = normalizeImageLayout(layout);
+    switch (action) {
+      case "natural":
+        return !n.width;
+      case "full":
+        return n.width === "full";
+      case "left":
+      case "center":
+      case "right":
+        return n.align === action;
+      case "wrap":
+        return !!n.wrap && (n.align === "left" || n.align === "right");
+      default:
+        return false;
+    }
+  }
+  function imageLayoutDisabled(layout, action) {
+    const n = normalizeImageLayout(layout);
+    return action === "wrap" && !(n.align === "left" || n.align === "right");
+  }
+  function imageLayoutButtonsHtml(layout, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
+    return IMAGE_LAYOUT_GROUPS.map((group) => group.map((b) => `<button type="button" data-il="${b.action}" title="${b.title}"` + (imageLayoutPressed(layout, b.action) ? ' aria-pressed="true"' : "") + (imageLayoutDisabled(layout, b.action) ? " disabled" : "") + `>${b.label}</button>`).join("")).join(sep);
+  }
+  function imageLayoutProseCss(scope) {
+    const s = String(scope || "").trim();
+    return `
+  ${s} { display: flow-root; }
+  ${s} img.img-full { display: block; width: 100%; }
+  ${s} img.img-left, ${s} img.img-center, ${s} img.img-right { display: block; }
+  ${s} img.img-left { margin-left: 0; margin-right: auto; }
+  ${s} img.img-right { margin-left: auto; margin-right: 0; }
+  ${s} img.img-center { margin-left: auto; margin-right: auto; }
+  ${s} img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  ${s} img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  ${s} figure { margin: 1.5em auto; text-align: center; }
+  ${s} figure img { display: block; margin: 0 auto; }
+  ${s} figcaption { font-family: var(--f-mono, ui-monospace, monospace); background: var(--tint, rgba(127,127,127,.12)); color: var(--muted, var(--fg-mute)); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
+  ${s} figure.img-full { width: 100%; }
+  ${s} figure.img-full img { width: 100%; }
+  ${s} figure.img-left, ${s} figure.img-center, ${s} figure.img-right { width: fit-content; max-width: 100%; }
+  ${s} figure.img-left { margin-left: 0; margin-right: auto; }
+  ${s} figure.img-right { margin-left: auto; margin-right: 0; }
+  ${s} figure.img-center { margin-left: auto; margin-right: auto; }
+  ${s} figure.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  ${s} figure.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  @media (max-width: 640px) {
+    ${s} img.img-wrap.img-left:not(.img-full), ${s} img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+    ${s} figure.img-wrap.img-left:not(.img-full), ${s} figure.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; width: fit-content; }
+  }
+`;
+  }
+  var IMAGE_LAYOUT_GROUPS, IMAGE_LAYOUT_ROW_CSS;
+  var init_image_layout_ui = __esm({
+    "client-ui/src/image-layout-ui.mjs"() {
+      "use strict";
+      init_image_attrs();
+      IMAGE_LAYOUT_GROUPS = Object.freeze([
+        Object.freeze([{ action: "natural", label: "Natural", title: "Natural size" }, { action: "full", label: "Full width", title: "Span the column" }]),
+        Object.freeze([{ action: "left", label: "Left", title: "Align left" }, { action: "center", label: "Center", title: "Center" }, { action: "right", label: "Right", title: "Align right" }]),
+        Object.freeze([{ action: "wrap", label: "Wrap text", title: "Let the text flow beside the image (left or right only)" }])
+      ]);
+      IMAGE_LAYOUT_ROW_CSS = `
+  .imglay { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .imglay .gbti-stb-sep { display:none; }
+  .imglay button { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;
+    border:1px solid var(--s-line-2); background:transparent; color:var(--s-fg); }
+  .imglay button:hover { border-color:var(--s-green); }
+  .imglay button[aria-pressed="true"] { background:var(--s-tint); color:var(--s-green-fg); border-color:var(--s-green); }
+  .imglay button[disabled] { opacity:.4; cursor:default; }
+`;
+    }
+  });
+
+  // client-ui/src/list-style-ui.mjs
+  function listStylePressed(state, action) {
+    const ordered = !!state?.ordered;
+    const style = state?.style || null;
+    if (action === "ordered") return ordered;
+    if (action === "unordered") return !ordered;
+    if (String(action).startsWith("style:")) {
+      const word = String(action).slice("style:".length);
+      if (styleKind(word) !== (ordered ? "number" : "bullet")) return false;
+      return isDefaultStyle(word) ? !style : style === word;
+    }
+    return false;
+  }
+  function listStyleButtonsHtml(state, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
+    const groups = [LIST_STYLE_GROUPS.kind, state?.ordered ? LIST_STYLE_GROUPS.number : LIST_STYLE_GROUPS.bullet, LIST_STYLE_GROUPS.remove];
+    return groups.map((group) => group.map((b) => `<button type="button" data-la="${b.action}" title="${b.title}"` + (listStylePressed(state, b.action) ? ' aria-pressed="true"' : "") + `>${b.label}</button>`).join("")).join(sep);
+  }
+  function listStyleProseCss(scope) {
+    const s = String(scope || "").trim();
+    return LIST_STYLE_WORDS.filter((w2) => !isDefaultStyle(w2)).map((w2) => `  ${s} ${styleKind(w2) === "number" ? "ol" : "ul"}.list-${w2} > li { list-style: ${w2}; }`).join("\n");
+  }
+  var LIST_STYLE_GROUPS;
+  var init_list_style_ui = __esm({
+    "client-ui/src/list-style-ui.mjs"() {
+      "use strict";
+      init_list_attrs();
+      LIST_STYLE_GROUPS = Object.freeze({
+        kind: Object.freeze([
+          { action: "unordered", label: "Bullets", title: "A bulleted list" },
+          { action: "ordered", label: "Numbers", title: "A numbered list" }
+        ]),
+        bullet: Object.freeze([
+          { action: "style:disc", label: "Disc", title: "Round bullets (the default)" },
+          { action: "style:circle", label: "Circle", title: "Hollow bullets" },
+          { action: "style:square", label: "Square", title: "Square bullets" }
+        ]),
+        number: Object.freeze([
+          { action: "style:decimal", label: "1.", title: "Numbers (the default)" },
+          { action: "style:lower-alpha", label: "a.", title: "Lower-case letters" },
+          { action: "style:upper-alpha", label: "A.", title: "Upper-case letters" },
+          { action: "style:lower-roman", label: "i.", title: "Lower-case roman numerals" },
+          { action: "style:upper-roman", label: "I.", title: "Upper-case roman numerals" }
+        ]),
+        remove: Object.freeze([
+          { action: "unwrap", label: "Remove list", title: "Turn the list into paragraphs, one per item" }
+        ])
+      });
+    }
+  });
+
+  // client-ui/src/block-commit.mjs
+  function readListDom(el, md) {
+    const out = [];
+    const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
+    const classOf = (n) => (typeof n?.getAttribute === "function" ? n.getAttribute("class") : n?.className) || "";
+    const walk2 = (list, depth) => {
+      let style = listStyleFromClass(classOf(list));
+      for (const li of Array.from(list.children || [])) {
+        if (tagOf2(li) !== "LI") continue;
+        const own = String(li.innerHTML ?? "").replace(/<(ul|ol)\b[\s\S]*$/i, "");
+        out.push({ text: md(own), depth, ordered: tagOf2(list) === "OL", ...style ? { style } : {} });
+        style = null;
+        for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
+      }
+    };
+    walk2(el, 0);
+    return out;
+  }
+  function listItemAtSelection(el, sel) {
+    let n = sel?.anchorNode || null;
+    if (n && n.nodeType !== 1) n = n.parentNode;
+    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
+    if (!n || n === el) return { li: null, index: -1 };
+    const all = Array.from(el.querySelectorAll("li"));
+    return { li: n, index: all.indexOf(n) };
+  }
+  function caretAtEndOfItem(li, sel) {
+    if (!li || !sel) return;
+    let last = null;
+    for (const c of Array.from(li.childNodes || [])) {
+      const t = String(c.tagName || "").toUpperCase();
+      if (c.nodeType === 1 && (t === "UL" || t === "OL")) break;
+      last = c;
+    }
+    try {
+      const r = document.createRange();
+      if (last) {
+        r.selectNodeContents(last);
+        r.collapse(false);
+      } else {
+        r.setStart(li, 0);
+        r.collapse(true);
+      }
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch {
+    }
+  }
+  var init_block_commit = __esm({
+    "client-ui/src/block-commit.mjs"() {
+      "use strict";
+      init_image_attrs();
+      init_list_items();
+      init_list_attrs();
+    }
+  });
+
+  // client-ui/src/selection-toolbar.mjs
+  function ensureStyles(host) {
+    const root = host.getRootNode ? host.getRootNode() : document;
+    const target = root && root.nodeType === 11 ? root : document.head;
+    if (!target || target.querySelector(`#${STYLE_ID}`)) return;
+    const el = document.createElement("style");
+    el.id = STYLE_ID;
+    el.textContent = SELECTION_TOOLBAR_CSS;
+    target.appendChild(el);
+  }
+  function linkRel({ nofollow = false, blank: blank2 = false } = {}) {
+    return [nofollow ? "nofollow" : null, blank2 ? "noopener" : null].filter(Boolean).join(" ");
+  }
+  function planLinkEdit({ url = "", text: text2 = "", nofollow = false, blank: blank2 = false, hasExisting = false, existingText = "", remove = false } = {}) {
+    const href = String(url ?? "").trim();
+    if (remove || !href) return hasExisting ? { action: "remove" } : { action: "none" };
+    if (isDangerousUrl(href)) return { action: "reject" };
+    const rel = linkRel({ nofollow, blank: blank2 });
+    const wanted = String(text2 ?? "").trim();
+    return {
+      action: hasExisting ? "update" : "create",
+      href,
+      rel: rel || null,
+      target: blank2 ? "_blank" : null,
+      text: wanted && wanted !== String(existingText ?? "") ? wanted : null
+    };
+  }
+  function createSelectionToolbar({
+    root,
+    host,
+    editableOf,
+    allowInline = () => true,
+    onCommit = () => {
+    },
+    onRetype = null,
+    listItemImages = null,
+    onInsertImage = () => {
+    },
+    imageTools = null,
+    listTools = null
+  }) {
+    const hostEl = () => typeof host === "function" ? host() : host;
+    if (!hostEl()) return { destroy() {
+    }, isPanelOpen: () => false, hide() {
+    }, editLink() {
+    }, showImageTools() {
+    }, showListTools() {
+    } };
+    const mount = (node) => {
+      const h = hostEl();
+      if (h && node.parentNode !== h) h.appendChild(node);
+      return node;
+    };
+    let tb = null;
+    let lp = null;
+    let lk = null;
+    let ip = null;
+    let ik = null;
+    const getSel = () => {
+      try {
+        return root?.getSelection?.() ?? document.getSelection();
+      } catch {
+        return null;
+      }
+    };
+    const place = (node, rect, above) => {
+      const h = hostEl();
+      if (!h) return;
+      ensureStyles(h);
+      mount(node);
+      const hr = h.getBoundingClientRect();
+      node.style.top = `${above ? rect.top - hr.top - 40 : rect.bottom - hr.top + 6}px`;
+      node.style.left = `${Math.max(0, rect.left - hr.left)}px`;
+      node.style.display = "flex";
+    };
+    const hideTb = () => {
+      if (tb) tb.style.display = "none";
+    };
+    const hidePanel = () => {
+      if (lp) lp.style.display = "none";
+      lk = null;
+    };
+    const hideImagePanel = () => {
+      if (ip) ip.style.display = "none";
+      ik = null;
+    };
+    let ib = null;
+    let ibEl = null;
+    let ic3 = null;
+    const hideCaptionPanel = () => {
+      if (ic3) ic3.style.display = "none";
+    };
+    const hideImageBar = () => {
+      if (ib) ib.style.display = "none";
+      ibEl = null;
+      hideCaptionPanel();
+    };
+    let lb = null;
+    let lbEl = null;
+    let lbIndex = 0;
+    const hideListBar = () => {
+      if (lb) lb.style.display = "none";
+      lbEl = null;
+    };
+    const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
+    function buildTb() {
+      const el = document.createElement("div");
+      el.className = "gbti-stb";
+      let html = '<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>';
+      if (typeof onRetype === "function") {
+        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="h2" title="Heading">H2</button><button type="button" data-w="h3" title="Subheading">H3</button><button type="button" data-w="p" title="Body text">P</button>';
+      }
+      if (typeof listItemImages === "function") {
+        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="image" title="Insert image">Img</button>';
+      }
+      el.innerHTML = html;
+      el.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        wrap(b.dataset.w);
+      }));
+      return el;
+    }
+    function update() {
+      if (anyPanelOpen()) return;
+      const sel = getSel();
+      let list = null;
+      try {
+        list = listTools && sel && sel.rangeCount > 0 ? listTools.listOf(sel.anchorNode) : null;
+      } catch {
+        list = null;
+      }
+      if (!list) hideListBar();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        hideTb();
+        if (list) showListTools(list);
+        return;
+      }
+      const el = editableOf(sel.anchorNode);
+      if (!el) {
+        hideTb();
+        if (list) showListTools(list);
+        return;
+      }
+      try {
+        if (!tb) tb = buildTb();
+        place(tb, sel.getRangeAt(0).getBoundingClientRect(), true);
+      } catch {
+        hideTb();
+      }
+      if (list) showListTools(list, void 0, { lift: !!tb && tb.style.display !== "none" });
+    }
+    function wrap(w2) {
+      const sel = getSel();
+      if (!sel || sel.isCollapsed) return;
+      const el = editableOf(sel.anchorNode);
+      if (!el) return;
+      if (w2 === "image") {
+        openImagePanel(sel, el);
+        return;
+      }
+      if (w2 === "h2" || w2 === "h3" || w2 === "p") {
+        if (typeof onRetype === "function") onRetype(el, w2 === "p" ? "paragraph" : "heading", w2 === "h2" ? 2 : w2 === "h3" ? 3 : null);
+        hideTb();
+        return;
+      }
+      if (!allowInline(el)) return;
+      if (w2 === "link") {
+        openPanel(sel, el);
+        return;
+      }
+      if (w2 === "code") toggleInline(sel, "code");
+      else if (typeof document !== "undefined") document.execCommand(w2);
+      onCommit(el, "format");
+      hideTb();
+    }
+    function toggleInline(sel, tag) {
+      if (!sel.rangeCount || sel.isCollapsed) return;
+      const r = sel.getRangeAt(0);
+      const at3 = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+      const existing = at3 && at3.closest ? at3.closest(tag) : null;
+      if (existing) {
+        existing.replaceWith(document.createTextNode(existing.textContent));
+        return;
+      }
+      const node = document.createElement(tag);
+      try {
+        node.appendChild(r.extractContents());
+        r.insertNode(node);
+      } catch {
+      }
+    }
+    function anchorIn(range, stopAt) {
+      let n = range.commonAncestorContainer;
+      n = n && n.nodeType === 1 ? n : n && n.parentNode;
+      while (n && n !== root && n !== stopAt) {
+        if (n.tagName === "A") return n;
+        n = n.parentNode;
+      }
+      return null;
+    }
+    function buildPanel() {
+      const el = document.createElement("div");
+      el.className = "gbti-lp";
+      el.innerHTML = '<input type="text" data-lk-text placeholder="Link text" /><input type="url" data-lk-url placeholder="https://..." /><label><input type="checkbox" data-lk-nofollow /> nofollow</label><label><input type="checkbox" data-lk-blank /> New tab</label><div class="lp-btns"><button type="button" data-lk-apply>Apply</button><button type="button" data-lk-remove title="Remove link">Remove</button></div>';
+      el.addEventListener("mousedown", (e) => {
+        if (e.target.tagName !== "INPUT") e.preventDefault();
+      });
+      el.querySelector("[data-lk-apply]").addEventListener("click", () => apply(false));
+      el.querySelector("[data-lk-remove]").addEventListener("click", () => apply(true));
+      el.querySelectorAll('input[type="text"], input[type="url"]').forEach((i) => i.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          apply(false);
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hidePanel();
+        }
+      }));
+      return el;
+    }
+    function openPanel(sel, el) {
+      const range = sel.getRangeAt(0).cloneRange();
+      const existing = anchorIn(range, el);
+      lk = { range, el, existing };
+      if (!lp) lp = buildPanel();
+      const rel = existing ? existing.getAttribute("rel") || "" : "";
+      lp.querySelector("[data-lk-text]").value = existing ? existing.textContent || "" : String(range.toString() || "");
+      lp.querySelector("[data-lk-url]").value = existing ? existing.getAttribute("href") || "" : "";
+      lp.querySelector("[data-lk-nofollow]").checked = /\bnofollow\b/i.test(rel);
+      lp.querySelector("[data-lk-blank]").checked = existing ? existing.getAttribute("target") === "_blank" : false;
+      lp.querySelector("[data-lk-remove]").style.display = existing ? "" : "none";
+      place(lp, range.getBoundingClientRect(), false);
+      hideTb();
+      setTimeout(() => lp.querySelector("[data-lk-url]").focus(), 0);
+    }
+    function apply(remove) {
+      if (!lk) return;
+      const el = lk.el;
+      const text2 = String(lp.querySelector("[data-lk-text]").value || "").trim();
+      const url = String(lp.querySelector("[data-lk-url]").value || "").trim();
+      const nofollow = lp.querySelector("[data-lk-nofollow]").checked;
+      const blank2 = lp.querySelector("[data-lk-blank]").checked;
+      const plan = planLinkEdit({
+        url,
+        text: text2,
+        nofollow,
+        blank: blank2,
+        hasExisting: !!lk.existing,
+        existingText: lk.existing ? lk.existing.textContent || "" : String(lk.range.toString() || ""),
+        remove
+      });
+      if (plan.action === "reject" || plan.action === "none") {
+        hidePanel();
+        return;
+      }
+      try {
+        el.focus();
+        const s = getSel();
+        s.removeAllRanges();
+        s.addRange(lk.range);
+      } catch {
+      }
+      const attrs = (a) => {
+        a.setAttribute("href", plan.href);
+        if (plan.rel) a.setAttribute("rel", plan.rel);
+        else a.removeAttribute("rel");
+        if (plan.target) a.setAttribute("target", plan.target);
+        else a.removeAttribute("target");
+      };
+      if (plan.action === "remove") {
+        const a = lk.existing;
+        if (a && a.parentNode) {
+          while (a.firstChild) a.parentNode.insertBefore(a.firstChild, a);
+          a.remove();
+        }
+      } else if (plan.action === "update") {
+        const a = lk.existing;
+        attrs(a);
+        if (plan.text !== null) a.textContent = plan.text;
+      } else {
+        const a = document.createElement("a");
+        attrs(a);
+        try {
+          a.appendChild(lk.range.extractContents());
+          if (plan.text !== null) a.textContent = plan.text;
+          lk.range.insertNode(a);
+        } catch {
+        }
+      }
+      hidePanel();
+      onCommit(el, "link");
+    }
+    function buildImagePanel() {
+      const el = document.createElement("div");
+      el.className = "gbti-lp gbti-ip";
+      el.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div><div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
+      el.addEventListener("mousedown", (e) => {
+        if (!(e.target.closest && e.target.closest(".ip-thumb"))) e.preventDefault();
+      });
+      return el;
+    }
+    function openImagePanel(sel, el) {
+      const range = sel.getRangeAt(0).cloneRange();
+      ik = { el };
+      if (!ip) ip = buildImagePanel();
+      const grid = ip.querySelector("[data-ip-grid]");
+      const empty = ip.querySelector("[data-ip-empty]");
+      grid.textContent = "";
+      let images = [];
+      try {
+        images = listItemImages() || [];
+      } catch {
+        images = [];
+      }
+      empty.hidden = images.length > 0;
+      for (const img of images) {
+        const ref = String(img?.ref ?? img?.src ?? "").trim();
+        if (!ref) continue;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ip-thumb";
+        b.title = String(img?.name || ref);
+        const im = document.createElement("img");
+        im.src = String(img?.src || ref);
+        im.alt = "";
+        const cap = document.createElement("span");
+        cap.textContent = String(img?.name || "");
+        b.append(im, cap);
+        const alt = String(img?.alt ?? img?.name ?? "").replace(/\.[a-z0-9]+$/i, "");
+        b.addEventListener("click", () => {
+          const target = ik?.el;
+          hideImagePanel();
+          if (target) onInsertImage(target, { ref, alt });
+        });
+        grid.appendChild(b);
+      }
+      place(ip, range.getBoundingClientRect(), false);
+      hideTb();
+    }
+    const layoutOfEl = (el) => {
+      try {
+        return typeof imageTools?.layoutOf === "function" && imageTools.layoutOf(el) || {};
+      } catch {
+        return {};
+      }
+    };
+    function paintImageBar(layout) {
+      if (!ib) return;
+      ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="caption" title="Add or edit the caption under the image">Caption</button><button type="button" data-il="remove" title="Remove this image">Remove</button>';
+    }
+    function buildCaptionPanel() {
+      const el = document.createElement("div");
+      el.className = "gbti-lp gbti-ic";
+      el.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" /><div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button><button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
+      el.addEventListener("mousedown", (e) => {
+        if (e.target.tagName !== "INPUT") e.preventDefault();
+      });
+      const apply2 = (text2) => {
+        const target = ibEl;
+        hideCaptionPanel();
+        if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text2 ?? ""));
+      };
+      el.querySelector("[data-ic-apply]").addEventListener("click", () => apply2(el.querySelector("[data-ic-text]").value));
+      el.querySelector("[data-ic-remove]").addEventListener("click", () => apply2(""));
+      el.querySelector("[data-ic-text]").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          apply2(el.querySelector("[data-ic-text]").value);
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hideCaptionPanel();
+        }
+      });
+      return el;
+    }
+    function openCaptionPanel(target) {
+      if (!ic3) ic3 = buildCaptionPanel();
+      let current = "";
+      try {
+        current = typeof imageTools?.captionOf === "function" ? String(imageTools.captionOf(target) || "") : "";
+      } catch {
+        current = "";
+      }
+      const input = ic3.querySelector("[data-ic-text]");
+      input.value = current;
+      ic3.querySelector("[data-ic-remove]").style.display = current ? "" : "none";
+      const img = target.querySelector && target.querySelector("img") || target;
+      place(ic3, img.getBoundingClientRect(), false);
+      setTimeout(() => input.focus(), 0);
+    }
+    function buildImageBar() {
+      const el = document.createElement("div");
+      el.className = "gbti-stb gbti-imgbar";
+      el.addEventListener("mousedown", (e) => e.preventDefault());
+      el.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("button[data-il]") : null;
+        const target = ibEl;
+        if (!b || !target || b.disabled) return;
+        const act = b.dataset.il;
+        if (act === "remove") {
+          hideImageBar();
+          if (typeof imageTools?.onRemove === "function") imageTools.onRemove(target);
+          return;
+        }
+        if (act === "caption") {
+          openCaptionPanel(target);
+          return;
+        }
+        const next = applyImageLayoutAction(layoutOfEl(target), act);
+        paintImageBar(next);
+        if (typeof imageTools?.onLayout === "function") imageTools.onLayout(target, next);
+      });
+      return el;
+    }
+    function showImageTools(el) {
+      if (!el || !imageTools) return;
+      hideTb();
+      hidePanel();
+      hideImagePanel();
+      hideCaptionPanel();
+      if (!ib) ib = buildImageBar();
+      ibEl = el;
+      paintImageBar(layoutOfEl(el));
+      const img = el.querySelector && el.querySelector("img") || el;
+      place(ib, img.getBoundingClientRect(), true);
+    }
+    const stateOfEl = (el, index) => {
+      try {
+        return typeof listTools?.stateOf === "function" && listTools.stateOf(el, index) || { ordered: false, style: null };
+      } catch {
+        return { ordered: false, style: null };
+      }
+    };
+    function paintListBar(state) {
+      if (lb) lb.innerHTML = listStyleButtonsHtml(state);
+    }
+    function buildListBar() {
+      const el = document.createElement("div");
+      el.className = "gbti-stb gbti-listbar";
+      el.addEventListener("mousedown", (e) => e.preventDefault());
+      el.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("button[data-la]") : null;
+        const target = lbEl;
+        const index = lbIndex;
+        if (!b || !target || b.disabled) return;
+        const act = b.dataset.la;
+        if (act === "unwrap") hideListBar();
+        if (typeof listTools?.onAction === "function") listTools.onAction(target, index, act);
+      });
+      return el;
+    }
+    function showListTools(el, index, { lift = false } = {}) {
+      if (!el || !listTools) return;
+      hideImageBar();
+      hideImagePanel();
+      if (!lb) lb = buildListBar();
+      let idx = Number.isInteger(index) ? index : listItemAtSelection(el, getSel()).index;
+      if (idx < 0) idx = 0;
+      lbEl = el;
+      lbIndex = idx;
+      lb.dataset.item = String(idx);
+      paintListBar(stateOfEl(el, idx));
+      const hr = hostEl().getBoundingClientRect();
+      const blockRect = el.getBoundingClientRect();
+      const pinned = blockRect.top < 48;
+      place(lb, blockRect, true);
+      if (pinned) lb.style.top = `${8 - hr.top}px`;
+      lb.style.left = "auto";
+      lb.style.right = `${Math.max(0, hr.right - blockRect.right)}px`;
+      const extra = lb.offsetHeight - 38;
+      if (extra > 0 && !pinned) lb.style.top = `${parseFloat(lb.style.top) - extra}px`;
+      if (lift && !pinned) lb.style.top = `${parseFloat(lb.style.top) - 44}px`;
+    }
+    const onDocDown = (e) => {
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      if (ib && ib.style.display !== "none" && !(path.includes(ib) || ic3 && path.includes(ic3) || ibEl && path.includes(ibEl))) hideImageBar();
+      if (lb && lb.style.display !== "none" && !(path.includes(lb) || lbEl && path.includes(lbEl))) hideListBar();
+    };
+    document.addEventListener("mousedown", onDocDown, true);
+    const onSel = () => update();
+    document.addEventListener("selectionchange", onSel);
+    return {
+      isPanelOpen: () => anyPanelOpen(),
+      hide() {
+        hideTb();
+        hidePanel();
+        hideImagePanel();
+        hideImageBar();
+        hideListBar();
+      },
+      /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
+      showImageTools(el) {
+        showImageTools(el);
+      },
+      /** Show the list bar above item `index` of a list block (the caret's item when omitted). See listTools. */
+      showListTools(el, index) {
+        showListTools(el, index);
+      },
+      /**
+       * Open the link manager for an existing anchor, without going through the selection. A single click on a link
+       * inside a contenteditable neither navigates (Chrome and Firefox both suppress that) nor shows anything, so
+       * the link reads as dead unless the host wires this. Builds its own Range rather than touching
+       * document.getSelection(), so the selectionchange listener cannot flash the B/I/Link bar in behind the panel.
+       */
+      editLink(el, anchor) {
+        if (!el || !anchor) return;
+        const range = document.createRange();
+        range.selectNodeContents(anchor);
+        hideTb();
+        openPanel({ getRangeAt: () => range }, el);
+      },
+      destroy() {
+        document.removeEventListener("selectionchange", onSel);
+        document.removeEventListener("mousedown", onDocDown, true);
+        tb?.remove();
+        lp?.remove();
+        ip?.remove();
+        ib?.remove();
+        ic3?.remove();
+        lb?.remove();
+        tb = null;
+        lp = null;
+        lk = null;
+        ip = null;
+        ik = null;
+        ib = null;
+        ibEl = null;
+        ic3 = null;
+        lb = null;
+        lbEl = null;
+      }
+    };
+  }
+  var STYLE_ID, SELECTION_TOOLBAR_CSS;
+  var init_selection_toolbar = __esm({
+    "client-ui/src/selection-toolbar.mjs"() {
+      "use strict";
+      init_markdown_blocks();
+      init_image_attrs();
+      init_image_layout_ui();
+      init_list_style_ui();
+      init_block_commit();
+      STYLE_ID = "gbti-selection-toolbar-css";
+      SELECTION_TOOLBAR_CSS = `
+.gbti-stb, .gbti-lp {
+  position: absolute; z-index: 40; display: none;
+  --stb-pop: var(--s-surface, var(--paper, #fff));
+  --stb-pop-2: var(--s-surface-2, var(--paper-2, #f4f3f7));
+  --stb-line: var(--s-line, var(--line, #d9d7e0));
+  --stb-fg: var(--s-fg, var(--fg, #25232b));
+  --stb-fg-soft: var(--s-fg-soft, var(--fg-soft, #55525f));
+  --stb-accent: var(--s-green, var(--green-700, #1f9e5f));
+}
+.gbti-stb { gap: 1px; padding: 4px; border-radius: 10px; background: var(--ink, #25232b); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+.gbti-stb button {
+  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 7px; background: transparent; color: #e6e4ee; cursor: pointer;
+  font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
+}
+.gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
+.gbti-stb button[disabled] { opacity: .4; cursor: default; }
+.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-imgbar button { font-weight: 600; }
+.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-listbar button { font-weight: 600; }
+.gbti-lp {
+  flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
+  background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.28); color: var(--stb-fg);
+}
+.gbti-lp input[type="text"], .gbti-lp input[type="url"] {
+  font: inherit; font-size: 13px; color: var(--stb-fg); background: var(--stb-pop-2);
+  border: 1px solid var(--stb-line); border-radius: 7px; padding: 7px 9px; min-width: 0;
+}
+.gbti-lp label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--stb-fg-soft); cursor: pointer; }
+/* sow-342: THE CHECKBOXES NEED THEIR OWN RULE, and the reason is that every other control here already has one.
+   BASE_CSS (client-ui/src/tokens.mjs) carries a bare \`input, select, textarea { width: 100%; padding: 9px 11px }\`
+   and it is in the shadow root of every client-ui component, this panel included. The two text inputs above
+   outrank it on specificity, so they look right; a checkbox matched nothing here and inherited width:100%. In a
+   flex label that stretches the box to the full panel width, leaves the caption its min-content width, and wraps
+   "New tab" onto two lines with the tick stranded in the middle of the row. Reported by the owner as the link
+   editor "needing help", which is exactly what it looked like.
+   Measured in a browser against the real shadow CSS: as shipped the two boxes render 177px and 190px wide and
+   the second row is 39px tall; with this rule both are 13px and both rows are 20px. */
+.gbti-lp input[type="checkbox"] { width: auto; min-width: 0; flex: none; margin: 0; padding: 0; accent-color: var(--stb-accent); }
+.gbti-lp .lp-btns { display: flex; gap: 8px; margin-top: 2px; }
+.gbti-lp button {
+  font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; padding: 6px 12px;
+  cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
+}
+.gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
+.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
+.gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ic { min-width: 320px; }
+.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
+.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
+.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
+.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
+.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
+.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
+`;
+    }
+  });
+
+  // client-ui/src/embed-lightbox.mjs
+  function fallbackDialog() {
+    let dlg = document.getElementById(FALLBACK_ID);
+    if (dlg) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.id = FALLBACK_ID;
+    dlg.setAttribute("aria-label", "Video");
+    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
+    dlg.innerHTML = "<style>#" + FALLBACK_ID + "::backdrop{background:rgba(20,19,24,.88)}#" + FALLBACK_ID + "[open]{display:flex;align-items:center;justify-content:center}#" + FALLBACK_ID + " .f{width:min(92vw,1100px);aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.55)}#" + FALLBACK_ID + " iframe{width:100%;height:100%;border:0}#" + FALLBACK_ID + ' .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><div class="f"><iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.addEventListener("close", () => {
+      const f = dlg.querySelector("iframe");
+      if (f) f.removeAttribute("src");
+    });
+    document.body.appendChild(dlg);
+    return dlg;
+  }
+  function autoplaySrc(src) {
+    const s = String(src || "");
+    if (!s) return "";
+    return s + (s.includes("?") ? "&" : "?") + "autoplay=1";
+  }
+  function openEmbedLightbox(src) {
+    if (typeof document === "undefined" || !src) return false;
+    if (document.querySelector("[data-lightbox-root]")) {
+      document.dispatchEvent(new CustomEvent("gbti-embed-open", { bubbles: true, composed: true, detail: { src } }));
+      return true;
+    }
+    const dlg = fallbackDialog();
+    if (typeof dlg.showModal !== "function") {
+      window.open(src, "_blank", "noopener");
+      return false;
+    }
+    const f = dlg.querySelector("iframe");
+    if (f) f.src = autoplaySrc(src);
+    dlg.showModal();
+    return true;
+  }
+  function wireEmbedPosters(root) {
+    if (!root || typeof root.querySelectorAll !== "function") return 0;
+    let n = 0;
+    for (const btn of root.querySelectorAll(".md-embed-poster .md-embed-open")) {
+      if (btn.dataset.lbWired) continue;
+      btn.dataset.lbWired = "1";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const box = btn.closest(".md-embed-poster");
+        openEmbedLightbox(box?.dataset.embedSrc || "");
+      });
+      n++;
+    }
+    return n;
+  }
+  var FALLBACK_ID, EMBED_POSTER_CSS;
+  var init_embed_lightbox = __esm({
+    "client-ui/src/embed-lightbox.mjs"() {
+      "use strict";
+      FALLBACK_ID = "gbti-embed-lightbox";
+      EMBED_POSTER_CSS = `
+  .md-embed { position:relative; width:100%; margin:.6em 0 1em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+  .md-embed.md-embed-portrait { aspect-ratio:9/16; max-width:360px; }
+  .md-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .md-embed-open { position:absolute; inset:0; width:100%; height:100%; display:block; padding:0; border:0; background:#111; cursor:pointer; }
+  .md-embed-thumb { width:100%; height:100%; object-fit:cover; display:block; }
+  .md-embed-panel { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font:600 14px/1 var(--f-mono, ui-monospace, monospace); letter-spacing:.08em; text-transform:uppercase; }
+  .md-embed-play { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:999px; background:rgba(0,0,0,.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(0,0,0,.4); transition:background .15s ease, transform .15s ease; }
+  .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
+`;
+    }
+  });
+
+  // client-ui/src/prose-editor-core.mjs
+  function commentBodyTooLong(md) {
+    try {
+      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
+    } catch {
+      return String(md ?? "").length > COMMENT_MAX_BYTES;
+    }
+  }
+  function editorHtmlFromMarkdown(md) {
+    const html = renderMarkdown(String(md ?? ""), { autoEmbed: true }).trim();
+    return html || "<p><br></p>";
+  }
+  function codeText(el) {
+    const html = String(el?.innerHTML ?? "");
+    const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    return t.replace(/\n+$/, "");
+  }
+  function codeLang(pre) {
+    const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
+    const el = code || pre;
+    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
+    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
+  }
+  function walk(node, out) {
+    let buf = "";
+    const flush = () => {
+      const t = inline3(buf);
+      if (t.trim()) out.push(t);
+      buf = "";
+    };
+    for (const c of kids(node)) {
+      if (c.nodeType === TEXT) {
+        buf += escapeText(c.textContent);
+        continue;
+      }
+      if (c.nodeType !== ELEMENT) continue;
+      if (!isBlock(c)) {
+        if (tagOf(c) === "BR") {
+          buf += "<br>";
+          continue;
+        }
+        buf += String(c.outerHTML ?? "");
+        continue;
+      }
+      flush();
+      blockOf(c, out);
+    }
+    flush();
+  }
+  function blockOf(n, out) {
+    const t = tagOf(n);
+    if (isCard(n)) {
+      out.push(attr(n, "data-embed-url").trim());
+      return;
+    }
+    if (t === "P" || t === "DIV" || t === "SECTION" || t === "ARTICLE" || t === "FIGURE") {
+      if (hasBlockChild(n)) {
+        walk(n, out);
+        return;
+      }
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(text2);
+      return;
+    }
+    if (t === "BLOCKQUOTE") {
+      const inner = [];
+      if (hasBlockChild(n)) walk(n, inner);
+      else {
+        const text2 = inline3(n.innerHTML);
+        if (text2.trim()) inner.push(text2);
+      }
+      const paras = flat(inner);
+      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
+      return;
+    }
+    if (t === "UL" || t === "OL") {
+      const items = [];
+      for (const li of kids(n)) {
+        if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
+        let text2;
+        if (hasBlockChild(li)) {
+          const inner = [];
+          walk(li, inner);
+          text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
+        } else text2 = inline3(li.innerHTML);
+        if (text2.trim()) items.push(text2);
+      }
+      if (!items.length) return;
+      out.push(items.map((it2, i) => t === "OL" ? `${i + 1}. ${it2}` : `- ${it2}`).join("\n"));
+      return;
+    }
+    if (t === "PRE") {
+      const { el, lang } = codeLang(n);
+      out.push("```" + lang + "\n" + codeText(el) + "\n```");
+      return;
+    }
+    if (/^H[1-6]$/.test(t)) {
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
+      return;
+    }
+    if (t === "HR") {
+      out.push("---");
+      return;
+    }
+    if (t === "LI") {
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(`- ${text2}`);
+      return;
+    }
+    if (t === "TABLE") {
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(text2);
+      return;
+    }
+  }
+  function domToMarkdown(root) {
+    const out = [];
+    walk(root, out);
+    const blocks2 = [];
+    let run = null;
+    const closeRun = () => {
+      if (!run) return;
+      if (run.length) blocks2.push(run.join("\n>\n"));
+      run = null;
+    };
+    for (const b of out) {
+      if (b && typeof b === "object" && b.quote) {
+        run ||= [];
+        if (b.text) run.push(b.text);
+        continue;
+      }
+      closeRun();
+      if (typeof b === "string" && b.trim()) blocks2.push(b);
+    }
+    closeRun();
+    return blocks2.join("\n\n");
+  }
+  var COMMENT_MAX_BYTES, PROSE_CONTROLS, ELEMENT, TEXT, BLOCK_TAGS, tagOf, attr, kids, escapeText, isCard, isBlock, hasBlockChild, flat, inline3;
+  var init_prose_editor_core = __esm({
+    "client-ui/src/prose-editor-core.mjs"() {
+      "use strict";
+      init_markdown_blocks();
+      init_markdown();
+      COMMENT_MAX_BYTES = 8e3;
+      PROSE_CONTROLS = Object.freeze([
+        { act: "bold", label: "Bold", key: "B" },
+        { act: "italic", label: "Italic", key: "I" },
+        { act: "code", label: "Inline code" },
+        { act: "link", label: "Link" },
+        null,
+        { act: "quote", label: "Quote" },
+        { act: "ul", label: "Bulleted list" },
+        { act: "ol", label: "Numbered list" },
+        { act: "codeblock", label: "Code block" },
+        { act: "video", label: "Video" }
+      ]);
+      ELEMENT = 1;
+      TEXT = 3;
+      BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "DIV", "BLOCKQUOTE", "UL", "OL", "LI", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "FIGURE", "SECTION", "ARTICLE"]);
+      tagOf = (n) => String(n?.tagName || "").toUpperCase();
+      attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
+      kids = (n) => Array.from(n?.childNodes || []);
+      escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
+      isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
+      hasBlockChild = (n) => kids(n).some(isBlock);
+      flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+      inline3 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
+    }
+  });
+
+  // client-ui/src/elements/gbti-prose-editor.mjs
+  var ic2, svg4, CSS7, GbtiProseEditor;
+  var init_gbti_prose_editor = __esm({
+    "client-ui/src/elements/gbti-prose-editor.mjs"() {
+      "use strict";
+      init_base();
+      init_video_embed();
+      init_selection_toolbar();
+      init_embed_lightbox();
+      init_prose_editor_core();
+      ic2 = {
+        code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+        quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+        ul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+        ol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+        codeblock: '<rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9.5l-2.5 2.5 2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+        video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+        x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      };
+      svg4 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
+      CSS7 = `
+  :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
+  .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .box:focus-within { border-color: var(--brand); }
+  /* The header: small, muted, brand on hover. Quiet by design (owner, 2026-09-11). */
+  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .hdr button { width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer; font: 700 13px/1 var(--font-body); }
+  .hdr button:hover, .hdr button:focus-visible { color: var(--brand); background: rgba(31,158,95,.1); outline: 0; }
+  .hdr button svg { width: 16px; height: 16px; }
+  .hdr .k-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
+  .hdr .sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+  .vid { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .vid[hidden] { display: none; }
+  .vid input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); }
+  .vid input.bad { border-color: #c0392b; }
+  .vid button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+  .vid button.vid-add { border-color: var(--brand); background: var(--brand); color: #fff; }
+  .surface { position: relative; min-height: 96px; padding: 10px 12px; font-size: 14.5px; line-height: 1.6; outline: 0; caret-color: var(--brand); word-break: break-word; }
+  .surface.empty::before { content: attr(data-ph); position: absolute; left: 12px; top: 10px; color: var(--muted); pointer-events: none; }
+  .surface p, .surface div { margin: 0 0 .7em; }
+  .surface > :last-child { margin-bottom: 0; }
+  .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+  .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface blockquote > :last-child { margin-bottom: 0; }
+  .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
+  .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
+  .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
+  .surface pre code { background: none; padding: 0; font-size: inherit; }
+  .surface a { color: var(--brand); }
+  .surface strong { font-weight: 700; }
+  ${EMBED_POSTER_CSS}
+  .surface .md-embed { margin: .4em 0 .9em; }
+  .surface .md-embed .md-embed-open { cursor: default; }
+  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
+  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
+  .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
+  .pe-x svg { width: 15px; height: 15px; }
+  .pe-x:hover { background: #c0392b; }
+`;
+      GbtiProseEditor = class extends GbtiElement {
+        /** Markdown in, markdown out. The surface is read back on every get, so the value is always current. */
+        get value() {
+          const s = this._surface();
+          return s ? domToMarkdown(s) : String(this._pending ?? "");
+        }
+        set value(md) {
+          this._pending = String(md ?? "");
+          if (this._surface()) this._load(this._pending);
+        }
+        get placeholder() {
+          return this.getAttribute("placeholder") || "Write a comment";
+        }
+        _surface() {
+          return this.$("[data-surface]");
+        }
+        render() {
+          if (this._rendered) return;
+          this._rendered = true;
+          const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg4(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
+          this.set(this.css(CSS7) + `<div class="box" data-box>
+      <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
+      <div class="vid" data-vid hidden>
+        <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
+        <button type="button" class="vid-add" data-vid-add>Add</button>
+        <button type="button" data-vid-cancel>Cancel</button>
+      </div>
+      <div class="surface" contenteditable="true" data-surface data-ph="${esc2(this.placeholder)}" role="textbox" aria-multiline="true"></div>
+    </div>`);
+          this._wire();
+          this._load(this._pending ?? "");
+        }
+        _load(md) {
+          const s = this._surface();
+          if (!s) return;
+          s.innerHTML = editorHtmlFromMarkdown(md);
+          this._decorateCards();
+          this._syncEmpty();
+        }
+        /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
+         *  removes it whole. */
+        _decorateCards() {
+          for (const card of this.$$("[data-surface] .md-embed, [data-surface] .md-tweet")) {
+            if (card.dataset.peCard) continue;
+            card.dataset.peCard = "1";
+            card.setAttribute("contenteditable", "false");
+            const what = card.classList.contains("md-tweet") ? "Remove post" : "Remove video";
+            const x = document.createElement("button");
+            x.type = "button";
+            x.className = "pe-x";
+            x.title = what;
+            x.setAttribute("aria-label", what);
+            x.innerHTML = svg4("x");
+            x.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              card.remove();
+              this._changed();
+            });
+            card.appendChild(x);
+          }
+        }
+        _syncEmpty() {
+          const s = this._surface();
+          if (s) s.classList.toggle("empty", !String(this.value || "").trim());
+        }
+        _changed() {
+          this._syncEmpty();
+          this.emit("input");
+        }
+        _sel() {
+          try {
+            return (this.root.getSelection ? this.root.getSelection() : null) || document.getSelection();
+          } catch {
+            return document.getSelection();
+          }
+        }
+        /** The nearest ancestor of `node` with this tag, stopping at the surface. */
+        _closest(node, tag) {
+          const s = this._surface();
+          let n = node && node.nodeType === 1 ? node : node?.parentNode;
+          while (n && n !== s) {
+            if (String(n.tagName || "").toUpperCase() === tag) return n;
+            n = n.parentNode;
+          }
+          return null;
+        }
+        /** The top-level block of the surface that holds `node`. */
+        _blockAt(node) {
+          const s = this._surface();
+          let n = node;
+          while (n && n.parentNode && n.parentNode !== s) n = n.parentNode;
+          return n && n.parentNode === s ? n : null;
+        }
+        _wire() {
+          const surface = this._surface();
+          if (!surface) return;
+          this._tb = createSelectionToolbar({ root: this.root, host: () => this.$("[data-box]"), editableOf: () => null, onCommit: () => this._changed() });
+          this.$$("[data-act]").forEach((b) => {
+            b.addEventListener("mousedown", (e) => e.preventDefault());
+            b.addEventListener("click", () => this._act(b.dataset.act));
+          });
+          surface.addEventListener("input", () => this._changed());
+          surface.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+            if (t) document.execCommand("insertText", false, t);
+          });
+          surface.addEventListener("keydown", (e) => this._key(e));
+          this.$("[data-vid-add]")?.addEventListener("click", () => this._addVideo());
+          this.$("[data-vid-cancel]")?.addEventListener("click", () => this._toggleVideo(false));
+          this.$("[data-vid-url]")?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              this._addVideo();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              this._toggleVideo(false);
+            }
+          });
+        }
+        _act(act) {
+          const surface = this._surface();
+          if (!surface) return;
+          if (act === "video") {
+            this._toggleVideo(true);
+            return;
+          }
+          surface.focus();
+          switch (act) {
+            case "bold":
+              document.execCommand("bold");
+              break;
+            case "italic":
+              document.execCommand("italic");
+              break;
+            case "code":
+              this._toggleCode();
+              break;
+            case "link":
+              this._link();
+              return;
+            // commits through the panel
+            case "quote":
+              this._formatBlock("BLOCKQUOTE");
+              break;
+            case "codeblock":
+              this._formatBlock("PRE");
+              break;
+            case "ul":
+              document.execCommand("insertUnorderedList");
+              break;
+            case "ol":
+              document.execCommand("insertOrderedList");
+              break;
+            default:
+              return;
+          }
+          this._changed();
+        }
+        /** Quote and code block toggle: the same control puts a block back to a paragraph. */
+        _formatBlock(tag) {
+          const sel = this._sel();
+          const inside = sel && this._closest(sel.anchorNode, tag);
+          const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
+          if (line) {
+            this._liftLine(inside, line);
+            return;
+          }
+          document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
+        }
+        /** The P or DIV directly inside `quote` that holds `node`, or null. */
+        _quoteLine(quote, node) {
+          let n = node;
+          while (n && n.parentNode !== quote) n = n.parentNode;
+          return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
+        }
+        /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
+         *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
+         *  back to markdown (measured in Chrome, 2026-09-16). */
+        _liftLine(quote, line) {
+          const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
+          const rest = document.createElement("blockquote");
+          while (line.nextSibling) rest.appendChild(line.nextSibling);
+          const p = document.createElement("p");
+          while (line.firstChild) p.appendChild(line.firstChild);
+          if (!p.firstChild) p.innerHTML = "<br>";
+          line.remove();
+          quote.after(p);
+          if (has(rest)) p.after(rest);
+          if (!has(quote)) quote.remove();
+          try {
+            const r = document.createRange();
+            r.selectNodeContents(p);
+            r.collapse(false);
+            const s = this._sel();
+            s.removeAllRanges();
+            s.addRange(r);
+          } catch {
+          }
+        }
+        /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
+        _toggleCode() {
+          const sel = this._sel();
+          if (!sel || !sel.rangeCount) return;
+          const existing = this._closest(sel.anchorNode, "CODE");
+          if (existing && !this._closest(existing, "PRE")) {
+            existing.replaceWith(document.createTextNode(existing.textContent));
+            return;
+          }
+          if (sel.isCollapsed) return;
+          const r = sel.getRangeAt(0);
+          const node = document.createElement("code");
+          try {
+            node.appendChild(r.extractContents());
+            r.insertNode(node);
+          } catch {
+          }
+        }
+        /** Link: the panel over the anchor the selection is in, or a new anchor around the selection. */
+        _link() {
+          const sel = this._sel();
+          if (!sel || !sel.rangeCount) return;
+          let a = this._closest(sel.anchorNode, "A");
+          if (!a) {
+            if (sel.isCollapsed) return;
+            const r = sel.getRangeAt(0);
+            a = document.createElement("a");
+            a.setAttribute("href", "");
+            try {
+              a.appendChild(r.extractContents());
+              r.insertNode(a);
+            } catch {
+              return;
+            }
+          }
+          this._tb?.editLink(this._surface(), a);
+        }
+        _key(e) {
+          if (e.key !== "Enter" || e.shiftKey) return;
+          const sel = this._sel();
+          const pre = sel && this._closest(sel.anchorNode, "PRE");
+          if (pre) {
+            e.preventDefault();
+            const last = pre.lastChild;
+            const prev = last?.previousSibling;
+            const isBr = (n) => n && n.nodeType === 1 && String(n.tagName).toUpperCase() === "BR";
+            if (isBr(last) && isBr(prev) && sel.isCollapsed && this._closest(sel.anchorNode, "PRE") === pre && !sel.anchorNode.nextSibling) {
+              last.remove();
+              prev.remove();
+              const p = document.createElement("p");
+              p.innerHTML = "<br>";
+              pre.after(p);
+              this._caretIn(p);
+            } else document.execCommand("insertLineBreak");
+            this._changed();
+            return;
+          }
+          const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
+          if (quote && sel.isCollapsed) {
+            const line = this._quoteLine(quote, sel.anchorNode);
+            if (!String((line || quote).textContent || "").trim()) {
+              e.preventDefault();
+              if (line) this._liftLine(quote, line);
+              else {
+                const p = document.createElement("p");
+                p.innerHTML = "<br>";
+                quote.replaceWith(p);
+                this._caretIn(p);
+              }
+              this._changed();
+            }
+          }
+        }
+        _caretIn(el) {
+          try {
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            r.collapse(true);
+            const sel = this._sel();
+            sel.removeAllRanges();
+            sel.addRange(r);
+          } catch {
+          }
+        }
+        _toggleVideo(show) {
+          const row = this.$("[data-vid]");
+          const input = this.$("[data-vid-url]");
+          if (!row || !input) return;
+          if (show) {
+            const sel = this._sel();
+            this._vidAnchor = sel && sel.anchorNode ? this._blockAt(sel.anchorNode) : null;
+            row.hidden = false;
+            input.value = "";
+            input.classList.remove("bad");
+            setTimeout(() => input.focus(), 0);
+          } else {
+            row.hidden = true;
+            this._surface()?.focus();
+          }
+        }
+        /** The link becomes its own line in the markdown and renders as the poster at once. */
+        _addVideo() {
+          const input = this.$("[data-vid-url]");
+          const surface = this._surface();
+          if (!input || !surface) return;
+          const url = String(input.value || "").trim();
+          if (!url || !embedUrl(url)) {
+            input.classList.add("bad");
+            input.focus();
+            return;
+          }
+          const p = document.createElement("p");
+          p.textContent = url;
+          const anchor = this._vidAnchor && this._vidAnchor.parentNode === surface ? this._vidAnchor : null;
+          if (anchor) anchor.after(p);
+          else surface.appendChild(p);
+          this._load(this.value);
+          this._toggleVideo(false);
+          const cards = this.$$("[data-surface] .md-embed").filter((c) => c.getAttribute("data-embed-url") === url);
+          const card = cards[cards.length - 1];
+          if (card) {
+            let next = card.nextElementSibling;
+            if (!next || String(next.tagName).toUpperCase() !== "P") {
+              next = document.createElement("p");
+              next.innerHTML = "<br>";
+              card.after(next);
+            }
+            surface.focus();
+            this._caretIn(next);
+          }
+          this._changed();
+        }
+      };
+      define("gbti-prose-editor", GbtiProseEditor);
+    }
+  });
+
+  // client-ui/src/elements/community-css.mjs
+  var COMMUNITY_CSS, KIND_ICON;
+  var init_community_css = __esm({
+    "client-ui/src/elements/community-css.mjs"() {
+      "use strict";
+      COMMUNITY_CSS = `
+:host {
+  --fg: inherit; --fg-mute: inherit; --line: inherit; --line-2: inherit; --green-tint: inherit;
+  --tooltip-bg: inherit; --tooltip-fg: inherit; --tooltip-border: inherit;
+  --text: var(--fg); --muted: var(--fg-soft); --panel: var(--paper); --bg: var(--paper); --hover: var(--tint);
+  --cm-btn: #137d4a; --cm-btn-hover: #0f6f40; --cm-hi: var(--green); --cm-lo: var(--green-bar);
+  display: block; color: var(--fg); font: 16px/1.5 var(--f-sans); min-width: 0;
+}
+[hidden] { display: none !important; }
+h1, h2, h3 { margin: 0; color: inherit; font-family: var(--f-sans); text-transform: none; letter-spacing: normal; font-size: inherit; }
+label { display: inline; margin: 0; font-size: inherit; color: inherit; }
+input, select, textarea { width: auto; font: inherit; color: var(--fg); background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; }
+input[type="radio"], input[type="checkbox"] { width: 20px; height: 20px; padding: 0; margin: 0; accent-color: #1f9e5f; flex: none; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+button { background: none; color: inherit; border: 0; border-radius: 8px; padding: 0; font: inherit; font-weight: inherit; cursor: pointer; }
+button:hover { background: none; }
+button[disabled] { opacity: .5; cursor: not-allowed; }
+a { color: var(--green-700); }
+a:hover { color: var(--green); }
+
+.cm-disp { font-family: var(--f-display); font-weight: 700; }
+.cm-mono { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.cm-mute { color: var(--fg-mute); }
+.cm-soft { color: var(--fg-soft); }
+
+.cm-badge { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.cm-badge svg { width: 14px; height: 14px; flex: none; }
+.cm-badge.k-poll, .cm-badge.k-typed { background: var(--green-tint); color: var(--green-700); }
+.cm-badge.k-topic { background: var(--blue-tint); color: var(--blue-700); }
+
+.cm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.5; }
+.cm-pill.live { background: var(--green-tint); color: var(--green-700); }
+.cm-pill.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.cm-pill.muted { background: var(--tint); color: var(--fg-soft); }
+.cm-pill.outline { border: 1px solid var(--green-700); color: var(--green-700); padding: 1px 7px; }
+
+.cm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 22px; border-radius: 8px;
+  background: var(--cm-btn); color: #fff; font-weight: 700; font-size: 15px; text-decoration: none; white-space: nowrap; }
+.cm-btn:hover { background: var(--cm-btn-hover); color: #fff; }
+.cm-btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--fg); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.cm-btn2:hover { background: var(--tint); color: var(--fg); }
+.cm-btn2.sm { min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 6px; }
+.cm-quiet { color: var(--fg-soft); font-weight: 600; font-size: 14px; padding: 6px 4px; text-decoration: underline; text-underline-offset: 3px; }
+.cm-quiet:hover { color: var(--fg); }
+.cm-danger { color: var(--err); }
+.cm-danger:hover { color: var(--err); }
+
+.cm-card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+.cm-raised { border-color: var(--line-2); box-shadow: 0 4px 14px rgba(37,35,43,.07); }
+.cm-av { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--tint); display: inline-grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: var(--fg-soft); letter-spacing: .02em; }
+.cm-av.lg { width: 32px; height: 32px; font-size: 11px; }
+.cm-faces { display: inline-flex; }
+.cm-faces .cm-av { width: 26px; height: 26px; border: 2px solid var(--paper); margin-left: -6px; }
+.cm-faces .cm-av:first-child { margin-left: 0; }
+
+.cm-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; background: var(--amber-tint); color: var(--amber-text); font-size: 14px; }
+.cm-err { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; background: var(--err-tint); color: var(--err); font-size: 14px; }
+.cm-err strong { display: block; }
+.cm-ok { color: var(--green-700); font-size: 14px; font-weight: 600; }
+
+.cm-bars { display: flex; flex-direction: column; gap: 12px; }
+.cm-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: baseline; }
+.cm-bar .lbl { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+.cm-bar .num { font-family: var(--f-mono); font-size: 13px; color: var(--fg-soft); white-space: nowrap; }
+.cm-bar .trk { display: block; grid-column: 1 / -1; height: 12px; border-radius: 2px; background: var(--tint); overflow: hidden; }
+.cm-bar .fill { display: block; height: 100%; border-radius: 2px; background: var(--cm-lo); transition: width .3s ease; }
+.cm-bar.lead .lbl { font-weight: 700; }
+.cm-bar.lead .fill { background: var(--cm-hi); }
+.cm-yours { margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--green-700); }
+
+.cm-state { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cm-state h2 { font-size: 22px; font-weight: 700; }
+.cm-state p { margin: 0; max-width: 520px; color: var(--fg-soft); }
+.cm-state.amber { background: var(--amber-tint); border-radius: 12px; }
+.cm-skel { height: 76px; border-radius: 10px; background: var(--tint); opacity: .7; }
+
+@media (max-width: 640px) {
+  .cm-btn { min-height: 44px; padding: 0 18px; }
+}
+`;
+      KIND_ICON = {
+        poll: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+        topic: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-5 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+      };
+      KIND_ICON.typed = KIND_ICON.poll;
+    }
+  });
+
+  // membership/community-shared.mjs
+  var KINDS, KIND_LABEL, isPollKind, STATUSES, STATUS_LABEL2, ACCESS_MODES, REACTIONS, REACTION_NAMES, REACTION_EMOJI, LIMITS, ENC, MAX_IMAGE_BASE64;
+  var init_community_shared = __esm({
+    "membership/community-shared.mjs"() {
+      "use strict";
+      KINDS = Object.freeze(["poll", "typed", "topic"]);
+      KIND_LABEL = Object.freeze({ poll: "Poll", typed: "Typed poll", topic: "Topic" });
+      isPollKind = (kind2) => kind2 === "poll" || kind2 === "typed";
+      STATUSES = Object.freeze(["draft", "live", "closed", "published"]);
+      STATUS_LABEL2 = Object.freeze({ draft: "Draft", live: "Live", closed: "Closed", published: "Results" });
+      ACCESS_MODES = Object.freeze(["all", "chosen"]);
+      REACTIONS = Object.freeze([
+        ["+1", "👍"],
+        ["-1", "👎"],
+        ["laugh", "😄"],
+        ["hooray", "🎉"],
+        ["confused", "😕"],
+        ["heart", "❤️"],
+        ["rocket", "🚀"],
+        ["eyes", "👀"]
+      ]);
+      REACTION_NAMES = Object.freeze(REACTIONS.map((r) => r[0]));
+      REACTION_EMOJI = Object.freeze(Object.fromEntries(REACTIONS));
+      LIMITS = Object.freeze({
+        title: 200,
+        promptBytes: 8e3,
+        optionsMin: 2,
+        optionsMax: 8,
+        option: 120,
+        hint: 80,
+        typedShort: 80,
+        typedLong: 280,
+        meetingLabel: 80,
+        chosenMax: 300,
+        postBytes: 8e3,
+        // the prose editor's cap (client-ui/src/prose-editor-core.mjs COMMENT_MAX_BYTES)
+        postImages: 6,
+        promptImages: 6,
+        imageBytes: 1048576,
+        // 1 MB, the site-wide image cap
+        imageName: 80,
+        groupLabel: 120,
+        unattachedImageHours: 24
+      });
+      ENC = new TextEncoder();
+      MAX_IMAGE_BASE64 = Math.ceil(LIMITS.imageBytes / 3) * 4 + 4;
+    }
+  });
+
+  // client-ui/src/community-core.mjs
+  function initials(name) {
+    const s = String(name || "").replace(/^@/, "").trim();
+    if (!s) return "?";
+    const parts = s.split(/[\s._-]+/).filter(Boolean);
+    const two = parts.length > 1 ? parts[0][0] + parts[1][0] : s.slice(0, 2);
+    return two.toUpperCase();
+  }
+  function meetingDate(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ""));
+    if (!m) return "";
+    const month = MONTHS[Number(m[2]) - 1];
+    return month ? `${month} ${Number(m[3])}` : "";
+  }
+  function meetingText(meeting) {
+    const label = String(meeting?.label || "").trim();
+    if (!label) return "Between meetings";
+    const d = meetingDate(meeting?.date);
+    return d ? `${label}, ${d}` : label;
+  }
+  function statusPill(entry) {
+    const poll = isPollKind(entry?.kind);
+    switch (entry?.status) {
+      case "live":
+        return { tone: "live", text: "Live" };
+      case "closed":
+        return { tone: "muted", text: poll ? "Voting closed" : "Closed" };
+      case "published":
+        return { tone: "outline", text: "Results" };
+      case "draft":
+        return { tone: "muted", text: "Draft" };
+      default:
+        return null;
+    }
+  }
+  function formatBytes2(n) {
+    const b = Number(n) || 0;
+    if (b < 1024 * 1024) return `${Math.max(1, Math.round(b / 1024))} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function uploadProblem({ name, size, type } = {}) {
+    const n = String(name || "That file");
+    if (!IMAGE_TYPES.includes(String(type || ""))) return { title: `${n} is not a picture we can show.`, detail: "Use a PNG, JPG, WebP or GIF." };
+    if ((Number(size) || 0) > LIMITS.imageBytes) return { title: `${n} is ${formatBytes2(size)}.`, detail: "Images can be up to 1 MB. Save a smaller copy and add it again." };
+    return null;
+  }
+  function shoptalkMeetings(now = /* @__PURE__ */ new Date(), { label = "Shop Talk", back = 2, ahead = 4 } = {}) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const toSat = (6 - d.getDay() + 7) % 7;
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + toSat);
+    const out = [];
+    for (let i = -back; i < ahead; i++) {
+      const s = new Date(next.getFullYear(), next.getMonth(), next.getDate() + i * 7);
+      const ymd = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+      out.push({ label, date: ymd, text: `${label}, Saturday ${meetingDate(ymd)}`, next: i === 0 });
+    }
+    return out;
+  }
+  var plural, MONTHS, entryHref, IMAGE_TYPES;
+  var init_community_core = __esm({
+    "client-ui/src/community-core.mjs"() {
+      "use strict";
+      init_community_shared();
+      plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+      MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      entryHref = (id) => `/community/entry/?id=${encodeURIComponent(String(id || ""))}`;
+      IMAGE_TYPES = Object.freeze(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+    }
+  });
+
+  // client-ui/src/elements/gbti-community-editor.mjs
+  var gbti_community_editor_exports = {};
+  __export(gbti_community_editor_exports, {
+    GbtiCommunityEditor: () => GbtiCommunityEditor,
+    meetingText: () => meetingText
+  });
+  var KINDS2, CSS24, GbtiCommunityEditor;
+  var init_gbti_community_editor = __esm({
+    "client-ui/src/elements/gbti-community-editor.mjs"() {
+      "use strict";
+      init_base();
+      init_community_css();
+      init_community_core();
+      init_gbti_prose_editor();
+      KINDS2 = [
+        ["poll", "Poll with choices", "Members pick one answer."],
+        ["typed", "Poll with a typed answer", "Each member types a short answer."],
+        ["topic", "Topic", "Members post text and images beneath your prompt."]
+      ];
+      CSS24 = `
+  dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line-2); border-radius: 14px;
+    background: var(--paper); color: var(--fg); box-shadow: 0 28px 60px rgba(37,35,43,.25); }
+  dialog::backdrop { background: rgba(28,26,33,.55); }
+  .dlg { display: flex; flex-direction: column; max-height: calc(100vh - 50px); }
+  .top { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+  .top h2 { font-family: var(--f-display); font-size: 26px; font-weight: 700; line-height: 1.15; }
+  .top p { margin: 4px 0 0; font-size: 14px; color: var(--fg-mute); overflow-wrap: anywhere; }
+  .top .x { margin-left: auto; width: 36px; height: 36px; border-radius: 8px; font-size: 22px; color: var(--fg-soft); flex: none; }
+  .top .x:hover { background: var(--tint); }
+  .body { padding: 18px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+  .bot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 24px 18px; border-top: 1px solid var(--line); }
+  .bot .msg { flex: 1; min-width: 160px; font-size: 14px; }
+  .lbl { display: block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); margin-bottom: 8px; }
+  .kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .kind { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1.5px solid var(--line-2); border-radius: 10px; text-align: left; background: var(--paper); }
+  .kind:hover { border-color: var(--green); background: var(--paper); }
+  .kind[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); }
+  .kind[aria-pressed="true"]:hover { background: var(--green-tint); }
+  .kind b { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .kind b svg { width: 16px; height: 16px; color: var(--green-700); }
+  .kind span { font-size: 13px; color: var(--fg-soft); }
+  .inp { width: 100%; min-height: 44px; padding: 0 12px; font-size: 15px; font-weight: 500; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .optrow { display: flex; gap: 8px; align-items: center; }
+  .optrow .inp { flex: 1; }
+  .optrow button { width: 34px; height: 34px; border-radius: 8px; color: var(--fg-soft); flex: none; font-size: 16px; }
+  .optrow button:hover { background: var(--tint); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .radio, .check { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; cursor: pointer; padding: 4px 0; }
+  .radio small, .check small { display: block; font-size: 13px; color: var(--fg-mute); }
+  .people { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-2); }
+  .found { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+  .who { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: var(--paper); }
+  .who .nm { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .who .nm small { color: var(--fg-mute); }
+  .pimgs { display: flex; flex-direction: column; gap: 8px; }
+  .pi { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .pi img { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; background: var(--tint); }
+  .pi .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .lockd { font-size: 13px; color: var(--amber-text); }
+  input[type="file"] { display: none; }
+  .bad { color: var(--err); font-weight: 600; }
+  .ok { color: var(--green-700); font-weight: 600; }
+  @media (max-width: 640px) { .kinds, .two { grid-template-columns: 1fr; } .top, .body, .bot { padding-left: 16px; padding-right: 16px; } }
+`;
+      GbtiCommunityEditor = class extends GbtiElement {
+        constructor() {
+          super();
+          this._mode = null;
+          this._f = null;
+          this._members = null;
+          this._q = "";
+        }
+        skipClientRender() {
+          return this._mode != null;
+        }
+        render() {
+          if (this._mode) this.draw();
+        }
+        openCreate() {
+          this._mode = "create";
+          this._f = {
+            kind: "poll",
+            title: "",
+            prompt: "",
+            options: ["", ""],
+            hint: "",
+            answerLength: "short",
+            countMatching: true,
+            changeable: true,
+            publishOnClose: false,
+            imagesAllowed: true,
+            meeting: this.defaultMeeting(),
+            access: { mode: "all", members: [] },
+            images: []
+          };
+          this.show();
+        }
+        openEdit(entry, { answered = false } = {}) {
+          this._mode = "edit";
+          this._entry = entry;
+          this._answered = answered && entry.kind !== "topic";
+          const s = entry.settings || {};
+          this._f = {
+            kind: entry.kind,
+            title: entry.title,
+            prompt: entry.prompt || "",
+            options: [...entry.options || []],
+            hint: s.hint || "",
+            answerLength: s.answerLength || "short",
+            countMatching: s.countMatching !== false,
+            changeable: s.changeable !== false,
+            publishOnClose: s.publishOnClose === true,
+            imagesAllowed: s.imagesAllowed !== false,
+            meeting: { label: entry.meeting?.label || "", date: entry.meeting?.date || "" },
+            access: this.accessOf(entry),
+            images: (entry.promptImages || []).map((i) => ({ id: i.id, name: i.name, state: "ready", src: this.client.communityImageSrc(entry.id, i.id) }))
+          };
+          if (entry.meeting?.label) this._customMeeting = !shoptalkMeetings().some((m) => m.label === entry.meeting.label && m.date === entry.meeting.date);
+          this.show();
+        }
+        openAccess(entry) {
+          this._mode = "access";
+          this._entry = entry;
+          this._f = { access: this.accessOf(entry) };
+          this.show();
+          this.loadMembers();
+        }
+        accessOf(entry) {
+          const members = (entry.access?.members || []).map((m) => ({ githubId: m.githubId, username: m.login }));
+          return { mode: entry.access?.mode === "chosen" ? "chosen" : "all", members };
+        }
+        defaultMeeting() {
+          const next = shoptalkMeetings().find((m) => m.next);
+          return next ? { label: next.label, date: next.date } : { label: "", date: "" };
+        }
+        show() {
+          this.draw();
+          const d = this.$("dialog");
+          if (d && !d.open) {
+            try {
+              d.showModal();
+            } catch {
+              d.setAttribute("open", "");
+            }
+          }
+          if (this._f.access?.mode === "chosen") this.loadMembers();
+        }
+        close() {
+          this.$("dialog")?.close?.();
+          this.remove();
+        }
+        // ---- drawing -----------------------------------------------------------------------------------------------
+        draw() {
+          const m = this._mode;
+          const title = m === "create" ? "New entry" : m === "edit" ? "Edit entry" : "Who can see this entry";
+          const sub = m === "create" ? "Only superadmins start entries. Members answer, post and reply." : `${KIND_LABEL[this._entry?.kind] || ""} · ${this._entry?.title || ""}`;
+          const body = m === "access" ? this.accessHtml() : this.formHtml();
+          const buttons = m === "create" ? '<button type="button" class="cm-btn2" data-save="draft">Save for later</button><button type="button" class="cm-btn" data-save="open">Open now</button>' : m === "edit" ? '<button type="button" class="cm-btn2" data-close>Cancel</button><button type="button" class="cm-btn" data-save="edit">Save changes</button>' : '<button type="button" class="cm-btn2" data-close>Cancel</button><button type="button" class="cm-btn" data-save="access">Save access</button>';
+          this.set(this.css(COMMUNITY_CSS + CSS24) + `<dialog aria-labelledby="dlg-t"><div class="dlg">
+      <div class="top"><div><h2 id="dlg-t">${esc2(title)}</h2><p>${esc2(sub)}</p></div><button type="button" class="x" data-close aria-label="Close">×</button></div>
+      <div class="body">${body}</div>
+      <div class="bot"><span class="msg" data-msg></span>${buttons}</div>
+    </div></dialog>`);
+          this.wireShell();
+          this.wire();
+        }
+        formHtml() {
+          const f = this._f;
+          const kinds = this._mode === "create" ? `<div><span class="lbl">Kind</span><div class="kinds">${KINDS2.map(([k, label, hint]) => `<button type="button" class="kind" data-kind="${k}" aria-pressed="${f.kind === k}">
+        <b>${KIND_ICON[k]}${esc2(label)}</b><span>${esc2(hint)}</span></button>`).join("")}</div></div>` : "";
+          const locked = this._answered;
+          const title = `<label><span class="lbl">${f.kind === "topic" ? "Title" : "Question"}</span>
+      <input class="inp" data-f="title" maxlength="${LIMITS.title}" value="${esc2(f.title)}"${locked ? " disabled" : ""}></label>
+      ${locked ? '<p class="lockd" style="margin:6px 0 0">Members have answered, so the question and answers are locked.</p>' : ""}`;
+          let kindBlock = "";
+          if (f.kind === "poll") {
+            kindBlock = `<div><span class="lbl">Answers (2 to 8)</span><div class="opts">${f.options.map((o, i) => `<div class="optrow">
+          <input class="inp" data-opt="${i}" maxlength="${LIMITS.option}" value="${esc2(o)}" aria-label="Answer ${i + 1}"${locked ? " disabled" : ""}>
+          ${locked ? "" : `<button type="button" data-up="${i}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button><button type="button" data-rm="${i}" aria-label="Remove answer ${i + 1}"${f.options.length <= 2 ? " disabled" : ""}>×</button>`}
+        </div>`).join("")}</div>
+        ${locked || f.options.length >= LIMITS.optionsMax ? "" : '<button type="button" class="cm-quiet" data-add-opt style="margin-top:6px">Add an answer</button>'}</div>
+        ${this.checkHtml("changeable", "Members can change their answer until it closes")}
+        ${this.checkHtml("publishOnClose", "Publish the results as soon as it closes")}`;
+          } else if (f.kind === "typed") {
+            kindBlock = `<label><span class="lbl">Hint inside the answer box</span><input class="inp" data-f="hint" maxlength="${LIMITS.hint}" value="${esc2(f.hint)}" placeholder="A movie title"></label>
+        <div><span class="lbl">Answer length</span><div class="two">
+          ${this.radioHtml("answerLength", "short", `Short, up to ${LIMITS.typedShort} characters`)}${this.radioHtml("answerLength", "long", `A sentence, up to ${LIMITS.typedLong}`)}</div></div>
+        ${this.checkHtml("countMatching", "Count matching answers together in the results")}
+        ${this.checkHtml("changeable", "Members can change their answer until it closes")}
+        ${this.checkHtml("publishOnClose", "Publish the results as soon as it closes")}`;
+          } else {
+            kindBlock = `<div><span class="lbl">Prompt</span><gbti-prose-editor data-prompt placeholder="What should members post? Images are welcome."></gbti-prose-editor></div>
+        <div><span class="lbl">Images with the prompt</span><div class="pimgs" data-pimgs>${this.promptImgsHtml()}</div>
+          ${f.images.filter((i) => i.state !== "error").length < LIMITS.promptImages ? '<button type="button" class="cm-btn2 sm" data-add-pimg style="margin-top:8px">Add an image</button><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-pfile>' : ""}</div>
+        ${this.checkHtml("imagesAllowed", "Members can add images to their posts")}`;
+          }
+          return `${kinds}<div>${title}</div>${kindBlock}${this.meetingHtml()}${this.accessHtml()}`;
+        }
+        checkHtml(key, label) {
+          return `<label class="check"><input type="checkbox" data-c="${key}"${this._f[key] ? " checked" : ""}><span>${esc2(label)}</span></label>`;
+        }
+        radioHtml(key, value, label) {
+          return `<label class="radio"><input type="radio" name="${key}" data-r="${key}" value="${value}"${this._f[key] === value ? " checked" : ""}><span>${esc2(label)}</span></label>`;
+        }
+        promptImgsHtml() {
+          return this._f.images.map((i, n) => i.state === "error" ? `<div class="cm-err"><span><strong>${esc2(i.problem.title)}</strong>${esc2(i.problem.detail)}</span><button type="button" class="cm-quiet" data-pdrop="${n}" style="margin-left:auto">Dismiss</button></div>` : `<div class="pi">${i.src || i.preview ? `<img src="${esc2(i.src || i.preview)}" alt="">` : ""}<span class="nm">${esc2(i.name)}${i.size ? ` · ${esc2(formatBytes2(i.size))}` : ""}</span>
+          <span class="${i.state === "up" ? "cm-mute" : "ok"}">${i.state === "up" ? "Uploading" : "Ready"}</span><button type="button" class="cm-quiet" data-pdrop="${n}">Remove</button></div>`).join("");
+        }
+        meetingHtml() {
+          const f = this._f;
+          const list = shoptalkMeetings();
+          const cur = `${f.meeting.label}|${f.meeting.date}`;
+          const known = list.some((m) => `${m.label}|${m.date}` === cur);
+          const custom = this._customMeeting || f.meeting.label && !known;
+          const opts = list.map((m) => `<option value="${esc2(`${m.label}|${m.date}`)}"${!custom && cur === `${m.label}|${m.date}` ? " selected" : ""}>${esc2(m.text)}${m.next ? " (next)" : ""}</option>`).join("");
+          return `<div><span class="lbl">Meeting</span>
+      <select class="inp" data-meeting>${opts}<option value="-"${!f.meeting.label ? " selected" : ""}>Between meetings</option><option value="other"${custom ? " selected" : ""}>Another meeting</option></select>
+      ${custom ? `<div class="two" style="margin-top:8px"><input class="inp" data-ml maxlength="${LIMITS.meetingLabel}" placeholder="Meeting name" value="${esc2(f.meeting.label)}" aria-label="Meeting name">
+        <input class="inp" type="date" data-md value="${esc2(f.meeting.date)}" aria-label="Meeting date"></div>` : ""}</div>`;
+        }
+        accessHtml() {
+          const a = this._f.access;
+          const chosen = a.mode === "chosen";
+          const picked = a.members.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc2(initials(m.username))}</span><span class="nm">${esc2(m.username || m.githubId)}</span>
+      <button type="button" class="cm-quiet" data-unpick="${esc2(m.githubId)}">Remove</button></div>`).join("");
+          let found = "";
+          if (chosen) {
+            if (this._members == null) found = '<p class="cm-mute" style="margin:0;font-size:14px">Loading members…</p>';
+            else if (this._members.error) found = `<p class="bad" style="margin:0;font-size:14px">${esc2(this._members.error)}</p>`;
+            else {
+              const q2 = this._q.trim().toLowerCase();
+              const have = new Set(a.members.map((m) => m.githubId));
+              const hits = this._members.list.filter((m) => !have.has(m.githubId) && (!q2 || m.username.toLowerCase().includes(q2))).slice(0, 30);
+              found = hits.length ? hits.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc2(initials(m.username))}</span><span class="nm">${esc2(m.username)}</span>
+          <button type="button" class="cm-btn2 sm" data-pick="${esc2(m.githubId)}">Add</button></div>`).join("") : `<p class="cm-mute" style="margin:0;font-size:14px">${q2 ? "No member by that name." : "Everyone is on it."}</p>`;
+            }
+          }
+          return `<div><span class="lbl">Who can see it</span>
+      <label class="radio"><input type="radio" name="access" data-access="all"${chosen ? "" : " checked"}><span>All members<small>Every paying member can see it and take part.</small></span></label>
+      <label class="radio"><input type="radio" name="access" data-access="chosen"${chosen ? " checked" : ""}><span>Chosen members<small>Only the members you pick by name. Everyone else never meets it: not in the list, not by its link.</small></span></label>
+      ${chosen ? `<div class="people">
+        <strong style="font-size:14px">${esc2(plural(a.members.length, "member"))} can see it</strong>
+        ${picked ? `<div class="found">${picked}</div>` : ""}
+        <input class="inp" data-search placeholder="Add a member by name" value="${esc2(this._q)}" aria-label="Add a member by name">
+        <div class="found" data-found>${found}</div>
+        <p class="cm-mute" style="margin:0;font-size:13px">Removing someone hides the entry from them at once. What they already posted stays for the others. Superadmins always see every entry.</p>
+      </div>` : ""}</div>`;
+        }
+        // ---- wiring ------------------------------------------------------------------------------------------------
+        /** The dialog, its close controls and the save buttons are built once per draw(), so they are wired once, here. */
+        wireShell() {
+          const d = this.$("dialog");
+          d?.addEventListener("cancel", (ev) => {
+            ev.preventDefault();
+            this.close();
+          });
+          for (const b of this.$$("[data-close]")) b.addEventListener("click", () => this.close());
+          for (const b of this.$$("[data-save]")) b.addEventListener("click", () => this.save(b.dataset.save));
+        }
+        /** Everything inside .body, which redraw() replaces. Wiring the shell here too fired Save once per redraw. */
+        wire() {
+          for (const b of this.$$("[data-kind]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.kind = b.dataset.kind;
+            this.redraw();
+          });
+          for (const b of this.$$("[data-add-opt]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.options.push("");
+            this.redraw();
+            this.$(`[data-opt="${this._f.options.length - 1}"]`)?.focus();
+          });
+          for (const b of this.$$("[data-rm]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.options.splice(Number(b.dataset.rm), 1);
+            this.redraw();
+          });
+          for (const b of this.$$("[data-up]")) b.addEventListener("click", () => {
+            this.capture();
+            const i = Number(b.dataset.up);
+            const o = this._f.options;
+            [o[i - 1], o[i]] = [o[i], o[i - 1]];
+            this.redraw();
+          });
+          this.on("[data-meeting]", "change", (ev) => {
+            this.capture();
+            const v2 = ev.target.value;
+            if (v2 === "other") {
+              this._customMeeting = true;
+              this._f.meeting = { label: "", date: "" };
+            } else {
+              this._customMeeting = false;
+              const [label, date] = v2 === "-" ? ["", ""] : v2.split("|");
+              this._f.meeting = { label, date };
+            }
+            this.redraw();
+          });
+          for (const r of this.$$("[data-access]")) r.addEventListener("change", () => {
+            this.capture();
+            this._f.access.mode = r.dataset.access;
+            if (r.dataset.access === "chosen") this.loadMembers();
+            this.redraw();
+          });
+          this.on("[data-search]", "input", (ev) => {
+            this._q = ev.target.value;
+            this.drawFound();
+          });
+          for (const b of this.$$("[data-unpick]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.access.members = this._f.access.members.filter((m) => m.githubId !== b.dataset.unpick);
+            this.redraw();
+          });
+          this.wireFound();
+          this.on("[data-add-pimg]", "click", () => this.$("[data-pfile]")?.click());
+          this.on("[data-pfile]", "change", (ev) => {
+            this.capture();
+            this.addPromptFiles([...ev.target.files || []]);
+            ev.target.value = "";
+          });
+          for (const b of this.$$("[data-pdrop]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.images.splice(Number(b.dataset.pdrop), 1);
+            this.redraw();
+          });
+          const pe = this.$("[data-prompt]");
+          if (pe) pe.value = this._f.prompt || "";
+        }
+        wireFound() {
+          for (const b of this.$$("[data-pick]")) b.addEventListener("click", () => {
+            this.capture();
+            const m = this._members?.list?.find((x) => x.githubId === b.dataset.pick);
+            if (m && this._f.access.members.length < LIMITS.chosenMax) this._f.access.members.push({ githubId: m.githubId, username: m.username });
+            this._q = "";
+            this.redraw();
+            this.$("[data-search]")?.focus();
+          });
+        }
+        drawFound() {
+          const box = this.$("[data-found]");
+          if (!box) return;
+          const tmp = document.createElement("div");
+          tmp.innerHTML = this.accessHtml();
+          box.innerHTML = tmp.querySelector("[data-found]")?.innerHTML || "";
+          this.wireFound();
+        }
+        /** Read every field back into the form state, so a redraw never loses typing. */
+        capture() {
+          const f = this._f;
+          if (!f) return;
+          const v2 = (sel) => this.$(sel)?.value;
+          if (this._mode !== "access") {
+            if (v2('[data-f="title"]') != null) f.title = v2('[data-f="title"]');
+            if (v2('[data-f="hint"]') != null) f.hint = v2('[data-f="hint"]');
+            for (const inp of this.$$("[data-opt]")) f.options[Number(inp.dataset.opt)] = inp.value;
+            for (const c of this.$$("[data-c]")) f[c.dataset.c] = c.checked;
+            for (const r of this.$$("[data-r]")) if (r.checked) f[r.dataset.r] = r.value;
+            const pe = this.$("[data-prompt]");
+            if (pe) f.prompt = pe.value;
+            if (this.$("[data-ml]")) f.meeting = { label: v2("[data-ml]") || "", date: v2("[data-md]") || "" };
+          }
+          if (this.$("[data-search]")) this._q = v2("[data-search]") || "";
+        }
+        redraw() {
+          const body = this.$(".body");
+          const top = body ? body.scrollTop : 0;
+          const was = this.$("dialog");
+          if (!was) {
+            this.draw();
+            return;
+          }
+          const msg = this.$("[data-msg]")?.innerHTML || "";
+          body.innerHTML = this._mode === "access" ? this.accessHtml() : this.formHtml();
+          this.wire();
+          const m = this.$("[data-msg]");
+          if (m) m.innerHTML = msg;
+          this.$(".body").scrollTop = top;
+        }
+        async loadMembers() {
+          if (this._members) return;
+          if (typeof this.client?.communityMembers !== "function") {
+            this._members = { error: "The member list is for superadmins." };
+            return;
+          }
+          try {
+            const r = await this.client.communityMembers();
+            this._members = { list: r.members || [] };
+          } catch (e) {
+            this._members = { error: e?.message || "The member list could not be read. Try again in a moment." };
+          }
+          if (this._f?.access?.mode === "chosen") {
+            this.capture();
+            this.redraw();
+          }
+        }
+        say(text2, bad = false) {
+          const el = this.$("[data-msg]");
+          if (el) el.innerHTML = text2 ? `<span class="${bad ? "bad" : "ok"}" role="status">${esc2(text2)}</span>` : "";
+        }
+        // ---- prompt images -----------------------------------------------------------------------------------------
+        async addPromptFiles(files) {
+          for (const f of files) {
+            const problem = uploadProblem({ name: f.name, size: f.size, type: f.type });
+            if (problem) {
+              this._f.images.push({ name: f.name, state: "error", problem });
+              continue;
+            }
+            const preview = await new Promise((resolve) => {
+              const r = new FileReader();
+              r.onload = () => resolve(String(r.result || ""));
+              r.onerror = () => resolve("");
+              r.readAsDataURL(f);
+            });
+            this._f.images.push({ name: f.name, size: f.size, preview, dataBase64: preview, state: "pending" });
+          }
+          this.redraw();
+        }
+        async uploadPending(id) {
+          for (const img of this._f.images) {
+            if (img.state !== "pending") continue;
+            img.state = "up";
+            const r = await this.client.communityUploadImage(id, { name: img.name, dataBase64: img.dataBase64 });
+            img.id = r.id;
+            img.state = "ready";
+          }
+          return this._f.images.filter((i) => i.state === "ready" && i.id).map((i) => i.id);
+        }
+        // ---- saving ------------------------------------------------------------------------------------------------
+        input() {
+          const f = this._f;
+          const settings = f.kind === "poll" ? { changeable: f.changeable, publishOnClose: f.publishOnClose } : f.kind === "typed" ? { changeable: f.changeable, publishOnClose: f.publishOnClose, hint: f.hint, answerLength: f.answerLength, countMatching: f.countMatching } : { imagesAllowed: f.imagesAllowed };
+          return {
+            kind: f.kind,
+            title: f.title,
+            prompt: f.kind === "topic" ? f.prompt : "",
+            options: f.kind === "poll" ? f.options.filter((o) => String(o).trim()) : [],
+            settings,
+            meeting: f.meeting,
+            access: this.accessInput()
+          };
+        }
+        accessInput() {
+          const a = this._f.access;
+          return { mode: a.mode, members: a.mode === "chosen" ? a.members.map((m) => m.githubId) : [], logins: Object.fromEntries(a.members.map((m) => [m.githubId, m.username || ""])) };
+        }
+        async save(how) {
+          if (this._saving) return;
+          this.capture();
+          if (this._f.access?.mode === "chosen" && !this._f.access.members.length) {
+            this.say("Pick at least one member, or share it with all members.", true);
+            return;
+          }
+          this._saving = true;
+          for (const b of this.$$("[data-save]")) b.disabled = true;
+          this.say("Saving");
+          try {
+            let id = this._entry?.id;
+            if (how === "access") {
+              await this.client.communityAdmin("access", { id, access: this.accessInput() });
+            } else if (how === "edit") {
+              const promptImages = this._f.kind === "topic" ? await this.uploadPending(id) : void 0;
+              await this.client.communityAdmin("edit", { id, input: { ...this.input(), ...promptImages ? { promptImages } : {} } });
+            } else {
+              const pending = this._f.kind === "topic" && this._f.images.some((i) => i.state === "pending");
+              const r = await this.client.communityAdmin("create", { input: this.input(), open: how === "open" && !pending });
+              id = r.id;
+              if (pending) {
+                const promptImages = await this.uploadPending(id);
+                await this.client.communityAdmin("edit", { id, input: { ...this.input(), promptImages } });
+                if (how === "open") await this.client.communityAdmin("open", { id });
+              }
+            }
+            this.emit("community-saved", { id });
+            this.close();
+          } catch (e) {
+            this._saving = false;
+            for (const b of this.$$("[data-save]")) b.disabled = false;
+            this.say(e?.message || "That was not saved. Try again.", true);
+          }
+        }
+      };
+      define("gbti-community-editor", GbtiCommunityEditor);
+    }
+  });
+
   // node_modules/js-yaml/dist/js-yaml.mjs
   var __create = Object.create;
-  var __defProp = Object.defineProperty;
+  var __defProp2 = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getOwnPropNames2 = Object.getOwnPropertyNames;
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
   var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+    if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames2(from), i = 0, n = keys.length, key; i < n; i++) {
       key = keys[i];
-      if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+      if (!__hasOwnProp.call(to, key) && key !== except) __defProp2(to, key, {
         get: ((k) => from[k]).bind(null, key),
         enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
       });
     }
     return to;
   };
-  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp2(target, "default", {
     value: mod,
     enumerable: true
   }) : target, mod));
@@ -3040,568 +7793,8 @@ ${link}` : ""}`;
     return USERNAME_RE.test(u) ? u : null;
   }
 
-  // client-ui/src/assets.mjs
-  var SITE2 = "https://gbti.network";
-  var CONTENT_REPO = "gbti-network/gbti.network";
-  var RAW_HOST = "https://raw.githubusercontent.com";
-  var FULL_SHA = /^[0-9a-f]{40}$/;
-  var DEFAULT_REF = "main";
-  function pinnedRef(sha) {
-    const s = String(sha ?? "").trim().toLowerCase();
-    return FULL_SHA.test(s) ? s : DEFAULT_REF;
-  }
-  var currentRef = DEFAULT_REF;
-  function setContentRef(sha) {
-    currentRef = pinnedRef(sha);
-  }
-  function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
-    return `${RAW_HOST}/${repo}/${pinnedRef(ref)}`;
-  }
-  var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function cdnRetryUrl(src, repo = CONTENT_REPO) {
-    const s = String(src || "");
-    const r = escapeRe(repo);
-    const pinned = s.match(new RegExp(`^${escapeRe(RAW_HOST)}/${r}/[0-9a-f]{40}/(.+)$`));
-    if (pinned) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${pinned[1]}`;
-    const legacy = s.match(new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${r}@[^/]+/(.+)$`));
-    if (legacy) return `${RAW_HOST}/${repo}/${DEFAULT_REF}/${legacy[1]}`;
-    return "";
-  }
-  function attachCdnFallback(root, repo = CONTENT_REPO) {
-    if (!root || typeof root.addEventListener !== "function") return () => {
-    };
-    const onError = (ev) => {
-      const el = ev.target;
-      if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
-      const next = cdnRetryUrl(el.getAttribute("src"), repo);
-      if (!next) return;
-      el.dataset.cdnRetried = "1";
-      el.setAttribute("src", next);
-    };
-    root.addEventListener("error", onError, true);
-    return () => root.removeEventListener("error", onError, true);
-  }
-  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, ref = currentRef) {
-    const md = String(markdown ?? "");
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (!folder2) return md;
-    const base = cdnBase(repo, ref);
-    return md.replace(
-      /(!\[[^\]]*\]\()(\.\/)([^\s)]+)/g,
-      (_m, pre, _dot, rest) => `${pre}${base}/${folder2}/${rest}`
-    );
-  }
-  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE2, ref = currentRef) {
-    if (!value) return "";
-    const s = String(value);
-    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (folder2) return `${cdnBase(repo, ref)}/${folder2}/${s.replace(/^\.?\/+/, "")}`;
-    if (/^\.{1,2}\//.test(s)) return "";
-    return resolveAsset(s, site) || "";
-  }
-  function resolveAsset(thumb, site = SITE2) {
-    if (!thumb || typeof thumb !== "string") return null;
-    if (/^https?:\/\//.test(thumb)) return thumb;
-    if (/^\/\//.test(thumb)) return `https:${thumb}`;
-    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
-  }
-
-  // client-ui/src/tokens.mjs
-  var TOKENS = `
-:host {
-  --bg: #faf9f8; --panel: #ffffff;
-  --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
-  /* Owner, 2026-09-28: text ON an --accent fill. White on brand green is 3.4:1, under AA, so a filled control uses
-     --accent with --on-accent: 6.2:1 here (white on the dark green), 9.6:1 in dark (ink on the mint). */
-  --on-accent: #ffffff;
-  --text: #24222a; --fg: #24222a; --muted: #57545e;
-  --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
-  /* sow-227: three website tokens (src/styles/gbti-v3.css), pinned here like the rest. Until now a shared component
-     that named them INHERITED them from whichever page hosted it (custom properties cross the shadow boundary), so
-     the extension's older values (extension/shell.css, e.g. --fg-mute #84818c, which fails AA) leaked in there while
-     the website got its own. Pinning them makes the extension follow the website. */
-  --line-2: #ddd9d4; --green-tint: #e9f6ef; --fg-mute: #6c6976;
-  --radius: 12px;
-  --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
-  --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
-  --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
-  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens; the rules are in gbti-v3-theme.css) -- a dark bubble on the light surface */
-  --tooltip-bg: #1c1a21; --tooltip-fg: #f5f4f2; --tooltip-border: rgba(255,255,255,.10);
-}
-:host-context([data-theme="dark"]) {
-  --bg: #1c1a21; --panel: #2d2a34;
-  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a; --on-accent: #17151c;
-  --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
-  --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
-  /* sow-227: --fg-mute is the site's .50 lifted to .62, because .50 measures about 4.3:1 on the dark panel, under AA
-     for the small text it labels (owner-approved in the category picker design). */
-  --line-2: rgba(255,255,255,.20); --green-tint: rgba(31,158,95,.13); --fg-mute: rgba(243,242,240,.62);
-  /* tooltip flips to a light bubble on dark surfaces, same inversion as the site's own CSS */
-  --tooltip-bg: #f3f2f0; --tooltip-fg: #24222a; --tooltip-border: rgba(0,0,0,.12);
-}
-/* SOW-070: the GLASS layout skin (opt-in: data-layout="glass" on an ancestor). Re-points the surface tokens to
-   translucent values + defines --glass-blur, so any surface class that reads backdrop-filter: var(--glass-blur)
-   frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
-   are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
-:host-context([data-layout="glass"]) {
-  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1.7)));
-  --glass-blur: blur(20px) saturate(150%);
-}
-:host-context([data-layout="glass"][data-theme="dark"]) {
-  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1.7)));
-}
-`;
-  var EDITOR_SURFACE = `
-:host {
-  --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
-  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css (--fg-mute) already uses site-side for the identical reason. */
-  --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
-  --s-amber-fg:#8a5500; /* sow-184: a readable amber for TEXT (the Staged pill) -- the golden #d9a13c fails AA on a light tint */
-  --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);
-  --s-shadow-md:0 12px 30px rgba(37,35,43,.10),0 3px 8px rgba(37,35,43,.06);
-  --s-pop:0 14px 40px rgba(37,35,43,.18),0 4px 10px rgba(37,35,43,.10);
-  --s-sel:rgba(31,158,95,.16); --ink:#201d27;
-}
-:host-context([data-theme="dark"]) {
-  --s-app:#18161d; --s-surface:#232029; --s-surface-2:#2a2731; --s-surface-3:#322f3a;
-  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#9a96a1; /* sow-249: was #847f8d, 3.37:1 on --s-surface-3. Lightened (dark theme) to clear AA. */
-  --s-green:#28b06d; --s-green-fg:#5fd49a; --s-tint:rgba(95,212,154,.13); --s-tint-2:rgba(95,212,154,.22); --s-canvas:#201d27;
-  --s-amber-fg:#e6b45c; /* sow-184: light amber text for the Staged pill on the dark card tint */
-  --s-shadow:none; --s-shadow-md:0 18px 40px rgba(0,0,0,.4); --s-pop:0 18px 50px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
-  --s-sel:rgba(95,212,154,.22); --ink:#17151c;
-}
-`;
-  var BASE_CSS = `
-:host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
-*, *::before, *::after { box-sizing: border-box; }
-h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
-h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-a { color: var(--accent); }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
-input, select, textarea {
-  width: 100%; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line);
-  border-radius: 8px; color: var(--text); font: inherit;
-}
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); }
-textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, monospace; }
-button {
-  background: var(--brand); color: #08231a; border: 0; border-radius: 8px;
-  padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
-}
-button:hover { background: var(--brand-dark); }
-button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-button[disabled] { opacity: .5; cursor: default; }
-.muted { color: var(--muted); }
-.danger { color: var(--danger); }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--hover); font-size: 12px; color: var(--muted); }
-.tag.ok { background: rgba(31,158,95,.14); color: var(--accent); }
-.tag.bad { background: rgba(224,108,108,.16); color: var(--danger); }
-ul.list { list-style: none; margin: 0; padding: 0; }
-ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
-
-/* Tooltips (mirrors src/styles/gbti-v3-theme.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
-   page's global CSS, so any component wanting the site's hover-label treatment needs this rule INSIDE its own
-   tree; defined once here (BASE_CSS is included via this.css() in every component) rather than per-component.
-   Usage: add data-tooltip="..." to a focusable control AND keep an aria-label (data-tooltip is presentational,
-   not announced to assistive tech). */
-[data-tooltip] { position: relative; }
-[data-tooltip]::after, [data-tooltip]::before {
-  position: absolute; left: 50%; opacity: 0; pointer-events: none;
-  transition: opacity .14s ease, transform .14s ease; z-index: 60;
-}
-[data-tooltip]::after {
-  content: attr(data-tooltip); bottom: calc(100% + 8px); transform: translateX(-50%) translateY(4px);
-  background: var(--tooltip-bg); color: var(--tooltip-fg); border: 1px solid var(--tooltip-border);
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 500; line-height: 1.3; letter-spacing: .1px;
-  text-align: center; white-space: normal; width: max-content; max-width: 220px; padding: 5px 9px;
-  border-radius: 6px; box-shadow: 0 12px 30px rgba(37,35,43,.10), 0 3px 8px rgba(37,35,43,.06);
-}
-[data-tooltip]::before {
-  content: ""; bottom: calc(100% + 3px); transform: translateX(-50%) translateY(4px);
-  border: 5px solid transparent; border-top-color: var(--tooltip-bg);
-}
-[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after,
-[data-tooltip]:hover::before, [data-tooltip]:focus-visible::before { opacity: 1; transform: translateX(-50%) translateY(0); }
-[data-tooltip-pos="below"]::after { bottom: auto; top: calc(100% + 8px); }
-[data-tooltip-pos="below"]::before { bottom: auto; top: calc(100% + 3px); border-top-color: transparent; border-bottom-color: var(--tooltip-bg); }
-@media (hover: none) { [data-tooltip]::after, [data-tooltip]::before { display: none; } }
-`;
-
-  // membership/member-avatar.mjs
-  var SITE3 = "https://gbti.network";
-  var AVATAR_ROUTE = "/avatar/";
-  var NETWORK_FOLDERS = Object.freeze(["gbtilabs", "gbti", "house"]);
-  var FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-  var ID_RE = /^\d{1,20}$/;
-  function isFolder(v2) {
-    return FOLDER_RE.test(String(v2 ?? ""));
-  }
-  function idAvatarUrl(githubId, size = 128) {
-    const id = String(githubId ?? "").trim();
-    return ID_RE.test(id) ? `https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4` : "";
-  }
-  function memberAvatarUrl(folder2, { site = SITE3 } = {}) {
-    const f = String(folder2 ?? "").trim().toLowerCase();
-    return isFolder(f) ? `${site}${AVATAR_ROUTE}${f}` : "";
-  }
-
-  // node_modules/blobatar/dist/uri.js
-  function v({ l: t, c: e, h: n }) {
-    let a = n * Math.PI / 180, o = e * Math.cos(a), r = e * Math.sin(a), s = t + 0.3963377774 * o + 0.2158037573 * r, c = t - 0.1055613458 * o - 0.0638541728 * r, i = t - 0.0894841775 * o - 1.291485548 * r, l = s * s * s, m = c * c * c, u = i * i * i;
-    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * u, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * u, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * u];
-  }
-  var q = (t) => t.every((e) => e >= -1e-4 && e <= 1.0001);
-  function V(t) {
-    let e = v(t);
-    if (!q(e)) {
-      let n = 0, a = t.c;
-      for (let o = 0; o < 12; o++) {
-        let r = (n + a) / 2;
-        if (q(v({ ...t, c: r }))) n = r;
-        else a = r;
-      }
-      e = v({ ...t, c: n });
-    }
-    return e.map((n) => Math.min(1, Math.max(0, n)));
-  }
-  function U(t) {
-    let [e, n, a] = V(t);
-    return 0.2126 * e + 0.7152 * n + 0.0722 * a;
-  }
-  function B(t, e) {
-    let n = U(t), a = U(e);
-    return (Math.max(n, a) + 0.05) / (Math.min(n, a) + 0.05);
-  }
-  function w(t, e, n) {
-    if (B(t, e) >= n) return t;
-    let a = t.l >= e.l ? 1 : -1;
-    for (let s of [a, -a]) {
-      let c = { ...t };
-      for (let i = 0; i < 60; i++) {
-        if (c.l = Math.min(1, Math.max(0, c.l + s * 0.02)), B(c, e) >= n) return c;
-        if (c.l === 0 || c.l === 1) break;
-      }
-    }
-    let o = { ...t, l: 0, c: 0 }, r = { ...t, l: 1, c: 0 };
-    return B(o, e) >= B(r, e) ? o : r;
-  }
-  function T(t) {
-    return "#" + V(t).map((e) => {
-      let n = e <= 31308e-7 ? 12.92 * e : 1.055 * Math.pow(e, 0.4166666666666667) - 0.055;
-      return Math.round(n * 255).toString(16).padStart(2, "0");
-    }).join("");
-  }
-  var N = [[0.2, { l: 0.86, c: 0.085 }], [0.36, { l: 0.9, c: 0.028 }], [0.62, { l: 0.73, c: 0.135 }], [0.8, { l: 0.62, c: 0.165 }], [0.93, { l: 0.87, c: 0.16 }], [1, { l: 0.34, c: 0.035 }]];
-  var wt = (t) => N.find(([e]) => t < e)?.[1] ?? N[0][1];
-  var K = { l: 0.145, c: 0, h: 0 };
-  var Q = 1.5;
-  var Et = (t, e) => {
-    let n = wt(e), a = w({ l: n.l, c: n.c, h: t }, K, Q);
-    return { bg: { l: 0.965, c: 0.01, h: t }, head: a, eye: a.l >= 0.5 ? { l: 0.17, c: 0.02, h: t } : { l: 0.97, c: 0.012, h: t } };
-  };
-  var vt = [["head", "bg", 1.25], ["eye", "head", 4.5]];
-  function It(t, e = true, n = 0) {
-    let a = Et(t, n);
-    if (e) for (let [o, r, s] of vt) a[o] = w(a[o], a[r], s);
-    return a;
-  }
-  function G(t, e = true, n = 0) {
-    let a = It(t, e, n), o = {};
-    for (let r in a) o[r] = T(a[r]);
-    return o;
-  }
-  var y = (t) => {
-    let e = Math.round(t * 100) / 100;
-    return Object.is(e, -0) ? "0" : String(e);
-  };
-  function P({ cx: t, cy: e, rx: n, ry: a, n: o = 4, rot: r = 0 }) {
-    let s = Math.min(1, (8 * Math.pow(2, -1 / o) - 4) / 3), c = n, i = a, l = c * s, m = i * s, u = [[c, 0], [c, m], [l, i], [0, i], [-l, i], [-c, m], [-c, 0], [-c, -m], [-l, -i], [0, -i], [l, -i], [c, -m], [c, 0]], b = r * Math.PI / 180, p = Math.cos(b), d = Math.sin(b), h = (x) => {
-      let [g, k] = u[x];
-      return `${y(t + g * p - k * d)} ${y(e + g * d + k * p)}`;
-    }, f = `M${h(0)}`;
-    for (let x = 1; x < 13; x += 3) f += `C${h(x)} ${h(x + 1)} ${h(x + 2)}`;
-    return f + "Z";
-  }
-  function J(t, e, n, a, o, r = 0) {
-    let s = o.length, c = r * Math.PI / 180, i = o.map((u, b) => {
-      let p = c + 2 * Math.PI * b / s;
-      return [t + n * u * Math.cos(p), e + a * u * Math.sin(p)];
-    }), l = (u) => i[(u % s + s) % s], m = `M${y(l(0)[0])} ${y(l(0)[1])}`;
-    for (let u = 0; u < s; u++) {
-      let [b, p] = l(u - 1), [d, h] = l(u), [f, x] = l(u + 1), [g, k] = l(u + 2);
-      m += `C${y(d + (f - b) / 6)} ${y(h + (x - p) / 6)} ${y(f - (g - d) / 6)} ${y(x - (k - h) / 6)} ${y(f)} ${y(x)}`;
-    }
-    return m + "Z";
-  }
-  function W({ cx: t, cy: e, rx: n, ry: a, sides: o, round: r = 0.3, rot: s = 0 }) {
-    let c = r > 0 ? r < 1 ? r / 2 : 0.5 : 0, i = s * Math.PI / 180 - Math.PI / 2, l = Array.from({ length: o }, (p, d) => {
-      let h = i + 2 * Math.PI * d / o;
-      return [t + n * Math.cos(h), e + a * Math.sin(h)];
-    }), m = (p) => l[(p % o + o) % o], u = (p, d) => {
-      let [h, f] = m(p), [x, g] = m(d);
-      return `${y(h + (x - h) * c)} ${y(f + (g - f) * c)}`;
-    }, b = `M${u(0, -1)}`;
-    for (let p = 0; p < o; p++) {
-      let [d, h] = m(p);
-      if (b += `Q${y(d)} ${y(h)} ${u(p, p + 1)}`, c < 0.5) b += `L${u(p + 1, p)}`;
-    }
-    return b + "Z";
-  }
-  function tt(t, e, n, a) {
-    let o = y(t - n), r = y(t + n);
-    return `M${o} ${y(e - a)}H${r}V${y(e + a)}H${o}Z`;
-  }
-  function et(t, e, n, a, o) {
-    let r = Math.max(1.05, o), s = n * Math.sqrt(1 - 1 / (r * r)), c = e - a / r, i = e - r * a, l = s * 0.14, m = c + 0.86 * (i - c);
-    return `M${y(t - s)} ${y(c)}L${y(t - l)} ${y(m)}Q${y(t)} ${y(i)} ${y(t + l)} ${y(m)}L${y(t + s)} ${y(c)}Z`;
-  }
-  function I(t, e) {
-    for (let n = 0; n < e.length; n++) t = Math.imul(t ^ e[n], 3432918353), t = t << 13 | t >>> 19;
-    return t;
-  }
-  function At(t) {
-    return t = Math.imul(t ^ t >>> 16, 2246822507), t = Math.imul(t ^ t >>> 13, 3266489909), (t ^ t >>> 16) >>> 0;
-  }
-  var nt = new TextEncoder();
-  function Rt(t) {
-    return t.normalize("NFC").trim().toLowerCase();
-  }
-  function rt(t, e = true) {
-    let n = e ? Rt(t) : t;
-    return I(1779033703 ^ n.length, nt.encode(n));
-  }
-  function A(t, e) {
-    return At(I(I(t, Uint8Array.of(255)), nt.encode(e))) / 4294967296;
-  }
-  function ot(t, e = true, n) {
-    let a = rt(t, e), o = (r) => {
-      let s = n?.[r], c = Array.isArray(s) ? s[Math.floor(A(a, r) * s.length)] : s;
-      return c === void 0 ? A(a, r) : c > 0 ? c < 1 ? c : 0.999999 : 0;
-    };
-    return o.num = (r, s, c) => s + o(r) * (c - s), o.int = (r, s, c) => s + Math.floor(o(r) * (c - s + 1)), o.pick = (r, s) => s[Math.floor(o(r) * s.length)], o.bool = (r, s = 0.5) => o(r) < s, o.jitter = (r, s) => (o(r) * 2 - 1) * s, o;
-  }
-  function E(t, e, n) {
-    let a = e.expression;
-    if (n || !a) return { l: t, wrap: "" };
-    return a.bake(t, a.p);
-  }
-  var R = (t, e) => e?.tint ? e.tint(t, e.p) : t;
-  var at = (t, e) => e ? `<g transform="${e}">${t}</g>` : t;
-  var Ft = (t) => t.replace(/[&<>]/g, (e) => e === "&" ? "&amp;" : e === "<" ? "&lt;" : "&gt;");
-  function S(t, e) {
-    let n = ot(t, e.normalize ?? true, e.traits);
-    return { t: n, palette: { ...G(e.hue ?? n.num("hue", 0, 360), e.contrast ?? true, e.tone ?? n("tone")), ...e.palette } };
-  }
-  var jt = (t) => t.title ? `<title>${Ft(t.title)}</title>` : "";
-  function L(t, e, n) {
-    let a = e.background ?? t.background;
-    if (a === false) return;
-    return { d: a === "square" ? "M0 0H100V100H0Z" : P({ cx: 50, cy: 50, rx: 50, ry: 50, n: a === "circle" ? 2 : 6 }), fill: n.bg };
-  }
-  var Ct = (t) => t ? `<path d="${t.d}" fill="${t.fill}"/>` : "";
-  function st(t) {
-    return (e, n = {}) => {
-      let { t: a, palette: o } = S(e, n), r = R(o, n.expression), s = n.size ? ` width="${n.size}" height="${n.size}"` : "", c = E(t.layout(a), n), i = jt(n) + Ct(L(t, n, r)) + at(t.render(c.l, r), c.wrap);
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"${s}>${i}</svg>`;
-    };
-  }
-  var it = (t, e, n) => {
-    let a = e.rx, o = t.num("eye.rx", 0.075, 0.105) * a, r = t.num("eye.ratio", 1.9, 3.2), s = t.num("eye.scale", 0.78, 1.24), c = t.num("eye.stretch", 0.85, 1.18), i = t.num("eye.gap", 0.1, 0.24) * a, l = o * Math.max(1, s), m = o * r * Math.max(1, s * c), u = l + a * 0.03 + i, b = t.jitter("gaze.x", 0.09) * n.rx, p = t.num("gaze.y", -0.2, 0.08) * n.ry, d = t.jitter("eye.dy", 0.04) * n.ry, h = Math.hypot(l, m), f = Math.hypot((Math.abs(b) + u + h) / n.rx, (Math.abs(p) + Math.abs(d) + h) / n.ry), x = f > 0.9 ? 0.9 / f : 1, g = o * x, k = g * r, C2 = u * x, Ot = Math.max(0, Math.min(1, i / m)), St = Math.min(12, Math.asin(Ot) * 180 / Math.PI), _ = t.num("eye.lean", -1, 1) * St, Bt = Math.max(-12, Math.min(12, _ + t.jitter("eye.lean2", 3.5))), H = n.cx + b * x, z = n.cy + p * x;
-    return [{ cx: H - C2, cy: z, rx: g, ry: k, n: t.num("eye.n", 3.5, 6), rot: _ }, { cx: H + C2, cy: z + d * x, rx: g * s, ry: k * s * c, n: t.num("eye.n", 3.5, 6), rot: Bt }];
-  };
-  function ut(t, e) {
-    let n = (r) => (t.find(([, s]) => r < s) ?? t[t.length - 1])[0];
-    function a(r) {
-      let s = n(r("shape")), c = r.num("body.r", 31, 38) * s.core, i = { cx: 50 + r.jitter("body.x", 1.5), cy: 50 + r.jitter("body.y", 1.5), rx: c, ry: c * r.num("body.ratio", 0.92, 1.08), n: r.num("body.n", 1.9, 2.5), rot: 0, radii: Array.from({ length: r.int("body.pts", 6, 8) }, (u, b) => 1 + r.jitter(`body.r${b}`, 0.16)) };
-      s.body?.(r, i);
-      let l = s.face?.(i) ?? i, m = { petals: [], extra: [] };
-      return s.decorate?.(r, i, m), { shape: s.name, draw: s.path, body: i, face: l, petals: m.petals, extra: m.extra, eyes: e(r, i, l) };
-    }
-    function o(r, s, c) {
-      let i = (u) => Math.round(u * 100) / 100, l = (u, b) => {
-        let p = `<path d="${P(u)}"/>`;
-        return c ? `<g class="mo-eye" style="--mo-wrap:${b ? 1 : -1};--mo-lean:${i(u.rot)};transform-origin:${i(u.cx)}px ${i(u.cy)}px">${p}</g>` : p;
-      }, m = `<g fill="${s.head}">` + r.petals.map((u) => `<circle cx="${i(u.cx)}" cy="${i(u.cy)}" r="${i(u.r)}"/>`).join("") + r.extra.map((u) => `<path d="${u}"/>`).join("") + `<path d="${r.draw ? r.draw(r.body) : P(r.body)}"/></g><g fill="${s.eye}"${c ? ' class="mo-eyes"' : ""}>` + r.eyes.map(l).join("") + "</g>";
-      return c ? `<g class="mo-breathe"><g class="mo-bob">${m}</g></g>` : m;
-    }
-    return { layout: a, render: o, background: false };
-  }
-  var lt = (t) => W(t);
-  var mt = (t) => J(t.cx, t.cy, t.rx, t.ry, t.radii, t.rot);
-  var j = (t) => (e) => ({ cx: e.cx, cy: e.cy, rx: e.rx * t, ry: e.ry * t });
-  var pt = (t) => j(Math.min(...t.radii) * 0.95)(t);
-  var _t = (t) => j(0.84)(t);
-  var yt = { name: "round", core: 1 };
-  var bt = { name: "organic", core: 0.98, path: mt, face: pt };
-  var xt = { name: "boxy", core: 0.86, body: (t, e) => {
-    e.n = t.num("body.n", 3.4, 6), e.rot = t.num("body.rot", -20, 20);
-  } };
-  var ht = { name: "capsule", core: 1.02, body: (t, e) => {
-    e.ry *= t.num("capsule.squat", 0.55, 0.68);
-  }, face: j(0.94), decorate: (t, e, n) => {
-    for (let a of [-1, 1]) n.petals.push({ cx: e.cx + a * (e.rx - e.ry), cy: e.cy, r: e.ry });
-  }, path: (t) => tt(t.cx, t.cy, t.rx - t.ry, t.ry) };
-  var dt = { name: "nub", core: 0.88, decorate: (t, e, n) => {
-    let a = t.int("nub.n", 1, 2);
-    for (let o = 0; o < a; o++) {
-      let r = t.num(`nub.a${o}`, 0, 2 * Math.PI);
-      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.88, cy: e.cy + Math.sin(r) * e.rx * 0.88, r: e.rx * t.num(`nub.r${o}`, 0.24, 0.4) });
-    }
-  } };
-  var ft = { name: "cloud", core: 0.78, face: pt, path: mt, decorate: (t, e, n) => {
-    let a = t.int("cloud.n", 4, 6);
-    for (let o = 0; o < a; o++) {
-      let r = Math.PI + Math.PI * (o + 0.5) / a;
-      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.8, cy: e.cy + Math.sin(r) * e.rx * 0.5, r: e.rx * t.num(`cloud.r${o}`, 0.44, 0.62) });
-    }
-  } };
-  var gt = { name: "droplet", core: 0.78, body: (t, e) => {
-    e.cy += 0.22 * e.ry, e.n = 2;
-  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.05, rx: t.rx * 0.88, ry: t.ry * 0.88 }), decorate: (t, e, n) => {
-    n.extra.push(et(e.cx, e.cy, e.rx, e.ry, t.num("droplet.tip", 1.4, 1.65)));
-  } };
-  var Mt = { name: "hexagon", core: 1.05, path: lt, face: _t, body: (t, e) => {
-    e.sides = 6, e.rot = t.num("body.rot", -12, 12), e.round = t.num("poly.round", 0.24, 0.5);
-  } };
-  var kt = { name: "sun", core: 0.7, decorate: (t, e, n) => {
-    let a = t.int("sun.n", 6, 9), o = e.rx * t.num("sun.dist", 1, 1.08), r = e.rx * t.num("sun.r", 0.2, 0.26), s = t.num("sun.rot", 0, 2 * Math.PI);
-    for (let c = 0; c < a; c++) {
-      let i = s + 2 * Math.PI * c / a;
-      n.petals.push({ cx: e.cx + Math.cos(i) * o, cy: e.cy + Math.sin(i) * o, r });
-    }
-  } };
-  var $t = { name: "triangle", core: 1.15, path: lt, body: (t, e) => {
-    e.sides = 3, e.rot = t.num("body.rot", -5, 5), e.round = t.num("poly.round", 0.24, 0.5);
-  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.1, rx: t.rx * 0.54, ry: t.ry * 0.36 }) };
-  var Ht = [[yt, 0.22], [bt, 0.48], [xt, 0.6], [ht, 0.7], [dt, 0.79], [ft, 0.86], [gt, 0.915], [Mt, 0.95], [kt, 0.98], [$t, 1]];
-  var M = ut(Ht, it);
-  var Pt = st(M);
-  function ke(t, e) {
-    return "data:image/svg+xml," + Pt(t, e).replace(/"/g, "'").replace(/[%#<>{}|\\^[\]`]/g, (a) => "%" + a.charCodeAt(0).toString(16).toUpperCase()).replace(/\s+/g, " ");
-  }
-
-  // membership/member-blob.mjs
-  var OPTIONS = Object.freeze({ background: "square" });
-  var seedOf = (name) => String(name ?? "").trim() || "gbti";
-  function memberBlob(name) {
-    return ke(seedOf(name), OPTIONS);
-  }
-
-  // client-ui/src/member-avatars.mjs
-  var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  var AVATAR_LAYER_CSS = `img[data-blob], img[data-avphoto] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border:0; margin:0; max-width:none; }`;
-  function avatarLayers(seed, photo) {
-    const src = photo === void 0 ? memberAvatarUrl(seed) : String(photo || "");
-    return `<img data-blob src="${esc(memberBlob(seed))}" alt="" aria-hidden="true">` + (src ? `<img data-avphoto src="${esc(src)}" alt="" loading="lazy">` : "");
-  }
-  function attachAvatarFallback(root) {
-    if (!root || typeof root.addEventListener !== "function") return () => {
-    };
-    const onError = (ev) => {
-      const el = ev.target;
-      if (el && el.tagName === "IMG" && el.hasAttribute?.("data-avphoto")) el.remove();
-    };
-    root.addEventListener("error", onError, true);
-    return () => root.removeEventListener("error", onError, true);
-  }
-
-  // client-ui/src/base.mjs
-  var HAS_DOM = typeof HTMLElement !== "undefined";
-  var CLIENT = null;
-  var IDENTITY = null;
-  var SUBSCRIBERS = /* @__PURE__ */ new Set();
-  function setClient(client) {
-    CLIENT = client;
-    IDENTITY = null;
-    for (const fn of SUBSCRIBERS) {
-      try {
-        fn();
-      } catch {
-      }
-    }
-  }
-  function getClient() {
-    return CLIENT;
-  }
-  async function getIdentity() {
-    if (IDENTITY) return IDENTITY;
-    if (!CLIENT) return null;
-    try {
-      const s = await CLIENT.status();
-      IDENTITY = s?.identity ?? null;
-      return IDENTITY;
-    } catch {
-      return null;
-    }
-  }
-  var Base = HAS_DOM ? HTMLElement : class {
-  };
-  var GbtiElement = class extends Base {
-    constructor() {
-      super();
-      if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
-      this._ownClient = null;
-      this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
-    }
-    connectedCallback() {
-      SUBSCRIBERS.add(this._onClient);
-      if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
-      if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
-      this.render?.();
-    }
-    disconnectedCallback() {
-      SUBSCRIBERS.delete(this._onClient);
-      this._detachCdnFallback?.();
-      this._detachCdnFallback = null;
-      this._detachAvatarFallback?.();
-      this._detachAvatarFallback = null;
-    }
-    get client() {
-      return this._ownClient || getClient();
-    }
-    /**
-     * sow-399: give ONE element its own client. The website has many independent components that each call
-     * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
-     * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
-     * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
-     * The Worker re-checks the role on every call; this only decides which methods the element can reach.
-     */
-    set client(c) {
-      this._ownClient = c || null;
-      if (this.isConnected) this.render?.();
-    }
-    /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
-    css(extra = "") {
-      return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
-    }
-    set(markup) {
-      if (this.root) this.root.innerHTML = markup;
-    }
-    $(sel) {
-      return this.root?.querySelector(sel) ?? null;
-    }
-    $$(sel) {
-      return this.root ? [...this.root.querySelectorAll(sel)] : [];
-    }
-    on(sel, event, handler) {
-      const el = this.$(sel);
-      if (el) el.addEventListener(event, handler);
-    }
-    emit(name, detail) {
-      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
-    }
-  };
-  function define(tag, ctor) {
-    const ce = HAS_DOM ? globalThis.customElements : null;
-    if (!ce || ce.get(tag)) return;
-    ce.define(tag, ctor);
-  }
-  function esc2(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  }
+  // client-ui/src/elements/gbti-share-composer.mjs
+  init_base();
 
   // client-ui/src/workspace-core.mjs
   var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "share", "profile", "prs", "saved", "subs", "earnings"]);
@@ -3952,6 +8145,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { ...editing, path, staged: false, authorTarget: null, base, prevBase: base ? replaced : null, behind: null, draftKey: null };
   }
 
+  // client-ui/src/elements/gbti-category-picker.mjs
+  init_base();
+
   // client-ui/src/browse-filter-core.mjs
   function segChips(items, depth, underPrimary) {
     const map = /* @__PURE__ */ new Map();
@@ -4092,6 +8288,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/category-picker-core.mjs
+  init_base();
   var PATH_SEP = " — ";
   function treeNodesFromJson(data) {
     const tree = data && data.tree && typeof data.tree === "object" && !Array.isArray(data.tree) ? data.tree : null;
@@ -4582,1931 +8779,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${origin}/shares/${encodeURIComponent(author)}/${encodeURIComponent(id)}/`;
   }
 
-  // client/src/image-attrs.mjs
-  var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
-  var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
-  var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
-  function cleanCaption(s) {
-    return String(s ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
-  }
-  function imageTitleSuffix(caption) {
-    const c = cleanCaption(caption);
-    return c ? ` "${c}"` : "";
-  }
-  function parseImageLayout(suffix) {
-    if (suffix == null) return {};
-    const words = String(suffix).trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return null;
-    const out = {};
-    for (const w2 of words) {
-      if (!IMAGE_LAYOUT_WORDS.includes(w2)) return null;
-      if (w2 === "full") out.width = "full";
-      else if (w2 === "wrap") out.wrap = true;
-      else if (ALIGNS.has(w2)) {
-        if (out.align && out.align !== w2) return null;
-        out.align = w2;
-      }
-    }
-    return out;
-  }
-  function normalizeImageLayout(layout) {
-    const out = {};
-    if (layout?.width === "full") out.width = "full";
-    if (ALIGNS.has(layout?.align)) out.align = layout.align;
-    if (layout?.wrap === true) out.wrap = true;
-    return out;
-  }
-  function imageLayoutSuffix(layout) {
-    const n = normalizeImageLayout(layout);
-    const words = [];
-    if (n.width) words.push(n.width);
-    if (n.align) words.push(n.align);
-    if (n.wrap) words.push("wrap");
-    return words.length ? `{${words.join(" ")}}` : "";
-  }
-  function imageLayoutClasses(layout) {
-    const n = normalizeImageLayout(layout);
-    const out = [];
-    if (n.width) out.push("img-full");
-    if (n.align) out.push(`img-${n.align}`);
-    if (n.wrap && (n.align === "left" || n.align === "right")) out.push("img-wrap");
-    return out;
-  }
-  function parseImageLine(line) {
-    const m = IMAGE_LINE_RE.exec(String(line ?? ""));
-    if (!m) return null;
-    const layout = parseImageLayout(m[4]);
-    if (!layout) return null;
-    return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
-  }
-  function applyImageLayoutAction(layout, action) {
-    const n = normalizeImageLayout(layout);
-    switch (String(action || "")) {
-      case "natural":
-        delete n.width;
-        break;
-      case "full":
-        n.width = "full";
-        break;
-      case "left":
-      case "right":
-        n.align = action;
-        break;
-      case "center":
-        n.align = "center";
-        delete n.wrap;
-        break;
-      case "wrap":
-        if (n.align === "left" || n.align === "right") {
-          if (n.wrap) delete n.wrap;
-          else n.wrap = true;
-        }
-        break;
-      default:
-        break;
-    }
-    return n;
-  }
-
-  // client/src/list-attrs.mjs
-  var BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
-  var NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
-  var LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
-  var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
-  var LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
-  function styleKind(word) {
-    const w2 = String(word ?? "");
-    if (BULLET_WORDS.includes(w2)) return "bullet";
-    if (NUMBER_WORDS.includes(w2)) return "number";
-    return null;
-  }
-  function isDefaultStyle(word) {
-    const kind2 = styleKind(word);
-    return !!kind2 && LIST_STYLE_DEFAULTS[kind2] === String(word);
-  }
-  function normalizeListStyle(word, ordered) {
-    const kind2 = styleKind(word);
-    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
-    return isDefaultStyle(word) ? null : String(word);
-  }
-  function listStyleClass(style) {
-    return style && LIST_STYLE_CLASS_RE.test(`list-${style}`) ? `list-${style}` : null;
-  }
-  function listStyleFromClass(className) {
-    const tokens = Array.isArray(className) ? className : String(className ?? "").split(/\s+/);
-    for (const t of tokens) {
-      const m = LIST_STYLE_CLASS_RE.exec(String(t));
-      if (m) return m[1];
-    }
-    return null;
-  }
-  var SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
-  function splitListSuffix(text2, ordered, { bare = false } = {}) {
-    const m = SUFFIX_RE.exec(String(text2 ?? ""));
-    if (!m) return null;
-    const kind2 = styleKind(m[2]);
-    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
-    const rest = m[1];
-    if (!bare && rest.trim() === "") return null;
-    return { style: normalizeListStyle(m[2], !!ordered), rest };
-  }
-  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
-  function stripListStyleSuffix(line) {
-    const m = LINE_RE.exec(String(line ?? ""));
-    if (!m) return String(line ?? "");
-    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
-    if (!split) return String(line);
-    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
-  }
-
-  // client/src/list-items.mjs
-  var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
-  var THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
-  function isThematicBreak(line) {
-    return THEMATIC_BREAK_RE.test(String(line ?? ""));
-  }
-  function isListLine(line) {
-    const s = String(line ?? "");
-    return LIST_ITEM_RE.test(s) && !THEMATIC_BREAK_RE.test(s);
-  }
-  function opensRunBefore(items, i, depth, ordered) {
-    for (let j2 = i - 1; j2 >= 0; j2--) {
-      if (items[j2].depth < depth) return true;
-      if (items[j2].depth === depth) return items[j2].ordered !== ordered;
-    }
-    return true;
-  }
-  function opensRun(items, i) {
-    const it2 = items[i];
-    return !!it2 && opensRunBefore(items, i, it2.depth, it2.ordered);
-  }
-  function runOf(items, i) {
-    const d = items[i].depth;
-    const o = items[i].ordered;
-    let start = i;
-    for (let j2 = i - 1; j2 >= 0; j2--) {
-      if (items[j2].depth < d) break;
-      if (items[j2].depth === d) {
-        if (items[j2].ordered !== o) break;
-        start = j2;
-      }
-    }
-    const out = [];
-    for (let j2 = start; j2 < items.length; j2++) {
-      if (j2 > start && items[j2].depth < d) break;
-      if (items[j2].depth === d) {
-        if (items[j2].ordered !== o) break;
-        out.push(j2);
-      }
-    }
-    return out;
-  }
-  var BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
-  function continuesItem(line, markerIndent) {
-    const s = String(line ?? "");
-    if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
-    const lead = /^[ \t]*/.exec(s)[0].replace(/\t/g, "    ").length;
-    return lead > markerIndent && !BLOCK_OPENER_RE.test(s.trimStart());
-  }
-  function takeListRun(lines2, from = 0) {
-    const items = [];
-    let start = 1;
-    const stack = [0];
-    let topOrdered = null;
-    let i = from;
-    while (i < lines2.length) {
-      const m = LIST_ITEM_RE.exec(String(lines2[i] ?? ""));
-      if (!m || THEMATIC_BREAK_RE.test(String(lines2[i] ?? ""))) break;
-      const indent = m[1].replace(/\t/g, "    ").length;
-      const ordered = /^\d/.test(m[2]);
-      while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
-      if (indent > stack[stack.length - 1]) stack.push(indent);
-      const depth = stack.length - 1;
-      if (depth === 0) {
-        if (topOrdered === null) topOrdered = ordered;
-        else if (ordered !== topOrdered) break;
-      }
-      const item = { text: m[3], depth, ordered };
-      if (!items.length && ordered && depth === 0) start = Number.parseInt(m[2], 10) || 1;
-      items.push(item);
-      i++;
-      while (i < lines2.length && continuesItem(lines2[i], indent)) {
-        item.text += `
-${String(lines2[i]).trimStart()}`;
-        i++;
-      }
-    }
-    for (let k = 0; k < items.length; k++) {
-      if (!opensRun(items, k)) continue;
-      const [first, ...more] = items[k].text.split("\n");
-      const split = splitListSuffix(first, items[k].ordered);
-      if (!split) continue;
-      items[k].text = [split.rest, ...more].join("\n");
-      if (split.style) items[k].style = split.style;
-    }
-    return { items, next: i, start };
-  }
-  function normalizeListItems(items, ordered = false) {
-    const out = [];
-    let prevDepth = -1;
-    for (const raw of Array.isArray(items) ? items : []) {
-      const it2 = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
-      let depth = Math.max(0, Math.floor(Number(it2.depth) || 0));
-      if (depth > prevDepth + 1) depth = prevDepth + 1;
-      const own = typeof it2.ordered === "boolean" ? it2.ordered : false;
-      const isOrdered = depth === 0 ? !!ordered : own;
-      const item = { text: String(it2.text ?? ""), depth, ordered: isOrdered };
-      const style = it2.style ? normalizeListStyle(it2.style, isOrdered) : null;
-      if (style && opensRunBefore(out, out.length, depth, isOrdered)) item.style = style;
-      out.push(item);
-      prevDepth = depth;
-    }
-    return out;
-  }
-  function isFlatList(items) {
-    const list = Array.isArray(items) ? items : [];
-    if (!list.length) return true;
-    const first = list[0];
-    const firstOrdered = first && typeof first === "object" ? !!first.ordered : null;
-    return list.every((it2) => {
-      if (!it2 || typeof it2 !== "object") return firstOrdered === null;
-      return (Number(it2.depth) || 0) === 0 && !!it2.ordered === firstOrdered && !it2.style;
-    });
-  }
-  function serializeListItems(items, ordered = false, { start = 1 } = {}) {
-    const norm3 = normalizeListItems(items, ordered);
-    const lines2 = [];
-    const counters = [];
-    const indents = [];
-    const markerWidth = [];
-    let prevDepth = -1;
-    let prevOrderedAtDepth = [];
-    for (const it2 of norm3) {
-      if (it2.depth > prevDepth) {
-        counters[it2.depth] = it2.depth === 0 ? Math.max(0, Math.floor(Number(start) || 1) - 1) : 0;
-        indents[it2.depth] = it2.depth === 0 ? "" : indents[it2.depth - 1] + " ".repeat(markerWidth[it2.depth - 1] || 2);
-        prevOrderedAtDepth[it2.depth] = it2.ordered;
-      } else if (it2.depth < prevDepth) {
-        counters.length = it2.depth + 1;
-        prevOrderedAtDepth.length = it2.depth + 1;
-      }
-      if (prevOrderedAtDepth[it2.depth] !== it2.ordered) {
-        counters[it2.depth] = 0;
-        prevOrderedAtDepth[it2.depth] = it2.ordered;
-      }
-      counters[it2.depth] = (counters[it2.depth] || 0) + 1;
-      const marker = it2.ordered ? `${counters[it2.depth]}. ` : "- ";
-      markerWidth[it2.depth] = marker.length;
-      const suffix = it2.style && it2.text.trim() !== "" ? ` {${it2.style}}` : "";
-      const [first, ...more] = it2.text.split("\n");
-      lines2.push(`${indents[it2.depth]}${marker}${first}${suffix}`);
-      for (const l of more) lines2.push(`${indents[it2.depth]}${" ".repeat(marker.length)}${l}`);
-      prevDepth = it2.depth;
-    }
-    return lines2;
-  }
-  function withClass(attrs, cls) {
-    const a = String(attrs || "");
-    if (!cls) return a;
-    if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v2) => `class="${v2 ? `${v2} ` : ""}${cls}"`);
-    return `${a ? `${a} ` : ""}class="${cls}"`;
-  }
-  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
-    const norm3 = normalizeListItems(items, ordered);
-    let html = "";
-    const open = [];
-    const openList = (it2) => {
-      const tag = it2.ordered ? "ol" : "ul";
-      const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it2.style));
-      html += `<${tag}${attrs ? ` ${attrs}` : ""}>`;
-      open.push({ tag, ordered: it2.ordered });
-    };
-    const closeList = () => {
-      html += `</li></${open.pop().tag}>`;
-    };
-    for (const it2 of norm3) {
-      while (open.length > it2.depth + 1) closeList();
-      if (open.length === it2.depth + 1) {
-        const cur = open[open.length - 1];
-        if (cur.ordered !== it2.ordered) {
-          closeList();
-          openList(it2);
-          html += `<li>${inline4(it2.text)}`;
-        } else html += `</li><li>${inline4(it2.text)}`;
-      } else {
-        openList(it2);
-        html += `<li>${inline4(it2.text)}`;
-      }
-    }
-    while (open.length) closeList();
-    return html;
-  }
-  function indentListItem(items, index, delta, ordered = false) {
-    const norm3 = normalizeListItems(items, ordered);
-    const i = Number(index);
-    if (!(i >= 0 && i < norm3.length) || !delta) return null;
-    const oldDepth = norm3[i].depth;
-    const maxDepth = i === 0 ? 0 : norm3[i - 1].depth + 1;
-    const newDepth = Math.max(0, Math.min(maxDepth, oldDepth + (delta > 0 ? 1 : -1)));
-    if (newDepth === oldDepth) return null;
-    const shift = newDepth - oldDepth;
-    const out = norm3.map((it2) => ({ ...it2 }));
-    if (out[i].style) {
-      for (let j2 = i + 1; j2 < out.length; j2++) {
-        if (out[j2].depth < oldDepth) break;
-        if (out[j2].depth === oldDepth) {
-          if (out[j2].ordered === out[i].ordered) out[j2].style = out[i].style;
-          break;
-        }
-      }
-      delete out[i].style;
-    }
-    out[i].depth = newDepth;
-    for (let j2 = i - 1; j2 >= 0; j2--) {
-      if (out[j2].depth < newDepth) break;
-      if (out[j2].depth === newDepth) {
-        out[i].ordered = out[j2].ordered;
-        break;
-      }
-    }
-    for (let j2 = i + 1; j2 < out.length && out[j2].depth > oldDepth; j2++) out[j2].depth = Math.max(0, out[j2].depth + shift);
-    return normalizeListItems(out, ordered);
-  }
-  function listRunState(items, ordered = false, index = 0) {
-    const norm3 = normalizeListItems(items, ordered);
-    if (!norm3.length) return { ordered: !!ordered, style: null, depth: 0 };
-    const i = Math.min(Math.max(0, Number(index) || 0), norm3.length - 1);
-    const run = runOf(norm3, i);
-    return { ordered: norm3[i].ordered, style: norm3[run[0]].style || null, depth: norm3[i].depth };
-  }
-  function applyListAction(list, index, action) {
-    const ordered = !!list?.ordered;
-    const norm3 = normalizeListItems(list?.items, ordered);
-    const i = Number(index);
-    if (!(i >= 0 && i < norm3.length)) return null;
-    const act = String(action || "");
-    let wantOrdered = null;
-    let wantStyle;
-    if (act === "ordered" || act === "unordered") wantOrdered = act === "ordered";
-    else if (act.startsWith("style:")) {
-      const word = act.slice("style:".length);
-      if (word === "default") wantStyle = null;
-      else {
-        const kind2 = styleKind(word);
-        if (!kind2) return null;
-        wantOrdered = kind2 === "number";
-        wantStyle = normalizeListStyle(word, wantOrdered);
-      }
-    } else return null;
-    const out = norm3.map((it2) => ({ ...it2 }));
-    if (wantOrdered !== null) for (const j2 of runOf(out, i)) out[j2].ordered = wantOrdered;
-    if (wantStyle !== void 0) {
-      const run = runOf(out, i);
-      for (const j2 of run) delete out[j2].style;
-      if (wantStyle) out[run[0]].style = wantStyle;
-    }
-    const topOrdered = out[0].ordered;
-    const next = normalizeListItems(out, topOrdered);
-    if (JSON.stringify(next) === JSON.stringify(norm3)) return null;
-    return { ordered: topOrdered, items: next };
-  }
-
-  // client/src/underscore-emphasis.mjs
-  var OPAQUE = /\u0000A\d+\u0000|\uE000\d+\uE001|<[^>]*>|&(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);|`[^`\n]*`|\\_/giy;
-  var WS = /\s/u;
-  var PUNCT = /[\p{P}\p{S}]/u;
-  function tokenize(src) {
-    const out = [];
-    let i = 0;
-    while (i < src.length) {
-      OPAQUE.lastIndex = i;
-      const m = OPAQUE.exec(src);
-      if (m) {
-        out.push({ opaque: m[0] });
-        i += m[0].length;
-        continue;
-      }
-      const cp = src.codePointAt(i);
-      const ch = String.fromCodePoint(cp);
-      out.push({ ch });
-      i += ch.length;
-    }
-    return out;
-  }
-  function kind(tok) {
-    if (!tok) return "ws";
-    if (tok.opaque !== void 0) return "punct";
-    if (WS.test(tok.ch)) return "ws";
-    if (PUNCT.test(tok.ch)) return "punct";
-    return "word";
-  }
-  function underscoreEmphasis(html, { em = "<em>", strong = "<strong>", keepEscapes = false } = {}) {
-    const src = String(html ?? "");
-    if (!src.includes("_")) return src;
-    const toks = tokenize(src);
-    const runs = [];
-    for (let i = 0; i < toks.length; i++) {
-      if (toks[i].ch !== "_") continue;
-      let j2 = i;
-      while (j2 + 1 < toks.length && toks[j2 + 1].ch === "_") j2++;
-      const before = kind(toks[i - 1]);
-      const after = kind(toks[j2 + 1]);
-      const left = after !== "ws" && (after !== "punct" || before === "ws" || before === "punct");
-      const right = before !== "ws" && (before !== "punct" || after === "ws" || after === "punct");
-      runs.push({
-        at: i,
-        len: j2 - i + 1,
-        count: j2 - i + 1,
-        canOpen: left && (!right || before === "punct"),
-        canClose: right && (!left || after === "punct"),
-        opens: [],
-        closes: []
-      });
-      i = j2;
-    }
-    if (!runs.length) return render(toks, /* @__PURE__ */ new Map(), keepEscapes);
-    const emClose = em.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
-    const strongClose = strong.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
-    const stack = [];
-    for (const r of runs) {
-      if (r.canClose) {
-        while (r.count > 0) {
-          let k = stack.length - 1;
-          for (; k >= 0; k--) {
-            const o2 = stack[k];
-            if (o2.count === 0) continue;
-            const oddMatch = (o2.canClose || r.canOpen) && (o2.len + r.len) % 3 === 0 && !(o2.len % 3 === 0 && r.len % 3 === 0);
-            if (!oddMatch) break;
-          }
-          if (k < 0) break;
-          const o = stack[k];
-          const use = o.count >= 2 && r.count >= 2 ? 2 : 1;
-          o.count -= use;
-          r.count -= use;
-          o.opens.unshift(use === 2 ? strong : em);
-          r.closes.push(use === 2 ? strongClose : emClose);
-          stack.length = o.count > 0 ? k + 1 : k;
-        }
-      }
-      if (r.count > 0 && r.canOpen) stack.push(r);
-    }
-    return render(toks, new Map(runs.map((r) => [r.at, r])), keepEscapes);
-  }
-  function render(toks, runAt, keepEscapes) {
-    let out = "";
-    for (let i = 0; i < toks.length; i++) {
-      const r = runAt.get(i);
-      if (r) {
-        out += r.closes.join("") + "_".repeat(r.count) + r.opens.join("");
-        i += r.len - 1;
-        continue;
-      }
-      const t = toks[i];
-      if (t.opaque !== void 0) out += t.opaque === "\\_" && !keepEscapes ? "_" : t.opaque;
-      else out += t.ch;
-    }
-    return out;
-  }
-  var UNDERSCORE_MARK = 'data-md="_"';
-
-  // client-ui/src/markdown-blocks.mjs
-  var MEMBERS_MARKER = "<!-- members-only -->";
-  var isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
-  function splitTableRow(line) {
-    let s = String(line).trim();
-    if (s.startsWith("|")) s = s.slice(1);
-    if (s.endsWith("|")) s = s.slice(0, -1);
-    return s.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
-  }
-  function tableAlign(spec) {
-    const s = String(spec).trim();
-    const l = s.startsWith(":");
-    const r = s.endsWith(":");
-    return l && r ? "center" : r ? "right" : l ? "left" : "";
-  }
-  var isTableStart = (lines2, i) => i + 1 < lines2.length && lines2[i].includes("|") && isTableDelimLine(lines2[i + 1]);
-  var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-  var normalizeVariant = (v2) => CALLOUT_VARIANTS.includes(v2) ? v2 : "note";
-  var isMarker = (l) => l.trim() === MEMBERS_MARKER;
-  var isFence = (l) => /^```/.test(l);
-  var isHeading = (l) => /^#{1,6}\s+/.test(l);
-  var isQuote = (l) => /^>\s?/.test(l);
-  var isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
-  var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
-  var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
-  var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
-  function serializeBlocks(blocks2) {
-    const list = Array.isArray(blocks2) ? blocks2 : [];
-    let next = 1;
-    return list.map((b, i) => {
-      if (b && b.type === "list" && b.ordered) {
-        const prev = list[i - 1];
-        const start = prev && prev.type === "list" && prev.ordered ? next : 1;
-        const items = listBlockItems(b);
-        next = start + items.filter((it2) => !(it2 && typeof it2 === "object" && Number(it2.depth) > 0)).length;
-        return serializeListItems(items, true, { start }).join("\n");
-      }
-      return serializeBlock(b);
-    }).join("\n\n");
-  }
-  var listBlockItems = (b) => Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
-  function serializeBlock(b) {
-    if (!b || typeof b !== "object") return "";
-    switch (b.type) {
-      case "members":
-        return MEMBERS_MARKER;
-      case "heading":
-        return `${"#".repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ""}`;
-      case "code":
-      case "audio": {
-        const code = b.code ?? "";
-        const runs = code.match(/^`{3,}/gm) || [];
-        const fence = "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
-        return fence + (b.lang ?? "") + "\n" + code + "\n" + fence;
-      }
-      case "callout":
-        return "```callout " + normalizeVariant(b.variant) + (b.small ? " small" : "") + "\n" + (b.text ?? "") + "\n```";
-      case "quote":
-        return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
-      case "list": {
-        return serializeListItems(listBlockItems(b), !!b.ordered).join("\n");
-      }
-      case "table": {
-        const head = Array.isArray(b.head) ? b.head : [];
-        const aligns = Array.isArray(b.aligns) ? b.aligns : [];
-        const rows = Array.isArray(b.rows) ? b.rows : [];
-        const cols = Math.max(1, head.length);
-        const cell = (c) => String(c ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
-        const pad = (arr) => {
-          const a = arr.slice(0, cols);
-          while (a.length < cols) a.push("");
-          return a;
-        };
-        const line = (cells) => "| " + pad(cells).map(cell).join(" | ") + " |";
-        const delim = "| " + pad(head).map((_, i) => {
-          const a = aligns[i] || "";
-          return a === "center" ? ":---:" : a === "right" ? "---:" : a === "left" ? ":---" : "---";
-        }).join(" | ") + " |";
-        return [line(head), delim, ...rows.map(line)].join("\n");
-      }
-      case "image":
-        return `![${b.alt ?? ""}](${b.url ?? ""}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
-      case "embed":
-        return "```embed" + (b.lightbox ? " lightbox" : "") + "\n" + (b.url ?? "") + "\n```";
-      // lightbox: owner 2026-10-13
-      case "paragraph":
-      default:
-        return String(b.text ?? "");
-    }
-  }
-  function parseBlocks(md) {
-    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const blocks2 = [];
-    const n = lines2.length;
-    let i = 0;
-    while (i < n) {
-      const line = lines2[i];
-      if (line.trim() === "") {
-        i++;
-        continue;
-      }
-      if (isMarker(line)) {
-        blocks2.push({ type: "members" });
-        i++;
-        continue;
-      }
-      if (isFence(line)) {
-        const open = /^(`{3,})(.*)$/.exec(line);
-        const fenceLen = open[1].length;
-        const lang = open[2].trim();
-        const info = lang.split(/\s+/);
-        const code = [];
-        i++;
-        while (i < n) {
-          const close = /^(`{3,})\s*$/.exec(lines2[i]);
-          if (close && close[1].length >= fenceLen) break;
-          code.push(lines2[i]);
-          i++;
-        }
-        i++;
-        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), ...info.slice(2).includes("small") ? { small: true } : {}, text: code.join("\n") });
-        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim(), ...info[1] === "lightbox" ? { lightbox: true } : {} });
-        else if (info[0] === "audio") blocks2.push({ type: "audio", lang, code: code.join("\n") });
-        else blocks2.push({ type: "code", lang, code: code.join("\n") });
-        continue;
-      }
-      let m = line.match(/^(#{1,6})\s+(.*)$/);
-      if (m) {
-        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
-        i++;
-        continue;
-      }
-      if (isQuote(line)) {
-        const q2 = [];
-        while (i < n && isQuote(lines2[i])) {
-          q2.push(lines2[i].replace(/^>\s?/, ""));
-          i++;
-        }
-        blocks2.push({ type: "quote", text: q2.join("\n") });
-        continue;
-      }
-      if (isListItem(line)) {
-        const run = takeListRun(lines2, i);
-        if (run.next <= i) {
-          blocks2.push({ type: "paragraph", text: line });
-          i++;
-          continue;
-        }
-        const ordered = !!run.items[0]?.ordered;
-        const items = isFlatList(run.items) ? run.items.map((it2) => it2.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
-        blocks2.push({ type: "list", ordered, items });
-        i = run.next;
-        continue;
-      }
-      if (isTableStart(lines2, i)) {
-        const head = splitTableRow(lines2[i]);
-        const cols = Math.max(1, head.length);
-        const aligns = splitTableRow(lines2[i + 1]).map(tableAlign).slice(0, cols);
-        while (aligns.length < cols) aligns.push("");
-        i += 2;
-        const rows = [];
-        while (i < n && lines2[i].trim() !== "" && lines2[i].includes("|") && !isMarker(lines2[i]) && !isFence(lines2[i]) && !isHeading(lines2[i]) && !isQuote(lines2[i])) {
-          const row = splitTableRow(lines2[i]).slice(0, cols);
-          while (row.length < cols) row.push("");
-          rows.push(row);
-          i++;
-        }
-        blocks2.push({ type: "table", head, aligns, rows });
-        continue;
-      }
-      const im = parseImageLine(line);
-      if (im) {
-        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
-        i++;
-        continue;
-      }
-      if (isBareUrl(line) && isVideoUrl(line)) {
-        blocks2.push({ type: "embed", url: line.trim() });
-        i++;
-        continue;
-      }
-      const para = [];
-      while (i < n) {
-        const l = lines2[i];
-        if (l.trim() === "" || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || isBareUrl(l) && isVideoUrl(l) || isTableStart(lines2, i)) break;
-        para.push(l);
-        i++;
-      }
-      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
-      else i++;
-    }
-    return blocks2;
-  }
-  function emptyBlock(type) {
-    switch (type) {
-      case "heading":
-        return { type: "heading", level: 2, text: "" };
-      case "code":
-        return { type: "code", lang: "", code: "" };
-      case "quote":
-        return { type: "quote", text: "" };
-      case "list":
-        return { type: "list", ordered: false, items: [""] };
-      case "table":
-        return { type: "table", head: ["Column 1", "Column 2"], aligns: ["", ""], rows: [["", ""], ["", ""]] };
-      case "image":
-        return { type: "image", alt: "", url: "" };
-      case "embed":
-        return { type: "embed", url: "" };
-      case "callout":
-        return { type: "callout", variant: "note", text: "" };
-      case "members":
-        return { type: "members" };
-      case "audio":
-        return { type: "audio", lang: "audio", code: "" };
-      default:
-        return { type: "paragraph", text: "" };
-    }
-  }
-  var REL_ALLOWED = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
-  var DANGEROUS_SCHEME = /^\s*(?:javascript|data|vbscript):/i;
-  function isDangerousUrl(url) {
-    const decoded = decodeEnt(String(url ?? "")).replace(/[\x00-\x20]+/g, "");
-    return DANGEROUS_SCHEME.test(decoded) || DANGEROUS_SCHEME.test(String(url ?? ""));
-  }
-  function sanitizeRel(rel) {
-    const kept = [];
-    for (const tok of String(rel || "").trim().split(/\s+/)) {
-      const t = tok.toLowerCase();
-      if (REL_ALLOWED.has(t) && !kept.includes(t)) kept.push(t);
-    }
-    return kept;
-  }
-  var attrOf = (attrs, name) => {
-    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
-    return m ? m[1] : "";
-  };
-  var decodeEntOnce = (s) => String(s ?? "").replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
-    try {
-      return String.fromCodePoint(parseInt(h, 16));
-    } catch {
-      return "";
-    }
-  }).replace(/&#(\d+);?/g, (_m, d) => {
-    try {
-      return String.fromCodePoint(parseInt(d, 10));
-    } catch {
-      return "";
-    }
-  }).replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
-  var decodeEnt = (s) => {
-    let p = String(s ?? "");
-    for (let i = 0; i < 4; i += 1) {
-      const n = decodeEntOnce(p);
-      if (n === p) break;
-      p = n;
-    }
-    return p;
-  };
-  var escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  function parseLinkAttrs(attrs) {
-    const rawHref = decodeEnt(attrOf(attrs, "href"));
-    const href = isDangerousUrl(rawHref) ? "" : rawHref;
-    const rel = sanitizeRel(attrOf(attrs, "rel"));
-    const blank2 = attrOf(attrs, "target").toLowerCase() === "_blank";
-    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
-    return { href, rel, blank: blank2, attributed: rel.length > 0 || blank2 };
-  }
-  var SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
-  function sanitizeInner(html) {
-    return String(html ?? "").replace(
-      /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
-      (_m, slash, tag) => SAFE_INNER_TAG.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
-    );
-  }
-  function rawAnchor(href, rel, blank2, inner) {
-    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank2 ? ' target="_blank"' : "";
-    return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
-  }
-  var FN_REF_ID = "[A-Za-z0-9_-]+";
-  var FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, "g");
-  var EM_US = `<em ${UNDERSCORE_MARK}>`;
-  var STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
-  var WORD_CHAR = /[\p{L}\p{N}]/u;
-  function emphasisMark(attrs, all, at3, len, star) {
-    if (!/\bdata-md="_"/.test(attrs)) return star;
-    const before = all[at3 - 1] ?? "";
-    const after = all[at3 + len] ?? "";
-    return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, "_");
-  }
-  function inlineMdToHtml(md) {
-    let src = String(md ?? "");
-    const keep = [];
-    src = src.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
-      const a = parseLinkAttrs(attrs);
-      keep.push(a.href ? rawAnchor(a.href, a.rel, a.blank, inner) : inner);
-      return `\0A${keep.length - 1}\0`;
-    });
-    let h = src.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    h = h.replace(FN_REF_RE, (_m, id) => {
-      keep.push(`<sup class="md-fnchip" contenteditable="false" data-fn="${id}">${id}</sup>`);
-      return `\0A${keep.length - 1}\0`;
-    });
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text2, url) => isDangerousUrl(url) ? text2 : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text2}</a>`);
-    h = h.replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>");
-    h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    h = underscoreEmphasis(h, { em: EM_US, strong: STRONG_US, keepEscapes: true });
-    h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
-    h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
-    h = h.replace(/ {2,}\n/g, "<br>");
-    h = h.replace(new RegExp(`\\n(?=\\[\\^${FN_REF_ID}\\]:)`, "g"), '<br data-md="fn">');
-    h = h.replace(/\n/g, " ");
-    return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
-  }
-  function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
-    let s = String(html ?? "");
-    const keep = [];
-    s = s.replace(new RegExp(`<sup\\b[^>]*\\bdata-fn="(${FN_REF_ID})"[^>]*>[\\s\\S]*?<\\/sup>`, "gi"), (_m, id) => {
-      keep.push(`[^${id}]`);
-      return `\0A${keep.length - 1}\0`;
-    });
-    s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
-      const a = parseLinkAttrs(attrs);
-      if (!a.href) return inner;
-      if (!a.attributed) return `[${inner}](${a.href})`;
-      const rendererShaped = a.blank && a.rel.length === 1 && a.rel[0] === "noopener" && !/</.test(inner);
-      if (rendererAnchors && rendererShaped) return `[${inner}](${a.href})`;
-      keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
-      return `\0A${keep.length - 1}\0`;
-    });
-    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
-      const d = emphasisMark(attrs, all, at3, m.length, "**");
-      return `${d}${inner}${d}`;
-    });
-    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at3, all) => {
-      const d = emphasisMark(attrs, all, at3, m.length, "*");
-      return `${d}${inner}${d}`;
-    });
-    s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
-    s = s.replace(/<code>([\s\S]*?)<\/code>/gi, "`$1`");
-    s = s.replace(/<br\b[^>]*\bdata-md="fn"[^>]*>/gi, "\n");
-    s = s.replace(/<br\s*\/?>/gi, "  \n");
-    s = s.replace(/^\s*<div>/i, "");
-    s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
-    s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
-      const at3 = (name) => {
-        const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(attrs);
-        return m ? m[1] ?? m[2] ?? "" : "";
-      };
-      const ref = at3("data-ref") || at3("src");
-      if (!/^(https?:\/\/|\.\/)/i.test(ref)) return "";
-      return `![${at3("alt").replace(/[\[\]]/g, "")}](${ref})`;
-    });
-    s = s.replace(/<[^>]+>/g, "");
-    s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-    return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
-  }
-  function textBlockToHtml(text2) {
-    return String(text2 ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
-  }
-  function textBlockFromHtml(html) {
-    const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
-    return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join("\n\n");
-  }
-
-  // client/src/video-embed.mjs
-  function embedUrl(v2) {
-    const s = String(v2 || "").trim();
-    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
-    if (m) return `https://www.youtube.com/embed/${m[1]}`;
-    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (m) return `https://player.vimeo.com/video/${m[1]}`;
-    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
-    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
-    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
-    if (m) return `https://rumble.com/embed/${m[1]}/`;
-    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
-    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
-    return null;
-  }
-  function bareVideoLine(line) {
-    const s = String(line ?? "").trim();
-    if (!/^https?:\/\/\S+$/.test(s)) return null;
-    return embedUrl(s) ? s : null;
-  }
-  function embedPoster(url) {
-    const src = embedUrl(url);
-    if (!src) return null;
-    const yt2 = src.match(/youtube\.com\/embed\/([\w-]{11})/);
-    const provider = yt2 ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
-    return { src, thumb: yt2 ? `https://i.ytimg.com/vi/${yt2[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
-  }
-  var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  function embedPosterHtml(url, { frameSrc } = {}) {
-    const p = embedPoster(url);
-    if (!p) return "";
-    const src = frameSrc || p.src;
-    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr2(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr2(p.provider)}</span>`;
-    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr2(src)}" data-embed-url="${escAttr2(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
-  }
-  var MIXCLOUD_SITE_PAGES = /* @__PURE__ */ new Set([
-    "about",
-    "account",
-    "api",
-    "categories",
-    "dashboard",
-    "developers",
-    "discover",
-    "genres",
-    "help",
-    "live",
-    "login",
-    "media",
-    "messages",
-    "notifications",
-    "oembed",
-    "player",
-    "pricing",
-    "pro",
-    "search",
-    "select",
-    "settings",
-    "signup",
-    "tag",
-    "tags",
-    "upload",
-    "widget"
-  ]);
-  var MIXCLOUD_ACCOUNT_PAGES = /* @__PURE__ */ new Set([
-    "favorites",
-    "followers",
-    "following",
-    "hosts",
-    "listens",
-    "playlists",
-    "reposts",
-    "shows",
-    "stream",
-    "uploads"
-  ]);
-  function audioEmbedUrl(v2) {
-    let u;
-    try {
-      u = new URL(String(v2 || "").trim());
-    } catch {
-      return null;
-    }
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
-    const seg2 = u.pathname.split("/").filter(Boolean);
-    if (seg2.length !== 2) return null;
-    const [account, mix] = seg2;
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
-    if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
-    return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
-  }
-  function shareEmbed(url) {
-    const video = embedUrl(url);
-    if (video) return { src: video, kind: isPortraitEmbed(video) ? "portrait" : "video" };
-    const audio = audioEmbedUrl(url);
-    return audio ? { src: audio, kind: "audio" } : null;
-  }
-  var AUDIO_EMBED_HEIGHT = 120;
-  function isPortraitEmbed(src) {
-    return /tiktok\.com\/embed\//.test(String(src || ""));
-  }
-
-  // client/src/audio-embed.mjs
-  var AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
-  var PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
-  var DEFAULT_LINK_LABELS = { soundcloud: "Listen on SoundCloud", spotify: "Listen on Spotify", apple: "Open in Apple Podcasts" };
-  var SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
-    "discover",
-    "search",
-    "charts",
-    "stations",
-    "you",
-    "upload",
-    "settings",
-    "messages",
-    "notifications",
-    "pages",
-    "people",
-    "popular",
-    "terms-of-use",
-    "imprint",
-    "jobs",
-    "mobile",
-    "pro",
-    "feed",
-    "player",
-    "widget"
-  ]);
-  var parse = (raw) => {
-    try {
-      const u = new URL(String(raw ?? "").trim());
-      return /^https?:$/.test(u.protocol) ? u : null;
-    } catch {
-      return null;
-    }
-  };
-  function audioEmbed(provider, raw) {
-    const u = parse(raw);
-    if (!u) return null;
-    const host = u.hostname.toLowerCase().replace(/^(www|m)\./, "");
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (provider === "soundcloud") {
-      if (host !== "soundcloud.com") return null;
-      const [account, second, third, fourth] = parts;
-      if (!account || SOUNDCLOUD_RESERVED.has(account.toLowerCase()) || !/^[A-Za-z0-9_-]+$/.test(account)) return null;
-      let kind2 = null;
-      let pagePath = null;
-      if (second === "sets" && third && /^[A-Za-z0-9_-]+$/.test(third) && (!fourth || /^s-[A-Za-z0-9]+$/.test(fourth)) && parts.length <= 4) {
-        kind2 = "playlist";
-        pagePath = parts.join("/");
-      } else if (second && second !== "sets" && /^[A-Za-z0-9_-]+$/.test(second) && (!third || /^s-[A-Za-z0-9]+$/.test(third)) && parts.length <= 3 && !["tracks", "albums", "reposts", "likes", "followers", "following", "comments", "popular-tracks"].includes(second)) {
-        kind2 = "track";
-        pagePath = parts.join("/");
-      }
-      if (!kind2) return null;
-      const page = `https://soundcloud.com/${pagePath}`;
-      const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(page)}&color=%231f9e5f&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
-      return { provider, kind: kind2, page, src, height: kind2 === "playlist" ? 300 : 166 };
-    }
-    if (provider === "spotify") {
-      if (host !== "open.spotify.com") return null;
-      const p = /^intl-[a-z-]+$/i.test(parts[0] || "") ? parts.slice(1) : parts;
-      const [kind2, id] = p;
-      if (!["episode", "show"].includes(kind2) || !/^[A-Za-z0-9]{22}$/.test(id || "") || p.length !== 2) return null;
-      return { provider, kind: kind2, page: `https://open.spotify.com/${kind2}/${id}`, src: `https://open.spotify.com/embed/${kind2}/${id}`, height: 152 };
-    }
-    if (provider === "apple") {
-      if (host !== "podcasts.apple.com") return null;
-      const [cc, word, ...rest] = parts;
-      if (!/^[a-z]{2}$/i.test(cc || "") || word !== "podcast") return null;
-      const idSeg = rest[rest.length - 1] || "";
-      const name = rest.length === 2 ? rest[0] : null;
-      if (!/^id\d+$/.test(idSeg) || rest.length > 2 || name !== null && !/^[A-Za-z0-9%_.-]+$/.test(name)) return null;
-      const episode = u.searchParams.get("i");
-      if (episode !== null && !/^\d+$/.test(episode)) return null;
-      const pathPart = `${cc.toLowerCase()}/podcast/${name ? `${name}/` : ""}${idSeg}${episode ? `?i=${episode}` : ""}`;
-      return { provider, kind: episode ? "episode" : "show", page: `https://podcasts.apple.com/${pathPart}`, src: `https://embed.podcasts.apple.com/${pathPart}`, height: episode ? 175 : 450 };
-    }
-    return null;
-  }
-  var KNOWN_HOSTS = [
-    [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
-    [/(^|\.)vimeo\.com$/, "Vimeo"],
-    [/(^|\.)tiktok\.com$/, "TikTok"],
-    [/(^|\.)mixcloud\.com$/, "Mixcloud"],
-    [/(^|\.)soundcloud\.com$/, "SoundCloud"],
-    [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
-    [/(^|\.)apple\.com$/, "Apple"]
-  ];
-  function embedProblem(provider, raw) {
-    const name = PROVIDER_NAMES[provider] || "this service";
-    const wants = { soundcloud: "a SoundCloud track or playlist link", spotify: "a Spotify episode or show link", apple: "an Apple Podcasts episode or show link" }[provider] || "a link";
-    const u = parse(raw);
-    if (!u) return `"${String(raw ?? "").trim()}" is not a web address. Paste ${wants}.`;
-    const host = u.hostname.toLowerCase();
-    if (/^on\.soundcloud\.com$|^spotify\.link$|^spoti\.fi$/.test(host)) return `This is a short link. Open it, then copy the full ${name} address from the page.`;
-    const known = KNOWN_HOSTS.find(([re]) => re.test(host.replace(/^(www|m)\./, "")));
-    if (known && known[1] !== name && !(provider === "apple" && known[1] === "Apple")) {
-      const video = ["YouTube", "Vimeo", "TikTok"].includes(known[1]) ? ", or add the video with a Video block" : "";
-      return `This is a ${known[1]} link. Paste ${wants}${video}.`;
-    }
-    return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
-  }
-
-  // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
-  var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-  function parsePercent(v2) {
-    const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    return n >= 0 && n <= 100 ? n : null;
-  }
-  var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
-  function keyValue(line) {
-    const i = line.indexOf(":");
-    if (i <= 0) return { k: null, v: line };
-    return { k: line.slice(0, i).trim(), v: line.slice(i + 1).trim() };
-  }
-  function parseTags(body) {
-    return { tags: lines(body) };
-  }
-  function parseBar(body) {
-    const out = { label: "", value: null, raw: "", note: "", unknown: [] };
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "label") out.label = v2;
-      else if (key === "value") {
-        out.raw = v2;
-        out.value = parsePercent(v2);
-      } else if (key === "note") out.note = v2;
-      else out.unknown.push(l);
-    }
-    return out;
-  }
-  function parseFacts(body) {
-    const rows = [];
-    const bad = [];
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      if (!k) {
-        bad.push(l);
-        continue;
-      }
-      const m = v2.match(/^(.*?)\s*\{bar\}\s*$/);
-      const value = m ? m[1].trim() : v2;
-      rows.push({ k, v: value, bar: m ? parsePercent(value) : null, barAsked: !!m });
-    }
-    return { rows, bad };
-  }
-  function parseStats(body) {
-    let caption = "";
-    const stats = [];
-    const bad = [];
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      if (k && k.toLowerCase() === "caption") {
-        caption = v2;
-        continue;
-      }
-      if (!k || !v2) {
-        bad.push(l);
-        continue;
-      }
-      stats.push({ value: k, label: v2 });
-    }
-    return { caption, stats, bad };
-  }
-  function parseButton(body) {
-    const ls = lines(body);
-    let label = ls[0] ?? "";
-    let url = ls[1] ?? "";
-    if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
-    return { label, url: safeUrl(url), rawUrl: url };
-  }
-  var REVEAL_MAX_PARTS = 6;
-  var REVEAL_DEFAULT_LABEL = "Show more";
-  function parseWeights(v2) {
-    const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-    if (!parts.length) return null;
-    const out = [];
-    for (const p of parts) {
-      const m = p.match(/^(.+?)[:\s]\s*(\d{1,3})\s*%?$/);
-      if (!m || !m[1].trim()) return null;
-      out.push({ name: m[1].trim().replace(/:$/, ""), n: Number(m[2]) });
-    }
-    return out;
-  }
-  function parseReveal(body, meta = "") {
-    const src = String(body ?? "").split("\n");
-    const cut = src.findIndex((l) => /^\s*---\s*$/.test(l));
-    const head = cut < 0 ? [] : src.slice(0, cut);
-    const rest = cut < 0 ? src : src.slice(cut + 1);
-    const out = { label: String(meta ?? "").trim() || REVEAL_DEFAULT_LABEL, weights: null, weightsRaw: "", note: "", body: rest.join("\n").trim(), unknown: [], hasCut: cut >= 0 };
-    for (const l of head.map((x) => x.trim()).filter(Boolean)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "weights") {
-        out.weightsRaw = v2;
-        out.weights = parseWeights(v2);
-      } else if (key === "note") out.note = v2;
-      else out.unknown.push(l);
-    }
-    return out;
-  }
-  var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  function revealBodyHtml(md) {
-    const out = [];
-    let para = [];
-    let list = [];
-    let blank2 = false;
-    const flush = () => {
-      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
-      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
-      para = [];
-      list = [];
-    };
-    for (const raw of String(md).split("\n")) {
-      const l = raw.trim();
-      if (!l) {
-        if (list.length) blank2 = true;
-        else flush();
-        continue;
-      }
-      if (list.length && /^\s{2,}\S/.test(raw)) {
-        const it2 = list[list.length - 1];
-        if (blank2) it2.sub.push("");
-        it2.sub.push(raw.replace(/^\s{2,4}/, ""));
-        blank2 = false;
-        continue;
-      }
-      if (blank2) {
-        flush();
-        blank2 = false;
-      }
-      const item = l.match(/^[-*]\s+(.*)$/);
-      if (item) {
-        if (para.length) flush();
-        list.push({ text: item[1], sub: [] });
-        continue;
-      }
-      if (list.length) flush();
-      para.push(l);
-    }
-    flush();
-    return out.join("");
-  }
-  var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
-  var ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
-  function audioBaseFor(itemPath) {
-    const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
-    return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
-  }
-  function audioServedPath(src, audioBase) {
-    const s = String(src ?? "");
-    if (!s.startsWith("./audio/")) return s;
-    return audioBase ? `${audioBase}/${s.slice("./audio/".length)}` : null;
-  }
-  var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
-  var AUDIO_STYLES = ["bar", "card"];
-  var AUDIO_DEFAULT_LABEL = "Listen";
-  function parseAudio(body, meta = "") {
-    const out = {
-      label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL,
-      length: "",
-      style: "bar",
-      badStyle: "",
-      sources: [],
-      bad: [],
-      unknown: [],
-      providers: [],
-      embed: null,
-      embedBad: null,
-      link: "",
-      linkBad: "",
-      linkLabel: ""
-    };
-    for (const l of lines(body)) {
-      const { k, v: v2 } = keyValue(l);
-      const key = (k || "").toLowerCase();
-      if (key === "length") out.length = v2;
-      else if (AUDIO_PROVIDERS.includes(key)) {
-        out.providers.push(key);
-        const e = audioEmbed(key, v2);
-        if (e && !out.embed) out.embed = e;
-        else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v2 };
-      } else if (key === "link") {
-        if (safeUrl(v2)) out.link = safeUrl(v2);
-        else out.linkBad = v2;
-      } else if (key === "link-label") out.linkLabel = v2;
-      else if (key === "style") {
-        if (AUDIO_STYLES.includes(v2.toLowerCase())) out.style = v2.toLowerCase();
-        else out.badStyle = v2;
-      } else if (key === "src") {
-        const m = v2.match(AUDIO_SRC_RE);
-        if (m) out.sources.push({ src: v2, type: AUDIO_TYPES[m[1]] });
-        else out.bad.push(v2);
-      } else out.unknown.push(l);
-    }
-    return out;
-  }
-  function setAudioStyle(body, style) {
-    const kept = String(body ?? "").split("\n").filter((l) => !/^\s*style\s*:/i.test(l));
-    return style === "card" ? ["style: card", ...kept].join("\n") : kept.join("\n");
-  }
-  function audioLinkLabel(link, label = "") {
-    if (String(label ?? "").trim()) return String(label).trim();
-    let host = "";
-    try {
-      host = new URL(String(link)).hostname.toLowerCase().replace(/^(www|m)\./, "");
-    } catch {
-      return "Listen elsewhere";
-    }
-    if (host === "soundcloud.com") return DEFAULT_LINK_LABELS.soundcloud;
-    if (host === "open.spotify.com" || host === "spotify.com") return DEFAULT_LINK_LABELS.spotify;
-    if (host === "podcasts.apple.com") return DEFAULT_LINK_LABELS.apple;
-    return `Listen on ${host}`;
-  }
-  var EMBED_ALLOW = {
-    soundcloud: "autoplay",
-    spotify: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
-    apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
-  };
-  var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
-  function renderAudio(body, meta, { origin = "", audioBase = null, relativeAudio = false } = {}) {
-    const a = parseAudio(body, meta);
-    const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
-    const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
-    if (a.embed) {
-      const e = a.embed;
-      const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
-      return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
-    }
-    if (!a.sources.length) return null;
-    const served = a.sources.map((x) => {
-      const path = audioServedPath(x.src, audioBase);
-      return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
-    }).filter((x) => x.url);
-    if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
-    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + served.map((x) => `<source src="${esc3(x.url)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
-  }
-  function weightWidths(weights) {
-    const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
-    const ws = weights.map((w2) => Math.round(100 * w2.n / total));
-    ws[ws.length - 1] = Math.max(0, 100 - ws.slice(0, -1).reduce((a, b) => a + b, 0));
-    return ws;
-  }
-  function renderReveal(body, meta) {
-    const r = parseReveal(body, meta);
-    if (!r.body && !r.weights && !r.note) return null;
-    const hide = r.label === REVEAL_DEFAULT_LABEL ? "Show less" : /^show\s+/i.test(r.label) ? r.label.replace(/^show(\s+)/i, "Hide$1") : "Hide";
-    let top = "";
-    if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
-      const ws = weightWidths(r.weights);
-      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
-    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
-    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
-    if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
-    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
-  }
-  function renderDataBlock(name, body, meta = "", opts = {}) {
-    if (name === "reveal") return renderReveal(body, meta);
-    if (name === "audio") return renderAudio(body, meta, opts);
-    if (name === "tags") {
-      const { tags } = parseTags(body);
-      if (!tags.length) return null;
-      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
-    }
-    if (name === "bar") {
-      const b = parseBar(body);
-      if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
-      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
-    }
-    if (name === "facts") {
-      const { rows } = parseFacts(body);
-      if (!rows.length) return null;
-      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
-    }
-    if (name === "button") {
-      const b = parseButton(body);
-      if (!b.label) return null;
-      const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
-      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
-    }
-    if (name === "stats") {
-      const s = parseStats(body);
-      if (!s.stats.length) return null;
-      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
-    }
-    return null;
-  }
-  function barWidthCss(scope = "") {
-    let css = "";
-    for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
-    return css;
-  }
-  var DIRECTORY_STYLES = ["youtube"];
-  function sortListPlaceholder(meta = "") {
-    const style = String(meta ?? "").trim();
-    return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
-  }
-  var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
-  function dataBlocksCss(scope, t) {
-    const s = scope;
-    return `${s} .gbti-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 .9em}
-${s} .gbti-tag{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid ${t.line2};color:${t.soft};font-family:${t.mono};font-size:12px;font-weight:500;line-height:1.2}
-${s} .gbti-tag-primary{background:${t.greenTint};color:${t.green700};border-color:${t.greenBorder}}
-${s} .gbti-bar{margin:1.1em 0 .9em}
-${s} .gbti-bar-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-${s} .gbti-bar-label{font-size:14px;color:${t.soft}}
-${s} .gbti-bar-value{font-family:${t.mono};font-weight:600;font-size:16px;color:${t.fg}}
-${s} .gbti-bar-track{display:block;height:10px;margin-top:6px;border-radius:4px;overflow:hidden;background:${t.rest}}
-${s} .gbti-bar-fill{display:block;height:100%;background:${t.green};box-shadow:2px 0 0 ${t.surface}}
-${s} .gbti-bar-note{margin-top:10px;font-family:${t.mono};font-size:13px;line-height:1.5;color:${t.mute}}
-${s} .gbti-facts{margin:1em 0;border-top:1px solid ${t.line}}
-${s} .gbti-fact{display:grid;grid-template-columns:minmax(90px,30%) minmax(0,1fr);gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid ${t.line}}
-${s} .gbti-fact dt{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute};margin:0}
-${s} .gbti-fact dd{margin:0;display:flex;align-items:center;gap:10px;font-size:15px;color:${t.fg}}
-${s} .gbti-bar-mini{flex:1;max-width:220px;height:8px;margin:0}
-${s} .gbti-button-row{margin:1em 0}
-${s} a.gbti-button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:8px;border:1.5px solid ${t.green700};color:${t.green700};text-decoration:none;font-weight:600;font-size:15px;line-height:1.2}
-${s} a.gbti-button:hover{background:${t.greenTint}}
-${s} a.gbti-button-primary{gap:8px;background:${t.green700Solid};border-color:${t.green700Solid};color:#fff}
-${s} a.gbti-button-primary::before{content:"";width:0;height:0;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
-${s} a.gbti-button-primary:hover{background:#0b5a34;border-color:#0b5a34;color:#fff}
-${s} .gbti-stats{margin:1em 0}
-${s} .gbti-stats-caption{font-family:${t.mono};font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${t.mute}}
-${s} .gbti-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));margin-top:10px;border-top:1px solid ${t.line};border-bottom:1px solid ${t.line}}
-${s} .gbti-stat{display:flex;flex-direction:column;gap:2px;padding:12px 12px 12px 0}
-${s} .gbti-stat-value{font-family:${t.mono};font-weight:600;font-size:clamp(20px,4.5vw,24px);line-height:1.1;color:${t.fg}}
-${s} .gbti-stat-label{font-size:13px;line-height:1.35;color:${t.mute}}
-${s} a.gbti-button:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
-${s} .gbti-reveal{margin:1.2em 0;padding:16px;border:1px solid ${t.line};border-radius:10px}
-${s} .gbti-reveal-weights{display:flex;gap:2px;height:14px;margin:0 0 12px}
-${s} .gbti-reveal-seg{display:block;flex:0 1 auto;min-width:4px}
-${s} .gbti-reveal-weights .gbti-reveal-seg:first-child{border-radius:4px 0 0 4px}
-${s} .gbti-reveal-weights .gbti-reveal-seg:last-child{border-radius:0 4px 4px 0}
-${s} .gbti-reveal-seg-1{background:#0f6f40}
-${s} .gbti-reveal-seg-2{background:#1f9e5f}
-${s} .gbti-reveal-seg-3{background:#4fbf86}
-${s} .gbti-reveal-seg-4{background:#93d9b4}
-${s} .gbti-reveal-seg-5{background:#c4ebd5}
-${s} .gbti-reveal-seg-6{background:#0b4f2e}
-${s} .gbti-reveal-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px;margin:0 0 12px;font-size:.9em}
-${s} .gbti-reveal-key{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;overflow-wrap:normal}
-${s} .gbti-reveal-swatch{flex:none;width:10px;height:10px;border-radius:3px}
-${s} .gbti-reveal-name{font-weight:700;color:${t.fg}}
-${s} .gbti-reveal-pct{font-family:${t.mono};font-size:.85em;color:${t.soft}}
-${s} .gbti-reveal-note{margin:0 0 4px;font-size:.9em;color:${t.soft}}
-${s} .gbti-reveal-note strong{color:${t.fg}}
-${s} .gbti-reveal-more{margin:0}
-${s} .gbti-reveal-toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;list-style:none;font-size:.9em;font-weight:700;color:${t.green700}}
-${s} .gbti-reveal-toggle::-webkit-details-marker{display:none}
-${s} .gbti-reveal-toggle:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
-${s} .gbti-reveal-chev{flex:none;width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
-${s} .gbti-reveal-more[open] .gbti-reveal-chev{margin-top:4px;transform:rotate(-135deg)}
-${s} .gbti-reveal-more[open] .gbti-reveal-show,${s} .gbti-reveal-more:not([open]) .gbti-reveal-hide{display:none}
-${s} .gbti-reveal-body{padding-top:8px;border-top:1px solid ${t.line};font-size:.9em}
-${s} .gbti-reveal-body p{margin:8px 0 12px}
-${s} .gbti-reveal-body p:last-child,${s} .gbti-reveal-body ul:last-child{margin-bottom:0}
-${s} .gbti-reveal-body ul{margin:0 0 12px}
-${s} .gbti-audio{margin:1.2em 0}
-${s} > .gbti-audio:first-child{margin-top:14px}
-${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
-${s} .gbti-audio-label{font-weight:600;font-size:15.5px;line-height:1.3;color:${t.fg}}
-${s} .gbti-audio-length{font-family:${t.mono};font-size:12.5px;color:${t.mute}}
-${s} .gbti-audio-player{display:block;width:100%;margin-top:10px}
-${s} .gbti-audio-card{display:flex;flex-direction:column;gap:12px;padding:14px 18px;border:1px solid ${t.line};border-radius:12px;background:${t.card};box-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04)}
-${s} .gbti-audio-card .gbti-audio-head{flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
-${s} .gbti-audio-card .gbti-audio-label{font-size:16px}
-${s} .gbti-audio-card .gbti-audio-player{margin-top:0}
-${s} .gbti-audio-card[data-enhanced] .gbti-audio-player{display:none}
-${s} .gbti-audio-row{display:flex;align-items:center;gap:16px;min-width:0}
-${s} button.gbti-audio-play{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:0;padding:0;border:0;border-radius:999px;background:#1f9e5f;color:#fff;box-shadow:0 6px 16px rgba(31,158,95,.28);cursor:pointer}
-${s} button.gbti-audio-play:hover{background:#178a51;color:#fff}
-${s} button.gbti-audio-play:focus-visible{outline:2px solid ${t.green};outline-offset:3px}
-${s} .gbti-audio-play svg{display:block;width:22px;height:22px}
-${s} .gbti-audio-progress{display:flex;align-items:center;gap:10px}
-${s} .gbti-audio-progress[hidden]{display:none}
-${s} input.gbti-audio-seek{flex:1;min-width:0;width:auto;height:20px;margin:0;padding:0;border:0;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
-${s} input.gbti-audio-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,${t.green700} var(--p,0%),${t.line2} var(--p,0%))}
-${s} input.gbti-audio-seek::-moz-range-track{height:4px;border-radius:2px;background:${t.line2}}
-${s} input.gbti-audio-seek::-moz-range-progress{height:4px;border-radius:2px;background:${t.green700}}
-${s} input.gbti-audio-seek::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border:0;border-radius:50%;background:${t.green700};opacity:0}
-${s} input.gbti-audio-seek::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:${t.green700};opacity:0}
-${s} input.gbti-audio-seek:hover::-webkit-slider-thumb{opacity:1}
-${s} input.gbti-audio-seek:focus-visible::-webkit-slider-thumb{opacity:1}
-${s} input.gbti-audio-seek:hover::-moz-range-thumb{opacity:1}
-${s} input.gbti-audio-seek:focus-visible::-moz-range-thumb{opacity:1}
-${s} input.gbti-audio-seek:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
-${s} .gbti-audio-time{font-family:${t.mono};font-size:12px;color:${t.soft};white-space:nowrap}
-${s} .gbti-audio:not(.gbti-audio-card){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px}
-${s} .gbti-audio:not(.gbti-audio-card)>*{grid-column:1/-1}
-${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-head{grid-column:1;grid-row:1;align-self:baseline}
-${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:2;grid-row:1;align-self:baseline}
-${s} a.gbti-audio-link{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;font-weight:600;line-height:1.2;color:${t.green700};text-decoration:none;white-space:nowrap}
-${s} a.gbti-audio-link::after{content:"\\2197";font-size:.95em}
-${s} a.gbti-audio-link:hover{text-decoration:underline;text-underline-offset:3px}
-${s} a.gbti-audio-link:focus-visible{outline:2px solid ${t.green};outline-offset:2px;border-radius:4px}
-${s} .gbti-audio-row .gbti-audio-link{margin-left:auto}
-${s} .gbti-audio-row{flex-wrap:wrap}
-${s} .gbti-audio-row .gbti-audio-head{flex:1 1 0;min-width:0}
-${s} .gbti-audio-embed{margin-top:10px}
-${s} .gbti-audio-embed iframe{display:block;width:100%;max-width:100%;margin:0;border:0;aspect-ratio:auto}
-${s} .gbti-audio-embed-soundcloud iframe{height:166px;border-radius:0}
-${s} .gbti-audio-embed-soundcloud-tall iframe{height:300px;border-radius:0}
-${s} .gbti-audio-embed-spotify iframe{height:152px;border-radius:12px}
-${s} .gbti-audio-embed-apple iframe{height:175px;border-radius:10px}
-${s} .gbti-audio-embed-apple-tall iframe{height:450px;border-radius:10px}
-@media (max-width:560px){
-${s} .gbti-audio:not(.gbti-audio-card)>.gbti-audio-link{grid-column:1/-1;grid-row:auto;justify-self:start;margin-top:6px}
-${s} a.gbti-audio-link{min-height:32px}
-${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
-}
-${barWidthCss(s)}`;
-  }
-
-  // client/src/tweet-embed.mjs
-  var TWEET_FRAME_ORIGIN = "https://platform.twitter.com";
-  var TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
-  function tweetId(url) {
-    const m = String(url ?? "").trim().match(TWEET_RE);
-    return m ? m[1] : null;
-  }
-  function bareTweetLine(line) {
-    const s = String(line ?? "").trim();
-    if (!/^https?:\/\/\S+$/.test(s)) return null;
-    return tweetId(s) ? s : null;
-  }
-  var tweetTheme = (t) => t === "dark" ? "dark" : "light";
-  function tweetFrameUrl(idOrUrl, { theme = "light" } = {}) {
-    const raw = String(idOrUrl ?? "").trim();
-    const id = /^\d{5,25}$/.test(raw) ? raw : tweetId(raw);
-    if (!id) return null;
-    return `${TWEET_FRAME_ORIGIN}/embed/Tweet.html?id=${id}&theme=${tweetTheme(theme)}&dnt=true`;
-  }
-  var escAttr3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  function tweetBlockHtml(url) {
-    const u = String(url ?? "").trim();
-    if (!tweetId(u)) return "";
-    const e = escAttr3(u);
-    return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
-  }
-  function parseTweetMessage(data) {
-    let d = data;
-    if (typeof d === "string") {
-      if (d.length > 2e4 || !d.includes("twttr.embed") && !d.includes("gbtiTweet")) return null;
-      try {
-        d = JSON.parse(d);
-      } catch {
-        return null;
-      }
-    }
-    if (!d || typeof d !== "object") return null;
-    const fwd = d.gbtiTweet;
-    if (fwd && typeof fwd === "object") return shaped(fwd.method, fwd.height);
-    const rpc = d["twttr.embed"];
-    if (!rpc || typeof rpc !== "object" || typeof rpc.method !== "string") return null;
-    const method = rpc.method.replace(/^twttr\.private\./, "");
-    const p = Array.isArray(rpc.params) ? rpc.params[0] : null;
-    return shaped(method, p && p.height);
-  }
-  function shaped(method, height) {
-    if (method === "rendered" || method === "no_results") return { method };
-    if (method !== "resize") return null;
-    const h = Number(height);
-    return Number.isFinite(h) && h > 0 && h < 2e4 ? { method, height: Math.ceil(h) } : null;
-  }
-
-  // client/src/markdown.mjs
-  var EMBED_RELAY = "https://gbti.network/embed/";
-  var SITE_ORIGIN = "https://gbti.network";
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  }
-  var REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
-  var DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
-  function decodeEntities(s) {
-    let p = String(s ?? "");
-    for (let i = 0; i < 4; i++) {
-      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
-        try {
-          return String.fromCodePoint(parseInt(h, 16));
-        } catch {
-          return "";
-        }
-      }).replace(/&#(\d+);?/g, (_m, d) => {
-        try {
-          return String.fromCodePoint(parseInt(d, 10));
-        } catch {
-          return "";
-        }
-      }).replace(/&amp;/gi, "&");
-      if (n === p) break;
-      p = n;
-    }
-    return p;
-  }
-  var isDangerousAnchorHref = (url) => {
-    const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
-    return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
-  };
-  var attrOf2 = (attrs, name) => {
-    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
-    return m ? m[1] : "";
-  };
-  var escAttr4 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  function emphasis(t) {
-    const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
-  }
-  var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
-  var sanitizeAnchorInner = (html) => String(html ?? "").replace(
-    /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
-    (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
-  );
-  function rawAnchorHtml(attrs, inner) {
-    const href = decodeEntities(attrOf2(attrs, "href"));
-    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
-    const rel = [];
-    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
-    const blank2 = attrOf2(attrs, "target").toLowerCase() === "_blank";
-    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
-    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank2 ? ' target="_blank"' : "";
-    return `<a href="${escAttr4(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
-  }
-  function escapeKeepingLinks(s, keep) {
-    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
-      keep.push(rawAnchorHtml(attrs, inner));
-      return `${keep.length - 1}`;
-    });
-    return escapeHtml(stripped);
-  }
-  var FN_ID = "[A-Za-z0-9_-]+";
-  function collectFootnoteIds(lines2) {
-    const ids = /* @__PURE__ */ new Set();
-    let fence = 0;
-    for (const line of lines2) {
-      const f = /^(`{3,})(.*)$/.exec(line);
-      if (f) {
-        if (!fence) fence = f[1].length;
-        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
-        continue;
-      }
-      if (fence) continue;
-      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
-      if (d) ids.add(d[1]);
-    }
-    return ids;
-  }
-  var LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
-  var defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-  function collectLinkDefs(lines2) {
-    const defs = /* @__PURE__ */ new Map();
-    let fence = 0;
-    for (const line of lines2) {
-      const f = /^(`{3,})(.*)$/.exec(line);
-      if (f) {
-        if (!fence) fence = f[1].length;
-        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
-        continue;
-      }
-      if (fence) continue;
-      const d = LINK_DEF_RE.exec(line);
-      if (!d || d[1].startsWith("^")) continue;
-      if (!/^https?:\/\//.test(d[2])) continue;
-      const key = defKey(d[1]);
-      if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? "" });
-    }
-    return defs;
-  }
-  function refAnchor(text2, def) {
-    const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
-    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text2}</a>`;
-  }
-  function inline(escaped, fn = null, defs = null) {
-    let t = escaped;
-    const codes = [];
-    t = t.replace(/`([^`]+)`/g, (_m, c) => {
-      codes.push(c);
-      return `${codes.length - 1}`;
-    });
-    if (fn) {
-      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
-        if (!fn.ids.has(id)) return m;
-        const n = (fn.counts.get(id) ?? 0) + 1;
-        fn.counts.set(id, n);
-        return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
-      });
-    }
-    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
-      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-      const titleAttr = title ? ` title="${title}"` : "";
-      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
-      const cls = imageLayoutClasses(layout);
-      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
-    });
-    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
-    if (defs && defs.size) {
-      t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
-        const def = defs.get(defKey(label || alt));
-        return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
-      });
-      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text2, label) => {
-        const def = defs.get(defKey(label || text2));
-        return def ? refAnchor(text2, def) : m;
-      });
-      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text2) => {
-        if (text2.startsWith("^")) return m;
-        const def = defs.get(defKey(text2));
-        return def ? refAnchor(text2, def) : m;
-      });
-    }
-    t = emphasis(t);
-    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
-    return t;
-  }
-  function codeOpen(lang) {
-    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
-    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
-  }
-  var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
-  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
-    const info = String(lang || "").trim().split(/\s+/);
-    const body = buf.join("\n");
-    if (info[0] === "callout") {
-      const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
-      const small = info.slice(2).includes("small") ? " md-callout-small" : "";
-      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
-      return `<div class="md-callout md-callout-${v2}${small}"><div class="md-callout-body">${html}</div></div>`;
-    }
-    if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
-    if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
-      if (html != null) return html;
-    }
-    if (info[0] === "embed") {
-      const url = body.trim();
-      const src = embedUrl(url);
-      if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
-      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
-      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
-    }
-    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
-  }
-  function splitTableRow2(line) {
-    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
-    const cells = [];
-    let cur = "";
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-      if (ch === "\\" && s[i + 1] === "|") {
-        cur += "|";
-        i++;
-        continue;
-      }
-      if (ch === "|") {
-        cells.push(cur.trim());
-        cur = "";
-        continue;
-      }
-      cur += ch;
-    }
-    cells.push(cur.trim());
-    return cells;
-  }
-  function tableAlignments(line) {
-    if (!/\|/.test(String(line ?? ""))) return null;
-    const cells = splitTableRow2(line);
-    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
-    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
-  }
-  var QUOTE_LINE = /^\s*>\s?/;
-  var COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
-  function hardBreak(escaped, raw) {
-    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
-  }
-  function renderMarkdown(md, opts = {}) {
-    return renderDoc(md, false, opts).html;
-  }
-  function renderDoc(md, ids, opts = {}, nest = null) {
-    const autoEmbed = !!opts.autoEmbed;
-    const audioBase = audioBaseFor(opts.itemPath);
-    const relativeAudio = !!opts.relativeAudio;
-    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const out = [];
-    const ranges = [];
-    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
-    const emit = (html2, start, end) => {
-      out.push(stamp(html2, out.length));
-      ranges.push(start == null ? null : { start, end });
-    };
-    let codeFence = 3;
-    let fenceStart = 0;
-    let inCode = false;
-    let codeBuf = [];
-    let codeLang2 = "";
-    const footnotes = nest ? nest.footnotes : [];
-    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines2), counts: /* @__PURE__ */ new Map() };
-    const linkKeep = nest ? nest.linkKeep : [];
-    const defs = nest ? nest.defs : collectLinkDefs(lines2);
-    const flushList = () => {
-    };
-    let i = 0;
-    while (i < lines2.length) {
-      const line = lines2[i];
-      const fence = /^(`{3,})(.*)$/.exec(line);
-      if (fence) {
-        if (!inCode) {
-          inCode = true;
-          fenceStart = i;
-          codeBuf = [];
-          codeFence = fence[1].length;
-          codeLang2 = fence[2];
-          i++;
-          continue;
-        }
-        if (fence[1].length >= codeFence && !fence[2].trim()) {
-          inCode = false;
-          flushList();
-          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
-          codeLang2 = "";
-          i++;
-          continue;
-        }
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      if (inCode) {
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
-      if (def) {
-        flushList();
-        const parts = [def[2].trim()];
-        i++;
-        while (i < lines2.length && /^ {4,}\S/.test(lines2[i])) {
-          parts.push(lines2[i].trim());
-          i++;
-        }
-        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
-        continue;
-      }
-      if (autoEmbed) {
-        const videoUrl = bareVideoLine(line);
-        if (videoUrl) {
-          flushList();
-          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
-          i++;
-          continue;
-        }
-        const tweetUrl = bareTweetLine(line);
-        if (tweetUrl) {
-          flushList();
-          emit(tweetBlockHtml(tweetUrl), i, i);
-          i++;
-          continue;
-        }
-      }
-      const esc11 = escapeKeepingLinks(line, linkKeep);
-      let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc11)) {
-        flushList();
-        emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
-        i++;
-        continue;
-      }
-      if (isThematicBreak(line)) {
-        flushList();
-        emit("<hr />", i, i);
-        i++;
-        continue;
-      }
-      if (isListLine(line)) {
-        const run = takeListRun(lines2, i);
-        const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
-        const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
-        emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
-        i = run.next;
-        continue;
-      }
-      if (QUOTE_LINE.test(line)) {
-        flushList();
-        const quoteStart = i;
-        const inner = [];
-        while (i < lines2.length && QUOTE_LINE.test(lines2[i])) {
-          inner.push(lines2[i].replace(QUOTE_LINE, ""));
-          i++;
-        }
-        const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
-        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
-        continue;
-      }
-      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-        flushList();
-        emit("<hr/>", i, i);
-        i++;
-        continue;
-      }
-      const aligns = i + 1 < lines2.length ? tableAlignments(lines2[i + 1]) : null;
-      if (aligns && line.includes("|")) {
-        const tableStart = i;
-        flushList();
-        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
-        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
-        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
-        i += 2;
-        const rows = [];
-        while (i < lines2.length && lines2[i].includes("|") && !/^\s*$/.test(lines2[i])) {
-          rows.push(splitTableRow2(lines2[i]));
-          i++;
-        }
-        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
-        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
-        continue;
-      }
-      if (/^\s*$/.test(line)) {
-        flushList();
-        i++;
-        continue;
-      }
-      if (COMMENT_LINE.test(line)) {
-        flushList();
-        i++;
-        continue;
-      }
-      if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
-        flushList();
-        while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
-        continue;
-      }
-      const fig = parseImageLine(line);
-      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
-        flushList();
-        const cls = imageLayoutClasses(fig.layout);
-        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
-        i++;
-        continue;
-      }
-      flushList();
-      const paraStart = i;
-      const para = [hardBreak(esc11, line)];
-      i++;
-      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
-        para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
-        i++;
-      }
-      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
-      emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
-    }
-    flushList();
-    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
-    if (nest) return { html: out.join("\n"), blocks: ranges };
-    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
-    if (referenced.length) {
-      const items = referenced.map((f) => {
-        const n = fn.counts.get(f.id);
-        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
-        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
-      }).join("");
-      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
-    }
-    const joined = out.join("\n");
-    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
-    return { html, blocks: ranges };
-  }
+  // client-ui/src/elements/gbti-share-composer.mjs
+  init_markdown_blocks();
+  init_markdown();
 
   // client-ui/src/elements/share-composer-css.mjs
   var SHARE_COMPOSER_CSS = `
@@ -7422,6 +9697,9 @@ ${barWidthCss(s)}`;
   };
   define("gbti-share-composer", GbtiShareComposer);
 
+  // client-ui/src/elements/gbti-activity-bell.mjs
+  init_base();
+
   // membership/bell-seen.mjs
   var BELL_SEEN_GROUPS = Object.freeze(["following", "replies", "approvals"]);
   var LATE_WINDOW_MS = 48 * 60 * 60 * 1e3;
@@ -8076,6 +10354,9 @@ ${barWidthCss(s)}`;
   };
   define("gbti-activity-bell", GbtiActivityBell);
 
+  // client-ui/src/elements/gbti-social-queue.mjs
+  init_base();
+
   // client-ui/src/social-icons.mjs
   var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
   var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
@@ -8465,6 +10746,7 @@ ${barWidthCss(s)}`;
   }
 
   // membership/markdown-plain.mjs
+  init_list_attrs();
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
@@ -9050,6 +11332,7 @@ ${barWidthCss(s)}`;
   define("gbti-social-queue", GbtiSocialQueue);
 
   // client-ui/src/elements/gbti-debug-panel.mjs
+  init_base();
   var fmtTime = (ms) => {
     try {
       return new Date(ms).toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -9210,6 +11493,7 @@ ${barWidthCss(s)}`;
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/elements/gbti-signin-splash.mjs
+  init_base();
   var SITE6 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
@@ -10748,6 +13032,7 @@ ${barWidthCss(s)}`;
   }
 
   // client-ui/src/elements/gbti-auth.mjs
+  init_base();
   var GbtiAuth = class extends GbtiElement {
     async render() {
       if (!this.client) {
@@ -10800,764 +13085,17 @@ ${barWidthCss(s)}`;
   };
   define("gbti-auth", GbtiAuth);
 
-  // client-ui/src/image-layout-ui.mjs
-  var IMAGE_LAYOUT_GROUPS = Object.freeze([
-    Object.freeze([{ action: "natural", label: "Natural", title: "Natural size" }, { action: "full", label: "Full width", title: "Span the column" }]),
-    Object.freeze([{ action: "left", label: "Left", title: "Align left" }, { action: "center", label: "Center", title: "Center" }, { action: "right", label: "Right", title: "Align right" }]),
-    Object.freeze([{ action: "wrap", label: "Wrap text", title: "Let the text flow beside the image (left or right only)" }])
-  ]);
-  function imageLayoutPressed(layout, action) {
-    const n = normalizeImageLayout(layout);
-    switch (action) {
-      case "natural":
-        return !n.width;
-      case "full":
-        return n.width === "full";
-      case "left":
-      case "center":
-      case "right":
-        return n.align === action;
-      case "wrap":
-        return !!n.wrap && (n.align === "left" || n.align === "right");
-      default:
-        return false;
-    }
-  }
-  function imageLayoutDisabled(layout, action) {
-    const n = normalizeImageLayout(layout);
-    return action === "wrap" && !(n.align === "left" || n.align === "right");
-  }
-  function imageLayoutButtonsHtml(layout, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
-    return IMAGE_LAYOUT_GROUPS.map((group) => group.map((b) => `<button type="button" data-il="${b.action}" title="${b.title}"` + (imageLayoutPressed(layout, b.action) ? ' aria-pressed="true"' : "") + (imageLayoutDisabled(layout, b.action) ? " disabled" : "") + `>${b.label}</button>`).join("")).join(sep);
-  }
-  var IMAGE_LAYOUT_ROW_CSS = `
-  .imglay { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-  .imglay .gbti-stb-sep { display:none; }
-  .imglay button { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;
-    border:1px solid var(--s-line-2); background:transparent; color:var(--s-fg); }
-  .imglay button:hover { border-color:var(--s-green); }
-  .imglay button[aria-pressed="true"] { background:var(--s-tint); color:var(--s-green-fg); border-color:var(--s-green); }
-  .imglay button[disabled] { opacity:.4; cursor:default; }
-`;
-  function imageLayoutProseCss(scope) {
-    const s = String(scope || "").trim();
-    return `
-  ${s} { display: flow-root; }
-  ${s} img.img-full { display: block; width: 100%; }
-  ${s} img.img-left, ${s} img.img-center, ${s} img.img-right { display: block; }
-  ${s} img.img-left { margin-left: 0; margin-right: auto; }
-  ${s} img.img-right { margin-left: auto; margin-right: 0; }
-  ${s} img.img-center { margin-left: auto; margin-right: auto; }
-  ${s} img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
-  ${s} img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
-  ${s} figure { margin: 1.5em auto; text-align: center; }
-  ${s} figure img { display: block; margin: 0 auto; }
-  ${s} figcaption { font-family: var(--f-mono, ui-monospace, monospace); background: var(--tint, rgba(127,127,127,.12)); color: var(--muted, var(--fg-mute)); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
-  ${s} figure.img-full { width: 100%; }
-  ${s} figure.img-full img { width: 100%; }
-  ${s} figure.img-left, ${s} figure.img-center, ${s} figure.img-right { width: fit-content; max-width: 100%; }
-  ${s} figure.img-left { margin-left: 0; margin-right: auto; }
-  ${s} figure.img-right { margin-left: auto; margin-right: 0; }
-  ${s} figure.img-center { margin-left: auto; margin-right: auto; }
-  ${s} figure.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
-  ${s} figure.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
-  @media (max-width: 640px) {
-    ${s} img.img-wrap.img-left:not(.img-full), ${s} img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
-    ${s} figure.img-wrap.img-left:not(.img-full), ${s} figure.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; width: fit-content; }
-  }
-`;
-  }
-
-  // client-ui/src/list-style-ui.mjs
-  var LIST_STYLE_GROUPS = Object.freeze({
-    kind: Object.freeze([
-      { action: "unordered", label: "Bullets", title: "A bulleted list" },
-      { action: "ordered", label: "Numbers", title: "A numbered list" }
-    ]),
-    bullet: Object.freeze([
-      { action: "style:disc", label: "Disc", title: "Round bullets (the default)" },
-      { action: "style:circle", label: "Circle", title: "Hollow bullets" },
-      { action: "style:square", label: "Square", title: "Square bullets" }
-    ]),
-    number: Object.freeze([
-      { action: "style:decimal", label: "1.", title: "Numbers (the default)" },
-      { action: "style:lower-alpha", label: "a.", title: "Lower-case letters" },
-      { action: "style:upper-alpha", label: "A.", title: "Upper-case letters" },
-      { action: "style:lower-roman", label: "i.", title: "Lower-case roman numerals" },
-      { action: "style:upper-roman", label: "I.", title: "Upper-case roman numerals" }
-    ]),
-    remove: Object.freeze([
-      { action: "unwrap", label: "Remove list", title: "Turn the list into paragraphs, one per item" }
-    ])
-  });
-  function listStylePressed(state, action) {
-    const ordered = !!state?.ordered;
-    const style = state?.style || null;
-    if (action === "ordered") return ordered;
-    if (action === "unordered") return !ordered;
-    if (String(action).startsWith("style:")) {
-      const word = String(action).slice("style:".length);
-      if (styleKind(word) !== (ordered ? "number" : "bullet")) return false;
-      return isDefaultStyle(word) ? !style : style === word;
-    }
-    return false;
-  }
-  function listStyleButtonsHtml(state, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
-    const groups = [LIST_STYLE_GROUPS.kind, state?.ordered ? LIST_STYLE_GROUPS.number : LIST_STYLE_GROUPS.bullet, LIST_STYLE_GROUPS.remove];
-    return groups.map((group) => group.map((b) => `<button type="button" data-la="${b.action}" title="${b.title}"` + (listStylePressed(state, b.action) ? ' aria-pressed="true"' : "") + `>${b.label}</button>`).join("")).join(sep);
-  }
-  function listStyleProseCss(scope) {
-    const s = String(scope || "").trim();
-    return LIST_STYLE_WORDS.filter((w2) => !isDefaultStyle(w2)).map((w2) => `  ${s} ${styleKind(w2) === "number" ? "ol" : "ul"}.list-${w2} > li { list-style: ${w2}; }`).join("\n");
-  }
-
-  // client-ui/src/block-commit.mjs
-  function readListDom(el, md) {
-    const out = [];
-    const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
-    const classOf = (n) => (typeof n?.getAttribute === "function" ? n.getAttribute("class") : n?.className) || "";
-    const walk2 = (list, depth) => {
-      let style = listStyleFromClass(classOf(list));
-      for (const li of Array.from(list.children || [])) {
-        if (tagOf2(li) !== "LI") continue;
-        const own = String(li.innerHTML ?? "").replace(/<(ul|ol)\b[\s\S]*$/i, "");
-        out.push({ text: md(own), depth, ordered: tagOf2(list) === "OL", ...style ? { style } : {} });
-        style = null;
-        for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
-      }
-    };
-    walk2(el, 0);
-    return out;
-  }
-  function listItemAtSelection(el, sel) {
-    let n = sel?.anchorNode || null;
-    if (n && n.nodeType !== 1) n = n.parentNode;
-    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
-    if (!n || n === el) return { li: null, index: -1 };
-    const all = Array.from(el.querySelectorAll("li"));
-    return { li: n, index: all.indexOf(n) };
-  }
-  function caretAtEndOfItem(li, sel) {
-    if (!li || !sel) return;
-    let last = null;
-    for (const c of Array.from(li.childNodes || [])) {
-      const t = String(c.tagName || "").toUpperCase();
-      if (c.nodeType === 1 && (t === "UL" || t === "OL")) break;
-      last = c;
-    }
-    try {
-      const r = document.createRange();
-      if (last) {
-        r.selectNodeContents(last);
-        r.collapse(false);
-      } else {
-        r.setStart(li, 0);
-        r.collapse(true);
-      }
-      sel.removeAllRanges();
-      sel.addRange(r);
-    } catch {
-    }
-  }
-
-  // client-ui/src/selection-toolbar.mjs
-  var STYLE_ID = "gbti-selection-toolbar-css";
-  var SELECTION_TOOLBAR_CSS = `
-.gbti-stb, .gbti-lp {
-  position: absolute; z-index: 40; display: none;
-  --stb-pop: var(--s-surface, var(--paper, #fff));
-  --stb-pop-2: var(--s-surface-2, var(--paper-2, #f4f3f7));
-  --stb-line: var(--s-line, var(--line, #d9d7e0));
-  --stb-fg: var(--s-fg, var(--fg, #25232b));
-  --stb-fg-soft: var(--s-fg-soft, var(--fg-soft, #55525f));
-  --stb-accent: var(--s-green, var(--green-700, #1f9e5f));
-}
-.gbti-stb { gap: 1px; padding: 4px; border-radius: 10px; background: var(--ink, #25232b); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
-.gbti-stb button {
-  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-radius: 7px; background: transparent; color: #e6e4ee; cursor: pointer;
-  font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
-}
-.gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
-.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
-.gbti-stb button[disabled] { opacity: .4; cursor: default; }
-.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
-.gbti-imgbar button { font-weight: 600; }
-.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
-.gbti-listbar button { font-weight: 600; }
-.gbti-lp {
-  flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
-  background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
-  box-shadow: 0 12px 34px rgba(0,0,0,.28); color: var(--stb-fg);
-}
-.gbti-lp input[type="text"], .gbti-lp input[type="url"] {
-  font: inherit; font-size: 13px; color: var(--stb-fg); background: var(--stb-pop-2);
-  border: 1px solid var(--stb-line); border-radius: 7px; padding: 7px 9px; min-width: 0;
-}
-.gbti-lp label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--stb-fg-soft); cursor: pointer; }
-/* sow-342: THE CHECKBOXES NEED THEIR OWN RULE, and the reason is that every other control here already has one.
-   BASE_CSS (client-ui/src/tokens.mjs) carries a bare \`input, select, textarea { width: 100%; padding: 9px 11px }\`
-   and it is in the shadow root of every client-ui component, this panel included. The two text inputs above
-   outrank it on specificity, so they look right; a checkbox matched nothing here and inherited width:100%. In a
-   flex label that stretches the box to the full panel width, leaves the caption its min-content width, and wraps
-   "New tab" onto two lines with the tick stranded in the middle of the row. Reported by the owner as the link
-   editor "needing help", which is exactly what it looked like.
-   Measured in a browser against the real shadow CSS: as shipped the two boxes render 177px and 190px wide and
-   the second row is 39px tall; with this rule both are 13px and both rows are 20px. */
-.gbti-lp input[type="checkbox"] { width: auto; min-width: 0; flex: none; margin: 0; padding: 0; accent-color: var(--stb-accent); }
-.gbti-lp .lp-btns { display: flex; gap: 8px; margin-top: 2px; }
-.gbti-lp button {
-  font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; padding: 6px 12px;
-  cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
-}
-.gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
-.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
-.gbti-ip { min-width: 300px; max-width: 360px; }
-.gbti-ic { min-width: 320px; }
-.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
-.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
-.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
-.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
-.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
-.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
-`;
-  function ensureStyles(host) {
-    const root = host.getRootNode ? host.getRootNode() : document;
-    const target = root && root.nodeType === 11 ? root : document.head;
-    if (!target || target.querySelector(`#${STYLE_ID}`)) return;
-    const el = document.createElement("style");
-    el.id = STYLE_ID;
-    el.textContent = SELECTION_TOOLBAR_CSS;
-    target.appendChild(el);
-  }
-  function linkRel({ nofollow = false, blank: blank2 = false } = {}) {
-    return [nofollow ? "nofollow" : null, blank2 ? "noopener" : null].filter(Boolean).join(" ");
-  }
-  function planLinkEdit({ url = "", text: text2 = "", nofollow = false, blank: blank2 = false, hasExisting = false, existingText = "", remove = false } = {}) {
-    const href = String(url ?? "").trim();
-    if (remove || !href) return hasExisting ? { action: "remove" } : { action: "none" };
-    if (isDangerousUrl(href)) return { action: "reject" };
-    const rel = linkRel({ nofollow, blank: blank2 });
-    const wanted = String(text2 ?? "").trim();
-    return {
-      action: hasExisting ? "update" : "create",
-      href,
-      rel: rel || null,
-      target: blank2 ? "_blank" : null,
-      text: wanted && wanted !== String(existingText ?? "") ? wanted : null
-    };
-  }
-  function createSelectionToolbar({
-    root,
-    host,
-    editableOf,
-    allowInline = () => true,
-    onCommit = () => {
-    },
-    onRetype = null,
-    listItemImages = null,
-    onInsertImage = () => {
-    },
-    imageTools = null,
-    listTools = null
-  }) {
-    const hostEl = () => typeof host === "function" ? host() : host;
-    if (!hostEl()) return { destroy() {
-    }, isPanelOpen: () => false, hide() {
-    }, editLink() {
-    }, showImageTools() {
-    }, showListTools() {
-    } };
-    const mount = (node) => {
-      const h = hostEl();
-      if (h && node.parentNode !== h) h.appendChild(node);
-      return node;
-    };
-    let tb = null;
-    let lp = null;
-    let lk = null;
-    let ip = null;
-    let ik = null;
-    const getSel = () => {
-      try {
-        return root?.getSelection?.() ?? document.getSelection();
-      } catch {
-        return null;
-      }
-    };
-    const place = (node, rect, above) => {
-      const h = hostEl();
-      if (!h) return;
-      ensureStyles(h);
-      mount(node);
-      const hr = h.getBoundingClientRect();
-      node.style.top = `${above ? rect.top - hr.top - 40 : rect.bottom - hr.top + 6}px`;
-      node.style.left = `${Math.max(0, rect.left - hr.left)}px`;
-      node.style.display = "flex";
-    };
-    const hideTb = () => {
-      if (tb) tb.style.display = "none";
-    };
-    const hidePanel = () => {
-      if (lp) lp.style.display = "none";
-      lk = null;
-    };
-    const hideImagePanel = () => {
-      if (ip) ip.style.display = "none";
-      ik = null;
-    };
-    let ib = null;
-    let ibEl = null;
-    let ic3 = null;
-    const hideCaptionPanel = () => {
-      if (ic3) ic3.style.display = "none";
-    };
-    const hideImageBar = () => {
-      if (ib) ib.style.display = "none";
-      ibEl = null;
-      hideCaptionPanel();
-    };
-    let lb = null;
-    let lbEl = null;
-    let lbIndex = 0;
-    const hideListBar = () => {
-      if (lb) lb.style.display = "none";
-      lbEl = null;
-    };
-    const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
-    function buildTb() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb";
-      let html = '<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>';
-      if (typeof onRetype === "function") {
-        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="h2" title="Heading">H2</button><button type="button" data-w="h3" title="Subheading">H3</button><button type="button" data-w="p" title="Body text">P</button>';
-      }
-      if (typeof listItemImages === "function") {
-        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="image" title="Insert image">Img</button>';
-      }
-      el.innerHTML = html;
-      el.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        wrap(b.dataset.w);
-      }));
-      return el;
-    }
-    function update() {
-      if (anyPanelOpen()) return;
-      const sel = getSel();
-      let list = null;
-      try {
-        list = listTools && sel && sel.rangeCount > 0 ? listTools.listOf(sel.anchorNode) : null;
-      } catch {
-        list = null;
-      }
-      if (!list) hideListBar();
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        hideTb();
-        if (list) showListTools(list);
-        return;
-      }
-      const el = editableOf(sel.anchorNode);
-      if (!el) {
-        hideTb();
-        if (list) showListTools(list);
-        return;
-      }
-      try {
-        if (!tb) tb = buildTb();
-        place(tb, sel.getRangeAt(0).getBoundingClientRect(), true);
-      } catch {
-        hideTb();
-      }
-      if (list) showListTools(list, void 0, { lift: !!tb && tb.style.display !== "none" });
-    }
-    function wrap(w2) {
-      const sel = getSel();
-      if (!sel || sel.isCollapsed) return;
-      const el = editableOf(sel.anchorNode);
-      if (!el) return;
-      if (w2 === "image") {
-        openImagePanel(sel, el);
-        return;
-      }
-      if (w2 === "h2" || w2 === "h3" || w2 === "p") {
-        if (typeof onRetype === "function") onRetype(el, w2 === "p" ? "paragraph" : "heading", w2 === "h2" ? 2 : w2 === "h3" ? 3 : null);
-        hideTb();
-        return;
-      }
-      if (!allowInline(el)) return;
-      if (w2 === "link") {
-        openPanel(sel, el);
-        return;
-      }
-      if (w2 === "code") toggleInline(sel, "code");
-      else if (typeof document !== "undefined") document.execCommand(w2);
-      onCommit(el, "format");
-      hideTb();
-    }
-    function toggleInline(sel, tag) {
-      if (!sel.rangeCount || sel.isCollapsed) return;
-      const r = sel.getRangeAt(0);
-      const at3 = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
-      const existing = at3 && at3.closest ? at3.closest(tag) : null;
-      if (existing) {
-        existing.replaceWith(document.createTextNode(existing.textContent));
-        return;
-      }
-      const node = document.createElement(tag);
-      try {
-        node.appendChild(r.extractContents());
-        r.insertNode(node);
-      } catch {
-      }
-    }
-    function anchorIn(range, stopAt) {
-      let n = range.commonAncestorContainer;
-      n = n && n.nodeType === 1 ? n : n && n.parentNode;
-      while (n && n !== root && n !== stopAt) {
-        if (n.tagName === "A") return n;
-        n = n.parentNode;
-      }
-      return null;
-    }
-    function buildPanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp";
-      el.innerHTML = '<input type="text" data-lk-text placeholder="Link text" /><input type="url" data-lk-url placeholder="https://..." /><label><input type="checkbox" data-lk-nofollow /> nofollow</label><label><input type="checkbox" data-lk-blank /> New tab</label><div class="lp-btns"><button type="button" data-lk-apply>Apply</button><button type="button" data-lk-remove title="Remove link">Remove</button></div>';
-      el.addEventListener("mousedown", (e) => {
-        if (e.target.tagName !== "INPUT") e.preventDefault();
-      });
-      el.querySelector("[data-lk-apply]").addEventListener("click", () => apply(false));
-      el.querySelector("[data-lk-remove]").addEventListener("click", () => apply(true));
-      el.querySelectorAll('input[type="text"], input[type="url"]').forEach((i) => i.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          apply(false);
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          hidePanel();
-        }
-      }));
-      return el;
-    }
-    function openPanel(sel, el) {
-      const range = sel.getRangeAt(0).cloneRange();
-      const existing = anchorIn(range, el);
-      lk = { range, el, existing };
-      if (!lp) lp = buildPanel();
-      const rel = existing ? existing.getAttribute("rel") || "" : "";
-      lp.querySelector("[data-lk-text]").value = existing ? existing.textContent || "" : String(range.toString() || "");
-      lp.querySelector("[data-lk-url]").value = existing ? existing.getAttribute("href") || "" : "";
-      lp.querySelector("[data-lk-nofollow]").checked = /\bnofollow\b/i.test(rel);
-      lp.querySelector("[data-lk-blank]").checked = existing ? existing.getAttribute("target") === "_blank" : false;
-      lp.querySelector("[data-lk-remove]").style.display = existing ? "" : "none";
-      place(lp, range.getBoundingClientRect(), false);
-      hideTb();
-      setTimeout(() => lp.querySelector("[data-lk-url]").focus(), 0);
-    }
-    function apply(remove) {
-      if (!lk) return;
-      const el = lk.el;
-      const text2 = String(lp.querySelector("[data-lk-text]").value || "").trim();
-      const url = String(lp.querySelector("[data-lk-url]").value || "").trim();
-      const nofollow = lp.querySelector("[data-lk-nofollow]").checked;
-      const blank2 = lp.querySelector("[data-lk-blank]").checked;
-      const plan = planLinkEdit({
-        url,
-        text: text2,
-        nofollow,
-        blank: blank2,
-        hasExisting: !!lk.existing,
-        existingText: lk.existing ? lk.existing.textContent || "" : String(lk.range.toString() || ""),
-        remove
-      });
-      if (plan.action === "reject" || plan.action === "none") {
-        hidePanel();
-        return;
-      }
-      try {
-        el.focus();
-        const s = getSel();
-        s.removeAllRanges();
-        s.addRange(lk.range);
-      } catch {
-      }
-      const attrs = (a) => {
-        a.setAttribute("href", plan.href);
-        if (plan.rel) a.setAttribute("rel", plan.rel);
-        else a.removeAttribute("rel");
-        if (plan.target) a.setAttribute("target", plan.target);
-        else a.removeAttribute("target");
-      };
-      if (plan.action === "remove") {
-        const a = lk.existing;
-        if (a && a.parentNode) {
-          while (a.firstChild) a.parentNode.insertBefore(a.firstChild, a);
-          a.remove();
-        }
-      } else if (plan.action === "update") {
-        const a = lk.existing;
-        attrs(a);
-        if (plan.text !== null) a.textContent = plan.text;
-      } else {
-        const a = document.createElement("a");
-        attrs(a);
-        try {
-          a.appendChild(lk.range.extractContents());
-          if (plan.text !== null) a.textContent = plan.text;
-          lk.range.insertNode(a);
-        } catch {
-        }
-      }
-      hidePanel();
-      onCommit(el, "link");
-    }
-    function buildImagePanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp gbti-ip";
-      el.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div><div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
-      el.addEventListener("mousedown", (e) => {
-        if (!(e.target.closest && e.target.closest(".ip-thumb"))) e.preventDefault();
-      });
-      return el;
-    }
-    function openImagePanel(sel, el) {
-      const range = sel.getRangeAt(0).cloneRange();
-      ik = { el };
-      if (!ip) ip = buildImagePanel();
-      const grid = ip.querySelector("[data-ip-grid]");
-      const empty = ip.querySelector("[data-ip-empty]");
-      grid.textContent = "";
-      let images = [];
-      try {
-        images = listItemImages() || [];
-      } catch {
-        images = [];
-      }
-      empty.hidden = images.length > 0;
-      for (const img of images) {
-        const ref = String(img?.ref ?? img?.src ?? "").trim();
-        if (!ref) continue;
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "ip-thumb";
-        b.title = String(img?.name || ref);
-        const im = document.createElement("img");
-        im.src = String(img?.src || ref);
-        im.alt = "";
-        const cap = document.createElement("span");
-        cap.textContent = String(img?.name || "");
-        b.append(im, cap);
-        const alt = String(img?.alt ?? img?.name ?? "").replace(/\.[a-z0-9]+$/i, "");
-        b.addEventListener("click", () => {
-          const target = ik?.el;
-          hideImagePanel();
-          if (target) onInsertImage(target, { ref, alt });
-        });
-        grid.appendChild(b);
-      }
-      place(ip, range.getBoundingClientRect(), false);
-      hideTb();
-    }
-    const layoutOfEl = (el) => {
-      try {
-        return typeof imageTools?.layoutOf === "function" && imageTools.layoutOf(el) || {};
-      } catch {
-        return {};
-      }
-    };
-    function paintImageBar(layout) {
-      if (!ib) return;
-      ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="caption" title="Add or edit the caption under the image">Caption</button><button type="button" data-il="remove" title="Remove this image">Remove</button>';
-    }
-    function buildCaptionPanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp gbti-ic";
-      el.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" /><div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button><button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
-      el.addEventListener("mousedown", (e) => {
-        if (e.target.tagName !== "INPUT") e.preventDefault();
-      });
-      const apply2 = (text2) => {
-        const target = ibEl;
-        hideCaptionPanel();
-        if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text2 ?? ""));
-      };
-      el.querySelector("[data-ic-apply]").addEventListener("click", () => apply2(el.querySelector("[data-ic-text]").value));
-      el.querySelector("[data-ic-remove]").addEventListener("click", () => apply2(""));
-      el.querySelector("[data-ic-text]").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          apply2(el.querySelector("[data-ic-text]").value);
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          hideCaptionPanel();
-        }
-      });
-      return el;
-    }
-    function openCaptionPanel(target) {
-      if (!ic3) ic3 = buildCaptionPanel();
-      let current = "";
-      try {
-        current = typeof imageTools?.captionOf === "function" ? String(imageTools.captionOf(target) || "") : "";
-      } catch {
-        current = "";
-      }
-      const input = ic3.querySelector("[data-ic-text]");
-      input.value = current;
-      ic3.querySelector("[data-ic-remove]").style.display = current ? "" : "none";
-      const img = target.querySelector && target.querySelector("img") || target;
-      place(ic3, img.getBoundingClientRect(), false);
-      setTimeout(() => input.focus(), 0);
-    }
-    function buildImageBar() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb gbti-imgbar";
-      el.addEventListener("mousedown", (e) => e.preventDefault());
-      el.addEventListener("click", (e) => {
-        const b = e.target && e.target.closest ? e.target.closest("button[data-il]") : null;
-        const target = ibEl;
-        if (!b || !target || b.disabled) return;
-        const act = b.dataset.il;
-        if (act === "remove") {
-          hideImageBar();
-          if (typeof imageTools?.onRemove === "function") imageTools.onRemove(target);
-          return;
-        }
-        if (act === "caption") {
-          openCaptionPanel(target);
-          return;
-        }
-        const next = applyImageLayoutAction(layoutOfEl(target), act);
-        paintImageBar(next);
-        if (typeof imageTools?.onLayout === "function") imageTools.onLayout(target, next);
-      });
-      return el;
-    }
-    function showImageTools(el) {
-      if (!el || !imageTools) return;
-      hideTb();
-      hidePanel();
-      hideImagePanel();
-      hideCaptionPanel();
-      if (!ib) ib = buildImageBar();
-      ibEl = el;
-      paintImageBar(layoutOfEl(el));
-      const img = el.querySelector && el.querySelector("img") || el;
-      place(ib, img.getBoundingClientRect(), true);
-    }
-    const stateOfEl = (el, index) => {
-      try {
-        return typeof listTools?.stateOf === "function" && listTools.stateOf(el, index) || { ordered: false, style: null };
-      } catch {
-        return { ordered: false, style: null };
-      }
-    };
-    function paintListBar(state) {
-      if (lb) lb.innerHTML = listStyleButtonsHtml(state);
-    }
-    function buildListBar() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb gbti-listbar";
-      el.addEventListener("mousedown", (e) => e.preventDefault());
-      el.addEventListener("click", (e) => {
-        const b = e.target && e.target.closest ? e.target.closest("button[data-la]") : null;
-        const target = lbEl;
-        const index = lbIndex;
-        if (!b || !target || b.disabled) return;
-        const act = b.dataset.la;
-        if (act === "unwrap") hideListBar();
-        if (typeof listTools?.onAction === "function") listTools.onAction(target, index, act);
-      });
-      return el;
-    }
-    function showListTools(el, index, { lift = false } = {}) {
-      if (!el || !listTools) return;
-      hideImageBar();
-      hideImagePanel();
-      if (!lb) lb = buildListBar();
-      let idx = Number.isInteger(index) ? index : listItemAtSelection(el, getSel()).index;
-      if (idx < 0) idx = 0;
-      lbEl = el;
-      lbIndex = idx;
-      lb.dataset.item = String(idx);
-      paintListBar(stateOfEl(el, idx));
-      const hr = hostEl().getBoundingClientRect();
-      const blockRect = el.getBoundingClientRect();
-      const pinned = blockRect.top < 48;
-      place(lb, blockRect, true);
-      if (pinned) lb.style.top = `${8 - hr.top}px`;
-      lb.style.left = "auto";
-      lb.style.right = `${Math.max(0, hr.right - blockRect.right)}px`;
-      const extra = lb.offsetHeight - 38;
-      if (extra > 0 && !pinned) lb.style.top = `${parseFloat(lb.style.top) - extra}px`;
-      if (lift && !pinned) lb.style.top = `${parseFloat(lb.style.top) - 44}px`;
-    }
-    const onDocDown = (e) => {
-      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-      if (ib && ib.style.display !== "none" && !(path.includes(ib) || ic3 && path.includes(ic3) || ibEl && path.includes(ibEl))) hideImageBar();
-      if (lb && lb.style.display !== "none" && !(path.includes(lb) || lbEl && path.includes(lbEl))) hideListBar();
-    };
-    document.addEventListener("mousedown", onDocDown, true);
-    const onSel = () => update();
-    document.addEventListener("selectionchange", onSel);
-    return {
-      isPanelOpen: () => anyPanelOpen(),
-      hide() {
-        hideTb();
-        hidePanel();
-        hideImagePanel();
-        hideImageBar();
-        hideListBar();
-      },
-      /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
-      showImageTools(el) {
-        showImageTools(el);
-      },
-      /** Show the list bar above item `index` of a list block (the caret's item when omitted). See listTools. */
-      showListTools(el, index) {
-        showListTools(el, index);
-      },
-      /**
-       * Open the link manager for an existing anchor, without going through the selection. A single click on a link
-       * inside a contenteditable neither navigates (Chrome and Firefox both suppress that) nor shows anything, so
-       * the link reads as dead unless the host wires this. Builds its own Range rather than touching
-       * document.getSelection(), so the selectionchange listener cannot flash the B/I/Link bar in behind the panel.
-       */
-      editLink(el, anchor) {
-        if (!el || !anchor) return;
-        const range = document.createRange();
-        range.selectNodeContents(anchor);
-        hideTb();
-        openPanel({ getRangeAt: () => range }, el);
-      },
-      destroy() {
-        document.removeEventListener("selectionchange", onSel);
-        document.removeEventListener("mousedown", onDocDown, true);
-        tb?.remove();
-        lp?.remove();
-        ip?.remove();
-        ib?.remove();
-        ic3?.remove();
-        lb?.remove();
-        tb = null;
-        lp = null;
-        lk = null;
-        ip = null;
-        ik = null;
-        ib = null;
-        ibEl = null;
-        ic3 = null;
-        lb = null;
-        lbEl = null;
-      }
-    };
-  }
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_base();
+  init_markdown_blocks();
+  init_selection_toolbar();
+  init_list_items();
+  init_block_commit();
 
   // client-ui/src/list-editing.mjs
+  init_list_items();
+  init_markdown_blocks();
+  init_block_commit();
   function listTabKeydown(e, { el, ordered = false, selection, apply }) {
     if (!e || e.key !== "Tab" || !el) return false;
     const sel = selection || (typeof document !== "undefined" ? document.getSelection() : null);
@@ -11614,7 +13152,11 @@ ${barWidthCss(s)}`;
     };
   }
 
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_assets();
+
   // client-ui/src/media-picker.mjs
+  init_assets();
   var MEDIA_INDEX_URL = "https://gbti.network/media-index.json";
   function mediaFor(index, author) {
     const rows = index?.byAuthor?.[author];
@@ -11692,7 +13234,20 @@ ${String(body ?? "")}`;
     return out;
   }
 
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_tokens();
+  init_image_layout_ui();
+
+  // client-ui/src/doc-editor-css.mjs
+  init_image_layout_ui();
+  init_list_style_ui();
+
+  // client-ui/src/audio-block-ui.mjs
+  init_base();
+  init_content_blocks();
+
   // client/src/audio-block-edit.mjs
+  init_audio_embed();
   var AUDIO_SOURCES = ["upload", ...AUDIO_PROVIDERS];
   var SOURCE_NAMES = { upload: "Upload", ...PROVIDER_NAMES };
   var SOURCE_KEYS = ["src", ...AUDIO_PROVIDERS];
@@ -12408,6 +13963,7 @@ ${listStyleProseCss(".doc-blocks")}
 `;
 
   // client-ui/src/elements/gbti-doc-editor.mjs
+  init_image_attrs();
   var UID = 0;
   var withId = (b) => {
     if (b && !b._id) b._id = ++UID;
@@ -13343,6 +14899,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_base();
+
   // client-ui/src/editor-core.mjs
   function fmtDate2(value) {
     if (!value) return "";
@@ -13408,75 +14967,12 @@ ${listStyleProseCss(".doc-blocks")}
     return { before: anchor && keys.includes(anchor) ? anchor : null };
   }
 
-  // client-ui/src/embed-lightbox.mjs
-  var FALLBACK_ID = "gbti-embed-lightbox";
-  function fallbackDialog() {
-    let dlg = document.getElementById(FALLBACK_ID);
-    if (dlg) return dlg;
-    dlg = document.createElement("dialog");
-    dlg.id = FALLBACK_ID;
-    dlg.setAttribute("aria-label", "Video");
-    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
-    dlg.innerHTML = "<style>#" + FALLBACK_ID + "::backdrop{background:rgba(20,19,24,.88)}#" + FALLBACK_ID + "[open]{display:flex;align-items:center;justify-content:center}#" + FALLBACK_ID + " .f{width:min(92vw,1100px);aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.55)}#" + FALLBACK_ID + " iframe{width:100%;height:100%;border:0}#" + FALLBACK_ID + ' .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><div class="f"><iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
-    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
-    dlg.addEventListener("click", (e) => {
-      if (e.target === dlg) dlg.close();
-    });
-    dlg.addEventListener("close", () => {
-      const f = dlg.querySelector("iframe");
-      if (f) f.removeAttribute("src");
-    });
-    document.body.appendChild(dlg);
-    return dlg;
-  }
-  function autoplaySrc(src) {
-    const s = String(src || "");
-    if (!s) return "";
-    return s + (s.includes("?") ? "&" : "?") + "autoplay=1";
-  }
-  function openEmbedLightbox(src) {
-    if (typeof document === "undefined" || !src) return false;
-    if (document.querySelector("[data-lightbox-root]")) {
-      document.dispatchEvent(new CustomEvent("gbti-embed-open", { bubbles: true, composed: true, detail: { src } }));
-      return true;
-    }
-    const dlg = fallbackDialog();
-    if (typeof dlg.showModal !== "function") {
-      window.open(src, "_blank", "noopener");
-      return false;
-    }
-    const f = dlg.querySelector("iframe");
-    if (f) f.src = autoplaySrc(src);
-    dlg.showModal();
-    return true;
-  }
-  function wireEmbedPosters(root) {
-    if (!root || typeof root.querySelectorAll !== "function") return 0;
-    let n = 0;
-    for (const btn of root.querySelectorAll(".md-embed-poster .md-embed-open")) {
-      if (btn.dataset.lbWired) continue;
-      btn.dataset.lbWired = "1";
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        const box = btn.closest(".md-embed-poster");
-        openEmbedLightbox(box?.dataset.embedSrc || "");
-      });
-      n++;
-    }
-    return n;
-  }
-  var EMBED_POSTER_CSS = `
-  .md-embed { position:relative; width:100%; margin:.6em 0 1em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
-  .md-embed.md-embed-portrait { aspect-ratio:9/16; max-width:360px; }
-  .md-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
-  .md-embed-open { position:absolute; inset:0; width:100%; height:100%; display:block; padding:0; border:0; background:#111; cursor:pointer; }
-  .md-embed-thumb { width:100%; height:100%; object-fit:cover; display:block; }
-  .md-embed-panel { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font:600 14px/1 var(--f-mono, ui-monospace, monospace); letter-spacing:.08em; text-transform:uppercase; }
-  .md-embed-play { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:999px; background:rgba(0,0,0,.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(0,0,0,.4); transition:background .15s ease, transform .15s ease; }
-  .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
-`;
+  // client-ui/src/elements/gbti-discussion.mjs
+  init_base();
+  init_embed_lightbox();
 
   // client-ui/src/tweet-frames.mjs
+  init_tweet_embed();
   var TWEET_RELAY = "https://gbti.network/embed/";
   var TWEET_RELAY_ORIGIN = "https://gbti.network";
   var TWEET_SLOW_MS = 15e3;
@@ -13659,561 +15155,10 @@ ${listStyleProseCss(".doc-blocks")}
     await rawDel(types2.map((t) => wbKey(memberKey, t)));
   }
 
-  // client-ui/src/prose-editor-core.mjs
-  var COMMENT_MAX_BYTES = 8e3;
-  function commentBodyTooLong(md) {
-    try {
-      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
-    } catch {
-      return String(md ?? "").length > COMMENT_MAX_BYTES;
-    }
-  }
-  var PROSE_CONTROLS = Object.freeze([
-    { act: "bold", label: "Bold", key: "B" },
-    { act: "italic", label: "Italic", key: "I" },
-    { act: "code", label: "Inline code" },
-    { act: "link", label: "Link" },
-    null,
-    { act: "quote", label: "Quote" },
-    { act: "ul", label: "Bulleted list" },
-    { act: "ol", label: "Numbered list" },
-    { act: "codeblock", label: "Code block" },
-    { act: "video", label: "Video" }
-  ]);
-  function editorHtmlFromMarkdown(md) {
-    const html = renderMarkdown(String(md ?? ""), { autoEmbed: true }).trim();
-    return html || "<p><br></p>";
-  }
-  var ELEMENT = 1;
-  var TEXT = 3;
-  var BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "DIV", "BLOCKQUOTE", "UL", "OL", "LI", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "FIGURE", "SECTION", "ARTICLE"]);
-  var tagOf = (n) => String(n?.tagName || "").toUpperCase();
-  var attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
-  var kids = (n) => Array.from(n?.childNodes || []);
-  var escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
-  var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
-  var hasBlockChild = (n) => kids(n).some(isBlock);
-  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
-  var inline3 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
-  function codeText(el) {
-    const html = String(el?.innerHTML ?? "");
-    const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-    return t.replace(/\n+$/, "");
-  }
-  function codeLang(pre) {
-    const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
-    const el = code || pre;
-    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
-    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
-  }
-  function walk(node, out) {
-    let buf = "";
-    const flush = () => {
-      const t = inline3(buf);
-      if (t.trim()) out.push(t);
-      buf = "";
-    };
-    for (const c of kids(node)) {
-      if (c.nodeType === TEXT) {
-        buf += escapeText(c.textContent);
-        continue;
-      }
-      if (c.nodeType !== ELEMENT) continue;
-      if (!isBlock(c)) {
-        if (tagOf(c) === "BR") {
-          buf += "<br>";
-          continue;
-        }
-        buf += String(c.outerHTML ?? "");
-        continue;
-      }
-      flush();
-      blockOf(c, out);
-    }
-    flush();
-  }
-  function blockOf(n, out) {
-    const t = tagOf(n);
-    if (isCard(n)) {
-      out.push(attr(n, "data-embed-url").trim());
-      return;
-    }
-    if (t === "P" || t === "DIV" || t === "SECTION" || t === "ARTICLE" || t === "FIGURE") {
-      if (hasBlockChild(n)) {
-        walk(n, out);
-        return;
-      }
-      const text2 = inline3(n.innerHTML);
-      if (text2.trim()) out.push(text2);
-      return;
-    }
-    if (t === "BLOCKQUOTE") {
-      const inner = [];
-      if (hasBlockChild(n)) walk(n, inner);
-      else {
-        const text2 = inline3(n.innerHTML);
-        if (text2.trim()) inner.push(text2);
-      }
-      const paras = flat(inner);
-      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
-      return;
-    }
-    if (t === "UL" || t === "OL") {
-      const items = [];
-      for (const li of kids(n)) {
-        if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
-        let text2;
-        if (hasBlockChild(li)) {
-          const inner = [];
-          walk(li, inner);
-          text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
-        } else text2 = inline3(li.innerHTML);
-        if (text2.trim()) items.push(text2);
-      }
-      if (!items.length) return;
-      out.push(items.map((it2, i) => t === "OL" ? `${i + 1}. ${it2}` : `- ${it2}`).join("\n"));
-      return;
-    }
-    if (t === "PRE") {
-      const { el, lang } = codeLang(n);
-      out.push("```" + lang + "\n" + codeText(el) + "\n```");
-      return;
-    }
-    if (/^H[1-6]$/.test(t)) {
-      const text2 = inline3(n.innerHTML);
-      if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
-      return;
-    }
-    if (t === "HR") {
-      out.push("---");
-      return;
-    }
-    if (t === "LI") {
-      const text2 = inline3(n.innerHTML);
-      if (text2.trim()) out.push(`- ${text2}`);
-      return;
-    }
-    if (t === "TABLE") {
-      const text2 = inline3(n.innerHTML);
-      if (text2.trim()) out.push(text2);
-      return;
-    }
-  }
-  function domToMarkdown(root) {
-    const out = [];
-    walk(root, out);
-    const blocks2 = [];
-    let run = null;
-    const closeRun = () => {
-      if (!run) return;
-      if (run.length) blocks2.push(run.join("\n>\n"));
-      run = null;
-    };
-    for (const b of out) {
-      if (b && typeof b === "object" && b.quote) {
-        run ||= [];
-        if (b.text) run.push(b.text);
-        continue;
-      }
-      closeRun();
-      if (typeof b === "string" && b.trim()) blocks2.push(b);
-    }
-    closeRun();
-    return blocks2.join("\n\n");
-  }
-
-  // client-ui/src/elements/gbti-prose-editor.mjs
-  var ic2 = {
-    code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
-    ul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    ol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-    codeblock: '<rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9.5l-2.5 2.5 2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
-    video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-  };
-  var svg4 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
-  var CSS7 = `
-  :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
-  .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
-  .box:focus-within { border-color: var(--brand); }
-  /* The header: small, muted, brand on hover. Quiet by design (owner, 2026-09-11). */
-  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
-  .hdr button { width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px;
-    background: transparent; color: var(--muted); cursor: pointer; font: 700 13px/1 var(--font-body); }
-  .hdr button:hover, .hdr button:focus-visible { color: var(--brand); background: rgba(31,158,95,.1); outline: 0; }
-  .hdr button svg { width: 16px; height: 16px; }
-  .hdr .k-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
-  .hdr .sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
-  .vid { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  .vid[hidden] { display: none; }
-  .vid input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); }
-  .vid input.bad { border-color: #c0392b; }
-  .vid button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
-  .vid button.vid-add { border-color: var(--brand); background: var(--brand); color: #fff; }
-  .surface { position: relative; min-height: 96px; padding: 10px 12px; font-size: 14.5px; line-height: 1.6; outline: 0; caret-color: var(--brand); word-break: break-word; }
-  .surface.empty::before { content: attr(data-ph); position: absolute; left: 12px; top: 10px; color: var(--muted); pointer-events: none; }
-  .surface p, .surface div { margin: 0 0 .7em; }
-  .surface > :last-child { margin-bottom: 0; }
-  .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
-  .surface blockquote + blockquote { margin-top: -.7em; }
-  .surface blockquote > :last-child { margin-bottom: 0; }
-  .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
-  .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
-  .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
-  .surface pre code { background: none; padding: 0; font-size: inherit; }
-  .surface a { color: var(--brand); }
-  .surface strong { font-weight: 700; }
-  ${EMBED_POSTER_CSS}
-  .surface .md-embed { margin: .4em 0 .9em; }
-  .surface .md-embed .md-embed-open { cursor: default; }
-  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
-  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
-  .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-    padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
-  .pe-x svg { width: 15px; height: 15px; }
-  .pe-x:hover { background: #c0392b; }
-`;
-  var GbtiProseEditor = class extends GbtiElement {
-    /** Markdown in, markdown out. The surface is read back on every get, so the value is always current. */
-    get value() {
-      const s = this._surface();
-      return s ? domToMarkdown(s) : String(this._pending ?? "");
-    }
-    set value(md) {
-      this._pending = String(md ?? "");
-      if (this._surface()) this._load(this._pending);
-    }
-    get placeholder() {
-      return this.getAttribute("placeholder") || "Write a comment";
-    }
-    _surface() {
-      return this.$("[data-surface]");
-    }
-    render() {
-      if (this._rendered) return;
-      this._rendered = true;
-      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg4(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
-      this.set(this.css(CSS7) + `<div class="box" data-box>
-      <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
-      <div class="vid" data-vid hidden>
-        <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
-        <button type="button" class="vid-add" data-vid-add>Add</button>
-        <button type="button" data-vid-cancel>Cancel</button>
-      </div>
-      <div class="surface" contenteditable="true" data-surface data-ph="${esc2(this.placeholder)}" role="textbox" aria-multiline="true"></div>
-    </div>`);
-      this._wire();
-      this._load(this._pending ?? "");
-    }
-    _load(md) {
-      const s = this._surface();
-      if (!s) return;
-      s.innerHTML = editorHtmlFromMarkdown(md);
-      this._decorateCards();
-      this._syncEmpty();
-    }
-    /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
-     *  removes it whole. */
-    _decorateCards() {
-      for (const card of this.$$("[data-surface] .md-embed, [data-surface] .md-tweet")) {
-        if (card.dataset.peCard) continue;
-        card.dataset.peCard = "1";
-        card.setAttribute("contenteditable", "false");
-        const what = card.classList.contains("md-tweet") ? "Remove post" : "Remove video";
-        const x = document.createElement("button");
-        x.type = "button";
-        x.className = "pe-x";
-        x.title = what;
-        x.setAttribute("aria-label", what);
-        x.innerHTML = svg4("x");
-        x.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          card.remove();
-          this._changed();
-        });
-        card.appendChild(x);
-      }
-    }
-    _syncEmpty() {
-      const s = this._surface();
-      if (s) s.classList.toggle("empty", !String(this.value || "").trim());
-    }
-    _changed() {
-      this._syncEmpty();
-      this.emit("input");
-    }
-    _sel() {
-      try {
-        return (this.root.getSelection ? this.root.getSelection() : null) || document.getSelection();
-      } catch {
-        return document.getSelection();
-      }
-    }
-    /** The nearest ancestor of `node` with this tag, stopping at the surface. */
-    _closest(node, tag) {
-      const s = this._surface();
-      let n = node && node.nodeType === 1 ? node : node?.parentNode;
-      while (n && n !== s) {
-        if (String(n.tagName || "").toUpperCase() === tag) return n;
-        n = n.parentNode;
-      }
-      return null;
-    }
-    /** The top-level block of the surface that holds `node`. */
-    _blockAt(node) {
-      const s = this._surface();
-      let n = node;
-      while (n && n.parentNode && n.parentNode !== s) n = n.parentNode;
-      return n && n.parentNode === s ? n : null;
-    }
-    _wire() {
-      const surface = this._surface();
-      if (!surface) return;
-      this._tb = createSelectionToolbar({ root: this.root, host: () => this.$("[data-box]"), editableOf: () => null, onCommit: () => this._changed() });
-      this.$$("[data-act]").forEach((b) => {
-        b.addEventListener("mousedown", (e) => e.preventDefault());
-        b.addEventListener("click", () => this._act(b.dataset.act));
-      });
-      surface.addEventListener("input", () => this._changed());
-      surface.addEventListener("paste", (e) => {
-        e.preventDefault();
-        const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
-        if (t) document.execCommand("insertText", false, t);
-      });
-      surface.addEventListener("keydown", (e) => this._key(e));
-      this.$("[data-vid-add]")?.addEventListener("click", () => this._addVideo());
-      this.$("[data-vid-cancel]")?.addEventListener("click", () => this._toggleVideo(false));
-      this.$("[data-vid-url]")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          this._addVideo();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          this._toggleVideo(false);
-        }
-      });
-    }
-    _act(act) {
-      const surface = this._surface();
-      if (!surface) return;
-      if (act === "video") {
-        this._toggleVideo(true);
-        return;
-      }
-      surface.focus();
-      switch (act) {
-        case "bold":
-          document.execCommand("bold");
-          break;
-        case "italic":
-          document.execCommand("italic");
-          break;
-        case "code":
-          this._toggleCode();
-          break;
-        case "link":
-          this._link();
-          return;
-        // commits through the panel
-        case "quote":
-          this._formatBlock("BLOCKQUOTE");
-          break;
-        case "codeblock":
-          this._formatBlock("PRE");
-          break;
-        case "ul":
-          document.execCommand("insertUnorderedList");
-          break;
-        case "ol":
-          document.execCommand("insertOrderedList");
-          break;
-        default:
-          return;
-      }
-      this._changed();
-    }
-    /** Quote and code block toggle: the same control puts a block back to a paragraph. */
-    _formatBlock(tag) {
-      const sel = this._sel();
-      const inside = sel && this._closest(sel.anchorNode, tag);
-      const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
-      if (line) {
-        this._liftLine(inside, line);
-        return;
-      }
-      document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
-    }
-    /** The P or DIV directly inside `quote` that holds `node`, or null. */
-    _quoteLine(quote, node) {
-      let n = node;
-      while (n && n.parentNode !== quote) n = n.parentNode;
-      return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
-    }
-    /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
-     *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
-     *  back to markdown (measured in Chrome, 2026-09-16). */
-    _liftLine(quote, line) {
-      const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
-      const rest = document.createElement("blockquote");
-      while (line.nextSibling) rest.appendChild(line.nextSibling);
-      const p = document.createElement("p");
-      while (line.firstChild) p.appendChild(line.firstChild);
-      if (!p.firstChild) p.innerHTML = "<br>";
-      line.remove();
-      quote.after(p);
-      if (has(rest)) p.after(rest);
-      if (!has(quote)) quote.remove();
-      try {
-        const r = document.createRange();
-        r.selectNodeContents(p);
-        r.collapse(false);
-        const s = this._sel();
-        s.removeAllRanges();
-        s.addRange(r);
-      } catch {
-      }
-    }
-    /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
-    _toggleCode() {
-      const sel = this._sel();
-      if (!sel || !sel.rangeCount) return;
-      const existing = this._closest(sel.anchorNode, "CODE");
-      if (existing && !this._closest(existing, "PRE")) {
-        existing.replaceWith(document.createTextNode(existing.textContent));
-        return;
-      }
-      if (sel.isCollapsed) return;
-      const r = sel.getRangeAt(0);
-      const node = document.createElement("code");
-      try {
-        node.appendChild(r.extractContents());
-        r.insertNode(node);
-      } catch {
-      }
-    }
-    /** Link: the panel over the anchor the selection is in, or a new anchor around the selection. */
-    _link() {
-      const sel = this._sel();
-      if (!sel || !sel.rangeCount) return;
-      let a = this._closest(sel.anchorNode, "A");
-      if (!a) {
-        if (sel.isCollapsed) return;
-        const r = sel.getRangeAt(0);
-        a = document.createElement("a");
-        a.setAttribute("href", "");
-        try {
-          a.appendChild(r.extractContents());
-          r.insertNode(a);
-        } catch {
-          return;
-        }
-      }
-      this._tb?.editLink(this._surface(), a);
-    }
-    _key(e) {
-      if (e.key !== "Enter" || e.shiftKey) return;
-      const sel = this._sel();
-      const pre = sel && this._closest(sel.anchorNode, "PRE");
-      if (pre) {
-        e.preventDefault();
-        const last = pre.lastChild;
-        const prev = last?.previousSibling;
-        const isBr = (n) => n && n.nodeType === 1 && String(n.tagName).toUpperCase() === "BR";
-        if (isBr(last) && isBr(prev) && sel.isCollapsed && this._closest(sel.anchorNode, "PRE") === pre && !sel.anchorNode.nextSibling) {
-          last.remove();
-          prev.remove();
-          const p = document.createElement("p");
-          p.innerHTML = "<br>";
-          pre.after(p);
-          this._caretIn(p);
-        } else document.execCommand("insertLineBreak");
-        this._changed();
-        return;
-      }
-      const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
-      if (quote && sel.isCollapsed) {
-        const line = this._quoteLine(quote, sel.anchorNode);
-        if (!String((line || quote).textContent || "").trim()) {
-          e.preventDefault();
-          if (line) this._liftLine(quote, line);
-          else {
-            const p = document.createElement("p");
-            p.innerHTML = "<br>";
-            quote.replaceWith(p);
-            this._caretIn(p);
-          }
-          this._changed();
-        }
-      }
-    }
-    _caretIn(el) {
-      try {
-        const r = document.createRange();
-        r.selectNodeContents(el);
-        r.collapse(true);
-        const sel = this._sel();
-        sel.removeAllRanges();
-        sel.addRange(r);
-      } catch {
-      }
-    }
-    _toggleVideo(show) {
-      const row = this.$("[data-vid]");
-      const input = this.$("[data-vid-url]");
-      if (!row || !input) return;
-      if (show) {
-        const sel = this._sel();
-        this._vidAnchor = sel && sel.anchorNode ? this._blockAt(sel.anchorNode) : null;
-        row.hidden = false;
-        input.value = "";
-        input.classList.remove("bad");
-        setTimeout(() => input.focus(), 0);
-      } else {
-        row.hidden = true;
-        this._surface()?.focus();
-      }
-    }
-    /** The link becomes its own line in the markdown and renders as the poster at once. */
-    _addVideo() {
-      const input = this.$("[data-vid-url]");
-      const surface = this._surface();
-      if (!input || !surface) return;
-      const url = String(input.value || "").trim();
-      if (!url || !embedUrl(url)) {
-        input.classList.add("bad");
-        input.focus();
-        return;
-      }
-      const p = document.createElement("p");
-      p.textContent = url;
-      const anchor = this._vidAnchor && this._vidAnchor.parentNode === surface ? this._vidAnchor : null;
-      if (anchor) anchor.after(p);
-      else surface.appendChild(p);
-      this._load(this.value);
-      this._toggleVideo(false);
-      const cards = this.$$("[data-surface] .md-embed").filter((c) => c.getAttribute("data-embed-url") === url);
-      const card = cards[cards.length - 1];
-      if (card) {
-        let next = card.nextElementSibling;
-        if (!next || String(next.tagName).toUpperCase() !== "P") {
-          next = document.createElement("p");
-          next.innerHTML = "<br>";
-          card.after(next);
-        }
-        surface.focus();
-        this._caretIn(next);
-      }
-      this._changed();
-    }
-  };
-  define("gbti-prose-editor", GbtiProseEditor);
-
   // client-ui/src/elements/gbti-comment-box.mjs
+  init_base();
+  init_prose_editor_core();
+  init_gbti_prose_editor();
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS8 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
@@ -14509,6 +15454,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
+  init_member_avatars();
   var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
@@ -14777,6 +15723,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-discussion", GbtiDiscussion);
 
   // client-ui/src/elements/gbti-cta-assignment.mjs
+  init_base();
   var SITE9 = "https://gbti.network";
   var ADMIN = `${SITE9}/admin/`;
   var CSS10 = `
@@ -14851,6 +15798,12 @@ ${listStyleProseCss(".doc-blocks")}
     return ctas.filter((c) => Array.isArray(c?.items) && c.items.some((it2) => it2 && it2.type === type && it2.ref === r)).sort((a, b) => (b.enabled === true) - (a.enabled === true));
   }
   define("gbti-cta-assignment", GbtiCtaAssignment);
+
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_tokens();
+
+  // client-ui/src/editor-skill.mjs
+  init_base();
 
   // client-ui/src/public-url.mjs
   var SITE_ORIGIN2 = "https://gbti.network";
@@ -15165,6 +16118,9 @@ ${listStyleProseCss(".doc-blocks")}
   .dsub-opt { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:none; color:var(--s-fg-mute); border:1px solid var(--s-line-2); border-radius:999px; padding:1px 8px; }
   [data-skill-only][hidden], [data-main-opt][hidden] { display:none !important; }
 `;
+
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_member_avatars();
 
   // membership/tiers.mjs
   var TIER = Object.freeze({
@@ -16120,6 +17076,9 @@ ${listStyleProseCss(".doc-blocks")}
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `;
 
+  // client-ui/src/elements/editor-fields.mjs
+  init_base();
+
   // client-ui/src/one-click-public-core.mjs
   var AUDIENCE_MODES = Object.freeze(["switch"]);
   function audienceControl({ currentVisibility = null } = {}) {
@@ -16528,6 +17487,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return true;
   }
+
+  // client-ui/src/elements/editor-rows.mjs
+  init_base();
 
   // src/lib/content-link-types.mjs
   var CONTENT_LINK_TYPES = Object.freeze([
@@ -16954,6 +17916,8 @@ ${listStyleProseCss(".doc-blocks")}
   };
 
   // client-ui/src/elements/editor-media.mjs
+  init_base();
+  init_assets();
   var withEditorMedia = (Base2) => class extends Base2 {
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
     // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
@@ -17360,7 +18324,11 @@ ${listStyleProseCss(".doc-blocks")}
     });
   }
 
+  // client-ui/src/elements/editor-actions.mjs
+  init_base();
+
   // client-ui/src/publish-diff.mjs
+  init_markdown_blocks();
   var IGNORED_FIELDS = Object.freeze(/* @__PURE__ */ new Set([
     "updatedAt",
     "publishedAt",
@@ -18586,6 +19554,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-content-editor", GbtiContentEditor);
 
   // client-ui/src/elements/gbti-content-list.mjs
+  init_base();
   var GbtiContentList = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -18634,6 +19603,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-content-list", GbtiContentList);
 
   // client-ui/src/elements/gbti-pr-list.mjs
+  init_base();
   var GbtiPrList = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -18676,6 +19646,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-pr-list", GbtiPrList);
 
   // client-ui/src/elements/gbti-members-portal.mjs
+  init_base();
   var GbtiMembersPortal = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -18700,6 +19671,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-members-portal", GbtiMembersPortal);
 
   // client-ui/src/elements/gbti-settings.mjs
+  init_base();
   var GbtiSettings = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -18748,6 +19720,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-settings", GbtiSettings);
+
+  // client-ui/src/elements/gbti-account.mjs
+  init_base();
 
   // membership/discord-roles.mjs
   var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
@@ -18876,6 +19851,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-account.mjs
+  init_member_avatars();
   var SITE10 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
@@ -19202,6 +20178,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-account", GbtiAccount);
 
   // client-ui/src/elements/gbti-mod-actions.mjs
+  init_base();
   var SITE11 = "https://gbti.network";
   var ACTION_LABEL = { hide: "Hide", unhide: "Unhide", remove: "Remove", stale: "Mark stale", unstale: "Unmark stale", unindex: "Unindex", reindex: "Reindex" };
   var ACTION_API = { hide: "deplatform", unhide: "republish", remove: "remove", stale: "stale", unstale: "unstale", unindex: "unindex", reindex: "reindex" };
@@ -19391,6 +20368,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-mod-actions", GbtiModActions);
 
   // client-ui/src/elements/gbti-admin.mjs
+  init_base();
   var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS13 = `
@@ -19519,6 +20497,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-admin", GbtiAdmin);
 
+  // client-ui/src/elements/gbti-superadmin-dashboard.mjs
+  init_base();
+
   // client-ui/src/saved-core.mjs
   var TYPE_INDEX = { post: "blog-index.json", project: "projects-index.json", prompt: "prompts-index.json" };
   var TYPE_LABEL2 = { post: "Articles", project: "Projects", prompt: "Prompts & Skills", share: "Shares" };
@@ -19593,6 +20574,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
+  init_member_avatars();
+  init_member_avatar();
   var SITE12 = "https://gbti.network";
   var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -19868,6 +20851,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-superadmin-dashboard", GbtiSuperadminDashboard);
 
   // client-ui/src/elements/gbti-category-manager.mjs
+  init_base();
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -20061,6 +21045,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-category-manager", GbtiCategoryManager);
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
+  init_base();
   var SITE13 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
@@ -20715,6 +21700,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
+  init_base();
   var SITE14 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
@@ -21060,6 +22046,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-tag-explorer", GbtiTagExplorer);
 
+  // client-ui/src/elements/gbti-news-source-manager.mjs
+  init_base();
+
   // membership/news-banwords.mjs
   var BANWORD_MIN = 2;
   var BANWORD_MAX = 40;
@@ -21358,6 +22347,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
+  init_base();
   var CSS19 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -21475,6 +22465,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-quote-manager", GbtiQuoteManager);
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
+  init_base();
   var CSS20 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -21706,6 +22697,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-coupon-manager", GbtiCouponManager);
+
+  // client-ui/src/elements/gbti-prepared-listings.mjs
+  init_base();
 
   // client-ui/src/prepared-listings-core.mjs
   var PREPARED_SITE_BASE = "https://gbti.network";
@@ -22112,6 +23106,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-prepared-listings", GbtiPreparedListings);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
+  init_base();
   var CSS22 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
@@ -22197,6 +23192,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-site-settings-manager", GbtiSiteSettingsManager);
+
+  // client-ui/src/elements/gbti-digest-manager.mjs
+  init_base();
 
   // membership/digest-config.mjs
   var DEFAULT_CTA = Object.freeze({
@@ -22648,6 +23646,153 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-digest-manager", GbtiDigestManager);
 
+  // client-ui/src/elements/gbti-community-manager.mjs
+  init_base();
+  init_community_css();
+  init_community_core();
+  var CSS25 = `
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bar p { margin: 0; color: var(--fg-soft); font-size: 14px; flex: 1; min-width: 220px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); font-weight: 600; font-size: 13px; }
+  .chip:hover { background: var(--tint); }
+  .chip[aria-pressed="true"] { background: var(--fg); color: var(--paper); border-color: var(--fg); }
+  .chip[aria-pressed="true"]:hover { background: var(--fg); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.t a { font-weight: 700; color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+  td.t a:hover { color: var(--green-700); text-decoration: underline; }
+  td.t small { display: block; color: var(--fg-mute); margin-top: 4px; }
+  td.n { white-space: nowrap; color: var(--fg-soft); }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .msg { min-height: 20px; margin-top: 10px; font-size: 14px; }
+  .bad { color: var(--err); font-weight: 600; }
+  .empty { padding: 28px 10px; text-align: center; color: var(--fg-soft); }
+  @media (max-width: 760px) {
+    thead { display: none; }
+    tr { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    td { border: 0; padding: 2px 0; }
+    .acts { justify-content: flex-start; }
+  }
+`;
+  var FILTERS = [["", "All"], ["live", "Live"], ["draft", "Drafts"], ["closed", "Closed"], ["published", "Results"]];
+  var GbtiCommunityManager = class extends GbtiElement {
+    constructor() {
+      super();
+      this._state = "idle";
+      this._entries = [];
+      this._filter = "";
+    }
+    render() {
+      if (!this.client) return;
+      if (typeof this.client.communityAdmin !== "function") {
+        this.set(this.css(COMMUNITY_CSS + CSS25) + '<p class="cm-mute">Community is managed by superadmins.</p>');
+        return;
+      }
+      if (this._state === "idle") {
+        this.load();
+        return;
+      }
+      this.draw();
+    }
+    async load() {
+      this._state = "loading";
+      this.draw();
+      try {
+        const r = await this.client.communityList({});
+        this._entries = r.entries || [];
+        this._state = "ok";
+      } catch (e) {
+        this._error = e;
+        this._state = "error";
+      }
+      this.draw();
+    }
+    actions(e) {
+      const b = (op, label, cls = "cm-btn2 sm") => `<button type="button" class="${cls}" data-op="${op}" data-id="${esc2(e.id)}">${esc2(label)}</button>`;
+      const out = [];
+      const poll = isPollKind(e.kind);
+      if (e.status === "draft") out.push(b("open", "Open now"));
+      if (e.status === "live") out.push(b("close", poll ? "Close voting" : "Close topic"));
+      if (poll && e.status === "closed") out.push(b("publish", "Publish results"));
+      if (poll && e.status === "published") out.push(b("unpublish", "Unpublish"));
+      if (!poll && e.status === "closed") out.push(b("open", "Reopen"));
+      out.push(`<button type="button" class="cm-btn2 sm" data-edit="${esc2(e.id)}">Edit</button>`, `<button type="button" class="cm-btn2 sm" data-access="${esc2(e.id)}">Access</button>`);
+      return out.join("");
+    }
+    rowHtml(e) {
+      const pill = statusPill(e);
+      const counts = isPollKind(e.kind) ? `${plural(e.counts?.answers || 0, "answer")} · ${plural(e.counts?.posts || 0, "post")}` : plural(e.counts?.posts || 0, "post");
+      const access = e.access?.mode === "chosen" ? `${plural(e.access.count || 0, "member")}, chosen` : "All members";
+      return `<tr>
+      <td><span class="cm-badge k-${esc2(e.kind)}">${KIND_ICON[e.kind] || ""}${esc2(KIND_LABEL[e.kind] || e.kind)}</span></td>
+      <td class="t"><a href="${esc2(entryHref(e.id))}">${esc2(e.title)}</a><small>${esc2(meetingText(e.meeting))} · updated ${esc2(relTime(e.activityAt))}</small></td>
+      <td>${pill ? `<span class="cm-pill ${pill.tone}">${esc2(pill.text)}</span>` : ""}</td>
+      <td class="n">${esc2(access)}</td>
+      <td class="n">${esc2(counts)}</td>
+      <td><div class="acts">${this.actions(e)}</div></td>
+    </tr>`;
+    }
+    draw() {
+      let body;
+      if (this._state === "loading" || this._state === "idle") body = '<div class="cm-skel"></div>';
+      else if (this._state === "error") body = `<div class="cm-err"><span>${esc2(this._error?.message || "Community did not load.")}</span><button type="button" class="cm-quiet" data-retry style="margin-left:auto">Try again</button></div>`;
+      else {
+        const shown = this._entries.filter((e) => !this._filter || e.status === this._filter);
+        body = `<div class="chips" role="group" aria-label="Filter">${FILTERS.map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${this._filter === k}">${esc2(l)}</button>`).join("")}</div>
+        ${shown.length ? `<table><thead><tr><th>Kind</th><th>Entry</th><th>State</th><th>Who can see it</th><th>Activity</th><th></th></tr></thead><tbody>${shown.map((e) => this.rowHtml(e)).join("")}</tbody></table>` : `<div class="empty">${this._entries.length ? "No entries in this state." : "No entries yet. Start one with New entry."}</div>`}`;
+      }
+      this.set(this.css(COMMUNITY_CSS + CSS25) + `<div class="bar"><p>Polls and topics members see at <a href="/community/">gbti.network/community</a>. Each entry is shared with all members or with members you choose.</p>
+      <button type="button" class="cm-btn" data-new>New entry</button></div>${body}<div class="msg" data-msg></div>`);
+      this.on("[data-retry]", "click", () => this.load());
+      this.on("[data-new]", "click", () => this.openEditor("create"));
+      for (const b of this.$$("[data-filter]")) b.addEventListener("click", () => {
+        this._filter = b.dataset.filter;
+        this.draw();
+      });
+      for (const b of this.$$("[data-op]")) b.addEventListener("click", () => this.op(b.dataset.op, b.dataset.id, b));
+      for (const b of this.$$("[data-edit]")) b.addEventListener("click", () => this.openEditor("edit", b.dataset.edit));
+      for (const b of this.$$("[data-access]")) b.addEventListener("click", () => this.openEditor("access", b.dataset.access));
+    }
+    async op(op, id, btn) {
+      btn.disabled = true;
+      try {
+        await this.client.communityAdmin(op, { id });
+        await this.load();
+      } catch (e) {
+        btn.disabled = false;
+        const m = this.$("[data-msg]");
+        if (m) m.innerHTML = `<span class="bad" role="status">${esc2(e?.message || "That did not work.")}</span>`;
+      }
+    }
+    async openEditor(mode, id) {
+      await Promise.resolve().then(() => (init_gbti_community_editor(), gbti_community_editor_exports));
+      let entry = null;
+      if (id) {
+        try {
+          entry = await this.client.communityEntry(id);
+        } catch (e) {
+          const m = this.$("[data-msg]");
+          if (m) m.innerHTML = `<span class="bad" role="status">${esc2(e?.message || "That entry did not load.")}</span>`;
+          return;
+        }
+      }
+      const ed = document.createElement("gbti-community-editor");
+      ed.client = this.client;
+      document.body.appendChild(ed);
+      ed.addEventListener("community-saved", () => this.load());
+      if (mode === "create") ed.openCreate();
+      else if (mode === "access") ed.openAccess(entry.entry);
+      else ed.openEdit(entry.entry, { answered: (entry.results?.total || 0) > 0 });
+    }
+  };
+  define("gbti-community-manager", GbtiCommunityManager);
+
+  // client-ui/src/elements/gbti-skill-install-manager.mjs
+  init_base();
+
   // membership/skill-install.mjs
   var str3 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -22964,7 +24109,7 @@ ${SKILL_BOX_CSS}`;
   var PREVIEW_NAME = "farley";
   var NEW = "__new__";
   var blank = () => ({ label: "", folder: "", run: "", local: "" });
-  var CSS24 = `
+  var CSS26 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .msg.err { color:var(--danger); }
@@ -23059,20 +24204,20 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS24) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
+        this.set(this.css(CSS26) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS24) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS26) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS24) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS26) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS24) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS26) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -23084,7 +24229,7 @@ ${SKILL_BOX_CSS}`;
         <span class="tl"><span class="tn">${esc2(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
       const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
       const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
-      this.set(this.css(SKILL_READER_CSS + CSS24) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(SKILL_READER_CSS + CSS26) + `<div class="${this._busy ? "busy" : ""}">
       <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
       ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc2(this._msg)}</p>` : ""}
       <div class="grid">
@@ -23189,6 +24334,9 @@ ${SKILL_BOX_CSS}`;
     }
   };
   define("gbti-skill-install-manager", GbtiSkillInstallManager);
+
+  // client-ui/src/elements/gbti-outbound-link-manager.mjs
+  init_base();
 
   // membership/outbound-link-edits.mjs
   var LINK_STATUSES = Object.freeze(["live", "placeholder", "retired"]);
@@ -23464,6 +24612,9 @@ ${SKILL_BOX_CSS}`;
     }
   };
   define("gbti-outbound-link-manager", GbtiOutboundLinkManager);
+
+  // client-ui/src/elements/gbti-cta-manager.mjs
+  init_base();
 
   // membership/cta-icon.mjs
   var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
@@ -23920,7 +25071,7 @@ ${SKILL_BOX_CSS}`;
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
   var ID_RE3 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   var str5 = (v2) => typeof v2 === "string" ? v2 : "";
-  var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
+  var plural2 = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
       id: str5(c?.id),
@@ -24060,7 +25211,7 @@ ${SKILL_BOX_CSS}`;
   }
   function previewNote(d) {
     if (!d.enabled) return "Disabled: this card shows on no page.";
-    return d.items.length ? `Shows on ${plural(d.items.length)} once saved.` : "Not on any page yet.";
+    return d.items.length ? `Shows on ${plural2(d.items.length)} once saved.` : "Not on any page yet.";
   }
 
   // client-ui/src/cta-manager-view.mjs
@@ -24098,7 +25249,7 @@ ${SKILL_BOX_CSS}`;
       <div class="meta">
         <div class="top"><span class="label">${esc10(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc10(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
         <p class="line">${esc10(rowSummary(c))}</p>
-        <p class="sub mono">${esc10(c.partner || "no partner")} · on ${plural(n)}</p>
+        <p class="sub mono">${esc10(c.partner || "no partner")} · on ${plural2(n)}</p>
         ${clicks ? `<p class="sub mono tracked">${esc10(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
@@ -24206,7 +25357,7 @@ ${SKILL_BOX_CSS}`;
     const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc10(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc10(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
-    <div class="warnbox">${SVG3.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
+    <div class="warnbox">${SVG3.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural2(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
@@ -24229,7 +25380,7 @@ ${SKILL_BOX_CSS}`;
   function pagesSection(st2) {
     const d = st2.d;
     const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc10(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc10(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
-    return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
+    return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural2(d.items.length)}</span></div>
     ${assigned}
     <label class="srch">${SVG3.search}<input type="text" data-q="pages" value="${esc10(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st2)}</div></div>`;
@@ -24806,7 +25957,7 @@ ${SKILL_BOX_CSS}`;
       const note = this.$('[data-region="pvnote"]');
       if (note) note.textContent = previewNote(st2.d);
       this.$$("[data-count]").forEach((el) => {
-        el.textContent = plural(st2.d.items.length);
+        el.textContent = plural2(st2.d.items.length);
       });
       if (found) {
         const f = this.$('[data-region="found"]');
@@ -25125,7 +26276,8 @@ ${SKILL_BOX_CSS}`;
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS25 = `
+  init_base();
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -25183,7 +26335,7 @@ ${SKILL_BOX_CSS}`;
   var QUEUE_TRIED_AT = 0;
   var QUEUE_REFRESH_FAILED = false;
   var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", newsletter: "Newsletter" };
-  var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
+  var STATUSES2 = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
     // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
@@ -25224,18 +26376,18 @@ ${SKILL_BOX_CSS}`;
     _rows() {
       const d = this._data || {};
       const all = [];
-      for (const st2 of STATUSES) for (const it2 of Array.isArray(d[st2]) ? d[st2] : []) all.push({ ...it2, _st: st2 });
+      for (const st2 of STATUSES2) for (const it2 of Array.isArray(d[st2]) ? d[st2] : []) all.push({ ...it2, _st: st2 });
       all.sort((a, b) => (b.sentAt || b.cancelledAt || b.enqueuedAt || 0) - (a.sentAt || a.cancelledAt || a.enqueuedAt || 0));
       const q2 = this._fQ.trim().toLowerCase();
       return all.filter((it2) => (this._fStatus === "all" || it2._st === this._fStatus) && (this._fType === "all" || it2.source === this._fType) && (this._fTrigger === "all" || (this._fTrigger === "manual" ? it2.trigger === "manual" : it2.trigger !== "manual")) && (!q2 || String(it2.title || it2.targetSlug || "").toLowerCase().includes(q2)));
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS25) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS27) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -25244,7 +26396,7 @@ ${SKILL_BOX_CSS}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS25) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -25254,12 +26406,12 @@ ${SKILL_BOX_CSS}`;
       const rows = this._rows();
       const opt = (v2, label, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(label)}</option>`;
       const body = rows.map((it2) => this._row(it2)).join("");
-      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS27) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc2(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
       <div class="fbar">
-        <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
+        <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES2.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
         <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v2, l]) => opt(v2, l, this._fType)).join("")}</select>
         <select data-f="trigger" aria-label="Filter by trigger">${opt("all", "Manual + auto", this._fTrigger)}${opt("manual", "Manual only", this._fTrigger)}${opt("auto", "Auto only", this._fTrigger)}</select>
         <input data-f="q" type="search" placeholder="Search titles" value="${esc2(this._fQ)}" aria-label="Search titles" />
@@ -25350,8 +26502,9 @@ ${SKILL_BOX_CSS}`;
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
+  init_base();
   var AMBER = "#d8901a";
-  var CSS26 = `
+  var CSS28 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -25846,7 +26999,7 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -25855,7 +27008,7 @@ ${SKILL_BOX_CSS}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS26) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS28) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -25868,7 +27021,7 @@ ${SKILL_BOX_CSS}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS26) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS28) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -25881,7 +27034,7 @@ ${SKILL_BOX_CSS}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS26) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS28) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
@@ -26182,6 +27335,9 @@ ${SKILL_BOX_CSS}`;
   };
   define("gbti-channel-map-manager", GbtiChannelMapManager);
 
+  // client-ui/src/elements/gbti-edit-panel.mjs
+  init_base();
+
   // client-ui/src/inline.mjs
   var TYPE_RE = /^(post|project|product|prompt|profile)$/;
   function readHooks(dataset = {}) {
@@ -26330,6 +27486,10 @@ ${SKILL_BOX_CSS}`;
   define("gbti-edit-panel", GbtiEditPanel);
 
   // client-ui/src/elements/gbti-locked-content.mjs
+  init_base();
+  init_image_layout_ui();
+  init_list_style_ui();
+  init_embed_lightbox();
   function lockedTargets(raw) {
     try {
       const v2 = JSON.parse(String(raw || "[]"));
@@ -26501,6 +27661,9 @@ ${SKILL_BOX_CSS}`;
   };
   define("gbti-locked-content", GbtiLockedContent);
 
+  // client-ui/src/elements/gbti-favorite.mjs
+  init_base();
+
   // client-ui/src/activity-state.mjs
   var CACHE = /* @__PURE__ */ new WeakMap();
   var EMPTY = () => ({ favorites: [], collections: [] });
@@ -26548,7 +27711,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS27 = `
+  var CSS29 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -26587,7 +27750,7 @@ ${SKILL_BOX_CSS}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS27) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS29) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -26623,8 +27786,9 @@ ${SKILL_BOX_CSS}`;
   define("gbti-favorite", GbtiFavorite);
 
   // client-ui/src/elements/gbti-collection.mjs
+  init_base();
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS28 = `
+  var CSS30 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -26668,7 +27832,7 @@ ${SKILL_BOX_CSS}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS28) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS30) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -26790,6 +27954,12 @@ ${SKILL_BOX_CSS}`;
   }
   define("gbti-collection", GbtiCollection);
 
+  // client-ui/src/elements/gbti-subscribe.mjs
+  init_base();
+
+  // client-ui/src/elements/gbti-notify-modal.mjs
+  init_base();
+
   // client-ui/src/notify-matrix-core.mjs
   var EMAIL_DISABLED_TIP = "Email Notifications Disabled at this time";
   function channelBlocked(channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
@@ -26864,6 +28034,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/elements/notify-pill.mjs
+  init_base();
   function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false, paid = true } = {}) {
     const cell = `${esc2(rowKey)}:${esc2(channel)}`;
     const tip = cellBlockedTip(rowKey, channel, { paid });
@@ -26896,12 +28067,13 @@ ${SKILL_BOX_CSS}`;
 `;
 
   // client-ui/src/elements/gbti-notify-modal.mjs
+  init_member_avatars();
   var ROWS = { rows: PERSON_ROWS };
   var CHANNELS2 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS29 = `
+  var CSS31 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -26965,7 +28137,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS29));
+      this.set(this.css(CSS31));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -27038,12 +28210,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS29));
+        this.set(this.css(CSS31));
         return;
       }
       const u = esc2(this._username || "");
       if (!this._loaded) {
-        this.set(this.css(CSS29) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS31) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -27055,7 +28227,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS29) + `
+      this.set(this.css(CSS31) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -27142,7 +28314,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS30 = `
+  var CSS32 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -27204,7 +28376,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS30) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS32) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -27253,7 +28425,11 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-subscribe", GbtiSubscribe);
 
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_base();
+
   // client/src/link-kind.mjs
+  init_video_embed();
   var AUDIO_HOSTS = Object.freeze([
     // Music for artists: where musicians and DJs publish their own work.
     "mixcloud.com",
@@ -27298,6 +28474,9 @@ ${BLOCKED_PILL_CSS}
     return { audio: "Listen to it", video: "Watch video", read: "Read article" }[linkKind(url)];
   }
 
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_video_embed();
+
   // client/src/partner-links.mjs
   var SITE_HOSTS = /* @__PURE__ */ new Set(["gbti.network", "www.gbti.network", "preview.gbti.network"]);
   var norm2 = (p) => p.length > 1 ? p.replace(/\/+$/, "") : p;
@@ -27324,6 +28503,12 @@ ${BLOCKED_PILL_CSS}
     }
     return cached;
   }
+
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_assets();
+
+  // client-ui/src/elements/gbti-card-list.mjs
+  init_base();
 
   // client-ui/src/cat-glyph.mjs
   var GLYPH_SVG = {
@@ -27385,6 +28570,10 @@ ${BLOCKED_PILL_CSS}
     return TYPE_ACCENT[String(type || "").toLowerCase()] || OTHER_ACCENT;
   }
 
+  // client-ui/src/elements/gbti-card-list.mjs
+  init_assets();
+  init_member_avatars();
+
   // client-ui/src/target-slug.mjs
   function targetSlugFor(it2) {
     if (!it2) return "";
@@ -27427,7 +28616,7 @@ ${BLOCKED_PILL_CSS}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS31 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -27668,11 +28857,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS31) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS33) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS31) + body);
+      this.set(this.css(CSS33) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -27783,7 +28972,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS32 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -27918,10 +29107,10 @@ ${BLOCKED_PILL_CSS}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st2 = await this.client.status();
@@ -27938,7 +29127,7 @@ ${BLOCKED_PILL_CSS}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -27964,12 +29153,12 @@ ${BLOCKED_PILL_CSS}
       const pending = dropPublished(items.map((it2) => `${it2.author}/${it2.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS32) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS34) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS32) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS34) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -28038,7 +29227,7 @@ ${BLOCKED_PILL_CSS}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc2(share.author)}" data-gbti-id="${esc2(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS32) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS34) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc2(authorName3(share.author))}</span><span class="when">${esc2(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -28081,21 +29270,22 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _splash() {
-      this.set(this.css(CSS32) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS34) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS33 = `
+  init_base();
+  var CSS35 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS33) + `<div class="stack">
+      this.set(this.css(CSS35) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -28105,7 +29295,8 @@ ${BLOCKED_PILL_CSS}
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS34 = `
+  init_base();
+  var CSS36 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -28123,7 +29314,7 @@ ${BLOCKED_PILL_CSS}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS34) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS36) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -28132,7 +29323,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS34) + `<div class="splash">
+        this.set(this.css(CSS36) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc2(c.heading)}</h2>
         <p>${esc2(c.body)}</p>
@@ -28140,15 +29331,20 @@ ${BLOCKED_PILL_CSS}
       </div>`);
         return;
       }
-      this.set(this.css(CSS34) + `<slot></slot>`);
+      this.set(this.css(CSS36) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
 
+  // client-ui/src/index.mjs
+  init_gbti_prose_editor();
+
   // client-ui/src/elements/gbti-comment-echoes.mjs
+  init_base();
+  init_embed_lightbox();
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS35 = `
+  var CSS37 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -28222,7 +29418,7 @@ ${BLOCKED_PILL_CSS}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS35) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS37) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       wireTweets(this.root);
       this._syncPage(this._rows.length);
@@ -28311,7 +29507,11 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-comment-echoes", GbtiCommentEchoes);
 
+  // client-ui/src/elements/gbti-workspace.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-share-list.mjs
+  init_base();
   var GbtiShareList = class extends GbtiElement {
     static get observedAttributes() {
       return ["edit-id", "scope"];
@@ -28420,8 +29620,9 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
+  init_base();
   var SITE17 = "https://gbti.network";
-  var CSS36 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -28505,15 +29706,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -28529,7 +29730,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc2(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc2(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it2) => this._itemRow(resolveItem(idx, it2.type, it2.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
@@ -28596,13 +29797,17 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-saved", GbtiSaved);
 
+  // client-ui/src/elements/gbti-subscriptions.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-topic-picker.mjs
+  init_base();
   var SITE18 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK5 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS37 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -28692,14 +29897,14 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS37) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS37) + `
+      this.set(this.css(CSS39) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -28761,10 +29966,11 @@ ${BLOCKED_PILL_CSS}
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
+  init_member_avatars();
   var SITE19 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS38 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -28847,11 +30053,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -28860,7 +30066,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS40) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -28938,6 +30144,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-subscriptions", GbtiSubscriptions);
+
+  // client-ui/src/elements/gbti-onboarding-progress.mjs
+  init_base();
 
   // membership/onboarding.mjs
   var ONBOARDING_STEPS = Object.freeze([
@@ -29025,6 +30234,9 @@ ${BLOCKED_PILL_CSS}
     const outstanding = steps2.filter((s) => s.state !== "done").length;
     return { steps: steps2, complete: outstanding === 0, known, outstanding };
   }
+
+  // client-ui/src/onboarding-card-core.mjs
+  init_base();
 
   // client-ui/src/own-profile.mjs
   async function readOwnProfile(client, { identity } = {}) {
@@ -29117,7 +30329,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS39 = `
+  var CSS41 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -29158,10 +30370,13 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS39) + html : "");
+      this.set(html ? this.css(CSS41) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
+
+  // client-ui/src/elements/gbti-profile-editor.mjs
+  init_base();
 
   // client-ui/src/profile-fields.mjs
   var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
@@ -29199,7 +30414,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-profile-editor.mjs
   var SITE20 = "https://gbti.network";
-  var STATUS_LABEL2 = {
+  var STATUS_LABEL3 = {
     paid: "Paid member",
     trialing: "Free trial",
     trial: "Free trial",
@@ -29211,7 +30426,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
-  var CSS40 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -29395,19 +30610,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE20}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE20}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS40) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS42) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -29417,11 +30632,11 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS40) + sections);
+      this.set(this.css(CSS42) + sections);
       this._wire();
     }
     _identity(m) {
-      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc2(STATUS_LABEL2[this._membership] || this._membership)}</span>`;
+      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc2(STATUS_LABEL3[this._membership] || this._membership)}</span>`;
       return `<section class="sec">
       <div class="sec-h"><h3>Profile ${badge}</h3><p>How you appear across gbti.network: your public profile page, the member directory, and content you author. Signed in as <b>@${esc2(this._login || "")}</b>.</p></div>
       <div class="body">
@@ -29765,6 +30980,8 @@ ${BLOCKED_PILL_CSS}
 `;
 
   // client-ui/src/elements/workspace-data.mjs
+  init_base();
+  init_assets();
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
   var withWorkspaceData = (Base2) => class extends Base2 {
     // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
@@ -30700,6 +31917,8 @@ ${BLOCKED_PILL_CSS}
   define("gbti-workspace", GbtiWorkspace);
 
   // client-ui/src/elements/gbti-notification-bell.mjs
+  init_base();
+  init_member_avatars();
   var INDEX_URL = "/activity-index.json";
   var SHARES_URL = "/shares-index.json";
   var LEGACY_SEEN_KEY2 = "gbti-notif-seen";
@@ -30711,7 +31930,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS41 = `
+  var CSS43 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -30895,7 +32114,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS41) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS43) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -30945,12 +32164,14 @@ ${BLOCKED_PILL_CSS}
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
+  init_base();
+  init_member_avatars();
   var SITE22 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS42 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -31055,11 +32276,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS42) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE22}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS44) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE22}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS44) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -31082,7 +32303,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE22}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS42) + `
+      this.set(this.css(CSS44) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -31104,6 +32325,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-notifications-settings", GbtiNotificationsSettings);
+
+  // client-ui/src/elements/gbti-news.mjs
+  init_base();
 
   // membership/topic-map.mjs
   function topicMapFromParsed(parsed) {
@@ -31164,7 +32388,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS43 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -31326,12 +32550,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS43) + head + `<div data-body></div>`);
+      this.set(this.css(CSS45) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -31440,7 +32664,11 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-news", GbtiNews);
 
+  // client-ui/src/elements/gbti-news-reader.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-news-admin.mjs
+  init_base();
   var NEWS_ADMIN_COPY = {
     eyebrow: "Superadmin",
     weightLabel: "Modify source weight",
@@ -31465,7 +32693,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS44 = `
+  var CSS46 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -31591,13 +32819,16 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS44) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS46) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
     }
   };
   define("gbti-news-admin", GbtiNewsAdmin);
+
+  // client-ui/src/elements/gbti-news-share.mjs
+  init_base();
 
   // client-ui/src/discord-channel-order.mjs
   var TEXT2 = /* @__PURE__ */ new Set([0, 5]);
@@ -31668,7 +32899,7 @@ ${BLOCKED_PILL_CSS}
   var discordPreviewHtml = (msg) => String(msg || "").split("\n").map((line) => esc2(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^_(.+)_$/, "<em>$1</em>")).join("<br>");
   var listOr = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} or ${a[a.length - 1]}`;
   var listAnd = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
-  var CSS45 = `
+  var CSS47 = `
   :host { display:block; margin:16px 0 0; }
   :host([hidden]) { display:none !important; } /* the host's own display would otherwise beat the hidden attribute */
   .ns { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; display:flex; flex-direction:column; gap:14px;
@@ -31866,13 +33097,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._story) {
-        this.set(this.css(CSS45));
+        this.set(this.css(CSS47));
         return;
       }
       const ch = this._target;
       const cov = this._statusErr ? `<p class="cov msg err" role="status">${esc2(this._statusErr)} <button type="button" class="link" data-retry>Try again</button></p>` : `<p class="cov">${esc2(this._coverage())}</p>`;
       const body = ch ? '<div class="sep"></div>' + (ch === "discord" ? "" : this._linkChoice()) + this._composer(ch) + `<p class="note">${esc2(NOTES[ch] || "")}</p>` + (this._msg?.text === DONE_MSG ? "" : this._postedLine(ch)) + this._actions(ch) + (this._msg ? `<p class="msg${this._msg.err ? " err" : ""}" role="status">${esc2(this._msg.text)}</p>` : "") : '<p class="hint">Pick a channel to write its post.</p>';
-      this.set(this.css(CSS45) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
+      this.set(this.css(CSS47) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
       this._wire();
     }
     _wire() {
@@ -32013,7 +33244,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS46 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -32201,12 +33432,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS46) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS48) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS46) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS48) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -32225,7 +33456,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.sourceName || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
-      this.set(this.css(CSS46) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS48) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (this._share) this.$("[data-share-slot]")?.replaceWith(this._share);
       if (!this._wiredErr) {
@@ -32242,6 +33473,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-news-reader", GbtiNewsReader);
+
+  // client-ui/src/elements/gbti-reader.mjs
+  init_base();
 
   // client/src/share-source.mjs
   var PLATFORMS = {
@@ -32373,6 +33607,12 @@ ${BLOCKED_PILL_CSS}
     };
   }
 
+  // client-ui/src/elements/gbti-reader.mjs
+  init_image_layout_ui();
+  init_content_blocks();
+  init_list_style_ui();
+  init_assets();
+
   // client-ui/src/members-index.mjs
   var SITE24 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -32387,11 +33627,19 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
+  // client-ui/src/elements/gbti-reader.mjs
+  init_video_embed();
+  init_tweet_embed();
+
   // membership/prompt-kind.mjs
   var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
-  var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+  var KIND_LABEL2 = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+
+  // client-ui/src/elements/gbti-reader.mjs
+  init_member_avatars();
 
   // client-ui/src/project-view.mjs
+  init_assets();
   var REPOSITORY2 = "repository";
   var PRICING_LABELS = { free: "Free", freemium: "Freemium", paid: "Paid" };
   var str6 = (v2) => typeof v2 === "string" ? v2.trim() : "";
@@ -32475,6 +33723,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/reader-project.mjs
+  init_base();
   var ICON3 = {
     github: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12 1.6a10.4 10.4 0 0 0-3.29 20.27c.52.1.71-.22.71-.5l-.01-1.75c-2.9.63-3.51-1.4-3.51-1.4-.47-1.2-1.16-1.52-1.16-1.52-.95-.65.07-.64.07-.64 1.05.08 1.6 1.08 1.6 1.08.93 1.6 2.44 1.13 3.04.87.09-.68.36-1.13.66-1.39-2.31-.26-4.74-1.16-4.74-5.14 0-1.14.4-2.06 1.07-2.79-.11-.27-.46-1.32.1-2.76 0 0 .87-.28 2.85 1.06a9.8 9.8 0 0 1 5.19 0c1.98-1.34 2.85-1.06 2.85-1.06.57 1.44.21 2.49.1 2.76.67.73 1.07 1.65 1.07 2.79 0 3.99-2.43 4.87-4.75 5.13.38.32.71.95.71 1.92l-.01 2.85c0 .28.19.61.72.5A10.4 10.4 0 0 0 12 1.6Z"/></svg>',
     download: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
@@ -32608,11 +33857,11 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE25 = "https://gbti.network";
-  var KIND_ICON = {
+  var KIND_ICON2 = {
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS47 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS49 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc8(a);
@@ -32671,7 +33920,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS47 = `
+  var CSS49 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -33049,7 +34298,7 @@ ${BLOCKED_PILL_CSS}
       const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
       const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc2(it2.type)}" data-gbti-author="${esc2(it2.author || "")}" data-gbti-slug="${esc2(slug)}"${it2.type === "share" ? ` data-gbti-id="${esc2(it2.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
       const kind2 = this._kind(it2);
-      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc2(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
+      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON2[kind2]}${esc2(KIND_LABEL2[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
       return `<div class="meta">${badge}<span class="who">${av}<b>${esc2(name)}</b></span>${when2 ? `<span>· ${esc2(dateStr(when2))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it2) {
@@ -33231,6 +34480,10 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-reader", GbtiReader);
 
+  // client-ui/src/elements/gbti-member-view.mjs
+  init_base();
+  init_assets();
+
   // client-ui/src/member-view-core.mjs
   var lc9 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
@@ -33252,11 +34505,12 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
+  init_member_avatars();
   var SITE26 = "https://gbti.network";
   var lc10 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS48 = `
+  var CSS50 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -33380,7 +34634,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS48) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS50) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -33388,7 +34642,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS48) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS50) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -33413,6 +34667,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
+  init_base();
   var SITE27 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
@@ -33432,7 +34687,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS49 = `
+  var CSS51 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -33572,7 +34827,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS49) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS51) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -33585,7 +34840,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS49) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS51) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -33645,6 +34900,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-browse", GbtiBrowse);
 
   // client-ui/src/elements/gbti-app.mjs
+  init_base();
   var TABS3 = [
     { id: "author", label: "Author", tag: "gbti-content-editor" },
     { id: "shares", label: "Shares", tag: "gbti-shares" },
@@ -33707,6 +34963,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-app", GbtiApp);
+
+  // client-ui/src/index.mjs
+  init_base();
 
   // client-ui/src/client.mjs
   var GbtiClientError = class extends Error {

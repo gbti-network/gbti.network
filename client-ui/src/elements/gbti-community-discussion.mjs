@@ -136,7 +136,9 @@ class GbtiCommunityDiscussion extends GbtiElement {
     this.on('[data-add-img]', 'click', () => this.$('[data-file]')?.click());
     this.on('[data-file]', 'change', (ev) => { this.addFiles([...(ev.target.files || [])]); ev.target.value = ''; });
     this.on('[data-send-post]', 'click', () => this.send());
-    this.root.addEventListener('click', (ev) => this.onClick(ev));
+    // The shadow root outlives a disconnect, so its one delegated listener is bound once, ever; a second one would
+    // send every reaction and moderation click twice.
+    if (!this._rootWired) { this._rootWired = true; this.root.addEventListener('click', (ev) => this.onClick(ev)); }
     this._outside = (ev) => { if ((this._menu || this._picker) && !ev.composedPath().includes(this)) { this._menu = null; this._picker = null; this.redraw(); } };
     document.addEventListener('click', this._outside);
     this.drawList();

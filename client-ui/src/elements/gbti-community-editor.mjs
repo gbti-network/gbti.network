@@ -141,6 +141,7 @@ class GbtiCommunityEditor extends GbtiElement {
       <div class="body">${body}</div>
       <div class="bot"><span class="msg" data-msg></span>${buttons}</div>
     </div></dialog>`);
+    this.wireShell();
     this.wire();
   }
 
@@ -235,10 +236,16 @@ class GbtiCommunityEditor extends GbtiElement {
 
   // ---- wiring ------------------------------------------------------------------------------------------------
 
-  wire() {
+  /** The dialog, its close controls and the save buttons are built once per draw(), so they are wired once, here. */
+  wireShell() {
     const d = this.$('dialog');
     d?.addEventListener('cancel', (ev) => { ev.preventDefault(); this.close(); });
     for (const b of this.$$('[data-close]')) b.addEventListener('click', () => this.close());
+    for (const b of this.$$('[data-save]')) b.addEventListener('click', () => this.save(b.dataset.save));
+  }
+
+  /** Everything inside .body, which redraw() replaces. Wiring the shell here too fired Save once per redraw. */
+  wire() {
     for (const b of this.$$('[data-kind]')) b.addEventListener('click', () => { this.capture(); this._f.kind = b.dataset.kind; this.redraw(); });
     for (const b of this.$$('[data-add-opt]')) b.addEventListener('click', () => { this.capture(); this._f.options.push(''); this.redraw(); this.$(`[data-opt="${this._f.options.length - 1}"]`)?.focus(); });
     for (const b of this.$$('[data-rm]')) b.addEventListener('click', () => { this.capture(); this._f.options.splice(Number(b.dataset.rm), 1); this.redraw(); });
@@ -260,7 +267,6 @@ class GbtiCommunityEditor extends GbtiElement {
     this.on('[data-add-pimg]', 'click', () => this.$('[data-pfile]')?.click());
     this.on('[data-pfile]', 'change', (ev) => { this.capture(); this.addPromptFiles([...(ev.target.files || [])]); ev.target.value = ''; });
     for (const b of this.$$('[data-pdrop]')) b.addEventListener('click', () => { this.capture(); this._f.images.splice(Number(b.dataset.pdrop), 1); this.redraw(); });
-    for (const b of this.$$('[data-save]')) b.addEventListener('click', () => this.save(b.dataset.save));
     const pe = this.$('[data-prompt]');
     if (pe) pe.value = this._f.prompt || '';
   }
@@ -373,8 +379,10 @@ class GbtiCommunityEditor extends GbtiElement {
   }
 
   async save(how) {
+    if (this._saving) return; // one save at a time, whatever fires the click
     this.capture();
     if (this._f.access?.mode === 'chosen' && !this._f.access.members.length) { this.say('Pick at least one member, or share it with all members.', true); return; }
+    this._saving = true;
     for (const b of this.$$('[data-save]')) b.disabled = true;
     this.say('Saving');
     try {
@@ -397,6 +405,7 @@ class GbtiCommunityEditor extends GbtiElement {
       this.emit('community-saved', { id });
       this.close();
     } catch (e) {
+      this._saving = false;
       for (const b of this.$$('[data-save]')) b.disabled = false;
       this.say(e?.message || 'That was not saved. Try again.', true);
     }

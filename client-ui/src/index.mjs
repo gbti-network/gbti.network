@@ -27,6 +27,7 @@ import './elements/gbti-coupon-manager.mjs'; // SOW-119: superadmin coupon manag
 import './elements/gbti-prepared-listings.mjs'; // sow-481: the superadmin Invitations section (was inside the coupon manager)
 import './elements/gbti-site-settings-manager.mjs'; // sow-271: superadmin site-wide presentation toggles
 import './elements/gbti-digest-manager.mjs'; // sow-266: superadmin digest pitch copy + sponsor slot
+import './elements/gbti-community-manager.mjs'; // sow-494: the superadmin Community tab (its dialog loads on demand)
 import './elements/gbti-skill-install-manager.mjs'; // sow-109: superadmin Skill install, the install steps per tool
 import './elements/gbti-outbound-link-manager.mjs'; // sow-289: the read-only outbound partner link board
 import './elements/gbti-cta-manager.mjs'; // sow-281: the superadmin CTA registry manager

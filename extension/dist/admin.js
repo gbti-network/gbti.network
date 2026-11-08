@@ -1,23 +1,26 @@
 "use strict";
 (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
   // client-ui/src/assets.mjs
-  var SITE = "https://gbti.network";
-  var CONTENT_REPO = "gbti-network/gbti.network";
-  var RAW_HOST = "https://raw.githubusercontent.com";
-  var FULL_SHA = /^[0-9a-f]{40}$/;
-  var DEFAULT_REF = "main";
   function pinnedRef(sha) {
     const s = String(sha ?? "").trim().toLowerCase();
     return FULL_SHA.test(s) ? s : DEFAULT_REF;
   }
-  var currentRef = DEFAULT_REF;
   function setContentRef(sha) {
     currentRef = pinnedRef(sha);
   }
   function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
     return `${RAW_HOST}/${repo}/${pinnedRef(ref)}`;
   }
-  var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   function cdnRetryUrl(src, repo = CONTENT_REPO) {
     const s = String(src || "");
     const r = escapeRe(repo);
@@ -66,9 +69,26 @@
     if (/^\/\//.test(thumb)) return `https:${thumb}`;
     return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
+  var SITE, CONTENT_REPO, RAW_HOST, FULL_SHA, DEFAULT_REF, currentRef, escapeRe;
+  var init_assets = __esm({
+    "client-ui/src/assets.mjs"() {
+      "use strict";
+      SITE = "https://gbti.network";
+      CONTENT_REPO = "gbti-network/gbti.network";
+      RAW_HOST = "https://raw.githubusercontent.com";
+      FULL_SHA = /^[0-9a-f]{40}$/;
+      DEFAULT_REF = "main";
+      currentRef = DEFAULT_REF;
+      escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  });
 
   // client-ui/src/tokens.mjs
-  var TOKENS = `
+  var TOKENS, EDITOR_SURFACE, BASE_CSS;
+  var init_tokens = __esm({
+    "client-ui/src/tokens.mjs"() {
+      "use strict";
+      TOKENS = `
 :host {
   --bg: #faf9f8; --panel: #ffffff;
   --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
@@ -112,7 +132,7 @@
   --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1.7)));
 }
 `;
-  var EDITOR_SURFACE = `
+      EDITOR_SURFACE = `
 :host {
   --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
   --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css (--fg-mute) already uses site-side for the identical reason. */
@@ -132,7 +152,7 @@
   --s-sel:rgba(95,212,154,.22); --ink:#17151c;
 }
 `;
-  var BASE_CSS = `
+      BASE_CSS = `
 :host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
 *, *::before, *::after { box-sizing: border-box; }
 h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
@@ -189,13 +209,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 [data-tooltip-pos="below"]::before { bottom: auto; top: calc(100% + 3px); border-top-color: transparent; border-bottom-color: var(--tooltip-bg); }
 @media (hover: none) { [data-tooltip]::after, [data-tooltip]::before { display: none; } }
 `;
+    }
+  });
 
   // membership/member-avatar.mjs
-  var SITE2 = "https://gbti.network";
-  var AVATAR_ROUTE = "/avatar/";
-  var NETWORK_FOLDERS = Object.freeze(["gbtilabs", "gbti", "house"]);
-  var FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-  var ID_RE = /^\d{1,20}$/;
   function isFolder(v2) {
     return FOLDER_RE.test(String(v2 ?? ""));
   }
@@ -207,13 +224,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const f = String(folder2 ?? "").trim().toLowerCase();
     return isFolder(f) ? `${site}${AVATAR_ROUTE}${f}` : "";
   }
+  var SITE2, AVATAR_ROUTE, NETWORK_FOLDERS, FOLDER_RE, ID_RE;
+  var init_member_avatar = __esm({
+    "membership/member-avatar.mjs"() {
+      "use strict";
+      SITE2 = "https://gbti.network";
+      AVATAR_ROUTE = "/avatar/";
+      NETWORK_FOLDERS = Object.freeze(["gbtilabs", "gbti", "house"]);
+      FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+      ID_RE = /^\d{1,20}$/;
+    }
+  });
 
   // node_modules/blobatar/dist/uri.js
   function v({ l: t, c: e, h: n }) {
     let a = n * Math.PI / 180, o = e * Math.cos(a), r = e * Math.sin(a), s = t + 0.3963377774 * o + 0.2158037573 * r, c = t - 0.1055613458 * o - 0.0638541728 * r, i = t - 0.0894841775 * o - 1.291485548 * r, l = s * s * s, m = c * c * c, u = i * i * i;
     return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * u, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * u, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * u];
   }
-  var q = (t) => t.every((e) => e >= -1e-4 && e <= 1.0001);
   function V(t) {
     let e = v(t);
     if (!q(e)) {
@@ -254,15 +281,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return Math.round(n * 255).toString(16).padStart(2, "0");
     }).join("");
   }
-  var N = [[0.2, { l: 0.86, c: 0.085 }], [0.36, { l: 0.9, c: 0.028 }], [0.62, { l: 0.73, c: 0.135 }], [0.8, { l: 0.62, c: 0.165 }], [0.93, { l: 0.87, c: 0.16 }], [1, { l: 0.34, c: 0.035 }]];
-  var wt = (t) => N.find(([e]) => t < e)?.[1] ?? N[0][1];
-  var K = { l: 0.145, c: 0, h: 0 };
-  var Q = 1.5;
-  var Et = (t, e) => {
-    let n = wt(e), a = w({ l: n.l, c: n.c, h: t }, K, Q);
-    return { bg: { l: 0.965, c: 0.01, h: t }, head: a, eye: a.l >= 0.5 ? { l: 0.17, c: 0.02, h: t } : { l: 0.97, c: 0.012, h: t } };
-  };
-  var vt = [["head", "bg", 1.25], ["eye", "head", 4.5]];
   function It(t, e = true, n = 0) {
     let a = Et(t, n);
     if (e) for (let [o, r, s] of vt) a[o] = w(a[o], a[r], s);
@@ -273,10 +291,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     for (let r in a) o[r] = T(a[r]);
     return o;
   }
-  var y = (t) => {
-    let e = Math.round(t * 100) / 100;
-    return Object.is(e, -0) ? "0" : String(e);
-  };
   function P({ cx: t, cy: e, rx: n, ry: a, n: o = 4, rot: r = 0 }) {
     let s = Math.min(1, (8 * Math.pow(2, -1 / o) - 4) / 3), c = n, i = a, l = c * s, m = i * s, u = [[c, 0], [c, m], [l, i], [0, i], [-l, i], [-c, m], [-c, 0], [-c, -m], [-l, -i], [0, -i], [l, -i], [c, -m], [c, 0]], b = r * Math.PI / 180, p = Math.cos(b), d = Math.sin(b), h = (x) => {
       let [g, k] = u[x];
@@ -325,7 +339,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function At(t) {
     return t = Math.imul(t ^ t >>> 16, 2246822507), t = Math.imul(t ^ t >>> 13, 3266489909), (t ^ t >>> 16) >>> 0;
   }
-  var nt = new TextEncoder();
   function Rt(t) {
     return t.normalize("NFC").trim().toLowerCase();
   }
@@ -348,30 +361,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (n || !a) return { l: t, wrap: "" };
     return a.bake(t, a.p);
   }
-  var R = (t, e) => e?.tint ? e.tint(t, e.p) : t;
-  var at = (t, e) => e ? `<g transform="${e}">${t}</g>` : t;
-  var Ft = (t) => t.replace(/[&<>]/g, (e) => e === "&" ? "&amp;" : e === "<" ? "&lt;" : "&gt;");
   function S(t, e) {
     let n = ot(t, e.normalize ?? true, e.traits);
     return { t: n, palette: { ...G(e.hue ?? n.num("hue", 0, 360), e.contrast ?? true, e.tone ?? n("tone")), ...e.palette } };
   }
-  var jt = (t) => t.title ? `<title>${Ft(t.title)}</title>` : "";
   function L(t, e, n) {
     let a = e.background ?? t.background;
     if (a === false) return;
     return { d: a === "square" ? "M0 0H100V100H0Z" : P({ cx: 50, cy: 50, rx: 50, ry: 50, n: a === "circle" ? 2 : 6 }), fill: n.bg };
   }
-  var Ct = (t) => t ? `<path d="${t.d}" fill="${t.fill}"/>` : "";
   function st(t) {
     return (e, n = {}) => {
       let { t: a, palette: o } = S(e, n), r = R(o, n.expression), s = n.size ? ` width="${n.size}" height="${n.size}"` : "", c = E(t.layout(a), n), i = jt(n) + Ct(L(t, n, r)) + at(t.render(c.l, r), c.wrap);
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"${s}>${i}</svg>`;
     };
   }
-  var it = (t, e, n) => {
-    let a = e.rx, o = t.num("eye.rx", 0.075, 0.105) * a, r = t.num("eye.ratio", 1.9, 3.2), s = t.num("eye.scale", 0.78, 1.24), c = t.num("eye.stretch", 0.85, 1.18), i = t.num("eye.gap", 0.1, 0.24) * a, l = o * Math.max(1, s), m = o * r * Math.max(1, s * c), u = l + a * 0.03 + i, b = t.jitter("gaze.x", 0.09) * n.rx, p = t.num("gaze.y", -0.2, 0.08) * n.ry, d = t.jitter("eye.dy", 0.04) * n.ry, h = Math.hypot(l, m), f = Math.hypot((Math.abs(b) + u + h) / n.rx, (Math.abs(p) + Math.abs(d) + h) / n.ry), x = f > 0.9 ? 0.9 / f : 1, g = o * x, k = g * r, C2 = u * x, Ot = Math.max(0, Math.min(1, i / m)), St = Math.min(12, Math.asin(Ot) * 180 / Math.PI), _ = t.num("eye.lean", -1, 1) * St, Bt = Math.max(-12, Math.min(12, _ + t.jitter("eye.lean2", 3.5))), H = n.cx + b * x, z = n.cy + p * x;
-    return [{ cx: H - C2, cy: z, rx: g, ry: k, n: t.num("eye.n", 3.5, 6), rot: _ }, { cx: H + C2, cy: z + d * x, rx: g * s, ry: k * s * c, n: t.num("eye.n", 3.5, 6), rot: Bt }];
-  };
   function ut(t, e) {
     let n = (r) => (t.find(([, s]) => r < s) ?? t[t.length - 1])[0];
     function a(r) {
@@ -389,70 +393,104 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return { layout: a, render: o, background: false };
   }
-  var lt = (t) => W(t);
-  var mt = (t) => J(t.cx, t.cy, t.rx, t.ry, t.radii, t.rot);
-  var j = (t) => (e) => ({ cx: e.cx, cy: e.cy, rx: e.rx * t, ry: e.ry * t });
-  var pt = (t) => j(Math.min(...t.radii) * 0.95)(t);
-  var _t = (t) => j(0.84)(t);
-  var yt = { name: "round", core: 1 };
-  var bt = { name: "organic", core: 0.98, path: mt, face: pt };
-  var xt = { name: "boxy", core: 0.86, body: (t, e) => {
-    e.n = t.num("body.n", 3.4, 6), e.rot = t.num("body.rot", -20, 20);
-  } };
-  var ht = { name: "capsule", core: 1.02, body: (t, e) => {
-    e.ry *= t.num("capsule.squat", 0.55, 0.68);
-  }, face: j(0.94), decorate: (t, e, n) => {
-    for (let a of [-1, 1]) n.petals.push({ cx: e.cx + a * (e.rx - e.ry), cy: e.cy, r: e.ry });
-  }, path: (t) => tt(t.cx, t.cy, t.rx - t.ry, t.ry) };
-  var dt = { name: "nub", core: 0.88, decorate: (t, e, n) => {
-    let a = t.int("nub.n", 1, 2);
-    for (let o = 0; o < a; o++) {
-      let r = t.num(`nub.a${o}`, 0, 2 * Math.PI);
-      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.88, cy: e.cy + Math.sin(r) * e.rx * 0.88, r: e.rx * t.num(`nub.r${o}`, 0.24, 0.4) });
-    }
-  } };
-  var ft = { name: "cloud", core: 0.78, face: pt, path: mt, decorate: (t, e, n) => {
-    let a = t.int("cloud.n", 4, 6);
-    for (let o = 0; o < a; o++) {
-      let r = Math.PI + Math.PI * (o + 0.5) / a;
-      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.8, cy: e.cy + Math.sin(r) * e.rx * 0.5, r: e.rx * t.num(`cloud.r${o}`, 0.44, 0.62) });
-    }
-  } };
-  var gt = { name: "droplet", core: 0.78, body: (t, e) => {
-    e.cy += 0.22 * e.ry, e.n = 2;
-  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.05, rx: t.rx * 0.88, ry: t.ry * 0.88 }), decorate: (t, e, n) => {
-    n.extra.push(et(e.cx, e.cy, e.rx, e.ry, t.num("droplet.tip", 1.4, 1.65)));
-  } };
-  var Mt = { name: "hexagon", core: 1.05, path: lt, face: _t, body: (t, e) => {
-    e.sides = 6, e.rot = t.num("body.rot", -12, 12), e.round = t.num("poly.round", 0.24, 0.5);
-  } };
-  var kt = { name: "sun", core: 0.7, decorate: (t, e, n) => {
-    let a = t.int("sun.n", 6, 9), o = e.rx * t.num("sun.dist", 1, 1.08), r = e.rx * t.num("sun.r", 0.2, 0.26), s = t.num("sun.rot", 0, 2 * Math.PI);
-    for (let c = 0; c < a; c++) {
-      let i = s + 2 * Math.PI * c / a;
-      n.petals.push({ cx: e.cx + Math.cos(i) * o, cy: e.cy + Math.sin(i) * o, r });
-    }
-  } };
-  var $t = { name: "triangle", core: 1.15, path: lt, body: (t, e) => {
-    e.sides = 3, e.rot = t.num("body.rot", -5, 5), e.round = t.num("poly.round", 0.24, 0.5);
-  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.1, rx: t.rx * 0.54, ry: t.ry * 0.36 }) };
-  var Ht = [[yt, 0.22], [bt, 0.48], [xt, 0.6], [ht, 0.7], [dt, 0.79], [ft, 0.86], [gt, 0.915], [Mt, 0.95], [kt, 0.98], [$t, 1]];
-  var M = ut(Ht, it);
-  var Pt = st(M);
   function ke(t, e) {
     return "data:image/svg+xml," + Pt(t, e).replace(/"/g, "'").replace(/[%#<>{}|\\^[\]`]/g, (a) => "%" + a.charCodeAt(0).toString(16).toUpperCase()).replace(/\s+/g, " ");
   }
+  var q, N, wt, K, Q, Et, vt, y, nt, R, at, Ft, jt, Ct, it, lt, mt, j, pt, _t, yt, bt, xt, ht, dt, ft, gt, Mt, kt, $t, Ht, M, Pt;
+  var init_uri = __esm({
+    "node_modules/blobatar/dist/uri.js"() {
+      q = (t) => t.every((e) => e >= -1e-4 && e <= 1.0001);
+      N = [[0.2, { l: 0.86, c: 0.085 }], [0.36, { l: 0.9, c: 0.028 }], [0.62, { l: 0.73, c: 0.135 }], [0.8, { l: 0.62, c: 0.165 }], [0.93, { l: 0.87, c: 0.16 }], [1, { l: 0.34, c: 0.035 }]];
+      wt = (t) => N.find(([e]) => t < e)?.[1] ?? N[0][1];
+      K = { l: 0.145, c: 0, h: 0 };
+      Q = 1.5;
+      Et = (t, e) => {
+        let n = wt(e), a = w({ l: n.l, c: n.c, h: t }, K, Q);
+        return { bg: { l: 0.965, c: 0.01, h: t }, head: a, eye: a.l >= 0.5 ? { l: 0.17, c: 0.02, h: t } : { l: 0.97, c: 0.012, h: t } };
+      };
+      vt = [["head", "bg", 1.25], ["eye", "head", 4.5]];
+      y = (t) => {
+        let e = Math.round(t * 100) / 100;
+        return Object.is(e, -0) ? "0" : String(e);
+      };
+      nt = new TextEncoder();
+      R = (t, e) => e?.tint ? e.tint(t, e.p) : t;
+      at = (t, e) => e ? `<g transform="${e}">${t}</g>` : t;
+      Ft = (t) => t.replace(/[&<>]/g, (e) => e === "&" ? "&amp;" : e === "<" ? "&lt;" : "&gt;");
+      jt = (t) => t.title ? `<title>${Ft(t.title)}</title>` : "";
+      Ct = (t) => t ? `<path d="${t.d}" fill="${t.fill}"/>` : "";
+      it = (t, e, n) => {
+        let a = e.rx, o = t.num("eye.rx", 0.075, 0.105) * a, r = t.num("eye.ratio", 1.9, 3.2), s = t.num("eye.scale", 0.78, 1.24), c = t.num("eye.stretch", 0.85, 1.18), i = t.num("eye.gap", 0.1, 0.24) * a, l = o * Math.max(1, s), m = o * r * Math.max(1, s * c), u = l + a * 0.03 + i, b = t.jitter("gaze.x", 0.09) * n.rx, p = t.num("gaze.y", -0.2, 0.08) * n.ry, d = t.jitter("eye.dy", 0.04) * n.ry, h = Math.hypot(l, m), f = Math.hypot((Math.abs(b) + u + h) / n.rx, (Math.abs(p) + Math.abs(d) + h) / n.ry), x = f > 0.9 ? 0.9 / f : 1, g = o * x, k = g * r, C2 = u * x, Ot = Math.max(0, Math.min(1, i / m)), St = Math.min(12, Math.asin(Ot) * 180 / Math.PI), _ = t.num("eye.lean", -1, 1) * St, Bt = Math.max(-12, Math.min(12, _ + t.jitter("eye.lean2", 3.5))), H = n.cx + b * x, z = n.cy + p * x;
+        return [{ cx: H - C2, cy: z, rx: g, ry: k, n: t.num("eye.n", 3.5, 6), rot: _ }, { cx: H + C2, cy: z + d * x, rx: g * s, ry: k * s * c, n: t.num("eye.n", 3.5, 6), rot: Bt }];
+      };
+      lt = (t) => W(t);
+      mt = (t) => J(t.cx, t.cy, t.rx, t.ry, t.radii, t.rot);
+      j = (t) => (e) => ({ cx: e.cx, cy: e.cy, rx: e.rx * t, ry: e.ry * t });
+      pt = (t) => j(Math.min(...t.radii) * 0.95)(t);
+      _t = (t) => j(0.84)(t);
+      yt = { name: "round", core: 1 };
+      bt = { name: "organic", core: 0.98, path: mt, face: pt };
+      xt = { name: "boxy", core: 0.86, body: (t, e) => {
+        e.n = t.num("body.n", 3.4, 6), e.rot = t.num("body.rot", -20, 20);
+      } };
+      ht = { name: "capsule", core: 1.02, body: (t, e) => {
+        e.ry *= t.num("capsule.squat", 0.55, 0.68);
+      }, face: j(0.94), decorate: (t, e, n) => {
+        for (let a of [-1, 1]) n.petals.push({ cx: e.cx + a * (e.rx - e.ry), cy: e.cy, r: e.ry });
+      }, path: (t) => tt(t.cx, t.cy, t.rx - t.ry, t.ry) };
+      dt = { name: "nub", core: 0.88, decorate: (t, e, n) => {
+        let a = t.int("nub.n", 1, 2);
+        for (let o = 0; o < a; o++) {
+          let r = t.num(`nub.a${o}`, 0, 2 * Math.PI);
+          n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.88, cy: e.cy + Math.sin(r) * e.rx * 0.88, r: e.rx * t.num(`nub.r${o}`, 0.24, 0.4) });
+        }
+      } };
+      ft = { name: "cloud", core: 0.78, face: pt, path: mt, decorate: (t, e, n) => {
+        let a = t.int("cloud.n", 4, 6);
+        for (let o = 0; o < a; o++) {
+          let r = Math.PI + Math.PI * (o + 0.5) / a;
+          n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.8, cy: e.cy + Math.sin(r) * e.rx * 0.5, r: e.rx * t.num(`cloud.r${o}`, 0.44, 0.62) });
+        }
+      } };
+      gt = { name: "droplet", core: 0.78, body: (t, e) => {
+        e.cy += 0.22 * e.ry, e.n = 2;
+      }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.05, rx: t.rx * 0.88, ry: t.ry * 0.88 }), decorate: (t, e, n) => {
+        n.extra.push(et(e.cx, e.cy, e.rx, e.ry, t.num("droplet.tip", 1.4, 1.65)));
+      } };
+      Mt = { name: "hexagon", core: 1.05, path: lt, face: _t, body: (t, e) => {
+        e.sides = 6, e.rot = t.num("body.rot", -12, 12), e.round = t.num("poly.round", 0.24, 0.5);
+      } };
+      kt = { name: "sun", core: 0.7, decorate: (t, e, n) => {
+        let a = t.int("sun.n", 6, 9), o = e.rx * t.num("sun.dist", 1, 1.08), r = e.rx * t.num("sun.r", 0.2, 0.26), s = t.num("sun.rot", 0, 2 * Math.PI);
+        for (let c = 0; c < a; c++) {
+          let i = s + 2 * Math.PI * c / a;
+          n.petals.push({ cx: e.cx + Math.cos(i) * o, cy: e.cy + Math.sin(i) * o, r });
+        }
+      } };
+      $t = { name: "triangle", core: 1.15, path: lt, body: (t, e) => {
+        e.sides = 3, e.rot = t.num("body.rot", -5, 5), e.round = t.num("poly.round", 0.24, 0.5);
+      }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.1, rx: t.rx * 0.54, ry: t.ry * 0.36 }) };
+      Ht = [[yt, 0.22], [bt, 0.48], [xt, 0.6], [ht, 0.7], [dt, 0.79], [ft, 0.86], [gt, 0.915], [Mt, 0.95], [kt, 0.98], [$t, 1]];
+      M = ut(Ht, it);
+      Pt = st(M);
+    }
+  });
 
   // membership/member-blob.mjs
-  var OPTIONS = Object.freeze({ background: "square" });
-  var seedOf = (name) => String(name ?? "").trim() || "gbti";
   function memberBlob(name) {
     return ke(seedOf(name), OPTIONS);
   }
+  var OPTIONS, seedOf;
+  var init_member_blob = __esm({
+    "membership/member-blob.mjs"() {
+      "use strict";
+      init_uri();
+      OPTIONS = Object.freeze({ background: "square" });
+      seedOf = (name) => String(name ?? "").trim() || "gbti";
+    }
+  });
 
   // client-ui/src/member-avatars.mjs
-  var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  var AVATAR_LAYER_CSS = `img[data-blob], img[data-avphoto] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border:0; margin:0; max-width:none; }`;
   function avatarLayers(seed, photo) {
     const src = photo === void 0 ? memberAvatarUrl(seed) : String(photo || "");
     return `<img data-blob src="${esc(memberBlob(seed))}" alt="" aria-hidden="true">` + (src ? `<img data-avphoto src="${esc(src)}" alt="" loading="lazy">` : "");
@@ -467,12 +505,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.addEventListener("error", onError, true);
     return () => root.removeEventListener("error", onError, true);
   }
+  var esc, AVATAR_LAYER_CSS;
+  var init_member_avatars = __esm({
+    "client-ui/src/member-avatars.mjs"() {
+      "use strict";
+      init_member_avatar();
+      init_member_blob();
+      esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      AVATAR_LAYER_CSS = `img[data-blob], img[data-avphoto] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border:0; margin:0; max-width:none; }`;
+    }
+  });
 
   // client-ui/src/base.mjs
-  var HAS_DOM = typeof HTMLElement !== "undefined";
-  var CLIENT = null;
-  var IDENTITY = null;
-  var SUBSCRIBERS = /* @__PURE__ */ new Set();
   function setClient(client) {
     CLIENT = client;
     IDENTITY = null;
@@ -497,63 +541,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return null;
     }
   }
-  var Base = HAS_DOM ? HTMLElement : class {
-  };
-  var GbtiElement = class extends Base {
-    constructor() {
-      super();
-      if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
-      this._ownClient = null;
-      this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
-    }
-    connectedCallback() {
-      SUBSCRIBERS.add(this._onClient);
-      if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
-      if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
-      this.render?.();
-    }
-    disconnectedCallback() {
-      SUBSCRIBERS.delete(this._onClient);
-      this._detachCdnFallback?.();
-      this._detachCdnFallback = null;
-      this._detachAvatarFallback?.();
-      this._detachAvatarFallback = null;
-    }
-    get client() {
-      return this._ownClient || getClient();
-    }
-    /**
-     * sow-399: give ONE element its own client. The website has many independent components that each call
-     * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
-     * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
-     * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
-     * The Worker re-checks the role on every call; this only decides which methods the element can reach.
-     */
-    set client(c) {
-      this._ownClient = c || null;
-      if (this.isConnected) this.render?.();
-    }
-    /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
-    css(extra = "") {
-      return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
-    }
-    set(markup) {
-      if (this.root) this.root.innerHTML = markup;
-    }
-    $(sel) {
-      return this.root?.querySelector(sel) ?? null;
-    }
-    $$(sel) {
-      return this.root ? [...this.root.querySelectorAll(sel)] : [];
-    }
-    on(sel, event, handler) {
-      const el = this.$(sel);
-      if (el) el.addEventListener(event, handler);
-    }
-    emit(name, detail) {
-      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
-    }
-  };
   function define(tag, ctor) {
     const ce = HAS_DOM ? globalThis.customElements : null;
     if (!ce || ce.get(tag)) return;
@@ -562,64 +549,78 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function esc2(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
-
-  // client-ui/src/elements/gbti-auth.mjs
-  var GbtiAuth = class extends GbtiElement {
-    async render() {
-      if (!this.client) {
-        this.set(this.css() + `<div class="panel muted">Connecting to the local client…</div>`);
-        return;
-      }
-      let status = null;
-      try {
-        status = await this.client.status();
-      } catch {
-      }
-      const id = status?.identity ?? null;
-      const role = status?.role ?? "member";
-      const authed = Boolean(status?.authenticated);
-      if (id && authed) {
-        this.set(
-          this.css() + `<div class="panel row" style="justify-content:space-between">
-             <div>Signed in as <strong>@${esc2(id.login)}</strong> ${role !== "member" ? `<span class="tag ok">${esc2(role)}</span>` : ""}</div>
-             <button class="ghost" id="out">Sign out</button>
-           </div>`
-        );
-        this.on("#out", "click", () => this.emit("gbti-signout"));
-        return;
-      }
-      const canLogin = typeof this.client.login === "function";
-      this.set(
-        this.css() + `<div class="panel">
-           <h2>Sign in</h2>
-           <p class="muted">Authorize with GitHub to author + publish your content as pull requests.</p>
-           ${canLogin ? `<button id="in">Sign in with GitHub</button>` : `<p class="muted">Run <code>gbti login</code> in your terminal to connect this client.</p>`}
-           <div id="prompt" class="muted" style="margin-top:10px"></div>
-         </div>`
-      );
-      if (canLogin) {
-        this.on("#in", "click", async () => {
-          const slot = this.$("#prompt");
-          try {
-            await this.client.login(({ userCode, verificationUri }) => {
-              slot.innerHTML = `Enter code <strong>${esc2(userCode)}</strong> at <a href="${esc2(verificationUri)}" target="_blank" rel="noopener">${esc2(verificationUri)}</a>`;
-            });
-            getIdentity();
-            this.render();
-            this.emit("gbti-signin");
-          } catch (err) {
-            slot.innerHTML = `<span class="danger">${esc2(err.message || "sign-in failed")}</span>`;
-          }
-        });
-      }
+  var HAS_DOM, CLIENT, IDENTITY, SUBSCRIBERS, Base, GbtiElement;
+  var init_base = __esm({
+    "client-ui/src/base.mjs"() {
+      "use strict";
+      init_assets();
+      init_tokens();
+      init_member_avatars();
+      HAS_DOM = typeof HTMLElement !== "undefined";
+      CLIENT = null;
+      IDENTITY = null;
+      SUBSCRIBERS = /* @__PURE__ */ new Set();
+      Base = HAS_DOM ? HTMLElement : class {
+      };
+      GbtiElement = class extends Base {
+        constructor() {
+          super();
+          if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
+          this._ownClient = null;
+          this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
+        }
+        connectedCallback() {
+          SUBSCRIBERS.add(this._onClient);
+          if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
+          if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
+          this.render?.();
+        }
+        disconnectedCallback() {
+          SUBSCRIBERS.delete(this._onClient);
+          this._detachCdnFallback?.();
+          this._detachCdnFallback = null;
+          this._detachAvatarFallback?.();
+          this._detachAvatarFallback = null;
+        }
+        get client() {
+          return this._ownClient || getClient();
+        }
+        /**
+         * sow-399: give ONE element its own client. The website has many independent components that each call
+         * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
+         * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
+         * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
+         * The Worker re-checks the role on every call; this only decides which methods the element can reach.
+         */
+        set client(c) {
+          this._ownClient = c || null;
+          if (this.isConnected) this.render?.();
+        }
+        /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
+        css(extra = "") {
+          return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
+        }
+        set(markup) {
+          if (this.root) this.root.innerHTML = markup;
+        }
+        $(sel) {
+          return this.root?.querySelector(sel) ?? null;
+        }
+        $$(sel) {
+          return this.root ? [...this.root.querySelectorAll(sel)] : [];
+        }
+        on(sel, event, handler) {
+          const el = this.$(sel);
+          if (el) el.addEventListener(event, handler);
+        }
+        emit(name, detail) {
+          this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+        }
+      };
     }
-  };
-  define("gbti-auth", GbtiAuth);
+  });
 
   // client/src/image-attrs.mjs
-  var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
-  var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
-  var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
   function cleanCaption(s) {
     return String(s ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
   }
@@ -701,13 +702,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return n;
   }
+  var IMAGE_LAYOUT_WORDS, ALIGNS, IMAGE_LINE_RE;
+  var init_image_attrs = __esm({
+    "client/src/image-attrs.mjs"() {
+      "use strict";
+      IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
+      ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
+      IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
+    }
+  });
 
   // client/src/list-attrs.mjs
-  var BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
-  var NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
-  var LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
-  var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
-  var LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
   function styleKind(word) {
     const w2 = String(word ?? "");
     if (BULLET_WORDS.includes(w2)) return "bullet";
@@ -734,7 +739,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return null;
   }
-  var SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
   function splitListSuffix(text2, ordered, { bare = false } = {}) {
     const m = SUFFIX_RE.exec(String(text2 ?? ""));
     if (!m) return null;
@@ -744,7 +748,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!bare && rest.trim() === "") return null;
     return { style: normalizeListStyle(m[2], !!ordered), rest };
   }
-  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
   function stripListStyleSuffix(line) {
     const m = LINE_RE.exec(String(line ?? ""));
     if (!m) return String(line ?? "");
@@ -752,10 +755,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!split) return String(line);
     return `${m[1]}${m[2]}${m[3]}${split.rest}`;
   }
+  var BULLET_WORDS, NUMBER_WORDS, LIST_STYLE_WORDS, LIST_STYLE_DEFAULTS, LIST_STYLE_CLASS_RE, SUFFIX_RE, LINE_RE;
+  var init_list_attrs = __esm({
+    "client/src/list-attrs.mjs"() {
+      "use strict";
+      BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
+      NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
+      LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
+      LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
+      LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
+      SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
+      LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
+    }
+  });
 
   // client/src/list-items.mjs
-  var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
-  var THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
   function isThematicBreak(line) {
     return THEMATIC_BREAK_RE.test(String(line ?? ""));
   }
@@ -795,7 +809,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return out;
   }
-  var BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
   function continuesItem(line, markerIndent) {
     const s = String(line ?? "");
     if (/^\s*$/.test(s) || LIST_ITEM_RE.test(s) || THEMATIC_BREAK_RE.test(s)) return false;
@@ -1004,11 +1017,18 @@ ${String(lines2[i]).trimStart()}`;
     if (JSON.stringify(next) === JSON.stringify(norm3)) return null;
     return { ordered: topOrdered, items: next };
   }
+  var LIST_ITEM_RE, THEMATIC_BREAK_RE, BLOCK_OPENER_RE;
+  var init_list_items = __esm({
+    "client/src/list-items.mjs"() {
+      "use strict";
+      init_list_attrs();
+      LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+      THEMATIC_BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+      BLOCK_OPENER_RE = /^(?:```|~~~|>|#{1,6}\s|\||<|\[\^)/;
+    }
+  });
 
   // client/src/underscore-emphasis.mjs
-  var OPAQUE = /\u0000A\d+\u0000|\uE000\d+\uE001|<[^>]*>|&(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);|`[^`\n]*`|\\_/giy;
-  var WS = /\s/u;
-  var PUNCT = /[\p{P}\p{S}]/u;
   function tokenize(src) {
     const out = [];
     let i = 0;
@@ -1101,11 +1121,18 @@ ${String(lines2[i]).trimStart()}`;
     }
     return out;
   }
-  var UNDERSCORE_MARK = 'data-md="_"';
+  var OPAQUE, WS, PUNCT, UNDERSCORE_MARK;
+  var init_underscore_emphasis = __esm({
+    "client/src/underscore-emphasis.mjs"() {
+      "use strict";
+      OPAQUE = /\u0000A\d+\u0000|\uE000\d+\uE001|<[^>]*>|&(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);|`[^`\n]*`|\\_/giy;
+      WS = /\s/u;
+      PUNCT = /[\p{P}\p{S}]/u;
+      UNDERSCORE_MARK = 'data-md="_"';
+    }
+  });
 
   // client-ui/src/markdown-blocks.mjs
-  var MEMBERS_MARKER = "<!-- members-only -->";
-  var isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
   function splitTableRow(line) {
     let s = String(line).trim();
     if (s.startsWith("|")) s = s.slice(1);
@@ -1118,17 +1145,6 @@ ${String(lines2[i]).trimStart()}`;
     const r = s.endsWith(":");
     return l && r ? "center" : r ? "right" : l ? "left" : "";
   }
-  var isTableStart = (lines2, i) => i + 1 < lines2.length && lines2[i].includes("|") && isTableDelimLine(lines2[i + 1]);
-  var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-  var normalizeVariant = (v2) => CALLOUT_VARIANTS.includes(v2) ? v2 : "note";
-  var isMarker = (l) => l.trim() === MEMBERS_MARKER;
-  var isFence = (l) => /^```/.test(l);
-  var isHeading = (l) => /^#{1,6}\s+/.test(l);
-  var isQuote = (l) => /^>\s?/.test(l);
-  var isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
-  var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
-  var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
-  var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
   function serializeBlocks(blocks2) {
     const list = Array.isArray(blocks2) ? blocks2 : [];
     let next = 1;
@@ -1143,7 +1159,6 @@ ${String(lines2[i]).trimStart()}`;
       return serializeBlock(b);
     }).join("\n\n");
   }
-  var listBlockItems = (b) => Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
     switch (b.type) {
@@ -1322,8 +1337,6 @@ ${String(lines2[i]).trimStart()}`;
         return { type: "paragraph", text: "" };
     }
   }
-  var REL_ALLOWED = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
-  var DANGEROUS_SCHEME = /^\s*(?:javascript|data|vbscript):/i;
   function isDangerousUrl(url) {
     const decoded = decodeEnt(String(url ?? "")).replace(/[\x00-\x20]+/g, "");
     return DANGEROUS_SCHEME.test(decoded) || DANGEROUS_SCHEME.test(String(url ?? ""));
@@ -1336,33 +1349,6 @@ ${String(lines2[i]).trimStart()}`;
     }
     return kept;
   }
-  var attrOf = (attrs, name) => {
-    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
-    return m ? m[1] : "";
-  };
-  var decodeEntOnce = (s) => String(s ?? "").replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
-    try {
-      return String.fromCodePoint(parseInt(h, 16));
-    } catch {
-      return "";
-    }
-  }).replace(/&#(\d+);?/g, (_m, d) => {
-    try {
-      return String.fromCodePoint(parseInt(d, 10));
-    } catch {
-      return "";
-    }
-  }).replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
-  var decodeEnt = (s) => {
-    let p = String(s ?? "");
-    for (let i = 0; i < 4; i += 1) {
-      const n = decodeEntOnce(p);
-      if (n === p) break;
-      p = n;
-    }
-    return p;
-  };
-  var escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   function parseLinkAttrs(attrs) {
     const rawHref = decodeEnt(attrOf(attrs, "href"));
     const href = isDangerousUrl(rawHref) ? "" : rawHref;
@@ -1371,7 +1357,6 @@ ${String(lines2[i]).trimStart()}`;
     if (blank2 && !rel.includes("noopener")) rel.push("noopener");
     return { href, rel, blank: blank2, attributed: rel.length > 0 || blank2 };
   }
-  var SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
   function sanitizeInner(html) {
     return String(html ?? "").replace(
       /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
@@ -1383,11 +1368,6 @@ ${String(lines2[i]).trimStart()}`;
     const tgtAttr = blank2 ? ' target="_blank"' : "";
     return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
   }
-  var FN_REF_ID = "[A-Za-z0-9_-]+";
-  var FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, "g");
-  var EM_US = `<em ${UNDERSCORE_MARK}>`;
-  var STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
-  var WORD_CHAR = /[\p{L}\p{N}]/u;
   function emphasisMark(attrs, all, at3, len, star) {
     if (!/\bdata-md="_"/.test(attrs)) return star;
     const before = all[at3 - 1] ?? "";
@@ -1468,13 +1448,66 @@ ${String(lines2[i]).trimStart()}`;
     const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
     return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join("\n\n");
   }
+  var MEMBERS_MARKER, isTableDelimLine, isTableStart, CALLOUT_VARIANTS, normalizeVariant, isMarker, isFence, isHeading, isQuote, isListItem, isImageOnly, isBareUrl, isVideoUrl, listBlockItems, REL_ALLOWED, DANGEROUS_SCHEME, attrOf, decodeEntOnce, decodeEnt, escAttr, SAFE_INNER_TAG, FN_REF_ID, FN_REF_RE, EM_US, STRONG_US, WORD_CHAR;
+  var init_markdown_blocks = __esm({
+    "client-ui/src/markdown-blocks.mjs"() {
+      "use strict";
+      init_image_attrs();
+      init_list_items();
+      init_underscore_emphasis();
+      MEMBERS_MARKER = "<!-- members-only -->";
+      isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
+      isTableStart = (lines2, i) => i + 1 < lines2.length && lines2[i].includes("|") && isTableDelimLine(lines2[i + 1]);
+      CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
+      normalizeVariant = (v2) => CALLOUT_VARIANTS.includes(v2) ? v2 : "note";
+      isMarker = (l) => l.trim() === MEMBERS_MARKER;
+      isFence = (l) => /^```/.test(l);
+      isHeading = (l) => /^#{1,6}\s+/.test(l);
+      isQuote = (l) => /^>\s?/.test(l);
+      isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l) && !isThematicBreak(l);
+      isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
+      isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
+      isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
+      listBlockItems = (b) => Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
+      REL_ALLOWED = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+      DANGEROUS_SCHEME = /^\s*(?:javascript|data|vbscript):/i;
+      attrOf = (attrs, name) => {
+        const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+        return m ? m[1] : "";
+      };
+      decodeEntOnce = (s) => String(s ?? "").replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
+      decodeEnt = (s) => {
+        let p = String(s ?? "");
+        for (let i = 0; i < 4; i += 1) {
+          const n = decodeEntOnce(p);
+          if (n === p) break;
+          p = n;
+        }
+        return p;
+      };
+      escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
+      FN_REF_ID = "[A-Za-z0-9_-]+";
+      FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, "g");
+      EM_US = `<em ${UNDERSCORE_MARK}>`;
+      STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
+      WORD_CHAR = /[\p{L}\p{N}]/u;
+    }
+  });
 
   // client-ui/src/image-layout-ui.mjs
-  var IMAGE_LAYOUT_GROUPS = Object.freeze([
-    Object.freeze([{ action: "natural", label: "Natural", title: "Natural size" }, { action: "full", label: "Full width", title: "Span the column" }]),
-    Object.freeze([{ action: "left", label: "Left", title: "Align left" }, { action: "center", label: "Center", title: "Center" }, { action: "right", label: "Right", title: "Align right" }]),
-    Object.freeze([{ action: "wrap", label: "Wrap text", title: "Let the text flow beside the image (left or right only)" }])
-  ]);
   function imageLayoutPressed(layout, action) {
     const n = normalizeImageLayout(layout);
     switch (action) {
@@ -1499,15 +1532,6 @@ ${String(lines2[i]).trimStart()}`;
   function imageLayoutButtonsHtml(layout, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
     return IMAGE_LAYOUT_GROUPS.map((group) => group.map((b) => `<button type="button" data-il="${b.action}" title="${b.title}"` + (imageLayoutPressed(layout, b.action) ? ' aria-pressed="true"' : "") + (imageLayoutDisabled(layout, b.action) ? " disabled" : "") + `>${b.label}</button>`).join("")).join(sep);
   }
-  var IMAGE_LAYOUT_ROW_CSS = `
-  .imglay { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-  .imglay .gbti-stb-sep { display:none; }
-  .imglay button { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;
-    border:1px solid var(--s-line-2); background:transparent; color:var(--s-fg); }
-  .imglay button:hover { border-color:var(--s-green); }
-  .imglay button[aria-pressed="true"] { background:var(--s-tint); color:var(--s-green-fg); border-color:var(--s-green); }
-  .imglay button[disabled] { opacity:.4; cursor:default; }
-`;
   function imageLayoutProseCss(scope) {
     const s = String(scope || "").trim();
     return `
@@ -1536,29 +1560,29 @@ ${String(lines2[i]).trimStart()}`;
   }
 `;
   }
+  var IMAGE_LAYOUT_GROUPS, IMAGE_LAYOUT_ROW_CSS;
+  var init_image_layout_ui = __esm({
+    "client-ui/src/image-layout-ui.mjs"() {
+      "use strict";
+      init_image_attrs();
+      IMAGE_LAYOUT_GROUPS = Object.freeze([
+        Object.freeze([{ action: "natural", label: "Natural", title: "Natural size" }, { action: "full", label: "Full width", title: "Span the column" }]),
+        Object.freeze([{ action: "left", label: "Left", title: "Align left" }, { action: "center", label: "Center", title: "Center" }, { action: "right", label: "Right", title: "Align right" }]),
+        Object.freeze([{ action: "wrap", label: "Wrap text", title: "Let the text flow beside the image (left or right only)" }])
+      ]);
+      IMAGE_LAYOUT_ROW_CSS = `
+  .imglay { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .imglay .gbti-stb-sep { display:none; }
+  .imglay button { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;
+    border:1px solid var(--s-line-2); background:transparent; color:var(--s-fg); }
+  .imglay button:hover { border-color:var(--s-green); }
+  .imglay button[aria-pressed="true"] { background:var(--s-tint); color:var(--s-green-fg); border-color:var(--s-green); }
+  .imglay button[disabled] { opacity:.4; cursor:default; }
+`;
+    }
+  });
 
   // client-ui/src/list-style-ui.mjs
-  var LIST_STYLE_GROUPS = Object.freeze({
-    kind: Object.freeze([
-      { action: "unordered", label: "Bullets", title: "A bulleted list" },
-      { action: "ordered", label: "Numbers", title: "A numbered list" }
-    ]),
-    bullet: Object.freeze([
-      { action: "style:disc", label: "Disc", title: "Round bullets (the default)" },
-      { action: "style:circle", label: "Circle", title: "Hollow bullets" },
-      { action: "style:square", label: "Square", title: "Square bullets" }
-    ]),
-    number: Object.freeze([
-      { action: "style:decimal", label: "1.", title: "Numbers (the default)" },
-      { action: "style:lower-alpha", label: "a.", title: "Lower-case letters" },
-      { action: "style:upper-alpha", label: "A.", title: "Upper-case letters" },
-      { action: "style:lower-roman", label: "i.", title: "Lower-case roman numerals" },
-      { action: "style:upper-roman", label: "I.", title: "Upper-case roman numerals" }
-    ]),
-    remove: Object.freeze([
-      { action: "unwrap", label: "Remove list", title: "Turn the list into paragraphs, one per item" }
-    ])
-  });
   function listStylePressed(state, action) {
     const ordered = !!state?.ordered;
     const style = state?.style || null;
@@ -1579,6 +1603,34 @@ ${String(lines2[i]).trimStart()}`;
     const s = String(scope || "").trim();
     return LIST_STYLE_WORDS.filter((w2) => !isDefaultStyle(w2)).map((w2) => `  ${s} ${styleKind(w2) === "number" ? "ol" : "ul"}.list-${w2} > li { list-style: ${w2}; }`).join("\n");
   }
+  var LIST_STYLE_GROUPS;
+  var init_list_style_ui = __esm({
+    "client-ui/src/list-style-ui.mjs"() {
+      "use strict";
+      init_list_attrs();
+      LIST_STYLE_GROUPS = Object.freeze({
+        kind: Object.freeze([
+          { action: "unordered", label: "Bullets", title: "A bulleted list" },
+          { action: "ordered", label: "Numbers", title: "A numbered list" }
+        ]),
+        bullet: Object.freeze([
+          { action: "style:disc", label: "Disc", title: "Round bullets (the default)" },
+          { action: "style:circle", label: "Circle", title: "Hollow bullets" },
+          { action: "style:square", label: "Square", title: "Square bullets" }
+        ]),
+        number: Object.freeze([
+          { action: "style:decimal", label: "1.", title: "Numbers (the default)" },
+          { action: "style:lower-alpha", label: "a.", title: "Lower-case letters" },
+          { action: "style:upper-alpha", label: "A.", title: "Upper-case letters" },
+          { action: "style:lower-roman", label: "i.", title: "Lower-case roman numerals" },
+          { action: "style:upper-roman", label: "I.", title: "Upper-case roman numerals" }
+        ]),
+        remove: Object.freeze([
+          { action: "unwrap", label: "Remove list", title: "Turn the list into paragraphs, one per item" }
+        ])
+      });
+    }
+  });
 
   // client-ui/src/block-commit.mjs
   function readListDom(el, md) {
@@ -1628,69 +1680,16 @@ ${String(lines2[i]).trimStart()}`;
     } catch {
     }
   }
+  var init_block_commit = __esm({
+    "client-ui/src/block-commit.mjs"() {
+      "use strict";
+      init_image_attrs();
+      init_list_items();
+      init_list_attrs();
+    }
+  });
 
   // client-ui/src/selection-toolbar.mjs
-  var STYLE_ID = "gbti-selection-toolbar-css";
-  var SELECTION_TOOLBAR_CSS = `
-.gbti-stb, .gbti-lp {
-  position: absolute; z-index: 40; display: none;
-  --stb-pop: var(--s-surface, var(--paper, #fff));
-  --stb-pop-2: var(--s-surface-2, var(--paper-2, #f4f3f7));
-  --stb-line: var(--s-line, var(--line, #d9d7e0));
-  --stb-fg: var(--s-fg, var(--fg, #25232b));
-  --stb-fg-soft: var(--s-fg-soft, var(--fg-soft, #55525f));
-  --stb-accent: var(--s-green, var(--green-700, #1f9e5f));
-}
-.gbti-stb { gap: 1px; padding: 4px; border-radius: 10px; background: var(--ink, #25232b); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
-.gbti-stb button {
-  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-radius: 7px; background: transparent; color: #e6e4ee; cursor: pointer;
-  font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
-}
-.gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
-.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
-.gbti-stb button[disabled] { opacity: .4; cursor: default; }
-.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
-.gbti-imgbar button { font-weight: 600; }
-.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
-.gbti-listbar button { font-weight: 600; }
-.gbti-lp {
-  flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
-  background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
-  box-shadow: 0 12px 34px rgba(0,0,0,.28); color: var(--stb-fg);
-}
-.gbti-lp input[type="text"], .gbti-lp input[type="url"] {
-  font: inherit; font-size: 13px; color: var(--stb-fg); background: var(--stb-pop-2);
-  border: 1px solid var(--stb-line); border-radius: 7px; padding: 7px 9px; min-width: 0;
-}
-.gbti-lp label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--stb-fg-soft); cursor: pointer; }
-/* sow-342: THE CHECKBOXES NEED THEIR OWN RULE, and the reason is that every other control here already has one.
-   BASE_CSS (client-ui/src/tokens.mjs) carries a bare \`input, select, textarea { width: 100%; padding: 9px 11px }\`
-   and it is in the shadow root of every client-ui component, this panel included. The two text inputs above
-   outrank it on specificity, so they look right; a checkbox matched nothing here and inherited width:100%. In a
-   flex label that stretches the box to the full panel width, leaves the caption its min-content width, and wraps
-   "New tab" onto two lines with the tick stranded in the middle of the row. Reported by the owner as the link
-   editor "needing help", which is exactly what it looked like.
-   Measured in a browser against the real shadow CSS: as shipped the two boxes render 177px and 190px wide and
-   the second row is 39px tall; with this rule both are 13px and both rows are 20px. */
-.gbti-lp input[type="checkbox"] { width: auto; min-width: 0; flex: none; margin: 0; padding: 0; accent-color: var(--stb-accent); }
-.gbti-lp .lp-btns { display: flex; gap: 8px; margin-top: 2px; }
-.gbti-lp button {
-  font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; padding: 6px 12px;
-  cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
-}
-.gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
-.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
-.gbti-ip { min-width: 300px; max-width: 360px; }
-.gbti-ic { min-width: 320px; }
-.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
-.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
-.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
-.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
-.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
-.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
-`;
   function ensureStyles(host) {
     const root = host.getRootNode ? host.getRootNode() : document;
     const target = root && root.nodeType === 11 ? root : document.head;
@@ -2225,176 +2224,80 @@ ${String(lines2[i]).trimStart()}`;
       }
     };
   }
-
-  // client-ui/src/list-editing.mjs
-  function listTabKeydown(e, { el, ordered = false, selection, apply }) {
-    if (!e || e.key !== "Tab" || !el) return false;
-    const sel = selection || (typeof document !== "undefined" ? document.getSelection() : null);
-    const { index } = listItemAtSelection(el, sel);
-    if (index < 0) return false;
-    e.preventDefault();
-    const current = readListDom(el, (h) => inlineHtmlToMd(h));
-    const next = indentListItem(current, index, e.shiftKey ? -1 : 1, !!ordered);
-    if (!next) return true;
-    const again = apply(isFlatList(next) ? next.map((it2) => it2.text) : next);
-    const li = again ? again.querySelectorAll("li")[index] : null;
-    if (again) again.focus();
-    if (li) caretAtEndOfItem(li, sel);
-    return true;
-  }
-  var shapeOf = (items) => isFlatList(items) ? items.map((it2) => it2.text) : items;
-  function listBarTools(host) {
-    const md = (h) => inlineHtmlToMd(h);
-    return {
-      listOf: (node) => {
-        const ce = host.ceOf(node);
-        return ce && ce.dataset && ce.dataset.edit === "list" ? ce : null;
-      },
-      stateOf: (el, index) => {
-        const b = host.byId(el.dataset.id);
-        return b ? listRunState(b.items, !!b.ordered, index) : { ordered: false, style: null, depth: 0 };
-      },
-      onAction: (el, index, action) => {
-        const b = host.byId(el.dataset.id);
-        if (!b) return;
-        const current = readListDom(el, md);
-        if (action === "unwrap") {
-          const i = host.indexOf(b._id);
-          if (i < 0) return;
-          const texts = normalizeListItems(current, !!b.ordered).map((it2) => it2.text).filter((t) => t.trim() !== "");
-          const paras = (texts.length ? texts : [""]).map((text2) => host.withId({ type: "paragraph", text: text2 }));
-          host.blocks().splice(i, 1, ...paras);
-          host.render();
-          host.change();
-          host.focusBlock(paras[0]._id);
-          return;
-        }
-        const next = applyListAction({ ordered: !!b.ordered, items: current }, index, action);
-        if (!next) return;
-        b.ordered = next.ordered;
-        b.items = shapeOf(next.items);
-        host.render();
-        host.change();
-        const again = host.query(`.ce[data-edit="list"][data-id="${b._id}"]`);
-        const li = again ? again.querySelectorAll("li")[index] : null;
-        if (again) again.focus();
-        if (li) caretAtEndOfItem(li, host.selection());
-      }
-    };
-  }
-
-  // client-ui/src/media-picker.mjs
-  var MEDIA_INDEX_URL = "https://gbti.network/media-index.json";
-  function mediaFor(index, author) {
-    const rows = index?.byAuthor?.[author];
-    return Array.isArray(rows) ? rows.filter((r) => r && typeof r.name === "string" && typeof r.itemPath === "string") : [];
-  }
-  function filterMedia(rows, query) {
-    const q2 = String(query ?? "").trim().toLowerCase();
-    const list = Array.isArray(rows) ? rows : [];
-    if (!q2) return list.slice();
-    return list.filter((r) => `${r?.name ?? ""} ${r?.itemTitle ?? ""}`.toLowerCase().includes(q2));
-  }
-  function reusePlan(record, currentItemPath) {
-    const name = record?.name;
-    const from = record?.itemPath;
-    if (!name || !from) return null;
-    const alreadyHere = !!currentItemPath && from === currentItemPath;
-    return {
-      name,
-      ref: `./images/${name}`,
-      // what the block stores, identical to what an upload produces
-      alreadyHere,
-      // Resolved against the SOURCE item, which is the whole point: the bytes live in the other item's folder.
-      sourceUrl: resolveContentAsset(`./images/${name}`, from)
-    };
-  }
-  function authorFromItemPath(itemPath) {
-    const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(itemPath ?? ""));
-    return m ? m[1] : null;
-  }
-
-  // src/lib/staged-images.mjs
-  var NAME = String.raw`[^/"'\s)]+\.(?:png|jpe?g|webp|gif)`;
-  var CANONICAL_G = new RegExp(String.raw`\.\/images\/${NAME}`, "gi");
-  var FLAT_G = new RegExp(String.raw`members\/[A-Za-z0-9-]+\/images\/${NAME}`, "gi");
-  var CANONICAL = new RegExp(String.raw`^\.\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
-  var FLAT = new RegExp(String.raw`^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
-  function isStagedImagePath(v2) {
-    const s = String(v2 ?? "");
-    return CANONICAL.test(s) || FLAT.test(s);
-  }
-  function stagedImageName(p) {
-    return isStagedImagePath(p) ? String(p).split("/").pop() : null;
-  }
-  function referencedDraftImages(frontmatter = {}, body = "") {
-    let fm = "";
-    try {
-      fm = JSON.stringify(frontmatter ?? {});
-    } catch {
-      fm = "";
+  var STYLE_ID, SELECTION_TOOLBAR_CSS;
+  var init_selection_toolbar = __esm({
+    "client-ui/src/selection-toolbar.mjs"() {
+      "use strict";
+      init_markdown_blocks();
+      init_image_attrs();
+      init_image_layout_ui();
+      init_list_style_ui();
+      init_block_commit();
+      STYLE_ID = "gbti-selection-toolbar-css";
+      SELECTION_TOOLBAR_CSS = `
+.gbti-stb, .gbti-lp {
+  position: absolute; z-index: 40; display: none;
+  --stb-pop: var(--s-surface, var(--paper, #fff));
+  --stb-pop-2: var(--s-surface-2, var(--paper-2, #f4f3f7));
+  --stb-line: var(--s-line, var(--line, #d9d7e0));
+  --stb-fg: var(--s-fg, var(--fg, #25232b));
+  --stb-fg-soft: var(--s-fg-soft, var(--fg-soft, #55525f));
+  --stb-accent: var(--s-green, var(--green-700, #1f9e5f));
+}
+.gbti-stb { gap: 1px; padding: 4px; border-radius: 10px; background: var(--ink, #25232b); box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+.gbti-stb button {
+  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 7px; background: transparent; color: #e6e4ee; cursor: pointer;
+  font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
+}
+.gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
+.gbti-stb button[disabled] { opacity: .4; cursor: default; }
+.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-imgbar button { font-weight: 600; }
+.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-listbar button { font-weight: 600; }
+.gbti-lp {
+  flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
+  background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.28); color: var(--stb-fg);
+}
+.gbti-lp input[type="text"], .gbti-lp input[type="url"] {
+  font: inherit; font-size: 13px; color: var(--stb-fg); background: var(--stb-pop-2);
+  border: 1px solid var(--stb-line); border-radius: 7px; padding: 7px 9px; min-width: 0;
+}
+.gbti-lp label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--stb-fg-soft); cursor: pointer; }
+/* sow-342: THE CHECKBOXES NEED THEIR OWN RULE, and the reason is that every other control here already has one.
+   BASE_CSS (client-ui/src/tokens.mjs) carries a bare \`input, select, textarea { width: 100%; padding: 9px 11px }\`
+   and it is in the shadow root of every client-ui component, this panel included. The two text inputs above
+   outrank it on specificity, so they look right; a checkbox matched nothing here and inherited width:100%. In a
+   flex label that stretches the box to the full panel width, leaves the caption its min-content width, and wraps
+   "New tab" onto two lines with the tick stranded in the middle of the row. Reported by the owner as the link
+   editor "needing help", which is exactly what it looked like.
+   Measured in a browser against the real shadow CSS: as shipped the two boxes render 177px and 190px wide and
+   the second row is 39px tall; with this rule both are 13px and both rows are 20px. */
+.gbti-lp input[type="checkbox"] { width: auto; min-width: 0; flex: none; margin: 0; padding: 0; accent-color: var(--stb-accent); }
+.gbti-lp .lp-btns { display: flex; gap: 8px; margin-top: 2px; }
+.gbti-lp button {
+  font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; padding: 6px 12px;
+  cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
+}
+.gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
+.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
+.gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ic { min-width: 320px; }
+.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
+.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
+.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
+.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
+.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
+.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
+`;
     }
-    const hay = `${fm}
-${String(body ?? "")}`;
-    return [.../* @__PURE__ */ new Set([...hay.match(CANONICAL_G) || [], ...hay.match(FLAT_G) || []])];
-  }
-  function stagedImageDataUrl(img) {
-    const b64 = img?.dataBase64;
-    return b64 ? `data:${img.contentType || "image/png"};base64,${b64}` : "";
-  }
-  async function loadStagedImages(paths, read3, have = {}) {
-    const out = {};
-    if (typeof read3 !== "function") return out;
-    for (const raw of new Set(paths || [])) {
-      const p = String(raw || "");
-      const name = stagedImageName(p);
-      if (!name || have[p] || out[p]) continue;
-      let img = null;
-      try {
-        img = await read3(name, p);
-      } catch {
-        img = null;
-      }
-      const url = stagedImageDataUrl(img);
-      if (url) out[p] = url;
-    }
-    return out;
-  }
+  });
 
   // client/src/audio-embed.mjs
-  var AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
-  var PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
-  var DEFAULT_LINK_LABELS = { soundcloud: "Listen on SoundCloud", spotify: "Listen on Spotify", apple: "Open in Apple Podcasts" };
-  var SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
-    "discover",
-    "search",
-    "charts",
-    "stations",
-    "you",
-    "upload",
-    "settings",
-    "messages",
-    "notifications",
-    "pages",
-    "people",
-    "popular",
-    "terms-of-use",
-    "imprint",
-    "jobs",
-    "mobile",
-    "pro",
-    "feed",
-    "player",
-    "widget"
-  ]);
-  var parse = (raw) => {
-    try {
-      const u = new URL(String(raw ?? "").trim());
-      return /^https?:$/.test(u.protocol) ? u : null;
-    } catch {
-      return null;
-    }
-  };
   function audioEmbed(provider, raw) {
     const u = parse(raw);
     if (!u) return null;
@@ -2439,15 +2342,6 @@ ${String(body ?? "")}`;
     }
     return null;
   }
-  var KNOWN_HOSTS = [
-    [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
-    [/(^|\.)vimeo\.com$/, "Vimeo"],
-    [/(^|\.)tiktok\.com$/, "TikTok"],
-    [/(^|\.)mixcloud\.com$/, "Mixcloud"],
-    [/(^|\.)soundcloud\.com$/, "SoundCloud"],
-    [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
-    [/(^|\.)apple\.com$/, "Apple"]
-  ];
   function embedProblem(provider, raw) {
     const name = PROVIDER_NAMES[provider] || "this service";
     const wants = { soundcloud: "a SoundCloud track or playlist link", spotify: "a Spotify episode or show link", apple: "an Apple Podcasts episode or show link" }[provider] || "a link";
@@ -2462,18 +2356,62 @@ ${String(body ?? "")}`;
     }
     return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
   }
+  var AUDIO_PROVIDERS, PROVIDER_NAMES, DEFAULT_LINK_LABELS, SOUNDCLOUD_RESERVED, parse, KNOWN_HOSTS;
+  var init_audio_embed = __esm({
+    "client/src/audio-embed.mjs"() {
+      "use strict";
+      AUDIO_PROVIDERS = ["soundcloud", "spotify", "apple"];
+      PROVIDER_NAMES = { soundcloud: "SoundCloud", spotify: "Spotify", apple: "Apple Podcasts" };
+      DEFAULT_LINK_LABELS = { soundcloud: "Listen on SoundCloud", spotify: "Listen on Spotify", apple: "Open in Apple Podcasts" };
+      SOUNDCLOUD_RESERVED = /* @__PURE__ */ new Set([
+        "discover",
+        "search",
+        "charts",
+        "stations",
+        "you",
+        "upload",
+        "settings",
+        "messages",
+        "notifications",
+        "pages",
+        "people",
+        "popular",
+        "terms-of-use",
+        "imprint",
+        "jobs",
+        "mobile",
+        "pro",
+        "feed",
+        "player",
+        "widget"
+      ]);
+      parse = (raw) => {
+        try {
+          const u = new URL(String(raw ?? "").trim());
+          return /^https?:$/.test(u.protocol) ? u : null;
+        } catch {
+          return null;
+        }
+      };
+      KNOWN_HOSTS = [
+        [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
+        [/(^|\.)vimeo\.com$/, "Vimeo"],
+        [/(^|\.)tiktok\.com$/, "TikTok"],
+        [/(^|\.)mixcloud\.com$/, "Mixcloud"],
+        [/(^|\.)soundcloud\.com$/, "SoundCloud"],
+        [/(^|\.)spotify\.com$|^spotify\.link$|^spoti\.fi$/, "Spotify"],
+        [/(^|\.)apple\.com$/, "Apple"]
+      ];
+    }
+  });
 
   // client/src/content-blocks.mjs
-  var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
-  var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
   function parsePercent(v2) {
     const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
     if (!m) return null;
     const n = Number(m[1]);
     return n >= 0 && n <= 100 ? n : null;
   }
-  var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
   function keyValue(line) {
     const i = line.indexOf(":");
     if (i <= 0) return { k: null, v: line };
@@ -2536,8 +2474,6 @@ ${String(body ?? "")}`;
     if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
     return { label, url: safeUrl(url), rawUrl: url };
   }
-  var REVEAL_MAX_PARTS = 6;
-  var REVEAL_DEFAULT_LABEL = "Show more";
   function parseWeights(v2) {
     const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     if (!parts.length) return null;
@@ -2566,7 +2502,6 @@ ${String(body ?? "")}`;
     }
     return out;
   }
-  var inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   function revealBodyHtml(md) {
     const out = [];
     let para = [];
@@ -2608,8 +2543,6 @@ ${String(body ?? "")}`;
     flush();
     return out.join("");
   }
-  var AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
-  var ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
   function audioBaseFor(itemPath) {
     const m = ITEM_FILE_RE.exec(String(itemPath ?? ""));
     return m ? `/media/audio/${m[1]}/${m[2]}/${m[3]}` : null;
@@ -2619,9 +2552,6 @@ ${String(body ?? "")}`;
     if (!s.startsWith("./audio/")) return s;
     return audioBase ? `${audioBase}/${s.slice("./audio/".length)}` : null;
   }
-  var AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
-  var AUDIO_STYLES = ["bar", "card"];
-  var AUDIO_DEFAULT_LABEL = "Listen";
   function parseAudio(body, meta = "") {
     const out = {
       label: String(meta ?? "").trim() || AUDIO_DEFAULT_LABEL,
@@ -2679,12 +2609,6 @@ ${String(body ?? "")}`;
     if (host === "podcasts.apple.com") return DEFAULT_LINK_LABELS.apple;
     return `Listen on ${host}`;
   }
-  var EMBED_ALLOW = {
-    soundcloud: "autoplay",
-    spotify: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
-    apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
-  };
-  var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
   function renderAudio(body, meta, { origin = "", audioBase = null, relativeAudio = false } = {}) {
     const a = parseAudio(body, meta);
     const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
@@ -2757,12 +2681,10 @@ ${String(body ?? "")}`;
     for (let i = 0; i <= 100; i++) css += `${scope} .gbti-bar-w-${i}{width:${i}%}`;
     return css;
   }
-  var DIRECTORY_STYLES = ["youtube"];
   function sortListPlaceholder(meta = "") {
     const style = String(meta ?? "").trim();
     return DIRECTORY_STYLES.includes(style) ? `<div class="sortlist sortlist-${style}"></div>` : '<div class="sortlist"></div>';
   }
-  var KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
   function dataBlocksCss(scope, t) {
     const s = scope;
     return `${s} .gbti-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 .9em}
@@ -2877,8 +2799,2177 @@ ${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
 }
 ${barWidthCss(s)}`;
   }
+  var DATA_BLOCKS, esc3, lines, safeUrl, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
+  var init_content_blocks = __esm({
+    "client/src/content-blocks.mjs"() {
+      "use strict";
+      init_audio_embed();
+      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio"];
+      esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+      safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+      REVEAL_MAX_PARTS = 6;
+      REVEAL_DEFAULT_LABEL = "Show more";
+      inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
+      ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
+      AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
+      AUDIO_STYLES = ["bar", "card"];
+      AUDIO_DEFAULT_LABEL = "Listen";
+      EMBED_ALLOW = {
+        soundcloud: "autoplay",
+        spotify: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
+        apple: "autoplay *; encrypted-media *; fullscreen *; clipboard-write"
+      };
+      APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
+      DIRECTORY_STYLES = ["youtube"];
+      KNOWN_FENCES = ["callout", "embed", "directory", ...DATA_BLOCKS];
+    }
+  });
+
+  // client-ui/src/embed-lightbox.mjs
+  function fallbackDialog() {
+    let dlg = document.getElementById(FALLBACK_ID);
+    if (dlg) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.id = FALLBACK_ID;
+    dlg.setAttribute("aria-label", "Video");
+    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
+    dlg.innerHTML = "<style>#" + FALLBACK_ID + "::backdrop{background:rgba(20,19,24,.88)}#" + FALLBACK_ID + "[open]{display:flex;align-items:center;justify-content:center}#" + FALLBACK_ID + " .f{width:min(92vw,1100px);aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.55)}#" + FALLBACK_ID + " iframe{width:100%;height:100%;border:0}#" + FALLBACK_ID + ' .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><div class="f"><iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.addEventListener("close", () => {
+      const f = dlg.querySelector("iframe");
+      if (f) f.removeAttribute("src");
+    });
+    document.body.appendChild(dlg);
+    return dlg;
+  }
+  function autoplaySrc(src) {
+    const s = String(src || "");
+    if (!s) return "";
+    return s + (s.includes("?") ? "&" : "?") + "autoplay=1";
+  }
+  function openEmbedLightbox(src) {
+    if (typeof document === "undefined" || !src) return false;
+    if (document.querySelector("[data-lightbox-root]")) {
+      document.dispatchEvent(new CustomEvent("gbti-embed-open", { bubbles: true, composed: true, detail: { src } }));
+      return true;
+    }
+    const dlg = fallbackDialog();
+    if (typeof dlg.showModal !== "function") {
+      window.open(src, "_blank", "noopener");
+      return false;
+    }
+    const f = dlg.querySelector("iframe");
+    if (f) f.src = autoplaySrc(src);
+    dlg.showModal();
+    return true;
+  }
+  function wireEmbedPosters(root) {
+    if (!root || typeof root.querySelectorAll !== "function") return 0;
+    let n = 0;
+    for (const btn of root.querySelectorAll(".md-embed-poster .md-embed-open")) {
+      if (btn.dataset.lbWired) continue;
+      btn.dataset.lbWired = "1";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const box = btn.closest(".md-embed-poster");
+        openEmbedLightbox(box?.dataset.embedSrc || "");
+      });
+      n++;
+    }
+    return n;
+  }
+  var FALLBACK_ID, EMBED_POSTER_CSS;
+  var init_embed_lightbox = __esm({
+    "client-ui/src/embed-lightbox.mjs"() {
+      "use strict";
+      FALLBACK_ID = "gbti-embed-lightbox";
+      EMBED_POSTER_CSS = `
+  .md-embed { position:relative; width:100%; margin:.6em 0 1em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+  .md-embed.md-embed-portrait { aspect-ratio:9/16; max-width:360px; }
+  .md-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .md-embed-open { position:absolute; inset:0; width:100%; height:100%; display:block; padding:0; border:0; background:#111; cursor:pointer; }
+  .md-embed-thumb { width:100%; height:100%; object-fit:cover; display:block; }
+  .md-embed-panel { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font:600 14px/1 var(--f-mono, ui-monospace, monospace); letter-spacing:.08em; text-transform:uppercase; }
+  .md-embed-play { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:999px; background:rgba(0,0,0,.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(0,0,0,.4); transition:background .15s ease, transform .15s ease; }
+  .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
+`;
+    }
+  });
+
+  // client/src/tweet-embed.mjs
+  function tweetId(url) {
+    const m = String(url ?? "").trim().match(TWEET_RE);
+    return m ? m[1] : null;
+  }
+  function bareTweetLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return tweetId(s) ? s : null;
+  }
+  function tweetFrameUrl(idOrUrl, { theme = "light" } = {}) {
+    const raw = String(idOrUrl ?? "").trim();
+    const id = /^\d{5,25}$/.test(raw) ? raw : tweetId(raw);
+    if (!id) return null;
+    return `${TWEET_FRAME_ORIGIN}/embed/Tweet.html?id=${id}&theme=${tweetTheme(theme)}&dnt=true`;
+  }
+  function tweetBlockHtml(url) {
+    const u = String(url ?? "").trim();
+    if (!tweetId(u)) return "";
+    const e = escAttr2(u);
+    return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
+  }
+  function parseTweetMessage(data) {
+    let d = data;
+    if (typeof d === "string") {
+      if (d.length > 2e4 || !d.includes("twttr.embed") && !d.includes("gbtiTweet")) return null;
+      try {
+        d = JSON.parse(d);
+      } catch {
+        return null;
+      }
+    }
+    if (!d || typeof d !== "object") return null;
+    const fwd = d.gbtiTweet;
+    if (fwd && typeof fwd === "object") return shaped(fwd.method, fwd.height);
+    const rpc = d["twttr.embed"];
+    if (!rpc || typeof rpc !== "object" || typeof rpc.method !== "string") return null;
+    const method = rpc.method.replace(/^twttr\.private\./, "");
+    const p = Array.isArray(rpc.params) ? rpc.params[0] : null;
+    return shaped(method, p && p.height);
+  }
+  function shaped(method, height) {
+    if (method === "rendered" || method === "no_results") return { method };
+    if (method !== "resize") return null;
+    const h = Number(height);
+    return Number.isFinite(h) && h > 0 && h < 2e4 ? { method, height: Math.ceil(h) } : null;
+  }
+  var TWEET_FRAME_ORIGIN, TWEET_RE, tweetTheme, escAttr2;
+  var init_tweet_embed = __esm({
+    "client/src/tweet-embed.mjs"() {
+      "use strict";
+      TWEET_FRAME_ORIGIN = "https://platform.twitter.com";
+      TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
+      tweetTheme = (t) => t === "dark" ? "dark" : "light";
+      escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    }
+  });
+
+  // client/src/video-embed.mjs
+  function embedUrl(v2) {
+    const s = String(v2 || "").trim();
+    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}`;
+    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+    if (m) return `https://rumble.com/embed/${m[1]}/`;
+    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+    return null;
+  }
+  function bareVideoLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return embedUrl(s) ? s : null;
+  }
+  function embedPoster(url) {
+    const src = embedUrl(url);
+    if (!src) return null;
+    const yt2 = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+    const provider = yt2 ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+    return { src, thumb: yt2 ? `https://i.ytimg.com/vi/${yt2[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+  }
+  function embedPosterHtml(url, { frameSrc } = {}) {
+    const p = embedPoster(url);
+    if (!p) return "";
+    const src = frameSrc || p.src;
+    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr3(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr3(p.provider)}</span>`;
+    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr3(src)}" data-embed-url="${escAttr3(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+  }
+  function audioEmbedUrl(v2) {
+    let u;
+    try {
+      u = new URL(String(v2 || "").trim());
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
+    const seg2 = u.pathname.split("/").filter(Boolean);
+    if (seg2.length !== 2) return null;
+    const [account, mix] = seg2;
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
+    if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
+    return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
+  }
+  function shareEmbed(url) {
+    const video = embedUrl(url);
+    if (video) return { src: video, kind: isPortraitEmbed(video) ? "portrait" : "video" };
+    const audio = audioEmbedUrl(url);
+    return audio ? { src: audio, kind: "audio" } : null;
+  }
+  function isPortraitEmbed(src) {
+    return /tiktok\.com\/embed\//.test(String(src || ""));
+  }
+  var escAttr3, MIXCLOUD_SITE_PAGES, MIXCLOUD_ACCOUNT_PAGES, AUDIO_EMBED_HEIGHT;
+  var init_video_embed = __esm({
+    "client/src/video-embed.mjs"() {
+      "use strict";
+      escAttr3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      MIXCLOUD_SITE_PAGES = /* @__PURE__ */ new Set([
+        "about",
+        "account",
+        "api",
+        "categories",
+        "dashboard",
+        "developers",
+        "discover",
+        "genres",
+        "help",
+        "live",
+        "login",
+        "media",
+        "messages",
+        "notifications",
+        "oembed",
+        "player",
+        "pricing",
+        "pro",
+        "search",
+        "select",
+        "settings",
+        "signup",
+        "tag",
+        "tags",
+        "upload",
+        "widget"
+      ]);
+      MIXCLOUD_ACCOUNT_PAGES = /* @__PURE__ */ new Set([
+        "favorites",
+        "followers",
+        "following",
+        "hosts",
+        "listens",
+        "playlists",
+        "reposts",
+        "shows",
+        "stream",
+        "uploads"
+      ]);
+      AUDIO_EMBED_HEIGHT = 120;
+    }
+  });
+
+  // client/src/markdown.mjs
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  function decodeEntities(s) {
+    let p = String(s ?? "");
+    for (let i = 0; i < 4; i++) {
+      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&amp;/gi, "&");
+      if (n === p) break;
+      p = n;
+    }
+    return p;
+  }
+  function emphasis(t) {
+    const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
+  }
+  function rawAnchorHtml(attrs, inner) {
+    const href = decodeEntities(attrOf2(attrs, "href"));
+    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
+    const rel = [];
+    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
+    const blank2 = attrOf2(attrs, "target").toLowerCase() === "_blank";
+    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
+    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
+    const tgtAttr = blank2 ? ' target="_blank"' : "";
+    return `<a href="${escAttr4(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  }
+  function escapeKeepingLinks(s, keep) {
+    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      keep.push(rawAnchorHtml(attrs, inner));
+      return `${keep.length - 1}`;
+    });
+    return escapeHtml(stripped);
+  }
+  function collectFootnoteIds(lines2) {
+    const ids = /* @__PURE__ */ new Set();
+    let fence = 0;
+    for (const line of lines2) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+      if (d) ids.add(d[1]);
+    }
+    return ids;
+  }
+  function collectLinkDefs(lines2) {
+    const defs = /* @__PURE__ */ new Map();
+    let fence = 0;
+    for (const line of lines2) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = LINK_DEF_RE.exec(line);
+      if (!d || d[1].startsWith("^")) continue;
+      if (!/^https?:\/\//.test(d[2])) continue;
+      const key = defKey(d[1]);
+      if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? "" });
+    }
+    return defs;
+  }
+  function refAnchor(text2, def) {
+    const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
+    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text2}</a>`;
+  }
+  function inline(escaped, fn = null, defs = null) {
+    let t = escaped;
+    const codes = [];
+    t = t.replace(/`([^`]+)`/g, (_m, c) => {
+      codes.push(c);
+      return `${codes.length - 1}`;
+    });
+    if (fn) {
+      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
+        if (!fn.ids.has(id)) return m;
+        const n = (fn.counts.get(id) ?? 0) + 1;
+        fn.counts.set(id, n);
+        return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+      });
+    }
+    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
+      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+      const titleAttr = title ? ` title="${title}"` : "";
+      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
+      const cls = imageLayoutClasses(layout);
+      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+    });
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+    if (defs && defs.size) {
+      t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
+        const def = defs.get(defKey(label || alt));
+        return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text2, label) => {
+        const def = defs.get(defKey(label || text2));
+        return def ? refAnchor(text2, def) : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text2) => {
+        if (text2.startsWith("^")) return m;
+        const def = defs.get(defKey(text2));
+        return def ? refAnchor(text2, def) : m;
+      });
+    }
+    t = emphasis(t);
+    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
+    return t;
+  }
+  function codeOpen(lang) {
+    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
+    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+  }
+  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
+    const info = String(lang || "").trim().split(/\s+/);
+    const body = buf.join("\n");
+    if (info[0] === "callout") {
+      const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const small = info.slice(2).includes("small") ? " md-callout-small" : "";
+      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
+      return `<div class="md-callout md-callout-${v2}${small}"><div class="md-callout-body">${html}</div></div>`;
+    }
+    if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
+    if (DATA_BLOCKS.includes(info[0])) {
+      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
+      if (html != null) return html;
+    }
+    if (info[0] === "embed") {
+      const url = body.trim();
+      const src = embedUrl(url);
+      if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
+      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
+    }
+    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
+  }
+  function splitTableRow2(line) {
+    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
+    const cells = [];
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\" && s[i + 1] === "|") {
+        cur += "|";
+        i++;
+        continue;
+      }
+      if (ch === "|") {
+        cells.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+  function tableAlignments(line) {
+    if (!/\|/.test(String(line ?? ""))) return null;
+    const cells = splitTableRow2(line);
+    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
+    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+  }
+  function hardBreak(escaped, raw) {
+    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
+  }
+  function renderMarkdown(md, opts = {}) {
+    return renderDoc(md, false, opts).html;
+  }
+  function renderDoc(md, ids, opts = {}, nest = null) {
+    const autoEmbed = !!opts.autoEmbed;
+    const audioBase = audioBaseFor(opts.itemPath);
+    const relativeAudio = !!opts.relativeAudio;
+    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    const ranges = [];
+    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
+    const emit = (html2, start, end) => {
+      out.push(stamp(html2, out.length));
+      ranges.push(start == null ? null : { start, end });
+    };
+    let codeFence = 3;
+    let fenceStart = 0;
+    let inCode = false;
+    let codeBuf = [];
+    let codeLang2 = "";
+    const footnotes = nest ? nest.footnotes : [];
+    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines2), counts: /* @__PURE__ */ new Map() };
+    const linkKeep = nest ? nest.linkKeep : [];
+    const defs = nest ? nest.defs : collectLinkDefs(lines2);
+    const flushList = () => {
+    };
+    let i = 0;
+    while (i < lines2.length) {
+      const line = lines2[i];
+      const fence = /^(`{3,})(.*)$/.exec(line);
+      if (fence) {
+        if (!inCode) {
+          inCode = true;
+          fenceStart = i;
+          codeBuf = [];
+          codeFence = fence[1].length;
+          codeLang2 = fence[2];
+          i++;
+          continue;
+        }
+        if (fence[1].length >= codeFence && !fence[2].trim()) {
+          inCode = false;
+          flushList();
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
+          codeLang2 = "";
+          i++;
+          continue;
+        }
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      if (inCode) {
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+      if (def) {
+        flushList();
+        const parts = [def[2].trim()];
+        i++;
+        while (i < lines2.length && /^ {4,}\S/.test(lines2[i])) {
+          parts.push(lines2[i].trim());
+          i++;
+        }
+        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
+        continue;
+      }
+      if (autoEmbed) {
+        const videoUrl = bareVideoLine(line);
+        if (videoUrl) {
+          flushList();
+          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
+          i++;
+          continue;
+        }
+        const tweetUrl = bareTweetLine(line);
+        if (tweetUrl) {
+          flushList();
+          emit(tweetBlockHtml(tweetUrl), i, i);
+          i++;
+          continue;
+        }
+      }
+      const esc11 = escapeKeepingLinks(line, linkKeep);
+      let m;
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc11)) {
+        flushList();
+        emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
+        i++;
+        continue;
+      }
+      if (isThematicBreak(line)) {
+        flushList();
+        emit("<hr />", i, i);
+        i++;
+        continue;
+      }
+      if (isListLine(line)) {
+        const run = takeListRun(lines2, i);
+        const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
+        const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
+        emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
+        i = run.next;
+        continue;
+      }
+      if (QUOTE_LINE.test(line)) {
+        flushList();
+        const quoteStart = i;
+        const inner = [];
+        while (i < lines2.length && QUOTE_LINE.test(lines2[i])) {
+          inner.push(lines2[i].replace(QUOTE_LINE, ""));
+          i++;
+        }
+        const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
+        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
+        continue;
+      }
+      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+        flushList();
+        emit("<hr/>", i, i);
+        i++;
+        continue;
+      }
+      const aligns = i + 1 < lines2.length ? tableAlignments(lines2[i + 1]) : null;
+      if (aligns && line.includes("|")) {
+        const tableStart = i;
+        flushList();
+        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
+        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
+        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
+        i += 2;
+        const rows = [];
+        while (i < lines2.length && lines2[i].includes("|") && !/^\s*$/.test(lines2[i])) {
+          rows.push(splitTableRow2(lines2[i]));
+          i++;
+        }
+        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
+        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
+        continue;
+      }
+      if (/^\s*$/.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      if (COMMENT_LINE.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
+        flushList();
+        while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
+        continue;
+      }
+      const fig = parseImageLine(line);
+      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+        flushList();
+        const cls = imageLayoutClasses(fig.layout);
+        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
+        i++;
+        continue;
+      }
+      flushList();
+      const paraStart = i;
+      const para = [hardBreak(esc11, line)];
+      i++;
+      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
+        para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
+        i++;
+      }
+      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
+      emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
+    }
+    flushList();
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
+    if (nest) return { html: out.join("\n"), blocks: ranges };
+    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
+    if (referenced.length) {
+      const items = referenced.map((f) => {
+        const n = fn.counts.get(f.id);
+        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
+      }).join("");
+      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
+    }
+    const joined = out.join("\n");
+    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
+    return { html, blocks: ranges };
+  }
+  var EMBED_RELAY, SITE_ORIGIN, REL_ALLOWED2, DANGEROUS_SCHEME2, isDangerousAnchorHref, attrOf2, escAttr4, SAFE_INNER_TAG2, sanitizeAnchorInner, FN_ID, LINK_DEF_RE, defKey, CALLOUT_VARIANTS2, QUOTE_LINE, COMMENT_LINE;
+  var init_markdown = __esm({
+    "client/src/markdown.mjs"() {
+      "use strict";
+      init_video_embed();
+      init_content_blocks();
+      init_tweet_embed();
+      init_image_attrs();
+      init_list_items();
+      init_underscore_emphasis();
+      EMBED_RELAY = "https://gbti.network/embed/";
+      SITE_ORIGIN = "https://gbti.network";
+      REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+      DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
+      isDangerousAnchorHref = (url) => {
+        const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
+        return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
+      };
+      attrOf2 = (attrs, name) => {
+        const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+        return m ? m[1] : "";
+      };
+      escAttr4 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
+      sanitizeAnchorInner = (html) => String(html ?? "").replace(
+        /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
+        (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
+      );
+      FN_ID = "[A-Za-z0-9_-]+";
+      LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
+      defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+      CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
+      QUOTE_LINE = /^\s*>\s?/;
+      COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
+    }
+  });
+
+  // client-ui/src/prose-editor-core.mjs
+  function commentBodyTooLong(md) {
+    try {
+      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
+    } catch {
+      return String(md ?? "").length > COMMENT_MAX_BYTES;
+    }
+  }
+  function editorHtmlFromMarkdown(md) {
+    const html = renderMarkdown(String(md ?? ""), { autoEmbed: true }).trim();
+    return html || "<p><br></p>";
+  }
+  function codeText(el) {
+    const html = String(el?.innerHTML ?? "");
+    const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    return t.replace(/\n+$/, "");
+  }
+  function codeLang(pre) {
+    const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
+    const el = code || pre;
+    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
+    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
+  }
+  function walk(node, out) {
+    let buf = "";
+    const flush = () => {
+      const t = inline2(buf);
+      if (t.trim()) out.push(t);
+      buf = "";
+    };
+    for (const c of kids(node)) {
+      if (c.nodeType === TEXT) {
+        buf += escapeText(c.textContent);
+        continue;
+      }
+      if (c.nodeType !== ELEMENT) continue;
+      if (!isBlock(c)) {
+        if (tagOf(c) === "BR") {
+          buf += "<br>";
+          continue;
+        }
+        buf += String(c.outerHTML ?? "");
+        continue;
+      }
+      flush();
+      blockOf(c, out);
+    }
+    flush();
+  }
+  function blockOf(n, out) {
+    const t = tagOf(n);
+    if (isCard(n)) {
+      out.push(attr(n, "data-embed-url").trim());
+      return;
+    }
+    if (t === "P" || t === "DIV" || t === "SECTION" || t === "ARTICLE" || t === "FIGURE") {
+      if (hasBlockChild(n)) {
+        walk(n, out);
+        return;
+      }
+      const text2 = inline2(n.innerHTML);
+      if (text2.trim()) out.push(text2);
+      return;
+    }
+    if (t === "BLOCKQUOTE") {
+      const inner = [];
+      if (hasBlockChild(n)) walk(n, inner);
+      else {
+        const text2 = inline2(n.innerHTML);
+        if (text2.trim()) inner.push(text2);
+      }
+      const paras = flat(inner);
+      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
+      return;
+    }
+    if (t === "UL" || t === "OL") {
+      const items = [];
+      for (const li of kids(n)) {
+        if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
+        let text2;
+        if (hasBlockChild(li)) {
+          const inner = [];
+          walk(li, inner);
+          text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
+        } else text2 = inline2(li.innerHTML);
+        if (text2.trim()) items.push(text2);
+      }
+      if (!items.length) return;
+      out.push(items.map((it2, i) => t === "OL" ? `${i + 1}. ${it2}` : `- ${it2}`).join("\n"));
+      return;
+    }
+    if (t === "PRE") {
+      const { el, lang } = codeLang(n);
+      out.push("```" + lang + "\n" + codeText(el) + "\n```");
+      return;
+    }
+    if (/^H[1-6]$/.test(t)) {
+      const text2 = inline2(n.innerHTML);
+      if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
+      return;
+    }
+    if (t === "HR") {
+      out.push("---");
+      return;
+    }
+    if (t === "LI") {
+      const text2 = inline2(n.innerHTML);
+      if (text2.trim()) out.push(`- ${text2}`);
+      return;
+    }
+    if (t === "TABLE") {
+      const text2 = inline2(n.innerHTML);
+      if (text2.trim()) out.push(text2);
+      return;
+    }
+  }
+  function domToMarkdown(root) {
+    const out = [];
+    walk(root, out);
+    const blocks2 = [];
+    let run = null;
+    const closeRun = () => {
+      if (!run) return;
+      if (run.length) blocks2.push(run.join("\n>\n"));
+      run = null;
+    };
+    for (const b of out) {
+      if (b && typeof b === "object" && b.quote) {
+        run ||= [];
+        if (b.text) run.push(b.text);
+        continue;
+      }
+      closeRun();
+      if (typeof b === "string" && b.trim()) blocks2.push(b);
+    }
+    closeRun();
+    return blocks2.join("\n\n");
+  }
+  var COMMENT_MAX_BYTES, PROSE_CONTROLS, ELEMENT, TEXT, BLOCK_TAGS, tagOf, attr, kids, escapeText, isCard, isBlock, hasBlockChild, flat, inline2;
+  var init_prose_editor_core = __esm({
+    "client-ui/src/prose-editor-core.mjs"() {
+      "use strict";
+      init_markdown_blocks();
+      init_markdown();
+      COMMENT_MAX_BYTES = 8e3;
+      PROSE_CONTROLS = Object.freeze([
+        { act: "bold", label: "Bold", key: "B" },
+        { act: "italic", label: "Italic", key: "I" },
+        { act: "code", label: "Inline code" },
+        { act: "link", label: "Link" },
+        null,
+        { act: "quote", label: "Quote" },
+        { act: "ul", label: "Bulleted list" },
+        { act: "ol", label: "Numbered list" },
+        { act: "codeblock", label: "Code block" },
+        { act: "video", label: "Video" }
+      ]);
+      ELEMENT = 1;
+      TEXT = 3;
+      BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "DIV", "BLOCKQUOTE", "UL", "OL", "LI", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "FIGURE", "SECTION", "ARTICLE"]);
+      tagOf = (n) => String(n?.tagName || "").toUpperCase();
+      attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
+      kids = (n) => Array.from(n?.childNodes || []);
+      escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
+      isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
+      hasBlockChild = (n) => kids(n).some(isBlock);
+      flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+      inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
+    }
+  });
+
+  // client-ui/src/elements/gbti-prose-editor.mjs
+  var ic2, svg2, CSS2, GbtiProseEditor;
+  var init_gbti_prose_editor = __esm({
+    "client-ui/src/elements/gbti-prose-editor.mjs"() {
+      "use strict";
+      init_base();
+      init_video_embed();
+      init_selection_toolbar();
+      init_embed_lightbox();
+      init_prose_editor_core();
+      ic2 = {
+        code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+        quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+        ul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+        ol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+        codeblock: '<rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9.5l-2.5 2.5 2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+        video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+        x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      };
+      svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
+      CSS2 = `
+  :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
+  .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .box:focus-within { border-color: var(--brand); }
+  /* The header: small, muted, brand on hover. Quiet by design (owner, 2026-09-11). */
+  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .hdr button { width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer; font: 700 13px/1 var(--font-body); }
+  .hdr button:hover, .hdr button:focus-visible { color: var(--brand); background: rgba(31,158,95,.1); outline: 0; }
+  .hdr button svg { width: 16px; height: 16px; }
+  .hdr .k-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
+  .hdr .sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+  .vid { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .vid[hidden] { display: none; }
+  .vid input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); }
+  .vid input.bad { border-color: #c0392b; }
+  .vid button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+  .vid button.vid-add { border-color: var(--brand); background: var(--brand); color: #fff; }
+  .surface { position: relative; min-height: 96px; padding: 10px 12px; font-size: 14.5px; line-height: 1.6; outline: 0; caret-color: var(--brand); word-break: break-word; }
+  .surface.empty::before { content: attr(data-ph); position: absolute; left: 12px; top: 10px; color: var(--muted); pointer-events: none; }
+  .surface p, .surface div { margin: 0 0 .7em; }
+  .surface > :last-child { margin-bottom: 0; }
+  .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+  .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface blockquote > :last-child { margin-bottom: 0; }
+  .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
+  .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
+  .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
+  .surface pre code { background: none; padding: 0; font-size: inherit; }
+  .surface a { color: var(--brand); }
+  .surface strong { font-weight: 700; }
+  ${EMBED_POSTER_CSS}
+  .surface .md-embed { margin: .4em 0 .9em; }
+  .surface .md-embed .md-embed-open { cursor: default; }
+  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
+  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
+  .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
+  .pe-x svg { width: 15px; height: 15px; }
+  .pe-x:hover { background: #c0392b; }
+`;
+      GbtiProseEditor = class extends GbtiElement {
+        /** Markdown in, markdown out. The surface is read back on every get, so the value is always current. */
+        get value() {
+          const s = this._surface();
+          return s ? domToMarkdown(s) : String(this._pending ?? "");
+        }
+        set value(md) {
+          this._pending = String(md ?? "");
+          if (this._surface()) this._load(this._pending);
+        }
+        get placeholder() {
+          return this.getAttribute("placeholder") || "Write a comment";
+        }
+        _surface() {
+          return this.$("[data-surface]");
+        }
+        render() {
+          if (this._rendered) return;
+          this._rendered = true;
+          const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
+          this.set(this.css(CSS2) + `<div class="box" data-box>
+      <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
+      <div class="vid" data-vid hidden>
+        <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
+        <button type="button" class="vid-add" data-vid-add>Add</button>
+        <button type="button" data-vid-cancel>Cancel</button>
+      </div>
+      <div class="surface" contenteditable="true" data-surface data-ph="${esc2(this.placeholder)}" role="textbox" aria-multiline="true"></div>
+    </div>`);
+          this._wire();
+          this._load(this._pending ?? "");
+        }
+        _load(md) {
+          const s = this._surface();
+          if (!s) return;
+          s.innerHTML = editorHtmlFromMarkdown(md);
+          this._decorateCards();
+          this._syncEmpty();
+        }
+        /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
+         *  removes it whole. */
+        _decorateCards() {
+          for (const card of this.$$("[data-surface] .md-embed, [data-surface] .md-tweet")) {
+            if (card.dataset.peCard) continue;
+            card.dataset.peCard = "1";
+            card.setAttribute("contenteditable", "false");
+            const what = card.classList.contains("md-tweet") ? "Remove post" : "Remove video";
+            const x = document.createElement("button");
+            x.type = "button";
+            x.className = "pe-x";
+            x.title = what;
+            x.setAttribute("aria-label", what);
+            x.innerHTML = svg2("x");
+            x.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              card.remove();
+              this._changed();
+            });
+            card.appendChild(x);
+          }
+        }
+        _syncEmpty() {
+          const s = this._surface();
+          if (s) s.classList.toggle("empty", !String(this.value || "").trim());
+        }
+        _changed() {
+          this._syncEmpty();
+          this.emit("input");
+        }
+        _sel() {
+          try {
+            return (this.root.getSelection ? this.root.getSelection() : null) || document.getSelection();
+          } catch {
+            return document.getSelection();
+          }
+        }
+        /** The nearest ancestor of `node` with this tag, stopping at the surface. */
+        _closest(node, tag) {
+          const s = this._surface();
+          let n = node && node.nodeType === 1 ? node : node?.parentNode;
+          while (n && n !== s) {
+            if (String(n.tagName || "").toUpperCase() === tag) return n;
+            n = n.parentNode;
+          }
+          return null;
+        }
+        /** The top-level block of the surface that holds `node`. */
+        _blockAt(node) {
+          const s = this._surface();
+          let n = node;
+          while (n && n.parentNode && n.parentNode !== s) n = n.parentNode;
+          return n && n.parentNode === s ? n : null;
+        }
+        _wire() {
+          const surface = this._surface();
+          if (!surface) return;
+          this._tb = createSelectionToolbar({ root: this.root, host: () => this.$("[data-box]"), editableOf: () => null, onCommit: () => this._changed() });
+          this.$$("[data-act]").forEach((b) => {
+            b.addEventListener("mousedown", (e) => e.preventDefault());
+            b.addEventListener("click", () => this._act(b.dataset.act));
+          });
+          surface.addEventListener("input", () => this._changed());
+          surface.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+            if (t) document.execCommand("insertText", false, t);
+          });
+          surface.addEventListener("keydown", (e) => this._key(e));
+          this.$("[data-vid-add]")?.addEventListener("click", () => this._addVideo());
+          this.$("[data-vid-cancel]")?.addEventListener("click", () => this._toggleVideo(false));
+          this.$("[data-vid-url]")?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              this._addVideo();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              this._toggleVideo(false);
+            }
+          });
+        }
+        _act(act) {
+          const surface = this._surface();
+          if (!surface) return;
+          if (act === "video") {
+            this._toggleVideo(true);
+            return;
+          }
+          surface.focus();
+          switch (act) {
+            case "bold":
+              document.execCommand("bold");
+              break;
+            case "italic":
+              document.execCommand("italic");
+              break;
+            case "code":
+              this._toggleCode();
+              break;
+            case "link":
+              this._link();
+              return;
+            // commits through the panel
+            case "quote":
+              this._formatBlock("BLOCKQUOTE");
+              break;
+            case "codeblock":
+              this._formatBlock("PRE");
+              break;
+            case "ul":
+              document.execCommand("insertUnorderedList");
+              break;
+            case "ol":
+              document.execCommand("insertOrderedList");
+              break;
+            default:
+              return;
+          }
+          this._changed();
+        }
+        /** Quote and code block toggle: the same control puts a block back to a paragraph. */
+        _formatBlock(tag) {
+          const sel = this._sel();
+          const inside = sel && this._closest(sel.anchorNode, tag);
+          const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
+          if (line) {
+            this._liftLine(inside, line);
+            return;
+          }
+          document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
+        }
+        /** The P or DIV directly inside `quote` that holds `node`, or null. */
+        _quoteLine(quote, node) {
+          let n = node;
+          while (n && n.parentNode !== quote) n = n.parentNode;
+          return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
+        }
+        /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
+         *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
+         *  back to markdown (measured in Chrome, 2026-09-16). */
+        _liftLine(quote, line) {
+          const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
+          const rest = document.createElement("blockquote");
+          while (line.nextSibling) rest.appendChild(line.nextSibling);
+          const p = document.createElement("p");
+          while (line.firstChild) p.appendChild(line.firstChild);
+          if (!p.firstChild) p.innerHTML = "<br>";
+          line.remove();
+          quote.after(p);
+          if (has(rest)) p.after(rest);
+          if (!has(quote)) quote.remove();
+          try {
+            const r = document.createRange();
+            r.selectNodeContents(p);
+            r.collapse(false);
+            const s = this._sel();
+            s.removeAllRanges();
+            s.addRange(r);
+          } catch {
+          }
+        }
+        /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
+        _toggleCode() {
+          const sel = this._sel();
+          if (!sel || !sel.rangeCount) return;
+          const existing = this._closest(sel.anchorNode, "CODE");
+          if (existing && !this._closest(existing, "PRE")) {
+            existing.replaceWith(document.createTextNode(existing.textContent));
+            return;
+          }
+          if (sel.isCollapsed) return;
+          const r = sel.getRangeAt(0);
+          const node = document.createElement("code");
+          try {
+            node.appendChild(r.extractContents());
+            r.insertNode(node);
+          } catch {
+          }
+        }
+        /** Link: the panel over the anchor the selection is in, or a new anchor around the selection. */
+        _link() {
+          const sel = this._sel();
+          if (!sel || !sel.rangeCount) return;
+          let a = this._closest(sel.anchorNode, "A");
+          if (!a) {
+            if (sel.isCollapsed) return;
+            const r = sel.getRangeAt(0);
+            a = document.createElement("a");
+            a.setAttribute("href", "");
+            try {
+              a.appendChild(r.extractContents());
+              r.insertNode(a);
+            } catch {
+              return;
+            }
+          }
+          this._tb?.editLink(this._surface(), a);
+        }
+        _key(e) {
+          if (e.key !== "Enter" || e.shiftKey) return;
+          const sel = this._sel();
+          const pre = sel && this._closest(sel.anchorNode, "PRE");
+          if (pre) {
+            e.preventDefault();
+            const last = pre.lastChild;
+            const prev = last?.previousSibling;
+            const isBr = (n) => n && n.nodeType === 1 && String(n.tagName).toUpperCase() === "BR";
+            if (isBr(last) && isBr(prev) && sel.isCollapsed && this._closest(sel.anchorNode, "PRE") === pre && !sel.anchorNode.nextSibling) {
+              last.remove();
+              prev.remove();
+              const p = document.createElement("p");
+              p.innerHTML = "<br>";
+              pre.after(p);
+              this._caretIn(p);
+            } else document.execCommand("insertLineBreak");
+            this._changed();
+            return;
+          }
+          const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
+          if (quote && sel.isCollapsed) {
+            const line = this._quoteLine(quote, sel.anchorNode);
+            if (!String((line || quote).textContent || "").trim()) {
+              e.preventDefault();
+              if (line) this._liftLine(quote, line);
+              else {
+                const p = document.createElement("p");
+                p.innerHTML = "<br>";
+                quote.replaceWith(p);
+                this._caretIn(p);
+              }
+              this._changed();
+            }
+          }
+        }
+        _caretIn(el) {
+          try {
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            r.collapse(true);
+            const sel = this._sel();
+            sel.removeAllRanges();
+            sel.addRange(r);
+          } catch {
+          }
+        }
+        _toggleVideo(show) {
+          const row = this.$("[data-vid]");
+          const input = this.$("[data-vid-url]");
+          if (!row || !input) return;
+          if (show) {
+            const sel = this._sel();
+            this._vidAnchor = sel && sel.anchorNode ? this._blockAt(sel.anchorNode) : null;
+            row.hidden = false;
+            input.value = "";
+            input.classList.remove("bad");
+            setTimeout(() => input.focus(), 0);
+          } else {
+            row.hidden = true;
+            this._surface()?.focus();
+          }
+        }
+        /** The link becomes its own line in the markdown and renders as the poster at once. */
+        _addVideo() {
+          const input = this.$("[data-vid-url]");
+          const surface = this._surface();
+          if (!input || !surface) return;
+          const url = String(input.value || "").trim();
+          if (!url || !embedUrl(url)) {
+            input.classList.add("bad");
+            input.focus();
+            return;
+          }
+          const p = document.createElement("p");
+          p.textContent = url;
+          const anchor = this._vidAnchor && this._vidAnchor.parentNode === surface ? this._vidAnchor : null;
+          if (anchor) anchor.after(p);
+          else surface.appendChild(p);
+          this._load(this.value);
+          this._toggleVideo(false);
+          const cards = this.$$("[data-surface] .md-embed").filter((c) => c.getAttribute("data-embed-url") === url);
+          const card = cards[cards.length - 1];
+          if (card) {
+            let next = card.nextElementSibling;
+            if (!next || String(next.tagName).toUpperCase() !== "P") {
+              next = document.createElement("p");
+              next.innerHTML = "<br>";
+              card.after(next);
+            }
+            surface.focus();
+            this._caretIn(next);
+          }
+          this._changed();
+        }
+      };
+      define("gbti-prose-editor", GbtiProseEditor);
+    }
+  });
+
+  // client-ui/src/elements/community-css.mjs
+  var COMMUNITY_CSS, KIND_ICON;
+  var init_community_css = __esm({
+    "client-ui/src/elements/community-css.mjs"() {
+      "use strict";
+      COMMUNITY_CSS = `
+:host {
+  --fg: inherit; --fg-mute: inherit; --line: inherit; --line-2: inherit; --green-tint: inherit;
+  --tooltip-bg: inherit; --tooltip-fg: inherit; --tooltip-border: inherit;
+  --text: var(--fg); --muted: var(--fg-soft); --panel: var(--paper); --bg: var(--paper); --hover: var(--tint);
+  --cm-btn: #137d4a; --cm-btn-hover: #0f6f40; --cm-hi: var(--green); --cm-lo: var(--green-bar);
+  display: block; color: var(--fg); font: 16px/1.5 var(--f-sans); min-width: 0;
+}
+[hidden] { display: none !important; }
+h1, h2, h3 { margin: 0; color: inherit; font-family: var(--f-sans); text-transform: none; letter-spacing: normal; font-size: inherit; }
+label { display: inline; margin: 0; font-size: inherit; color: inherit; }
+input, select, textarea { width: auto; font: inherit; color: var(--fg); background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; }
+input[type="radio"], input[type="checkbox"] { width: 20px; height: 20px; padding: 0; margin: 0; accent-color: #1f9e5f; flex: none; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+button { background: none; color: inherit; border: 0; border-radius: 8px; padding: 0; font: inherit; font-weight: inherit; cursor: pointer; }
+button:hover { background: none; }
+button[disabled] { opacity: .5; cursor: not-allowed; }
+a { color: var(--green-700); }
+a:hover { color: var(--green); }
+
+.cm-disp { font-family: var(--f-display); font-weight: 700; }
+.cm-mono { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.cm-mute { color: var(--fg-mute); }
+.cm-soft { color: var(--fg-soft); }
+
+.cm-badge { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.cm-badge svg { width: 14px; height: 14px; flex: none; }
+.cm-badge.k-poll, .cm-badge.k-typed { background: var(--green-tint); color: var(--green-700); }
+.cm-badge.k-topic { background: var(--blue-tint); color: var(--blue-700); }
+
+.cm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.5; }
+.cm-pill.live { background: var(--green-tint); color: var(--green-700); }
+.cm-pill.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.cm-pill.muted { background: var(--tint); color: var(--fg-soft); }
+.cm-pill.outline { border: 1px solid var(--green-700); color: var(--green-700); padding: 1px 7px; }
+
+.cm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 22px; border-radius: 8px;
+  background: var(--cm-btn); color: #fff; font-weight: 700; font-size: 15px; text-decoration: none; white-space: nowrap; }
+.cm-btn:hover { background: var(--cm-btn-hover); color: #fff; }
+.cm-btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--fg); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.cm-btn2:hover { background: var(--tint); color: var(--fg); }
+.cm-btn2.sm { min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 6px; }
+.cm-quiet { color: var(--fg-soft); font-weight: 600; font-size: 14px; padding: 6px 4px; text-decoration: underline; text-underline-offset: 3px; }
+.cm-quiet:hover { color: var(--fg); }
+.cm-danger { color: var(--err); }
+.cm-danger:hover { color: var(--err); }
+
+.cm-card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+.cm-raised { border-color: var(--line-2); box-shadow: 0 4px 14px rgba(37,35,43,.07); }
+.cm-av { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--tint); display: inline-grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: var(--fg-soft); letter-spacing: .02em; }
+.cm-av.lg { width: 32px; height: 32px; font-size: 11px; }
+.cm-faces { display: inline-flex; }
+.cm-faces .cm-av { width: 26px; height: 26px; border: 2px solid var(--paper); margin-left: -6px; }
+.cm-faces .cm-av:first-child { margin-left: 0; }
+
+.cm-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; background: var(--amber-tint); color: var(--amber-text); font-size: 14px; }
+.cm-err { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; background: var(--err-tint); color: var(--err); font-size: 14px; }
+.cm-err strong { display: block; }
+.cm-ok { color: var(--green-700); font-size: 14px; font-weight: 600; }
+
+.cm-bars { display: flex; flex-direction: column; gap: 12px; }
+.cm-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: baseline; }
+.cm-bar .lbl { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+.cm-bar .num { font-family: var(--f-mono); font-size: 13px; color: var(--fg-soft); white-space: nowrap; }
+.cm-bar .trk { display: block; grid-column: 1 / -1; height: 12px; border-radius: 2px; background: var(--tint); overflow: hidden; }
+.cm-bar .fill { display: block; height: 100%; border-radius: 2px; background: var(--cm-lo); transition: width .3s ease; }
+.cm-bar.lead .lbl { font-weight: 700; }
+.cm-bar.lead .fill { background: var(--cm-hi); }
+.cm-yours { margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--green-700); }
+
+.cm-state { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cm-state h2 { font-size: 22px; font-weight: 700; }
+.cm-state p { margin: 0; max-width: 520px; color: var(--fg-soft); }
+.cm-state.amber { background: var(--amber-tint); border-radius: 12px; }
+.cm-skel { height: 76px; border-radius: 10px; background: var(--tint); opacity: .7; }
+
+@media (max-width: 640px) {
+  .cm-btn { min-height: 44px; padding: 0 18px; }
+}
+`;
+      KIND_ICON = {
+        poll: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+        topic: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-5 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+      };
+      KIND_ICON.typed = KIND_ICON.poll;
+    }
+  });
+
+  // membership/community-shared.mjs
+  var KINDS, KIND_LABEL, isPollKind, STATUSES, STATUS_LABEL2, ACCESS_MODES, REACTIONS, REACTION_NAMES, REACTION_EMOJI, LIMITS, ENC, MAX_IMAGE_BASE64;
+  var init_community_shared = __esm({
+    "membership/community-shared.mjs"() {
+      "use strict";
+      KINDS = Object.freeze(["poll", "typed", "topic"]);
+      KIND_LABEL = Object.freeze({ poll: "Poll", typed: "Typed poll", topic: "Topic" });
+      isPollKind = (kind2) => kind2 === "poll" || kind2 === "typed";
+      STATUSES = Object.freeze(["draft", "live", "closed", "published"]);
+      STATUS_LABEL2 = Object.freeze({ draft: "Draft", live: "Live", closed: "Closed", published: "Results" });
+      ACCESS_MODES = Object.freeze(["all", "chosen"]);
+      REACTIONS = Object.freeze([
+        ["+1", "👍"],
+        ["-1", "👎"],
+        ["laugh", "😄"],
+        ["hooray", "🎉"],
+        ["confused", "😕"],
+        ["heart", "❤️"],
+        ["rocket", "🚀"],
+        ["eyes", "👀"]
+      ]);
+      REACTION_NAMES = Object.freeze(REACTIONS.map((r) => r[0]));
+      REACTION_EMOJI = Object.freeze(Object.fromEntries(REACTIONS));
+      LIMITS = Object.freeze({
+        title: 200,
+        promptBytes: 8e3,
+        optionsMin: 2,
+        optionsMax: 8,
+        option: 120,
+        hint: 80,
+        typedShort: 80,
+        typedLong: 280,
+        meetingLabel: 80,
+        chosenMax: 300,
+        postBytes: 8e3,
+        // the prose editor's cap (client-ui/src/prose-editor-core.mjs COMMENT_MAX_BYTES)
+        postImages: 6,
+        promptImages: 6,
+        imageBytes: 1048576,
+        // 1 MB, the site-wide image cap
+        imageName: 80,
+        groupLabel: 120,
+        unattachedImageHours: 24
+      });
+      ENC = new TextEncoder();
+      MAX_IMAGE_BASE64 = Math.ceil(LIMITS.imageBytes / 3) * 4 + 4;
+    }
+  });
+
+  // client-ui/src/community-core.mjs
+  function initials(name) {
+    const s = String(name || "").replace(/^@/, "").trim();
+    if (!s) return "?";
+    const parts = s.split(/[\s._-]+/).filter(Boolean);
+    const two = parts.length > 1 ? parts[0][0] + parts[1][0] : s.slice(0, 2);
+    return two.toUpperCase();
+  }
+  function meetingDate(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ""));
+    if (!m) return "";
+    const month = MONTHS[Number(m[2]) - 1];
+    return month ? `${month} ${Number(m[3])}` : "";
+  }
+  function meetingText(meeting) {
+    const label = String(meeting?.label || "").trim();
+    if (!label) return "Between meetings";
+    const d = meetingDate(meeting?.date);
+    return d ? `${label}, ${d}` : label;
+  }
+  function statusPill(entry) {
+    const poll = isPollKind(entry?.kind);
+    switch (entry?.status) {
+      case "live":
+        return { tone: "live", text: "Live" };
+      case "closed":
+        return { tone: "muted", text: poll ? "Voting closed" : "Closed" };
+      case "published":
+        return { tone: "outline", text: "Results" };
+      case "draft":
+        return { tone: "muted", text: "Draft" };
+      default:
+        return null;
+    }
+  }
+  function formatBytes2(n) {
+    const b = Number(n) || 0;
+    if (b < 1024 * 1024) return `${Math.max(1, Math.round(b / 1024))} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function uploadProblem({ name, size, type } = {}) {
+    const n = String(name || "That file");
+    if (!IMAGE_TYPES.includes(String(type || ""))) return { title: `${n} is not a picture we can show.`, detail: "Use a PNG, JPG, WebP or GIF." };
+    if ((Number(size) || 0) > LIMITS.imageBytes) return { title: `${n} is ${formatBytes2(size)}.`, detail: "Images can be up to 1 MB. Save a smaller copy and add it again." };
+    return null;
+  }
+  function shoptalkMeetings(now = /* @__PURE__ */ new Date(), { label = "Shop Talk", back = 2, ahead = 4 } = {}) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const toSat = (6 - d.getDay() + 7) % 7;
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + toSat);
+    const out = [];
+    for (let i = -back; i < ahead; i++) {
+      const s = new Date(next.getFullYear(), next.getMonth(), next.getDate() + i * 7);
+      const ymd = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+      out.push({ label, date: ymd, text: `${label}, Saturday ${meetingDate(ymd)}`, next: i === 0 });
+    }
+    return out;
+  }
+  var plural, MONTHS, entryHref, IMAGE_TYPES;
+  var init_community_core = __esm({
+    "client-ui/src/community-core.mjs"() {
+      "use strict";
+      init_community_shared();
+      plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+      MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      entryHref = (id) => `/community/entry/?id=${encodeURIComponent(String(id || ""))}`;
+      IMAGE_TYPES = Object.freeze(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+    }
+  });
+
+  // client-ui/src/elements/gbti-community-editor.mjs
+  var gbti_community_editor_exports = {};
+  __export(gbti_community_editor_exports, {
+    GbtiCommunityEditor: () => GbtiCommunityEditor,
+    meetingText: () => meetingText
+  });
+  var KINDS2, CSS20, GbtiCommunityEditor;
+  var init_gbti_community_editor = __esm({
+    "client-ui/src/elements/gbti-community-editor.mjs"() {
+      "use strict";
+      init_base();
+      init_community_css();
+      init_community_core();
+      init_gbti_prose_editor();
+      KINDS2 = [
+        ["poll", "Poll with choices", "Members pick one answer."],
+        ["typed", "Poll with a typed answer", "Each member types a short answer."],
+        ["topic", "Topic", "Members post text and images beneath your prompt."]
+      ];
+      CSS20 = `
+  dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line-2); border-radius: 14px;
+    background: var(--paper); color: var(--fg); box-shadow: 0 28px 60px rgba(37,35,43,.25); }
+  dialog::backdrop { background: rgba(28,26,33,.55); }
+  .dlg { display: flex; flex-direction: column; max-height: calc(100vh - 50px); }
+  .top { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+  .top h2 { font-family: var(--f-display); font-size: 26px; font-weight: 700; line-height: 1.15; }
+  .top p { margin: 4px 0 0; font-size: 14px; color: var(--fg-mute); overflow-wrap: anywhere; }
+  .top .x { margin-left: auto; width: 36px; height: 36px; border-radius: 8px; font-size: 22px; color: var(--fg-soft); flex: none; }
+  .top .x:hover { background: var(--tint); }
+  .body { padding: 18px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+  .bot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 24px 18px; border-top: 1px solid var(--line); }
+  .bot .msg { flex: 1; min-width: 160px; font-size: 14px; }
+  .lbl { display: block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); margin-bottom: 8px; }
+  .kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .kind { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1.5px solid var(--line-2); border-radius: 10px; text-align: left; background: var(--paper); }
+  .kind:hover { border-color: var(--green); background: var(--paper); }
+  .kind[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); }
+  .kind[aria-pressed="true"]:hover { background: var(--green-tint); }
+  .kind b { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .kind b svg { width: 16px; height: 16px; color: var(--green-700); }
+  .kind span { font-size: 13px; color: var(--fg-soft); }
+  .inp { width: 100%; min-height: 44px; padding: 0 12px; font-size: 15px; font-weight: 500; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .optrow { display: flex; gap: 8px; align-items: center; }
+  .optrow .inp { flex: 1; }
+  .optrow button { width: 34px; height: 34px; border-radius: 8px; color: var(--fg-soft); flex: none; font-size: 16px; }
+  .optrow button:hover { background: var(--tint); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .radio, .check { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; cursor: pointer; padding: 4px 0; }
+  .radio small, .check small { display: block; font-size: 13px; color: var(--fg-mute); }
+  .people { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-2); }
+  .found { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+  .who { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: var(--paper); }
+  .who .nm { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .who .nm small { color: var(--fg-mute); }
+  .pimgs { display: flex; flex-direction: column; gap: 8px; }
+  .pi { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .pi img { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; background: var(--tint); }
+  .pi .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .lockd { font-size: 13px; color: var(--amber-text); }
+  input[type="file"] { display: none; }
+  .bad { color: var(--err); font-weight: 600; }
+  .ok { color: var(--green-700); font-weight: 600; }
+  @media (max-width: 640px) { .kinds, .two { grid-template-columns: 1fr; } .top, .body, .bot { padding-left: 16px; padding-right: 16px; } }
+`;
+      GbtiCommunityEditor = class extends GbtiElement {
+        constructor() {
+          super();
+          this._mode = null;
+          this._f = null;
+          this._members = null;
+          this._q = "";
+        }
+        skipClientRender() {
+          return this._mode != null;
+        }
+        render() {
+          if (this._mode) this.draw();
+        }
+        openCreate() {
+          this._mode = "create";
+          this._f = {
+            kind: "poll",
+            title: "",
+            prompt: "",
+            options: ["", ""],
+            hint: "",
+            answerLength: "short",
+            countMatching: true,
+            changeable: true,
+            publishOnClose: false,
+            imagesAllowed: true,
+            meeting: this.defaultMeeting(),
+            access: { mode: "all", members: [] },
+            images: []
+          };
+          this.show();
+        }
+        openEdit(entry, { answered = false } = {}) {
+          this._mode = "edit";
+          this._entry = entry;
+          this._answered = answered && entry.kind !== "topic";
+          const s = entry.settings || {};
+          this._f = {
+            kind: entry.kind,
+            title: entry.title,
+            prompt: entry.prompt || "",
+            options: [...entry.options || []],
+            hint: s.hint || "",
+            answerLength: s.answerLength || "short",
+            countMatching: s.countMatching !== false,
+            changeable: s.changeable !== false,
+            publishOnClose: s.publishOnClose === true,
+            imagesAllowed: s.imagesAllowed !== false,
+            meeting: { label: entry.meeting?.label || "", date: entry.meeting?.date || "" },
+            access: this.accessOf(entry),
+            images: (entry.promptImages || []).map((i) => ({ id: i.id, name: i.name, state: "ready", src: this.client.communityImageSrc(entry.id, i.id) }))
+          };
+          if (entry.meeting?.label) this._customMeeting = !shoptalkMeetings().some((m) => m.label === entry.meeting.label && m.date === entry.meeting.date);
+          this.show();
+        }
+        openAccess(entry) {
+          this._mode = "access";
+          this._entry = entry;
+          this._f = { access: this.accessOf(entry) };
+          this.show();
+          this.loadMembers();
+        }
+        accessOf(entry) {
+          const members = (entry.access?.members || []).map((m) => ({ githubId: m.githubId, username: m.login }));
+          return { mode: entry.access?.mode === "chosen" ? "chosen" : "all", members };
+        }
+        defaultMeeting() {
+          const next = shoptalkMeetings().find((m) => m.next);
+          return next ? { label: next.label, date: next.date } : { label: "", date: "" };
+        }
+        show() {
+          this.draw();
+          const d = this.$("dialog");
+          if (d && !d.open) {
+            try {
+              d.showModal();
+            } catch {
+              d.setAttribute("open", "");
+            }
+          }
+          if (this._f.access?.mode === "chosen") this.loadMembers();
+        }
+        close() {
+          this.$("dialog")?.close?.();
+          this.remove();
+        }
+        // ---- drawing -----------------------------------------------------------------------------------------------
+        draw() {
+          const m = this._mode;
+          const title = m === "create" ? "New entry" : m === "edit" ? "Edit entry" : "Who can see this entry";
+          const sub = m === "create" ? "Only superadmins start entries. Members answer, post and reply." : `${KIND_LABEL[this._entry?.kind] || ""} · ${this._entry?.title || ""}`;
+          const body = m === "access" ? this.accessHtml() : this.formHtml();
+          const buttons = m === "create" ? '<button type="button" class="cm-btn2" data-save="draft">Save for later</button><button type="button" class="cm-btn" data-save="open">Open now</button>' : m === "edit" ? '<button type="button" class="cm-btn2" data-close>Cancel</button><button type="button" class="cm-btn" data-save="edit">Save changes</button>' : '<button type="button" class="cm-btn2" data-close>Cancel</button><button type="button" class="cm-btn" data-save="access">Save access</button>';
+          this.set(this.css(COMMUNITY_CSS + CSS20) + `<dialog aria-labelledby="dlg-t"><div class="dlg">
+      <div class="top"><div><h2 id="dlg-t">${esc2(title)}</h2><p>${esc2(sub)}</p></div><button type="button" class="x" data-close aria-label="Close">×</button></div>
+      <div class="body">${body}</div>
+      <div class="bot"><span class="msg" data-msg></span>${buttons}</div>
+    </div></dialog>`);
+          this.wireShell();
+          this.wire();
+        }
+        formHtml() {
+          const f = this._f;
+          const kinds = this._mode === "create" ? `<div><span class="lbl">Kind</span><div class="kinds">${KINDS2.map(([k, label, hint]) => `<button type="button" class="kind" data-kind="${k}" aria-pressed="${f.kind === k}">
+        <b>${KIND_ICON[k]}${esc2(label)}</b><span>${esc2(hint)}</span></button>`).join("")}</div></div>` : "";
+          const locked = this._answered;
+          const title = `<label><span class="lbl">${f.kind === "topic" ? "Title" : "Question"}</span>
+      <input class="inp" data-f="title" maxlength="${LIMITS.title}" value="${esc2(f.title)}"${locked ? " disabled" : ""}></label>
+      ${locked ? '<p class="lockd" style="margin:6px 0 0">Members have answered, so the question and answers are locked.</p>' : ""}`;
+          let kindBlock = "";
+          if (f.kind === "poll") {
+            kindBlock = `<div><span class="lbl">Answers (2 to 8)</span><div class="opts">${f.options.map((o, i) => `<div class="optrow">
+          <input class="inp" data-opt="${i}" maxlength="${LIMITS.option}" value="${esc2(o)}" aria-label="Answer ${i + 1}"${locked ? " disabled" : ""}>
+          ${locked ? "" : `<button type="button" data-up="${i}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button><button type="button" data-rm="${i}" aria-label="Remove answer ${i + 1}"${f.options.length <= 2 ? " disabled" : ""}>×</button>`}
+        </div>`).join("")}</div>
+        ${locked || f.options.length >= LIMITS.optionsMax ? "" : '<button type="button" class="cm-quiet" data-add-opt style="margin-top:6px">Add an answer</button>'}</div>
+        ${this.checkHtml("changeable", "Members can change their answer until it closes")}
+        ${this.checkHtml("publishOnClose", "Publish the results as soon as it closes")}`;
+          } else if (f.kind === "typed") {
+            kindBlock = `<label><span class="lbl">Hint inside the answer box</span><input class="inp" data-f="hint" maxlength="${LIMITS.hint}" value="${esc2(f.hint)}" placeholder="A movie title"></label>
+        <div><span class="lbl">Answer length</span><div class="two">
+          ${this.radioHtml("answerLength", "short", `Short, up to ${LIMITS.typedShort} characters`)}${this.radioHtml("answerLength", "long", `A sentence, up to ${LIMITS.typedLong}`)}</div></div>
+        ${this.checkHtml("countMatching", "Count matching answers together in the results")}
+        ${this.checkHtml("changeable", "Members can change their answer until it closes")}
+        ${this.checkHtml("publishOnClose", "Publish the results as soon as it closes")}`;
+          } else {
+            kindBlock = `<div><span class="lbl">Prompt</span><gbti-prose-editor data-prompt placeholder="What should members post? Images are welcome."></gbti-prose-editor></div>
+        <div><span class="lbl">Images with the prompt</span><div class="pimgs" data-pimgs>${this.promptImgsHtml()}</div>
+          ${f.images.filter((i) => i.state !== "error").length < LIMITS.promptImages ? '<button type="button" class="cm-btn2 sm" data-add-pimg style="margin-top:8px">Add an image</button><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-pfile>' : ""}</div>
+        ${this.checkHtml("imagesAllowed", "Members can add images to their posts")}`;
+          }
+          return `${kinds}<div>${title}</div>${kindBlock}${this.meetingHtml()}${this.accessHtml()}`;
+        }
+        checkHtml(key, label) {
+          return `<label class="check"><input type="checkbox" data-c="${key}"${this._f[key] ? " checked" : ""}><span>${esc2(label)}</span></label>`;
+        }
+        radioHtml(key, value, label) {
+          return `<label class="radio"><input type="radio" name="${key}" data-r="${key}" value="${value}"${this._f[key] === value ? " checked" : ""}><span>${esc2(label)}</span></label>`;
+        }
+        promptImgsHtml() {
+          return this._f.images.map((i, n) => i.state === "error" ? `<div class="cm-err"><span><strong>${esc2(i.problem.title)}</strong>${esc2(i.problem.detail)}</span><button type="button" class="cm-quiet" data-pdrop="${n}" style="margin-left:auto">Dismiss</button></div>` : `<div class="pi">${i.src || i.preview ? `<img src="${esc2(i.src || i.preview)}" alt="">` : ""}<span class="nm">${esc2(i.name)}${i.size ? ` · ${esc2(formatBytes2(i.size))}` : ""}</span>
+          <span class="${i.state === "up" ? "cm-mute" : "ok"}">${i.state === "up" ? "Uploading" : "Ready"}</span><button type="button" class="cm-quiet" data-pdrop="${n}">Remove</button></div>`).join("");
+        }
+        meetingHtml() {
+          const f = this._f;
+          const list = shoptalkMeetings();
+          const cur = `${f.meeting.label}|${f.meeting.date}`;
+          const known = list.some((m) => `${m.label}|${m.date}` === cur);
+          const custom = this._customMeeting || f.meeting.label && !known;
+          const opts = list.map((m) => `<option value="${esc2(`${m.label}|${m.date}`)}"${!custom && cur === `${m.label}|${m.date}` ? " selected" : ""}>${esc2(m.text)}${m.next ? " (next)" : ""}</option>`).join("");
+          return `<div><span class="lbl">Meeting</span>
+      <select class="inp" data-meeting>${opts}<option value="-"${!f.meeting.label ? " selected" : ""}>Between meetings</option><option value="other"${custom ? " selected" : ""}>Another meeting</option></select>
+      ${custom ? `<div class="two" style="margin-top:8px"><input class="inp" data-ml maxlength="${LIMITS.meetingLabel}" placeholder="Meeting name" value="${esc2(f.meeting.label)}" aria-label="Meeting name">
+        <input class="inp" type="date" data-md value="${esc2(f.meeting.date)}" aria-label="Meeting date"></div>` : ""}</div>`;
+        }
+        accessHtml() {
+          const a = this._f.access;
+          const chosen = a.mode === "chosen";
+          const picked = a.members.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc2(initials(m.username))}</span><span class="nm">${esc2(m.username || m.githubId)}</span>
+      <button type="button" class="cm-quiet" data-unpick="${esc2(m.githubId)}">Remove</button></div>`).join("");
+          let found = "";
+          if (chosen) {
+            if (this._members == null) found = '<p class="cm-mute" style="margin:0;font-size:14px">Loading members…</p>';
+            else if (this._members.error) found = `<p class="bad" style="margin:0;font-size:14px">${esc2(this._members.error)}</p>`;
+            else {
+              const q2 = this._q.trim().toLowerCase();
+              const have = new Set(a.members.map((m) => m.githubId));
+              const hits = this._members.list.filter((m) => !have.has(m.githubId) && (!q2 || m.username.toLowerCase().includes(q2))).slice(0, 30);
+              found = hits.length ? hits.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc2(initials(m.username))}</span><span class="nm">${esc2(m.username)}</span>
+          <button type="button" class="cm-btn2 sm" data-pick="${esc2(m.githubId)}">Add</button></div>`).join("") : `<p class="cm-mute" style="margin:0;font-size:14px">${q2 ? "No member by that name." : "Everyone is on it."}</p>`;
+            }
+          }
+          return `<div><span class="lbl">Who can see it</span>
+      <label class="radio"><input type="radio" name="access" data-access="all"${chosen ? "" : " checked"}><span>All members<small>Every paying member can see it and take part.</small></span></label>
+      <label class="radio"><input type="radio" name="access" data-access="chosen"${chosen ? " checked" : ""}><span>Chosen members<small>Only the members you pick by name. Everyone else never meets it: not in the list, not by its link.</small></span></label>
+      ${chosen ? `<div class="people">
+        <strong style="font-size:14px">${esc2(plural(a.members.length, "member"))} can see it</strong>
+        ${picked ? `<div class="found">${picked}</div>` : ""}
+        <input class="inp" data-search placeholder="Add a member by name" value="${esc2(this._q)}" aria-label="Add a member by name">
+        <div class="found" data-found>${found}</div>
+        <p class="cm-mute" style="margin:0;font-size:13px">Removing someone hides the entry from them at once. What they already posted stays for the others. Superadmins always see every entry.</p>
+      </div>` : ""}</div>`;
+        }
+        // ---- wiring ------------------------------------------------------------------------------------------------
+        /** The dialog, its close controls and the save buttons are built once per draw(), so they are wired once, here. */
+        wireShell() {
+          const d = this.$("dialog");
+          d?.addEventListener("cancel", (ev) => {
+            ev.preventDefault();
+            this.close();
+          });
+          for (const b of this.$$("[data-close]")) b.addEventListener("click", () => this.close());
+          for (const b of this.$$("[data-save]")) b.addEventListener("click", () => this.save(b.dataset.save));
+        }
+        /** Everything inside .body, which redraw() replaces. Wiring the shell here too fired Save once per redraw. */
+        wire() {
+          for (const b of this.$$("[data-kind]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.kind = b.dataset.kind;
+            this.redraw();
+          });
+          for (const b of this.$$("[data-add-opt]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.options.push("");
+            this.redraw();
+            this.$(`[data-opt="${this._f.options.length - 1}"]`)?.focus();
+          });
+          for (const b of this.$$("[data-rm]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.options.splice(Number(b.dataset.rm), 1);
+            this.redraw();
+          });
+          for (const b of this.$$("[data-up]")) b.addEventListener("click", () => {
+            this.capture();
+            const i = Number(b.dataset.up);
+            const o = this._f.options;
+            [o[i - 1], o[i]] = [o[i], o[i - 1]];
+            this.redraw();
+          });
+          this.on("[data-meeting]", "change", (ev) => {
+            this.capture();
+            const v2 = ev.target.value;
+            if (v2 === "other") {
+              this._customMeeting = true;
+              this._f.meeting = { label: "", date: "" };
+            } else {
+              this._customMeeting = false;
+              const [label, date] = v2 === "-" ? ["", ""] : v2.split("|");
+              this._f.meeting = { label, date };
+            }
+            this.redraw();
+          });
+          for (const r of this.$$("[data-access]")) r.addEventListener("change", () => {
+            this.capture();
+            this._f.access.mode = r.dataset.access;
+            if (r.dataset.access === "chosen") this.loadMembers();
+            this.redraw();
+          });
+          this.on("[data-search]", "input", (ev) => {
+            this._q = ev.target.value;
+            this.drawFound();
+          });
+          for (const b of this.$$("[data-unpick]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.access.members = this._f.access.members.filter((m) => m.githubId !== b.dataset.unpick);
+            this.redraw();
+          });
+          this.wireFound();
+          this.on("[data-add-pimg]", "click", () => this.$("[data-pfile]")?.click());
+          this.on("[data-pfile]", "change", (ev) => {
+            this.capture();
+            this.addPromptFiles([...ev.target.files || []]);
+            ev.target.value = "";
+          });
+          for (const b of this.$$("[data-pdrop]")) b.addEventListener("click", () => {
+            this.capture();
+            this._f.images.splice(Number(b.dataset.pdrop), 1);
+            this.redraw();
+          });
+          const pe = this.$("[data-prompt]");
+          if (pe) pe.value = this._f.prompt || "";
+        }
+        wireFound() {
+          for (const b of this.$$("[data-pick]")) b.addEventListener("click", () => {
+            this.capture();
+            const m = this._members?.list?.find((x) => x.githubId === b.dataset.pick);
+            if (m && this._f.access.members.length < LIMITS.chosenMax) this._f.access.members.push({ githubId: m.githubId, username: m.username });
+            this._q = "";
+            this.redraw();
+            this.$("[data-search]")?.focus();
+          });
+        }
+        drawFound() {
+          const box = this.$("[data-found]");
+          if (!box) return;
+          const tmp = document.createElement("div");
+          tmp.innerHTML = this.accessHtml();
+          box.innerHTML = tmp.querySelector("[data-found]")?.innerHTML || "";
+          this.wireFound();
+        }
+        /** Read every field back into the form state, so a redraw never loses typing. */
+        capture() {
+          const f = this._f;
+          if (!f) return;
+          const v2 = (sel) => this.$(sel)?.value;
+          if (this._mode !== "access") {
+            if (v2('[data-f="title"]') != null) f.title = v2('[data-f="title"]');
+            if (v2('[data-f="hint"]') != null) f.hint = v2('[data-f="hint"]');
+            for (const inp of this.$$("[data-opt]")) f.options[Number(inp.dataset.opt)] = inp.value;
+            for (const c of this.$$("[data-c]")) f[c.dataset.c] = c.checked;
+            for (const r of this.$$("[data-r]")) if (r.checked) f[r.dataset.r] = r.value;
+            const pe = this.$("[data-prompt]");
+            if (pe) f.prompt = pe.value;
+            if (this.$("[data-ml]")) f.meeting = { label: v2("[data-ml]") || "", date: v2("[data-md]") || "" };
+          }
+          if (this.$("[data-search]")) this._q = v2("[data-search]") || "";
+        }
+        redraw() {
+          const body = this.$(".body");
+          const top = body ? body.scrollTop : 0;
+          const was = this.$("dialog");
+          if (!was) {
+            this.draw();
+            return;
+          }
+          const msg = this.$("[data-msg]")?.innerHTML || "";
+          body.innerHTML = this._mode === "access" ? this.accessHtml() : this.formHtml();
+          this.wire();
+          const m = this.$("[data-msg]");
+          if (m) m.innerHTML = msg;
+          this.$(".body").scrollTop = top;
+        }
+        async loadMembers() {
+          if (this._members) return;
+          if (typeof this.client?.communityMembers !== "function") {
+            this._members = { error: "The member list is for superadmins." };
+            return;
+          }
+          try {
+            const r = await this.client.communityMembers();
+            this._members = { list: r.members || [] };
+          } catch (e) {
+            this._members = { error: e?.message || "The member list could not be read. Try again in a moment." };
+          }
+          if (this._f?.access?.mode === "chosen") {
+            this.capture();
+            this.redraw();
+          }
+        }
+        say(text2, bad = false) {
+          const el = this.$("[data-msg]");
+          if (el) el.innerHTML = text2 ? `<span class="${bad ? "bad" : "ok"}" role="status">${esc2(text2)}</span>` : "";
+        }
+        // ---- prompt images -----------------------------------------------------------------------------------------
+        async addPromptFiles(files) {
+          for (const f of files) {
+            const problem = uploadProblem({ name: f.name, size: f.size, type: f.type });
+            if (problem) {
+              this._f.images.push({ name: f.name, state: "error", problem });
+              continue;
+            }
+            const preview = await new Promise((resolve) => {
+              const r = new FileReader();
+              r.onload = () => resolve(String(r.result || ""));
+              r.onerror = () => resolve("");
+              r.readAsDataURL(f);
+            });
+            this._f.images.push({ name: f.name, size: f.size, preview, dataBase64: preview, state: "pending" });
+          }
+          this.redraw();
+        }
+        async uploadPending(id) {
+          for (const img of this._f.images) {
+            if (img.state !== "pending") continue;
+            img.state = "up";
+            const r = await this.client.communityUploadImage(id, { name: img.name, dataBase64: img.dataBase64 });
+            img.id = r.id;
+            img.state = "ready";
+          }
+          return this._f.images.filter((i) => i.state === "ready" && i.id).map((i) => i.id);
+        }
+        // ---- saving ------------------------------------------------------------------------------------------------
+        input() {
+          const f = this._f;
+          const settings = f.kind === "poll" ? { changeable: f.changeable, publishOnClose: f.publishOnClose } : f.kind === "typed" ? { changeable: f.changeable, publishOnClose: f.publishOnClose, hint: f.hint, answerLength: f.answerLength, countMatching: f.countMatching } : { imagesAllowed: f.imagesAllowed };
+          return {
+            kind: f.kind,
+            title: f.title,
+            prompt: f.kind === "topic" ? f.prompt : "",
+            options: f.kind === "poll" ? f.options.filter((o) => String(o).trim()) : [],
+            settings,
+            meeting: f.meeting,
+            access: this.accessInput()
+          };
+        }
+        accessInput() {
+          const a = this._f.access;
+          return { mode: a.mode, members: a.mode === "chosen" ? a.members.map((m) => m.githubId) : [], logins: Object.fromEntries(a.members.map((m) => [m.githubId, m.username || ""])) };
+        }
+        async save(how) {
+          if (this._saving) return;
+          this.capture();
+          if (this._f.access?.mode === "chosen" && !this._f.access.members.length) {
+            this.say("Pick at least one member, or share it with all members.", true);
+            return;
+          }
+          this._saving = true;
+          for (const b of this.$$("[data-save]")) b.disabled = true;
+          this.say("Saving");
+          try {
+            let id = this._entry?.id;
+            if (how === "access") {
+              await this.client.communityAdmin("access", { id, access: this.accessInput() });
+            } else if (how === "edit") {
+              const promptImages = this._f.kind === "topic" ? await this.uploadPending(id) : void 0;
+              await this.client.communityAdmin("edit", { id, input: { ...this.input(), ...promptImages ? { promptImages } : {} } });
+            } else {
+              const pending = this._f.kind === "topic" && this._f.images.some((i) => i.state === "pending");
+              const r = await this.client.communityAdmin("create", { input: this.input(), open: how === "open" && !pending });
+              id = r.id;
+              if (pending) {
+                const promptImages = await this.uploadPending(id);
+                await this.client.communityAdmin("edit", { id, input: { ...this.input(), promptImages } });
+                if (how === "open") await this.client.communityAdmin("open", { id });
+              }
+            }
+            this.emit("community-saved", { id });
+            this.close();
+          } catch (e) {
+            this._saving = false;
+            for (const b of this.$$("[data-save]")) b.disabled = false;
+            this.say(e?.message || "That was not saved. Try again.", true);
+          }
+        }
+      };
+      define("gbti-community-editor", GbtiCommunityEditor);
+    }
+  });
+
+  // client-ui/src/elements/gbti-auth.mjs
+  init_base();
+  var GbtiAuth = class extends GbtiElement {
+    async render() {
+      if (!this.client) {
+        this.set(this.css() + `<div class="panel muted">Connecting to the local client…</div>`);
+        return;
+      }
+      let status = null;
+      try {
+        status = await this.client.status();
+      } catch {
+      }
+      const id = status?.identity ?? null;
+      const role = status?.role ?? "member";
+      const authed = Boolean(status?.authenticated);
+      if (id && authed) {
+        this.set(
+          this.css() + `<div class="panel row" style="justify-content:space-between">
+             <div>Signed in as <strong>@${esc2(id.login)}</strong> ${role !== "member" ? `<span class="tag ok">${esc2(role)}</span>` : ""}</div>
+             <button class="ghost" id="out">Sign out</button>
+           </div>`
+        );
+        this.on("#out", "click", () => this.emit("gbti-signout"));
+        return;
+      }
+      const canLogin = typeof this.client.login === "function";
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>Sign in</h2>
+           <p class="muted">Authorize with GitHub to author + publish your content as pull requests.</p>
+           ${canLogin ? `<button id="in">Sign in with GitHub</button>` : `<p class="muted">Run <code>gbti login</code> in your terminal to connect this client.</p>`}
+           <div id="prompt" class="muted" style="margin-top:10px"></div>
+         </div>`
+      );
+      if (canLogin) {
+        this.on("#in", "click", async () => {
+          const slot = this.$("#prompt");
+          try {
+            await this.client.login(({ userCode, verificationUri }) => {
+              slot.innerHTML = `Enter code <strong>${esc2(userCode)}</strong> at <a href="${esc2(verificationUri)}" target="_blank" rel="noopener">${esc2(verificationUri)}</a>`;
+            });
+            getIdentity();
+            this.render();
+            this.emit("gbti-signin");
+          } catch (err) {
+            slot.innerHTML = `<span class="danger">${esc2(err.message || "sign-in failed")}</span>`;
+          }
+        });
+      }
+    }
+  };
+  define("gbti-auth", GbtiAuth);
+
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_base();
+  init_markdown_blocks();
+  init_selection_toolbar();
+  init_list_items();
+  init_block_commit();
+
+  // client-ui/src/list-editing.mjs
+  init_list_items();
+  init_markdown_blocks();
+  init_block_commit();
+  function listTabKeydown(e, { el, ordered = false, selection, apply }) {
+    if (!e || e.key !== "Tab" || !el) return false;
+    const sel = selection || (typeof document !== "undefined" ? document.getSelection() : null);
+    const { index } = listItemAtSelection(el, sel);
+    if (index < 0) return false;
+    e.preventDefault();
+    const current = readListDom(el, (h) => inlineHtmlToMd(h));
+    const next = indentListItem(current, index, e.shiftKey ? -1 : 1, !!ordered);
+    if (!next) return true;
+    const again = apply(isFlatList(next) ? next.map((it2) => it2.text) : next);
+    const li = again ? again.querySelectorAll("li")[index] : null;
+    if (again) again.focus();
+    if (li) caretAtEndOfItem(li, sel);
+    return true;
+  }
+  var shapeOf = (items) => isFlatList(items) ? items.map((it2) => it2.text) : items;
+  function listBarTools(host) {
+    const md = (h) => inlineHtmlToMd(h);
+    return {
+      listOf: (node) => {
+        const ce = host.ceOf(node);
+        return ce && ce.dataset && ce.dataset.edit === "list" ? ce : null;
+      },
+      stateOf: (el, index) => {
+        const b = host.byId(el.dataset.id);
+        return b ? listRunState(b.items, !!b.ordered, index) : { ordered: false, style: null, depth: 0 };
+      },
+      onAction: (el, index, action) => {
+        const b = host.byId(el.dataset.id);
+        if (!b) return;
+        const current = readListDom(el, md);
+        if (action === "unwrap") {
+          const i = host.indexOf(b._id);
+          if (i < 0) return;
+          const texts = normalizeListItems(current, !!b.ordered).map((it2) => it2.text).filter((t) => t.trim() !== "");
+          const paras = (texts.length ? texts : [""]).map((text2) => host.withId({ type: "paragraph", text: text2 }));
+          host.blocks().splice(i, 1, ...paras);
+          host.render();
+          host.change();
+          host.focusBlock(paras[0]._id);
+          return;
+        }
+        const next = applyListAction({ ordered: !!b.ordered, items: current }, index, action);
+        if (!next) return;
+        b.ordered = next.ordered;
+        b.items = shapeOf(next.items);
+        host.render();
+        host.change();
+        const again = host.query(`.ce[data-edit="list"][data-id="${b._id}"]`);
+        const li = again ? again.querySelectorAll("li")[index] : null;
+        if (again) again.focus();
+        if (li) caretAtEndOfItem(li, host.selection());
+      }
+    };
+  }
+
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_assets();
+
+  // client-ui/src/media-picker.mjs
+  init_assets();
+  var MEDIA_INDEX_URL = "https://gbti.network/media-index.json";
+  function mediaFor(index, author) {
+    const rows = index?.byAuthor?.[author];
+    return Array.isArray(rows) ? rows.filter((r) => r && typeof r.name === "string" && typeof r.itemPath === "string") : [];
+  }
+  function filterMedia(rows, query) {
+    const q2 = String(query ?? "").trim().toLowerCase();
+    const list = Array.isArray(rows) ? rows : [];
+    if (!q2) return list.slice();
+    return list.filter((r) => `${r?.name ?? ""} ${r?.itemTitle ?? ""}`.toLowerCase().includes(q2));
+  }
+  function reusePlan(record, currentItemPath) {
+    const name = record?.name;
+    const from = record?.itemPath;
+    if (!name || !from) return null;
+    const alreadyHere = !!currentItemPath && from === currentItemPath;
+    return {
+      name,
+      ref: `./images/${name}`,
+      // what the block stores, identical to what an upload produces
+      alreadyHere,
+      // Resolved against the SOURCE item, which is the whole point: the bytes live in the other item's folder.
+      sourceUrl: resolveContentAsset(`./images/${name}`, from)
+    };
+  }
+  function authorFromItemPath(itemPath) {
+    const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(itemPath ?? ""));
+    return m ? m[1] : null;
+  }
+
+  // src/lib/staged-images.mjs
+  var NAME = String.raw`[^/"'\s)]+\.(?:png|jpe?g|webp|gif)`;
+  var CANONICAL_G = new RegExp(String.raw`\.\/images\/${NAME}`, "gi");
+  var FLAT_G = new RegExp(String.raw`members\/[A-Za-z0-9-]+\/images\/${NAME}`, "gi");
+  var CANONICAL = new RegExp(String.raw`^\.\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
+  var FLAT = new RegExp(String.raw`^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
+  function isStagedImagePath(v2) {
+    const s = String(v2 ?? "");
+    return CANONICAL.test(s) || FLAT.test(s);
+  }
+  function stagedImageName(p) {
+    return isStagedImagePath(p) ? String(p).split("/").pop() : null;
+  }
+  function referencedDraftImages(frontmatter = {}, body = "") {
+    let fm = "";
+    try {
+      fm = JSON.stringify(frontmatter ?? {});
+    } catch {
+      fm = "";
+    }
+    const hay = `${fm}
+${String(body ?? "")}`;
+    return [.../* @__PURE__ */ new Set([...hay.match(CANONICAL_G) || [], ...hay.match(FLAT_G) || []])];
+  }
+  function stagedImageDataUrl(img) {
+    const b64 = img?.dataBase64;
+    return b64 ? `data:${img.contentType || "image/png"};base64,${b64}` : "";
+  }
+  async function loadStagedImages(paths, read3, have = {}) {
+    const out = {};
+    if (typeof read3 !== "function") return out;
+    for (const raw of new Set(paths || [])) {
+      const p = String(raw || "");
+      const name = stagedImageName(p);
+      if (!name || have[p] || out[p]) continue;
+      let img = null;
+      try {
+        img = await read3(name, p);
+      } catch {
+        img = null;
+      }
+      const url = stagedImageDataUrl(img);
+      if (url) out[p] = url;
+    }
+    return out;
+  }
+
+  // client-ui/src/elements/gbti-doc-editor.mjs
+  init_tokens();
+  init_image_layout_ui();
+
+  // client-ui/src/doc-editor-css.mjs
+  init_image_layout_ui();
+  init_list_style_ui();
+
+  // client-ui/src/audio-block-ui.mjs
+  init_base();
+  init_content_blocks();
 
   // client/src/audio-block-edit.mjs
+  init_audio_embed();
   var AUDIO_SOURCES = ["upload", ...AUDIO_PROVIDERS];
   var SOURCE_NAMES = { upload: "Upload", ...PROVIDER_NAMES };
   var SOURCE_KEYS = ["src", ...AUDIO_PROVIDERS];
@@ -3594,6 +5685,7 @@ ${listStyleProseCss(".doc-blocks")}
 `;
 
   // client-ui/src/elements/gbti-doc-editor.mjs
+  init_image_attrs();
   var UID = 0;
   var withId = (b) => {
     if (b && !b._id) b._id = ++UID;
@@ -4529,6 +6621,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_base();
+
   // client-ui/src/content-types.mjs
   var LEGACY_TYPE_ALIASES = Object.freeze({
     product: "project"
@@ -4953,127 +7048,12 @@ ${listStyleProseCss(".doc-blocks")}
     return { before: anchor && keys.includes(anchor) ? anchor : null };
   }
 
-  // client-ui/src/embed-lightbox.mjs
-  var FALLBACK_ID = "gbti-embed-lightbox";
-  function fallbackDialog() {
-    let dlg = document.getElementById(FALLBACK_ID);
-    if (dlg) return dlg;
-    dlg = document.createElement("dialog");
-    dlg.id = FALLBACK_ID;
-    dlg.setAttribute("aria-label", "Video");
-    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
-    dlg.innerHTML = "<style>#" + FALLBACK_ID + "::backdrop{background:rgba(20,19,24,.88)}#" + FALLBACK_ID + "[open]{display:flex;align-items:center;justify-content:center}#" + FALLBACK_ID + " .f{width:min(92vw,1100px);aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.55)}#" + FALLBACK_ID + " iframe{width:100%;height:100%;border:0}#" + FALLBACK_ID + ' .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><div class="f"><iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
-    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
-    dlg.addEventListener("click", (e) => {
-      if (e.target === dlg) dlg.close();
-    });
-    dlg.addEventListener("close", () => {
-      const f = dlg.querySelector("iframe");
-      if (f) f.removeAttribute("src");
-    });
-    document.body.appendChild(dlg);
-    return dlg;
-  }
-  function autoplaySrc(src) {
-    const s = String(src || "");
-    if (!s) return "";
-    return s + (s.includes("?") ? "&" : "?") + "autoplay=1";
-  }
-  function openEmbedLightbox(src) {
-    if (typeof document === "undefined" || !src) return false;
-    if (document.querySelector("[data-lightbox-root]")) {
-      document.dispatchEvent(new CustomEvent("gbti-embed-open", { bubbles: true, composed: true, detail: { src } }));
-      return true;
-    }
-    const dlg = fallbackDialog();
-    if (typeof dlg.showModal !== "function") {
-      window.open(src, "_blank", "noopener");
-      return false;
-    }
-    const f = dlg.querySelector("iframe");
-    if (f) f.src = autoplaySrc(src);
-    dlg.showModal();
-    return true;
-  }
-  function wireEmbedPosters(root) {
-    if (!root || typeof root.querySelectorAll !== "function") return 0;
-    let n = 0;
-    for (const btn of root.querySelectorAll(".md-embed-poster .md-embed-open")) {
-      if (btn.dataset.lbWired) continue;
-      btn.dataset.lbWired = "1";
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        const box = btn.closest(".md-embed-poster");
-        openEmbedLightbox(box?.dataset.embedSrc || "");
-      });
-      n++;
-    }
-    return n;
-  }
-  var EMBED_POSTER_CSS = `
-  .md-embed { position:relative; width:100%; margin:.6em 0 1em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
-  .md-embed.md-embed-portrait { aspect-ratio:9/16; max-width:360px; }
-  .md-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
-  .md-embed-open { position:absolute; inset:0; width:100%; height:100%; display:block; padding:0; border:0; background:#111; cursor:pointer; }
-  .md-embed-thumb { width:100%; height:100%; object-fit:cover; display:block; }
-  .md-embed-panel { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font:600 14px/1 var(--f-mono, ui-monospace, monospace); letter-spacing:.08em; text-transform:uppercase; }
-  .md-embed-play { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:999px; background:rgba(0,0,0,.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(0,0,0,.4); transition:background .15s ease, transform .15s ease; }
-  .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
-`;
-
-  // client/src/tweet-embed.mjs
-  var TWEET_FRAME_ORIGIN = "https://platform.twitter.com";
-  var TWEET_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}|i\/web)\/status(?:es)?\/(\d{5,25})(?:[/?#]\S*)?$/i;
-  function tweetId(url) {
-    const m = String(url ?? "").trim().match(TWEET_RE);
-    return m ? m[1] : null;
-  }
-  function bareTweetLine(line) {
-    const s = String(line ?? "").trim();
-    if (!/^https?:\/\/\S+$/.test(s)) return null;
-    return tweetId(s) ? s : null;
-  }
-  var tweetTheme = (t) => t === "dark" ? "dark" : "light";
-  function tweetFrameUrl(idOrUrl, { theme = "light" } = {}) {
-    const raw = String(idOrUrl ?? "").trim();
-    const id = /^\d{5,25}$/.test(raw) ? raw : tweetId(raw);
-    if (!id) return null;
-    return `${TWEET_FRAME_ORIGIN}/embed/Tweet.html?id=${id}&theme=${tweetTheme(theme)}&dnt=true`;
-  }
-  var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  function tweetBlockHtml(url) {
-    const u = String(url ?? "").trim();
-    if (!tweetId(u)) return "";
-    const e = escAttr2(u);
-    return `<div class="md-tweet" data-tweet-url="${e}" data-embed-url="${e}"><a href="${e}" target="_blank" rel="noopener nofollow">${e}</a></div>`;
-  }
-  function parseTweetMessage(data) {
-    let d = data;
-    if (typeof d === "string") {
-      if (d.length > 2e4 || !d.includes("twttr.embed") && !d.includes("gbtiTweet")) return null;
-      try {
-        d = JSON.parse(d);
-      } catch {
-        return null;
-      }
-    }
-    if (!d || typeof d !== "object") return null;
-    const fwd = d.gbtiTweet;
-    if (fwd && typeof fwd === "object") return shaped(fwd.method, fwd.height);
-    const rpc = d["twttr.embed"];
-    if (!rpc || typeof rpc !== "object" || typeof rpc.method !== "string") return null;
-    const method = rpc.method.replace(/^twttr\.private\./, "");
-    const p = Array.isArray(rpc.params) ? rpc.params[0] : null;
-    return shaped(method, p && p.height);
-  }
-  function shaped(method, height) {
-    if (method === "rendered" || method === "no_results") return { method };
-    if (method !== "resize") return null;
-    const h = Number(height);
-    return Number.isFinite(h) && h > 0 && h < 2e4 ? { method, height: Math.ceil(h) } : null;
-  }
+  // client-ui/src/elements/gbti-discussion.mjs
+  init_base();
+  init_embed_lightbox();
 
   // client-ui/src/tweet-frames.mjs
+  init_tweet_embed();
   var TWEET_RELAY = "https://gbti.network/embed/";
   var TWEET_RELAY_ORIGIN = "https://gbti.network";
   var TWEET_SLOW_MS = 15e3;
@@ -5290,1065 +7270,10 @@ ${listStyleProseCss(".doc-blocks")}
     }
   }
 
-  // client/src/video-embed.mjs
-  function embedUrl(v2) {
-    const s = String(v2 || "").trim();
-    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
-    if (m) return `https://www.youtube.com/embed/${m[1]}`;
-    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (m) return `https://player.vimeo.com/video/${m[1]}`;
-    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
-    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
-    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
-    if (m) return `https://rumble.com/embed/${m[1]}/`;
-    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
-    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
-    return null;
-  }
-  function bareVideoLine(line) {
-    const s = String(line ?? "").trim();
-    if (!/^https?:\/\/\S+$/.test(s)) return null;
-    return embedUrl(s) ? s : null;
-  }
-  function embedPoster(url) {
-    const src = embedUrl(url);
-    if (!src) return null;
-    const yt2 = src.match(/youtube\.com\/embed\/([\w-]{11})/);
-    const provider = yt2 ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
-    return { src, thumb: yt2 ? `https://i.ytimg.com/vi/${yt2[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
-  }
-  var escAttr3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  function embedPosterHtml(url, { frameSrc } = {}) {
-    const p = embedPoster(url);
-    if (!p) return "";
-    const src = frameSrc || p.src;
-    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr3(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr3(p.provider)}</span>`;
-    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr3(src)}" data-embed-url="${escAttr3(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
-  }
-  var MIXCLOUD_SITE_PAGES = /* @__PURE__ */ new Set([
-    "about",
-    "account",
-    "api",
-    "categories",
-    "dashboard",
-    "developers",
-    "discover",
-    "genres",
-    "help",
-    "live",
-    "login",
-    "media",
-    "messages",
-    "notifications",
-    "oembed",
-    "player",
-    "pricing",
-    "pro",
-    "search",
-    "select",
-    "settings",
-    "signup",
-    "tag",
-    "tags",
-    "upload",
-    "widget"
-  ]);
-  var MIXCLOUD_ACCOUNT_PAGES = /* @__PURE__ */ new Set([
-    "favorites",
-    "followers",
-    "following",
-    "hosts",
-    "listens",
-    "playlists",
-    "reposts",
-    "shows",
-    "stream",
-    "uploads"
-  ]);
-  function audioEmbedUrl(v2) {
-    let u;
-    try {
-      u = new URL(String(v2 || "").trim());
-    } catch {
-      return null;
-    }
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    if (!/^(?:(?:www|m)\.)?mixcloud\.com$/i.test(u.hostname)) return null;
-    const seg2 = u.pathname.split("/").filter(Boolean);
-    if (seg2.length !== 2) return null;
-    const [account, mix] = seg2;
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(account) || !/^[A-Za-z0-9_-]{1,200}$/.test(mix)) return null;
-    if (MIXCLOUD_SITE_PAGES.has(account.toLowerCase()) || MIXCLOUD_ACCOUNT_PAGES.has(mix.toLowerCase())) return null;
-    return `https://www.mixcloud.com/widget/iframe/?hide_cover=1&feed=${encodeURIComponent(`https://www.mixcloud.com/${account}/${mix}/`)}`;
-  }
-  function shareEmbed(url) {
-    const video = embedUrl(url);
-    if (video) return { src: video, kind: isPortraitEmbed(video) ? "portrait" : "video" };
-    const audio = audioEmbedUrl(url);
-    return audio ? { src: audio, kind: "audio" } : null;
-  }
-  var AUDIO_EMBED_HEIGHT = 120;
-  function isPortraitEmbed(src) {
-    return /tiktok\.com\/embed\//.test(String(src || ""));
-  }
-
-  // client/src/markdown.mjs
-  var EMBED_RELAY = "https://gbti.network/embed/";
-  var SITE_ORIGIN = "https://gbti.network";
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  }
-  var REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
-  var DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
-  function decodeEntities(s) {
-    let p = String(s ?? "");
-    for (let i = 0; i < 4; i++) {
-      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
-        try {
-          return String.fromCodePoint(parseInt(h, 16));
-        } catch {
-          return "";
-        }
-      }).replace(/&#(\d+);?/g, (_m, d) => {
-        try {
-          return String.fromCodePoint(parseInt(d, 10));
-        } catch {
-          return "";
-        }
-      }).replace(/&amp;/gi, "&");
-      if (n === p) break;
-      p = n;
-    }
-    return p;
-  }
-  var isDangerousAnchorHref = (url) => {
-    const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
-    return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
-  };
-  var attrOf2 = (attrs, name) => {
-    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
-    return m ? m[1] : "";
-  };
-  var escAttr4 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  function emphasis(t) {
-    const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
-  }
-  var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
-  var sanitizeAnchorInner = (html) => String(html ?? "").replace(
-    /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
-    (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
-  );
-  function rawAnchorHtml(attrs, inner) {
-    const href = decodeEntities(attrOf2(attrs, "href"));
-    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
-    const rel = [];
-    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
-    const blank2 = attrOf2(attrs, "target").toLowerCase() === "_blank";
-    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
-    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank2 ? ' target="_blank"' : "";
-    return `<a href="${escAttr4(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
-  }
-  function escapeKeepingLinks(s, keep) {
-    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
-      keep.push(rawAnchorHtml(attrs, inner));
-      return `${keep.length - 1}`;
-    });
-    return escapeHtml(stripped);
-  }
-  var FN_ID = "[A-Za-z0-9_-]+";
-  function collectFootnoteIds(lines2) {
-    const ids = /* @__PURE__ */ new Set();
-    let fence = 0;
-    for (const line of lines2) {
-      const f = /^(`{3,})(.*)$/.exec(line);
-      if (f) {
-        if (!fence) fence = f[1].length;
-        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
-        continue;
-      }
-      if (fence) continue;
-      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
-      if (d) ids.add(d[1]);
-    }
-    return ids;
-  }
-  var LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
-  var defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-  function collectLinkDefs(lines2) {
-    const defs = /* @__PURE__ */ new Map();
-    let fence = 0;
-    for (const line of lines2) {
-      const f = /^(`{3,})(.*)$/.exec(line);
-      if (f) {
-        if (!fence) fence = f[1].length;
-        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
-        continue;
-      }
-      if (fence) continue;
-      const d = LINK_DEF_RE.exec(line);
-      if (!d || d[1].startsWith("^")) continue;
-      if (!/^https?:\/\//.test(d[2])) continue;
-      const key = defKey(d[1]);
-      if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? "" });
-    }
-    return defs;
-  }
-  function refAnchor(text2, def) {
-    const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
-    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text2}</a>`;
-  }
-  function inline(escaped, fn = null, defs = null) {
-    let t = escaped;
-    const codes = [];
-    t = t.replace(/`([^`]+)`/g, (_m, c) => {
-      codes.push(c);
-      return `${codes.length - 1}`;
-    });
-    if (fn) {
-      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
-        if (!fn.ids.has(id)) return m;
-        const n = (fn.counts.get(id) ?? 0) + 1;
-        fn.counts.set(id, n);
-        return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
-      });
-    }
-    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
-      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-      const titleAttr = title ? ` title="${title}"` : "";
-      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
-      const cls = imageLayoutClasses(layout);
-      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
-    });
-    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
-    if (defs && defs.size) {
-      t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
-        const def = defs.get(defKey(label || alt));
-        return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
-      });
-      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text2, label) => {
-        const def = defs.get(defKey(label || text2));
-        return def ? refAnchor(text2, def) : m;
-      });
-      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text2) => {
-        if (text2.startsWith("^")) return m;
-        const def = defs.get(defKey(text2));
-        return def ? refAnchor(text2, def) : m;
-      });
-    }
-    t = emphasis(t);
-    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
-    return t;
-  }
-  function codeOpen(lang) {
-    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
-    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
-  }
-  var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
-  function renderFence(lang, buf, fn = null, { poster = false, audioBase = null, relativeAudio = false } = {}) {
-    const info = String(lang || "").trim().split(/\s+/);
-    const body = buf.join("\n");
-    if (info[0] === "callout") {
-      const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
-      const small = info.slice(2).includes("small") ? " md-callout-small" : "";
-      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
-      return `<div class="md-callout md-callout-${v2}${small}"><div class="md-callout-body">${html}</div></div>`;
-    }
-    if (info[0] === "directory") return sortListPlaceholder(info.slice(1).join(" "));
-    if (DATA_BLOCKS.includes(info[0])) {
-      const html = renderDataBlock(info[0], body, info.slice(1).join(" "), { origin: SITE_ORIGIN, audioBase, relativeAudio });
-      if (html != null) return html;
-    }
-    if (info[0] === "embed") {
-      const url = body.trim();
-      const src = embedUrl(url);
-      if (src && (poster || info[1] === "lightbox")) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
-      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
-      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
-    }
-    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
-  }
-  function splitTableRow2(line) {
-    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
-    const cells = [];
-    let cur = "";
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-      if (ch === "\\" && s[i + 1] === "|") {
-        cur += "|";
-        i++;
-        continue;
-      }
-      if (ch === "|") {
-        cells.push(cur.trim());
-        cur = "";
-        continue;
-      }
-      cur += ch;
-    }
-    cells.push(cur.trim());
-    return cells;
-  }
-  function tableAlignments(line) {
-    if (!/\|/.test(String(line ?? ""))) return null;
-    const cells = splitTableRow2(line);
-    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
-    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
-  }
-  var QUOTE_LINE = /^\s*>\s?/;
-  var COMMENT_LINE = /^\s*<!--[\s\S]*?-->\s*$/;
-  function hardBreak(escaped, raw) {
-    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
-  }
-  function renderMarkdown(md, opts = {}) {
-    return renderDoc(md, false, opts).html;
-  }
-  function renderDoc(md, ids, opts = {}, nest = null) {
-    const autoEmbed = !!opts.autoEmbed;
-    const audioBase = audioBaseFor(opts.itemPath);
-    const relativeAudio = !!opts.relativeAudio;
-    const lines2 = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const out = [];
-    const ranges = [];
-    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
-    const emit = (html2, start, end) => {
-      out.push(stamp(html2, out.length));
-      ranges.push(start == null ? null : { start, end });
-    };
-    let codeFence = 3;
-    let fenceStart = 0;
-    let inCode = false;
-    let codeBuf = [];
-    let codeLang2 = "";
-    const footnotes = nest ? nest.footnotes : [];
-    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines2), counts: /* @__PURE__ */ new Map() };
-    const linkKeep = nest ? nest.linkKeep : [];
-    const defs = nest ? nest.defs : collectLinkDefs(lines2);
-    const flushList = () => {
-    };
-    let i = 0;
-    while (i < lines2.length) {
-      const line = lines2[i];
-      const fence = /^(`{3,})(.*)$/.exec(line);
-      if (fence) {
-        if (!inCode) {
-          inCode = true;
-          fenceStart = i;
-          codeBuf = [];
-          codeFence = fence[1].length;
-          codeLang2 = fence[2];
-          i++;
-          continue;
-        }
-        if (fence[1].length >= codeFence && !fence[2].trim()) {
-          inCode = false;
-          flushList();
-          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed, audioBase, relativeAudio }), fenceStart, i);
-          codeLang2 = "";
-          i++;
-          continue;
-        }
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      if (inCode) {
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
-      if (def) {
-        flushList();
-        const parts = [def[2].trim()];
-        i++;
-        while (i < lines2.length && /^ {4,}\S/.test(lines2[i])) {
-          parts.push(lines2[i].trim());
-          i++;
-        }
-        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
-        continue;
-      }
-      if (autoEmbed) {
-        const videoUrl = bareVideoLine(line);
-        if (videoUrl) {
-          flushList();
-          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
-          i++;
-          continue;
-        }
-        const tweetUrl = bareTweetLine(line);
-        if (tweetUrl) {
-          flushList();
-          emit(tweetBlockHtml(tweetUrl), i, i);
-          i++;
-          continue;
-        }
-      }
-      const esc11 = escapeKeepingLinks(line, linkKeep);
-      let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc11)) {
-        flushList();
-        emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
-        i++;
-        continue;
-      }
-      if (isThematicBreak(line)) {
-        flushList();
-        emit("<hr />", i, i);
-        i++;
-        continue;
-      }
-      if (isListLine(line)) {
-        const run = takeListRun(lines2, i);
-        const itemHtml = (t) => inline(escapeKeepingLinks(t, linkKeep).replace(/ {2,}\n/g, "\0BR\0 ").replace(/\s*\n\s*/g, " "), fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />");
-        const startAttr = run.items[0]?.ordered && run.start > 1 ? `start="${run.start}"` : "";
-        emit(listHtml(run.items, itemHtml, { ordered: !!run.items[0]?.ordered, rootAttrs: startAttr }), i, run.next - 1);
-        i = run.next;
-        continue;
-      }
-      if (QUOTE_LINE.test(line)) {
-        flushList();
-        const quoteStart = i;
-        const inner = [];
-        while (i < lines2.length && QUOTE_LINE.test(lines2[i])) {
-          inner.push(lines2[i].replace(QUOTE_LINE, ""));
-          i++;
-        }
-        const body = renderDoc(inner.join("\n"), false, { itemPath: opts.itemPath, relativeAudio: opts.relativeAudio }, { fn, linkKeep, footnotes, defs }).html;
-        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
-        continue;
-      }
-      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-        flushList();
-        emit("<hr/>", i, i);
-        i++;
-        continue;
-      }
-      const aligns = i + 1 < lines2.length ? tableAlignments(lines2[i + 1]) : null;
-      if (aligns && line.includes("|")) {
-        const tableStart = i;
-        flushList();
-        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
-        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
-        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
-        i += 2;
-        const rows = [];
-        while (i < lines2.length && lines2[i].includes("|") && !/^\s*$/.test(lines2[i])) {
-          rows.push(splitTableRow2(lines2[i]));
-          i++;
-        }
-        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
-        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
-        continue;
-      }
-      if (/^\s*$/.test(line)) {
-        flushList();
-        i++;
-        continue;
-      }
-      if (COMMENT_LINE.test(line)) {
-        flushList();
-        i++;
-        continue;
-      }
-      if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
-        flushList();
-        while (i < lines2.length && LINK_DEF_RE.test(lines2[i]) && !/^ {0,3}\[\^/.test(lines2[i])) i++;
-        continue;
-      }
-      const fig = parseImageLine(line);
-      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
-        flushList();
-        const cls = imageLayoutClasses(fig.layout);
-        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
-        i++;
-        continue;
-      }
-      flushList();
-      const paraStart = i;
-      const para = [hardBreak(esc11, line)];
-      i++;
-      while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
-        para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
-        i++;
-      }
-      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
-      emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
-    }
-    flushList();
-    if (inCode) emit(renderFence(codeLang2, codeBuf, fn, { audioBase, relativeAudio }), fenceStart, lines2.length - 1);
-    if (nest) return { html: out.join("\n"), blocks: ranges };
-    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
-    if (referenced.length) {
-      const items = referenced.map((f) => {
-        const n = fn.counts.get(f.id);
-        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
-        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
-      }).join("");
-      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
-    }
-    const joined = out.join("\n");
-    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
-    return { html, blocks: ranges };
-  }
-
-  // client-ui/src/prose-editor-core.mjs
-  var COMMENT_MAX_BYTES = 8e3;
-  function commentBodyTooLong(md) {
-    try {
-      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
-    } catch {
-      return String(md ?? "").length > COMMENT_MAX_BYTES;
-    }
-  }
-  var PROSE_CONTROLS = Object.freeze([
-    { act: "bold", label: "Bold", key: "B" },
-    { act: "italic", label: "Italic", key: "I" },
-    { act: "code", label: "Inline code" },
-    { act: "link", label: "Link" },
-    null,
-    { act: "quote", label: "Quote" },
-    { act: "ul", label: "Bulleted list" },
-    { act: "ol", label: "Numbered list" },
-    { act: "codeblock", label: "Code block" },
-    { act: "video", label: "Video" }
-  ]);
-  function editorHtmlFromMarkdown(md) {
-    const html = renderMarkdown(String(md ?? ""), { autoEmbed: true }).trim();
-    return html || "<p><br></p>";
-  }
-  var ELEMENT = 1;
-  var TEXT = 3;
-  var BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "DIV", "BLOCKQUOTE", "UL", "OL", "LI", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "FIGURE", "SECTION", "ARTICLE"]);
-  var tagOf = (n) => String(n?.tagName || "").toUpperCase();
-  var attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
-  var kids = (n) => Array.from(n?.childNodes || []);
-  var escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-(embed|tweet)(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
-  var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
-  var hasBlockChild = (n) => kids(n).some(isBlock);
-  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
-  var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
-  function codeText(el) {
-    const html = String(el?.innerHTML ?? "");
-    const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-    return t.replace(/\n+$/, "");
-  }
-  function codeLang(pre) {
-    const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
-    const el = code || pre;
-    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
-    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
-  }
-  function walk(node, out) {
-    let buf = "";
-    const flush = () => {
-      const t = inline2(buf);
-      if (t.trim()) out.push(t);
-      buf = "";
-    };
-    for (const c of kids(node)) {
-      if (c.nodeType === TEXT) {
-        buf += escapeText(c.textContent);
-        continue;
-      }
-      if (c.nodeType !== ELEMENT) continue;
-      if (!isBlock(c)) {
-        if (tagOf(c) === "BR") {
-          buf += "<br>";
-          continue;
-        }
-        buf += String(c.outerHTML ?? "");
-        continue;
-      }
-      flush();
-      blockOf(c, out);
-    }
-    flush();
-  }
-  function blockOf(n, out) {
-    const t = tagOf(n);
-    if (isCard(n)) {
-      out.push(attr(n, "data-embed-url").trim());
-      return;
-    }
-    if (t === "P" || t === "DIV" || t === "SECTION" || t === "ARTICLE" || t === "FIGURE") {
-      if (hasBlockChild(n)) {
-        walk(n, out);
-        return;
-      }
-      const text2 = inline2(n.innerHTML);
-      if (text2.trim()) out.push(text2);
-      return;
-    }
-    if (t === "BLOCKQUOTE") {
-      const inner = [];
-      if (hasBlockChild(n)) walk(n, inner);
-      else {
-        const text2 = inline2(n.innerHTML);
-        if (text2.trim()) inner.push(text2);
-      }
-      const paras = flat(inner);
-      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
-      return;
-    }
-    if (t === "UL" || t === "OL") {
-      const items = [];
-      for (const li of kids(n)) {
-        if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
-        let text2;
-        if (hasBlockChild(li)) {
-          const inner = [];
-          walk(li, inner);
-          text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
-        } else text2 = inline2(li.innerHTML);
-        if (text2.trim()) items.push(text2);
-      }
-      if (!items.length) return;
-      out.push(items.map((it2, i) => t === "OL" ? `${i + 1}. ${it2}` : `- ${it2}`).join("\n"));
-      return;
-    }
-    if (t === "PRE") {
-      const { el, lang } = codeLang(n);
-      out.push("```" + lang + "\n" + codeText(el) + "\n```");
-      return;
-    }
-    if (/^H[1-6]$/.test(t)) {
-      const text2 = inline2(n.innerHTML);
-      if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
-      return;
-    }
-    if (t === "HR") {
-      out.push("---");
-      return;
-    }
-    if (t === "LI") {
-      const text2 = inline2(n.innerHTML);
-      if (text2.trim()) out.push(`- ${text2}`);
-      return;
-    }
-    if (t === "TABLE") {
-      const text2 = inline2(n.innerHTML);
-      if (text2.trim()) out.push(text2);
-      return;
-    }
-  }
-  function domToMarkdown(root) {
-    const out = [];
-    walk(root, out);
-    const blocks2 = [];
-    let run = null;
-    const closeRun = () => {
-      if (!run) return;
-      if (run.length) blocks2.push(run.join("\n>\n"));
-      run = null;
-    };
-    for (const b of out) {
-      if (b && typeof b === "object" && b.quote) {
-        run ||= [];
-        if (b.text) run.push(b.text);
-        continue;
-      }
-      closeRun();
-      if (typeof b === "string" && b.trim()) blocks2.push(b);
-    }
-    closeRun();
-    return blocks2.join("\n\n");
-  }
-
-  // client-ui/src/elements/gbti-prose-editor.mjs
-  var ic2 = {
-    code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
-    ul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    ol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-    codeblock: '<rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9.5l-2.5 2.5 2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
-    video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-  };
-  var svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
-  var CSS2 = `
-  :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
-  .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
-  .box:focus-within { border-color: var(--brand); }
-  /* The header: small, muted, brand on hover. Quiet by design (owner, 2026-09-11). */
-  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
-  .hdr button { width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px;
-    background: transparent; color: var(--muted); cursor: pointer; font: 700 13px/1 var(--font-body); }
-  .hdr button:hover, .hdr button:focus-visible { color: var(--brand); background: rgba(31,158,95,.1); outline: 0; }
-  .hdr button svg { width: 16px; height: 16px; }
-  .hdr .k-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
-  .hdr .sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
-  .vid { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  .vid[hidden] { display: none; }
-  .vid input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); }
-  .vid input.bad { border-color: #c0392b; }
-  .vid button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
-  .vid button.vid-add { border-color: var(--brand); background: var(--brand); color: #fff; }
-  .surface { position: relative; min-height: 96px; padding: 10px 12px; font-size: 14.5px; line-height: 1.6; outline: 0; caret-color: var(--brand); word-break: break-word; }
-  .surface.empty::before { content: attr(data-ph); position: absolute; left: 12px; top: 10px; color: var(--muted); pointer-events: none; }
-  .surface p, .surface div { margin: 0 0 .7em; }
-  .surface > :last-child { margin-bottom: 0; }
-  .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
-  .surface blockquote + blockquote { margin-top: -.7em; }
-  .surface blockquote > :last-child { margin-bottom: 0; }
-  .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
-  .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
-  .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
-  .surface pre code { background: none; padding: 0; font-size: inherit; }
-  .surface a { color: var(--brand); }
-  .surface strong { font-weight: 700; }
-  ${EMBED_POSTER_CSS}
-  .surface .md-embed { margin: .4em 0 .9em; }
-  .surface .md-embed .md-embed-open { cursor: default; }
-  /* sow-261: a tweet line is a card here too (its link; the live tweet shows once the comment is posted). */
-  .surface .md-tweet { position: relative; margin: .4em 0 .9em; padding: 12px 44px 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-wrap: anywhere; }
-  .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-    padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
-  .pe-x svg { width: 15px; height: 15px; }
-  .pe-x:hover { background: #c0392b; }
-`;
-  var GbtiProseEditor = class extends GbtiElement {
-    /** Markdown in, markdown out. The surface is read back on every get, so the value is always current. */
-    get value() {
-      const s = this._surface();
-      return s ? domToMarkdown(s) : String(this._pending ?? "");
-    }
-    set value(md) {
-      this._pending = String(md ?? "");
-      if (this._surface()) this._load(this._pending);
-    }
-    get placeholder() {
-      return this.getAttribute("placeholder") || "Write a comment";
-    }
-    _surface() {
-      return this.$("[data-surface]");
-    }
-    render() {
-      if (this._rendered) return;
-      this._rendered = true;
-      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
-      this.set(this.css(CSS2) + `<div class="box" data-box>
-      <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
-      <div class="vid" data-vid hidden>
-        <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
-        <button type="button" class="vid-add" data-vid-add>Add</button>
-        <button type="button" data-vid-cancel>Cancel</button>
-      </div>
-      <div class="surface" contenteditable="true" data-surface data-ph="${esc2(this.placeholder)}" role="textbox" aria-multiline="true"></div>
-    </div>`);
-      this._wire();
-      this._load(this._pending ?? "");
-    }
-    _load(md) {
-      const s = this._surface();
-      if (!s) return;
-      s.innerHTML = editorHtmlFromMarkdown(md);
-      this._decorateCards();
-      this._syncEmpty();
-    }
-    /** A video card (or, sow-261, a tweet card) is one atomic, non-editable thing with its own Remove; Backspace over it
-     *  removes it whole. */
-    _decorateCards() {
-      for (const card of this.$$("[data-surface] .md-embed, [data-surface] .md-tweet")) {
-        if (card.dataset.peCard) continue;
-        card.dataset.peCard = "1";
-        card.setAttribute("contenteditable", "false");
-        const what = card.classList.contains("md-tweet") ? "Remove post" : "Remove video";
-        const x = document.createElement("button");
-        x.type = "button";
-        x.className = "pe-x";
-        x.title = what;
-        x.setAttribute("aria-label", what);
-        x.innerHTML = svg2("x");
-        x.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          card.remove();
-          this._changed();
-        });
-        card.appendChild(x);
-      }
-    }
-    _syncEmpty() {
-      const s = this._surface();
-      if (s) s.classList.toggle("empty", !String(this.value || "").trim());
-    }
-    _changed() {
-      this._syncEmpty();
-      this.emit("input");
-    }
-    _sel() {
-      try {
-        return (this.root.getSelection ? this.root.getSelection() : null) || document.getSelection();
-      } catch {
-        return document.getSelection();
-      }
-    }
-    /** The nearest ancestor of `node` with this tag, stopping at the surface. */
-    _closest(node, tag) {
-      const s = this._surface();
-      let n = node && node.nodeType === 1 ? node : node?.parentNode;
-      while (n && n !== s) {
-        if (String(n.tagName || "").toUpperCase() === tag) return n;
-        n = n.parentNode;
-      }
-      return null;
-    }
-    /** The top-level block of the surface that holds `node`. */
-    _blockAt(node) {
-      const s = this._surface();
-      let n = node;
-      while (n && n.parentNode && n.parentNode !== s) n = n.parentNode;
-      return n && n.parentNode === s ? n : null;
-    }
-    _wire() {
-      const surface = this._surface();
-      if (!surface) return;
-      this._tb = createSelectionToolbar({ root: this.root, host: () => this.$("[data-box]"), editableOf: () => null, onCommit: () => this._changed() });
-      this.$$("[data-act]").forEach((b) => {
-        b.addEventListener("mousedown", (e) => e.preventDefault());
-        b.addEventListener("click", () => this._act(b.dataset.act));
-      });
-      surface.addEventListener("input", () => this._changed());
-      surface.addEventListener("paste", (e) => {
-        e.preventDefault();
-        const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
-        if (t) document.execCommand("insertText", false, t);
-      });
-      surface.addEventListener("keydown", (e) => this._key(e));
-      this.$("[data-vid-add]")?.addEventListener("click", () => this._addVideo());
-      this.$("[data-vid-cancel]")?.addEventListener("click", () => this._toggleVideo(false));
-      this.$("[data-vid-url]")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          this._addVideo();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          this._toggleVideo(false);
-        }
-      });
-    }
-    _act(act) {
-      const surface = this._surface();
-      if (!surface) return;
-      if (act === "video") {
-        this._toggleVideo(true);
-        return;
-      }
-      surface.focus();
-      switch (act) {
-        case "bold":
-          document.execCommand("bold");
-          break;
-        case "italic":
-          document.execCommand("italic");
-          break;
-        case "code":
-          this._toggleCode();
-          break;
-        case "link":
-          this._link();
-          return;
-        // commits through the panel
-        case "quote":
-          this._formatBlock("BLOCKQUOTE");
-          break;
-        case "codeblock":
-          this._formatBlock("PRE");
-          break;
-        case "ul":
-          document.execCommand("insertUnorderedList");
-          break;
-        case "ol":
-          document.execCommand("insertOrderedList");
-          break;
-        default:
-          return;
-      }
-      this._changed();
-    }
-    /** Quote and code block toggle: the same control puts a block back to a paragraph. */
-    _formatBlock(tag) {
-      const sel = this._sel();
-      const inside = sel && this._closest(sel.anchorNode, tag);
-      const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
-      if (line) {
-        this._liftLine(inside, line);
-        return;
-      }
-      document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
-    }
-    /** The P or DIV directly inside `quote` that holds `node`, or null. */
-    _quoteLine(quote, node) {
-      let n = node;
-      while (n && n.parentNode !== quote) n = n.parentNode;
-      return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
-    }
-    /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
-     *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
-     *  back to markdown (measured in Chrome, 2026-09-16). */
-    _liftLine(quote, line) {
-      const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
-      const rest = document.createElement("blockquote");
-      while (line.nextSibling) rest.appendChild(line.nextSibling);
-      const p = document.createElement("p");
-      while (line.firstChild) p.appendChild(line.firstChild);
-      if (!p.firstChild) p.innerHTML = "<br>";
-      line.remove();
-      quote.after(p);
-      if (has(rest)) p.after(rest);
-      if (!has(quote)) quote.remove();
-      try {
-        const r = document.createRange();
-        r.selectNodeContents(p);
-        r.collapse(false);
-        const s = this._sel();
-        s.removeAllRanges();
-        s.addRange(r);
-      } catch {
-      }
-    }
-    /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
-    _toggleCode() {
-      const sel = this._sel();
-      if (!sel || !sel.rangeCount) return;
-      const existing = this._closest(sel.anchorNode, "CODE");
-      if (existing && !this._closest(existing, "PRE")) {
-        existing.replaceWith(document.createTextNode(existing.textContent));
-        return;
-      }
-      if (sel.isCollapsed) return;
-      const r = sel.getRangeAt(0);
-      const node = document.createElement("code");
-      try {
-        node.appendChild(r.extractContents());
-        r.insertNode(node);
-      } catch {
-      }
-    }
-    /** Link: the panel over the anchor the selection is in, or a new anchor around the selection. */
-    _link() {
-      const sel = this._sel();
-      if (!sel || !sel.rangeCount) return;
-      let a = this._closest(sel.anchorNode, "A");
-      if (!a) {
-        if (sel.isCollapsed) return;
-        const r = sel.getRangeAt(0);
-        a = document.createElement("a");
-        a.setAttribute("href", "");
-        try {
-          a.appendChild(r.extractContents());
-          r.insertNode(a);
-        } catch {
-          return;
-        }
-      }
-      this._tb?.editLink(this._surface(), a);
-    }
-    _key(e) {
-      if (e.key !== "Enter" || e.shiftKey) return;
-      const sel = this._sel();
-      const pre = sel && this._closest(sel.anchorNode, "PRE");
-      if (pre) {
-        e.preventDefault();
-        const last = pre.lastChild;
-        const prev = last?.previousSibling;
-        const isBr = (n) => n && n.nodeType === 1 && String(n.tagName).toUpperCase() === "BR";
-        if (isBr(last) && isBr(prev) && sel.isCollapsed && this._closest(sel.anchorNode, "PRE") === pre && !sel.anchorNode.nextSibling) {
-          last.remove();
-          prev.remove();
-          const p = document.createElement("p");
-          p.innerHTML = "<br>";
-          pre.after(p);
-          this._caretIn(p);
-        } else document.execCommand("insertLineBreak");
-        this._changed();
-        return;
-      }
-      const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
-      if (quote && sel.isCollapsed) {
-        const line = this._quoteLine(quote, sel.anchorNode);
-        if (!String((line || quote).textContent || "").trim()) {
-          e.preventDefault();
-          if (line) this._liftLine(quote, line);
-          else {
-            const p = document.createElement("p");
-            p.innerHTML = "<br>";
-            quote.replaceWith(p);
-            this._caretIn(p);
-          }
-          this._changed();
-        }
-      }
-    }
-    _caretIn(el) {
-      try {
-        const r = document.createRange();
-        r.selectNodeContents(el);
-        r.collapse(true);
-        const sel = this._sel();
-        sel.removeAllRanges();
-        sel.addRange(r);
-      } catch {
-      }
-    }
-    _toggleVideo(show) {
-      const row = this.$("[data-vid]");
-      const input = this.$("[data-vid-url]");
-      if (!row || !input) return;
-      if (show) {
-        const sel = this._sel();
-        this._vidAnchor = sel && sel.anchorNode ? this._blockAt(sel.anchorNode) : null;
-        row.hidden = false;
-        input.value = "";
-        input.classList.remove("bad");
-        setTimeout(() => input.focus(), 0);
-      } else {
-        row.hidden = true;
-        this._surface()?.focus();
-      }
-    }
-    /** The link becomes its own line in the markdown and renders as the poster at once. */
-    _addVideo() {
-      const input = this.$("[data-vid-url]");
-      const surface = this._surface();
-      if (!input || !surface) return;
-      const url = String(input.value || "").trim();
-      if (!url || !embedUrl(url)) {
-        input.classList.add("bad");
-        input.focus();
-        return;
-      }
-      const p = document.createElement("p");
-      p.textContent = url;
-      const anchor = this._vidAnchor && this._vidAnchor.parentNode === surface ? this._vidAnchor : null;
-      if (anchor) anchor.after(p);
-      else surface.appendChild(p);
-      this._load(this.value);
-      this._toggleVideo(false);
-      const cards = this.$$("[data-surface] .md-embed").filter((c) => c.getAttribute("data-embed-url") === url);
-      const card = cards[cards.length - 1];
-      if (card) {
-        let next = card.nextElementSibling;
-        if (!next || String(next.tagName).toUpperCase() !== "P") {
-          next = document.createElement("p");
-          next.innerHTML = "<br>";
-          card.after(next);
-        }
-        surface.focus();
-        this._caretIn(next);
-      }
-      this._changed();
-    }
-  };
-  define("gbti-prose-editor", GbtiProseEditor);
-
   // client-ui/src/elements/gbti-comment-box.mjs
+  init_base();
+  init_prose_editor_core();
+  init_gbti_prose_editor();
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS3 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
@@ -6644,6 +7569,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
+  init_member_avatars();
   var CSS4 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
@@ -6912,6 +7838,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-discussion", GbtiDiscussion);
 
   // client-ui/src/elements/gbti-cta-assignment.mjs
+  init_base();
   var SITE3 = "https://gbti.network";
   var ADMIN = `${SITE3}/admin/`;
   var CSS5 = `
@@ -6986,6 +7913,9 @@ ${listStyleProseCss(".doc-blocks")}
     return ctas.filter((c) => Array.isArray(c?.items) && c.items.some((it2) => it2 && it2.type === type && it2.ref === r)).sort((a, b) => (b.enabled === true) - (a.enabled === true));
   }
   define("gbti-cta-assignment", GbtiCtaAssignment);
+
+  // client-ui/src/elements/gbti-category-picker.mjs
+  init_base();
 
   // client-ui/src/topic-picker-core.mjs
   function topicsFromJson(data) {
@@ -7192,6 +8122,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/category-picker-core.mjs
+  init_base();
   var PATH_SEP = " — ";
   function treeNodesFromJson(data) {
     const tree = data && data.tree && typeof data.tree === "object" && !Array.isArray(data.tree) ? data.tree : null;
@@ -7559,6 +8490,12 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-category-picker", GbtiCategoryPicker);
 
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_tokens();
+
+  // client-ui/src/editor-skill.mjs
+  init_base();
+
   // client-ui/src/public-url.mjs
   var SITE_ORIGIN2 = "https://gbti.network";
   var TYPE_BASE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
@@ -7872,6 +8809,9 @@ ${listStyleProseCss(".doc-blocks")}
   .dsub-opt { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:none; color:var(--s-fg-mute); border:1px solid var(--s-line-2); border-radius:999px; padding:1px 8px; }
   [data-skill-only][hidden], [data-main-opt][hidden] { display:none !important; }
 `;
+
+  // client-ui/src/elements/gbti-content-editor.mjs
+  init_member_avatars();
 
   // membership/tiers.mjs
   var TIER = Object.freeze({
@@ -8827,6 +9767,9 @@ ${listStyleProseCss(".doc-blocks")}
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `;
 
+  // client-ui/src/elements/editor-fields.mjs
+  init_base();
+
   // client-ui/src/one-click-public-core.mjs
   var AUDIENCE_MODES = Object.freeze(["switch"]);
   function audienceControl({ currentVisibility = null } = {}) {
@@ -9235,6 +10178,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return true;
   }
+
+  // client-ui/src/elements/editor-rows.mjs
+  init_base();
 
   // src/lib/content-link-types.mjs
   var CONTENT_LINK_TYPES = Object.freeze([
@@ -9661,6 +10607,8 @@ ${listStyleProseCss(".doc-blocks")}
   };
 
   // client-ui/src/elements/editor-media.mjs
+  init_base();
+  init_assets();
   var withEditorMedia = (Base2) => class extends Base2 {
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
     // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
@@ -10067,7 +11015,11 @@ ${listStyleProseCss(".doc-blocks")}
     });
   }
 
+  // client-ui/src/elements/editor-actions.mjs
+  init_base();
+
   // client-ui/src/publish-diff.mjs
+  init_markdown_blocks();
   var IGNORED_FIELDS = Object.freeze(/* @__PURE__ */ new Set([
     "updatedAt",
     "publishedAt",
@@ -11293,6 +12245,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-content-editor", GbtiContentEditor);
 
   // client-ui/src/elements/gbti-content-list.mjs
+  init_base();
   var GbtiContentList = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -11341,6 +12294,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-content-list", GbtiContentList);
 
   // client-ui/src/elements/gbti-pr-list.mjs
+  init_base();
   var GbtiPrList = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -11383,6 +12337,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-pr-list", GbtiPrList);
 
   // client-ui/src/elements/gbti-members-portal.mjs
+  init_base();
   var GbtiMembersPortal = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -11407,6 +12362,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-members-portal", GbtiMembersPortal);
 
   // client-ui/src/elements/gbti-settings.mjs
+  init_base();
   var GbtiSettings = class extends GbtiElement {
     async render() {
       if (!this.client) return;
@@ -11455,6 +12411,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-settings", GbtiSettings);
+
+  // client-ui/src/elements/gbti-account.mjs
+  init_base();
 
   // membership/discord-roles.mjs
   var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
@@ -11583,6 +12542,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-account.mjs
+  init_member_avatars();
   var SITE5 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
@@ -11908,25 +12868,28 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-account", GbtiAccount);
 
+  // client-ui/src/elements/gbti-mod-actions.mjs
+  init_base();
+
   // node_modules/js-yaml/dist/js-yaml.mjs
   var __create = Object.create;
-  var __defProp = Object.defineProperty;
+  var __defProp2 = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getOwnPropNames2 = Object.getOwnPropertyNames;
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
   var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+    if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames2(from), i = 0, n = keys.length, key; i < n; i++) {
       key = keys[i];
-      if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+      if (!__hasOwnProp.call(to, key) && key !== except) __defProp2(to, key, {
         get: ((k) => from[k]).bind(null, key),
         enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
       });
     }
     return to;
   };
-  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp2(target, "default", {
     value: mod,
     enumerable: true
   }) : target, mod));
@@ -14508,6 +15471,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-mod-actions", GbtiModActions);
 
   // client-ui/src/elements/gbti-admin.mjs
+  init_base();
   var RANK4 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS9 = `
@@ -14636,6 +15600,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-admin", GbtiAdmin);
 
+  // client-ui/src/elements/gbti-superadmin-dashboard.mjs
+  init_base();
+
   // client-ui/src/saved-core.mjs
   var TYPE_INDEX = { post: "blog-index.json", project: "projects-index.json", prompt: "prompts-index.json" };
   var TYPE_LABEL2 = { post: "Articles", project: "Projects", prompt: "Prompts & Skills", share: "Shares" };
@@ -14710,6 +15677,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
+  init_member_avatars();
+  init_member_avatar();
   var SITE7 = "https://gbti.network";
   var CSS10 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -14985,6 +15954,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-superadmin-dashboard", GbtiSuperadminDashboard);
 
   // client-ui/src/elements/gbti-category-manager.mjs
+  init_base();
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -15178,6 +16148,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-category-manager", GbtiCategoryManager);
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
+  init_base();
   var SITE8 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
@@ -15832,6 +16803,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
+  init_base();
   var SITE9 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
@@ -16177,6 +17149,9 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-tag-explorer", GbtiTagExplorer);
 
+  // client-ui/src/elements/gbti-news-source-manager.mjs
+  init_base();
+
   // membership/news-banwords.mjs
   var BANWORD_MIN = 2;
   var BANWORD_MAX = 40;
@@ -16475,6 +17450,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
+  init_base();
   var CSS15 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -16592,6 +17568,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-quote-manager", GbtiQuoteManager);
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
+  init_base();
   var CSS16 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -16823,6 +17800,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-coupon-manager", GbtiCouponManager);
+
+  // client-ui/src/elements/gbti-prepared-listings.mjs
+  init_base();
 
   // client-ui/src/prepared-listings-core.mjs
   var PREPARED_SITE_BASE = "https://gbti.network";
@@ -17229,6 +18209,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-prepared-listings", GbtiPreparedListings);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
+  init_base();
   var CSS18 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
@@ -17314,6 +18295,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   };
   define("gbti-site-settings-manager", GbtiSiteSettingsManager);
+
+  // client-ui/src/elements/gbti-digest-manager.mjs
+  init_base();
 
   // membership/digest-config.mjs
   var DEFAULT_CTA = Object.freeze({
@@ -17765,6 +18749,153 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-digest-manager", GbtiDigestManager);
 
+  // client-ui/src/elements/gbti-community-manager.mjs
+  init_base();
+  init_community_css();
+  init_community_core();
+  var CSS21 = `
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bar p { margin: 0; color: var(--fg-soft); font-size: 14px; flex: 1; min-width: 220px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); font-weight: 600; font-size: 13px; }
+  .chip:hover { background: var(--tint); }
+  .chip[aria-pressed="true"] { background: var(--fg); color: var(--paper); border-color: var(--fg); }
+  .chip[aria-pressed="true"]:hover { background: var(--fg); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.t a { font-weight: 700; color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+  td.t a:hover { color: var(--green-700); text-decoration: underline; }
+  td.t small { display: block; color: var(--fg-mute); margin-top: 4px; }
+  td.n { white-space: nowrap; color: var(--fg-soft); }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .msg { min-height: 20px; margin-top: 10px; font-size: 14px; }
+  .bad { color: var(--err); font-weight: 600; }
+  .empty { padding: 28px 10px; text-align: center; color: var(--fg-soft); }
+  @media (max-width: 760px) {
+    thead { display: none; }
+    tr { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    td { border: 0; padding: 2px 0; }
+    .acts { justify-content: flex-start; }
+  }
+`;
+  var FILTERS = [["", "All"], ["live", "Live"], ["draft", "Drafts"], ["closed", "Closed"], ["published", "Results"]];
+  var GbtiCommunityManager = class extends GbtiElement {
+    constructor() {
+      super();
+      this._state = "idle";
+      this._entries = [];
+      this._filter = "";
+    }
+    render() {
+      if (!this.client) return;
+      if (typeof this.client.communityAdmin !== "function") {
+        this.set(this.css(COMMUNITY_CSS + CSS21) + '<p class="cm-mute">Community is managed by superadmins.</p>');
+        return;
+      }
+      if (this._state === "idle") {
+        this.load();
+        return;
+      }
+      this.draw();
+    }
+    async load() {
+      this._state = "loading";
+      this.draw();
+      try {
+        const r = await this.client.communityList({});
+        this._entries = r.entries || [];
+        this._state = "ok";
+      } catch (e) {
+        this._error = e;
+        this._state = "error";
+      }
+      this.draw();
+    }
+    actions(e) {
+      const b = (op, label, cls = "cm-btn2 sm") => `<button type="button" class="${cls}" data-op="${op}" data-id="${esc2(e.id)}">${esc2(label)}</button>`;
+      const out = [];
+      const poll = isPollKind(e.kind);
+      if (e.status === "draft") out.push(b("open", "Open now"));
+      if (e.status === "live") out.push(b("close", poll ? "Close voting" : "Close topic"));
+      if (poll && e.status === "closed") out.push(b("publish", "Publish results"));
+      if (poll && e.status === "published") out.push(b("unpublish", "Unpublish"));
+      if (!poll && e.status === "closed") out.push(b("open", "Reopen"));
+      out.push(`<button type="button" class="cm-btn2 sm" data-edit="${esc2(e.id)}">Edit</button>`, `<button type="button" class="cm-btn2 sm" data-access="${esc2(e.id)}">Access</button>`);
+      return out.join("");
+    }
+    rowHtml(e) {
+      const pill = statusPill(e);
+      const counts = isPollKind(e.kind) ? `${plural(e.counts?.answers || 0, "answer")} · ${plural(e.counts?.posts || 0, "post")}` : plural(e.counts?.posts || 0, "post");
+      const access = e.access?.mode === "chosen" ? `${plural(e.access.count || 0, "member")}, chosen` : "All members";
+      return `<tr>
+      <td><span class="cm-badge k-${esc2(e.kind)}">${KIND_ICON[e.kind] || ""}${esc2(KIND_LABEL[e.kind] || e.kind)}</span></td>
+      <td class="t"><a href="${esc2(entryHref(e.id))}">${esc2(e.title)}</a><small>${esc2(meetingText(e.meeting))} · updated ${esc2(relTime(e.activityAt))}</small></td>
+      <td>${pill ? `<span class="cm-pill ${pill.tone}">${esc2(pill.text)}</span>` : ""}</td>
+      <td class="n">${esc2(access)}</td>
+      <td class="n">${esc2(counts)}</td>
+      <td><div class="acts">${this.actions(e)}</div></td>
+    </tr>`;
+    }
+    draw() {
+      let body;
+      if (this._state === "loading" || this._state === "idle") body = '<div class="cm-skel"></div>';
+      else if (this._state === "error") body = `<div class="cm-err"><span>${esc2(this._error?.message || "Community did not load.")}</span><button type="button" class="cm-quiet" data-retry style="margin-left:auto">Try again</button></div>`;
+      else {
+        const shown = this._entries.filter((e) => !this._filter || e.status === this._filter);
+        body = `<div class="chips" role="group" aria-label="Filter">${FILTERS.map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${this._filter === k}">${esc2(l)}</button>`).join("")}</div>
+        ${shown.length ? `<table><thead><tr><th>Kind</th><th>Entry</th><th>State</th><th>Who can see it</th><th>Activity</th><th></th></tr></thead><tbody>${shown.map((e) => this.rowHtml(e)).join("")}</tbody></table>` : `<div class="empty">${this._entries.length ? "No entries in this state." : "No entries yet. Start one with New entry."}</div>`}`;
+      }
+      this.set(this.css(COMMUNITY_CSS + CSS21) + `<div class="bar"><p>Polls and topics members see at <a href="/community/">gbti.network/community</a>. Each entry is shared with all members or with members you choose.</p>
+      <button type="button" class="cm-btn" data-new>New entry</button></div>${body}<div class="msg" data-msg></div>`);
+      this.on("[data-retry]", "click", () => this.load());
+      this.on("[data-new]", "click", () => this.openEditor("create"));
+      for (const b of this.$$("[data-filter]")) b.addEventListener("click", () => {
+        this._filter = b.dataset.filter;
+        this.draw();
+      });
+      for (const b of this.$$("[data-op]")) b.addEventListener("click", () => this.op(b.dataset.op, b.dataset.id, b));
+      for (const b of this.$$("[data-edit]")) b.addEventListener("click", () => this.openEditor("edit", b.dataset.edit));
+      for (const b of this.$$("[data-access]")) b.addEventListener("click", () => this.openEditor("access", b.dataset.access));
+    }
+    async op(op, id, btn) {
+      btn.disabled = true;
+      try {
+        await this.client.communityAdmin(op, { id });
+        await this.load();
+      } catch (e) {
+        btn.disabled = false;
+        const m = this.$("[data-msg]");
+        if (m) m.innerHTML = `<span class="bad" role="status">${esc2(e?.message || "That did not work.")}</span>`;
+      }
+    }
+    async openEditor(mode, id) {
+      await Promise.resolve().then(() => (init_gbti_community_editor(), gbti_community_editor_exports));
+      let entry = null;
+      if (id) {
+        try {
+          entry = await this.client.communityEntry(id);
+        } catch (e) {
+          const m = this.$("[data-msg]");
+          if (m) m.innerHTML = `<span class="bad" role="status">${esc2(e?.message || "That entry did not load.")}</span>`;
+          return;
+        }
+      }
+      const ed = document.createElement("gbti-community-editor");
+      ed.client = this.client;
+      document.body.appendChild(ed);
+      ed.addEventListener("community-saved", () => this.load());
+      if (mode === "create") ed.openCreate();
+      else if (mode === "access") ed.openAccess(entry.entry);
+      else ed.openEdit(entry.entry, { answered: (entry.results?.total || 0) > 0 });
+    }
+  };
+  define("gbti-community-manager", GbtiCommunityManager);
+
+  // client-ui/src/elements/gbti-skill-install-manager.mjs
+  init_base();
+
   // membership/skill-install.mjs
   var str2 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -18081,7 +19212,7 @@ ${SKILL_BOX_CSS}`;
   var PREVIEW_NAME = "farley";
   var NEW = "__new__";
   var blank = () => ({ label: "", folder: "", run: "", local: "" });
-  var CSS20 = `
+  var CSS22 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .msg.err { color:var(--danger); }
@@ -18176,20 +19307,20 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
+        this.set(this.css(CSS22) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS20) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS22) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS20) + '<p class="muted">Loading the install steps...</p>');
+        this.set(this.css(CSS22) + '<p class="muted">Loading the install steps...</p>');
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS20) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS22) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -18201,7 +19332,7 @@ ${SKILL_BOX_CSS}`;
         <span class="tl"><span class="tn">${esc2(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
       const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
       const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
-      this.set(this.css(SKILL_READER_CSS + CSS20) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(SKILL_READER_CSS + CSS22) + `<div class="${this._busy ? "busy" : ""}">
       <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
       ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc2(this._msg)}</p>` : ""}
       <div class="grid">
@@ -18306,6 +19437,9 @@ ${SKILL_BOX_CSS}`;
     }
   };
   define("gbti-skill-install-manager", GbtiSkillInstallManager);
+
+  // client-ui/src/elements/gbti-outbound-link-manager.mjs
+  init_base();
 
   // membership/outbound-link-edits.mjs
   var LINK_STATUSES = Object.freeze(["live", "placeholder", "retired"]);
@@ -18581,6 +19715,9 @@ ${SKILL_BOX_CSS}`;
     }
   };
   define("gbti-outbound-link-manager", GbtiOutboundLinkManager);
+
+  // client-ui/src/elements/gbti-cta-manager.mjs
+  init_base();
 
   // membership/cta-icon.mjs
   var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
@@ -19037,7 +20174,7 @@ ${SKILL_BOX_CSS}`;
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
   var ID_RE3 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   var str4 = (v2) => typeof v2 === "string" ? v2 : "";
-  var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
+  var plural2 = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
       id: str4(c?.id),
@@ -19177,7 +20314,7 @@ ${SKILL_BOX_CSS}`;
   }
   function previewNote(d) {
     if (!d.enabled) return "Disabled: this card shows on no page.";
-    return d.items.length ? `Shows on ${plural(d.items.length)} once saved.` : "Not on any page yet.";
+    return d.items.length ? `Shows on ${plural2(d.items.length)} once saved.` : "Not on any page yet.";
   }
 
   // client-ui/src/cta-manager-view.mjs
@@ -19215,7 +20352,7 @@ ${SKILL_BOX_CSS}`;
       <div class="meta">
         <div class="top"><span class="label">${esc7(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc7(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
         <p class="line">${esc7(rowSummary(c))}</p>
-        <p class="sub mono">${esc7(c.partner || "no partner")} · on ${plural(n)}</p>
+        <p class="sub mono">${esc7(c.partner || "no partner")} · on ${plural2(n)}</p>
         ${clicks ? `<p class="sub mono tracked">${esc7(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
@@ -19323,7 +20460,7 @@ ${SKILL_BOX_CSS}`;
     const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc7(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc7(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
-    <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
+    <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural2(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
@@ -19346,7 +20483,7 @@ ${SKILL_BOX_CSS}`;
   function pagesSection(st2) {
     const d = st2.d;
     const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc7(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc7(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
-    return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
+    return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural2(d.items.length)}</span></div>
     ${assigned}
     <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc7(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st2)}</div></div>`;
@@ -19923,7 +21060,7 @@ ${SKILL_BOX_CSS}`;
       const note = this.$('[data-region="pvnote"]');
       if (note) note.textContent = previewNote(st2.d);
       this.$$("[data-count]").forEach((el) => {
-        el.textContent = plural(st2.d.items.length);
+        el.textContent = plural2(st2.d.items.length);
       });
       if (found) {
         const f = this.$('[data-region="found"]');
@@ -20242,7 +21379,8 @@ ${SKILL_BOX_CSS}`;
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS21 = `
+  init_base();
+  var CSS23 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -20300,7 +21438,7 @@ ${SKILL_BOX_CSS}`;
   var QUEUE_TRIED_AT = 0;
   var QUEUE_REFRESH_FAILED = false;
   var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt", newsletter: "Newsletter" };
-  var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
+  var STATUSES2 = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
     // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
@@ -20341,18 +21479,18 @@ ${SKILL_BOX_CSS}`;
     _rows() {
       const d = this._data || {};
       const all = [];
-      for (const st2 of STATUSES) for (const it2 of Array.isArray(d[st2]) ? d[st2] : []) all.push({ ...it2, _st: st2 });
+      for (const st2 of STATUSES2) for (const it2 of Array.isArray(d[st2]) ? d[st2] : []) all.push({ ...it2, _st: st2 });
       all.sort((a, b) => (b.sentAt || b.cancelledAt || b.enqueuedAt || 0) - (a.sentAt || a.cancelledAt || a.enqueuedAt || 0));
       const q2 = this._fQ.trim().toLowerCase();
       return all.filter((it2) => (this._fStatus === "all" || it2._st === this._fStatus) && (this._fType === "all" || it2.source === this._fType) && (this._fTrigger === "all" || (this._fTrigger === "manual" ? it2.trigger === "manual" : it2.trigger !== "manual")) && (!q2 || String(it2.title || it2.targetSlug || "").toLowerCase().includes(q2)));
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS21) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS23) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -20361,7 +21499,7 @@ ${SKILL_BOX_CSS}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -20371,12 +21509,12 @@ ${SKILL_BOX_CSS}`;
       const rows = this._rows();
       const opt = (v2, label, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(label)}</option>`;
       const body = rows.map((it2) => this._row(it2)).join("");
-      this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc2(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
       <div class="fbar">
-        <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
+        <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES2.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
         <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v2, l]) => opt(v2, l, this._fType)).join("")}</select>
         <select data-f="trigger" aria-label="Filter by trigger">${opt("all", "Manual + auto", this._fTrigger)}${opt("manual", "Manual only", this._fTrigger)}${opt("auto", "Auto only", this._fTrigger)}</select>
         <input data-f="q" type="search" placeholder="Search titles" value="${esc2(this._fQ)}" aria-label="Search titles" />
@@ -20465,6 +21603,9 @@ ${SKILL_BOX_CSS}`;
     }
   };
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
+
+  // client-ui/src/elements/gbti-channel-map-manager.mjs
+  init_base();
 
   // membership/syndication-config-core.mjs
   var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev", "substack"]);
@@ -20653,7 +21794,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS22 = `
+  var CSS24 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -21148,7 +22289,7 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -21157,7 +22298,7 @@ ${SKILL_BOX_CSS}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS22) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS24) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -21170,7 +22311,7 @@ ${SKILL_BOX_CSS}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS22) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS24) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -21183,7 +22324,7 @@ ${SKILL_BOX_CSS}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS22) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
@@ -21484,6 +22625,9 @@ ${SKILL_BOX_CSS}`;
   };
   define("gbti-channel-map-manager", GbtiChannelMapManager);
 
+  // client-ui/src/elements/gbti-edit-panel.mjs
+  init_base();
+
   // client-ui/src/inline.mjs
   var TYPE_RE = /^(post|project|product|prompt|profile)$/;
   function readHooks(dataset = {}) {
@@ -21632,6 +22776,10 @@ ${SKILL_BOX_CSS}`;
   define("gbti-edit-panel", GbtiEditPanel);
 
   // client-ui/src/elements/gbti-locked-content.mjs
+  init_base();
+  init_image_layout_ui();
+  init_list_style_ui();
+  init_embed_lightbox();
   function lockedTargets(raw) {
     try {
       const v2 = JSON.parse(String(raw || "[]"));
@@ -21803,6 +22951,9 @@ ${SKILL_BOX_CSS}`;
   };
   define("gbti-locked-content", GbtiLockedContent);
 
+  // client-ui/src/elements/gbti-favorite.mjs
+  init_base();
+
   // client-ui/src/activity-state.mjs
   var CACHE = /* @__PURE__ */ new WeakMap();
   var EMPTY = () => ({ favorites: [], collections: [] });
@@ -21850,7 +23001,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS23 = `
+  var CSS25 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -21889,7 +23040,7 @@ ${SKILL_BOX_CSS}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS23) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS25) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -21925,8 +23076,9 @@ ${SKILL_BOX_CSS}`;
   define("gbti-favorite", GbtiFavorite);
 
   // client-ui/src/elements/gbti-collection.mjs
+  init_base();
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS24 = `
+  var CSS26 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -21970,7 +23122,7 @@ ${SKILL_BOX_CSS}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS24) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS26) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -22092,6 +23244,12 @@ ${SKILL_BOX_CSS}`;
   }
   define("gbti-collection", GbtiCollection);
 
+  // client-ui/src/elements/gbti-subscribe.mjs
+  init_base();
+
+  // client-ui/src/elements/gbti-notify-modal.mjs
+  init_base();
+
   // membership/notify-resolve.mjs
   var NOTIFY_CHANNELS = ["api", "email"];
   var SYSTEM_NOTIFY_DEFAULT = Object.freeze({ api: true, email: false });
@@ -22206,6 +23364,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/elements/notify-pill.mjs
+  init_base();
   function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false, paid = true } = {}) {
     const cell = `${esc2(rowKey)}:${esc2(channel)}`;
     const tip = cellBlockedTip(rowKey, channel, { paid });
@@ -22238,12 +23397,13 @@ ${SKILL_BOX_CSS}`;
 `;
 
   // client-ui/src/elements/gbti-notify-modal.mjs
+  init_member_avatars();
   var ROWS = { rows: PERSON_ROWS };
   var CHANNELS2 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS25 = `
+  var CSS27 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -22307,7 +23467,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS25));
+      this.set(this.css(CSS27));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -22380,12 +23540,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS25));
+        this.set(this.css(CSS27));
         return;
       }
       const u = esc2(this._username || "");
       if (!this._loaded) {
-        this.set(this.css(CSS25) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS27) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -22397,7 +23557,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS25) + `
+      this.set(this.css(CSS27) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -22484,7 +23644,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS26 = `
+  var CSS28 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -22546,7 +23706,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS26) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS28) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -22594,6 +23754,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-subscribe", GbtiSubscribe);
+
+  // client-ui/src/elements/gbti-share-composer.mjs
+  init_base();
 
   // client-ui/src/share-post-core.mjs
   function normalizeTagInput(raw, { max = 8, minLen = 2, maxLen = 32 } = {}) {
@@ -22717,6 +23880,10 @@ ${BLOCKED_PILL_CSS}
     if (!author || !SHARE_ID_RE.test(id)) return "";
     return `${origin}/shares/${encodeURIComponent(author)}/${encodeURIComponent(id)}/`;
   }
+
+  // client-ui/src/elements/gbti-share-composer.mjs
+  init_markdown_blocks();
+  init_markdown();
 
   // client-ui/src/elements/share-composer-css.mjs
   var SHARE_COMPOSER_CSS = `
@@ -23632,6 +24799,9 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-share-composer", GbtiShareComposer);
 
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_base();
+
   // membership/topics-vocab.mjs
   var titleCase = (key) => String(key).split("-").map((w2) => w2 ? w2[0].toUpperCase() + w2.slice(1) : w2).join(" ");
   var MORE_TOPICS = Object.freeze({ key: "more", label: "More topics" });
@@ -24024,6 +25194,7 @@ ${link}` : ""}`;
   }
 
   // client/src/link-kind.mjs
+  init_video_embed();
   var AUDIO_HOSTS = Object.freeze([
     // Music for artists: where musicians and DJs publish their own work.
     "mixcloud.com",
@@ -24068,6 +25239,9 @@ ${link}` : ""}`;
     return { audio: "Listen to it", video: "Watch video", read: "Read article" }[linkKind(url)];
   }
 
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_video_embed();
+
   // client/src/partner-links.mjs
   var SITE_HOSTS = /* @__PURE__ */ new Set(["gbti.network", "www.gbti.network", "preview.gbti.network"]);
   var norm2 = (p) => p.length > 1 ? p.replace(/\/+$/, "") : p;
@@ -24094,6 +25268,12 @@ ${link}` : ""}`;
     }
     return cached;
   }
+
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  init_assets();
+
+  // client-ui/src/elements/gbti-card-list.mjs
+  init_base();
 
   // client-ui/src/cat-glyph.mjs
   var GLYPH_SVG = {
@@ -24155,6 +25335,10 @@ ${link}` : ""}`;
     return TYPE_ACCENT[String(type || "").toLowerCase()] || OTHER_ACCENT;
   }
 
+  // client-ui/src/elements/gbti-card-list.mjs
+  init_assets();
+  init_member_avatars();
+
   // client-ui/src/target-slug.mjs
   function targetSlugFor(it2) {
     if (!it2) return "";
@@ -24197,7 +25381,7 @@ ${link}` : ""}`;
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS27 = `
+  var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -24438,11 +25622,11 @@ ${link}` : ""}`;
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS27) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS29) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS27) + body);
+      this.set(this.css(CSS29) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -24553,7 +25737,7 @@ ${link}` : ""}`;
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS28 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -24688,10 +25872,10 @@ ${link}` : ""}`;
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st2 = await this.client.status();
@@ -24708,7 +25892,7 @@ ${link}` : ""}`;
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -24734,12 +25918,12 @@ ${link}` : ""}`;
       const pending = dropPublished(items.map((it2) => `${it2.author}/${it2.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS28) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS30) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS28) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS30) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -24808,7 +25992,7 @@ ${link}` : ""}`;
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc2(share.author)}" data-gbti-id="${esc2(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS28) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS30) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc2(authorName3(share.author))}</span><span class="when">${esc2(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -24851,21 +26035,22 @@ ${link}` : ""}`;
       }
     }
     _splash() {
-      this.set(this.css(CSS28) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS30) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS29 = `
+  init_base();
+  var CSS31 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS29) + `<div class="stack">
+      this.set(this.css(CSS31) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -24875,7 +26060,8 @@ ${link}` : ""}`;
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS30 = `
+  init_base();
+  var CSS32 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -24893,7 +26079,7 @@ ${link}` : ""}`;
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS30) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS32) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -24902,7 +26088,7 @@ ${link}` : ""}`;
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS30) + `<div class="splash">
+        this.set(this.css(CSS32) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc2(c.heading)}</h2>
         <p>${esc2(c.body)}</p>
@@ -24910,15 +26096,20 @@ ${link}` : ""}`;
       </div>`);
         return;
       }
-      this.set(this.css(CSS30) + `<slot></slot>`);
+      this.set(this.css(CSS32) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
 
+  // client-ui/src/index.mjs
+  init_gbti_prose_editor();
+
   // client-ui/src/elements/gbti-comment-echoes.mjs
+  init_base();
+  init_embed_lightbox();
   var POLL_MS = 15e3;
   var POLL_MAX = 20;
-  var CSS31 = `
+  var CSS33 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -24992,7 +26183,7 @@ ${link}` : ""}`;
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS31) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS33) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       wireTweets(this.root);
       this._syncPage(this._rows.length);
@@ -25081,7 +26272,11 @@ ${link}` : ""}`;
   };
   define("gbti-comment-echoes", GbtiCommentEchoes);
 
+  // client-ui/src/elements/gbti-workspace.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-share-list.mjs
+  init_base();
   var GbtiShareList = class extends GbtiElement {
     static get observedAttributes() {
       return ["edit-id", "scope"];
@@ -25190,8 +26385,9 @@ ${link}` : ""}`;
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
+  init_base();
   var SITE13 = "https://gbti.network";
-  var CSS32 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -25275,15 +26471,15 @@ ${link}` : ""}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS32) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS32) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS32) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -25299,7 +26495,7 @@ ${link}` : ""}`;
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc2(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc2(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it2) => this._itemRow(resolveItem(idx, it2.type, it2.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS32) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS34) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
@@ -25366,13 +26562,17 @@ ${link}` : ""}`;
   };
   define("gbti-saved", GbtiSaved);
 
+  // client-ui/src/elements/gbti-subscriptions.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-topic-picker.mjs
+  init_base();
   var SITE14 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK4 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS33 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -25462,14 +26662,14 @@ ${link}` : ""}`;
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS33) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS33) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS33) + `
+      this.set(this.css(CSS35) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -25531,10 +26731,11 @@ ${link}` : ""}`;
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
+  init_member_avatars();
   var SITE15 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS34 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -25617,11 +26818,11 @@ ${link}` : ""}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS34) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS34) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -25630,7 +26831,7 @@ ${link}` : ""}`;
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS34) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -25708,6 +26909,9 @@ ${link}` : ""}`;
     }
   };
   define("gbti-subscriptions", GbtiSubscriptions);
+
+  // client-ui/src/elements/gbti-onboarding-progress.mjs
+  init_base();
 
   // membership/onboarding.mjs
   var ONBOARDING_STEPS = Object.freeze([
@@ -25949,6 +27153,9 @@ ${link}` : ""}`;
     return base ? base + handle : value;
   }
 
+  // client-ui/src/onboarding-card-core.mjs
+  init_base();
+
   // client-ui/src/own-profile.mjs
   async function readOwnProfile(client, { identity } = {}) {
     if (!client?.getContentItem) return { state: "failed", path: null, item: null };
@@ -26040,7 +27247,7 @@ ${link}` : ""}`;
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS35 = `
+  var CSS37 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -26081,10 +27288,13 @@ ${link}` : ""}`;
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS35) + html : "");
+      this.set(html ? this.css(CSS37) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
+
+  // client-ui/src/elements/gbti-profile-editor.mjs
+  init_base();
 
   // client-ui/src/profile-fields.mjs
   var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
@@ -26122,7 +27332,7 @@ ${link}` : ""}`;
 
   // client-ui/src/elements/gbti-profile-editor.mjs
   var SITE16 = "https://gbti.network";
-  var STATUS_LABEL2 = {
+  var STATUS_LABEL3 = {
     paid: "Paid member",
     trialing: "Free trial",
     trial: "Free trial",
@@ -26134,7 +27344,7 @@ ${link}` : ""}`;
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
-  var CSS36 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -26318,19 +27528,19 @@ ${link}` : ""}`;
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS36) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS36) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS36) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS36) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -26340,11 +27550,11 @@ ${link}` : ""}`;
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS36) + sections);
+      this.set(this.css(CSS38) + sections);
       this._wire();
     }
     _identity(m) {
-      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc2(STATUS_LABEL2[this._membership] || this._membership)}</span>`;
+      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc2(STATUS_LABEL3[this._membership] || this._membership)}</span>`;
       return `<section class="sec">
       <div class="sec-h"><h3>Profile ${badge}</h3><p>How you appear across gbti.network: your public profile page, the member directory, and content you author. Signed in as <b>@${esc2(this._login || "")}</b>.</p></div>
       <div class="body">
@@ -26688,6 +27898,8 @@ ${link}` : ""}`;
 `;
 
   // client-ui/src/elements/workspace-data.mjs
+  init_base();
+  init_assets();
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
   var withWorkspaceData = (Base2) => class extends Base2 {
     // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
@@ -27622,6 +28834,9 @@ ${link}` : ""}`;
   };
   define("gbti-workspace", GbtiWorkspace);
 
+  // client-ui/src/elements/gbti-activity-bell.mjs
+  init_base();
+
   // membership/bell-seen.mjs
   var BELL_SEEN_GROUPS = Object.freeze(["following", "replies", "approvals"]);
   var LATE_WINDOW_MS = 48 * 60 * 60 * 1e3;
@@ -27896,7 +29111,7 @@ ${link}` : ""}`;
       return {};
     }
   }
-  var CSS37 = `
+  var CSS39 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -28167,7 +29382,7 @@ ${link}` : ""}`;
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS37) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS39) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -28203,6 +29418,8 @@ ${link}` : ""}`;
   define("gbti-activity-bell", GbtiActivityBell);
 
   // client-ui/src/elements/gbti-notification-bell.mjs
+  init_base();
+  init_member_avatars();
   var INDEX_URL = "/activity-index.json";
   var SHARES_URL = "/shares-index.json";
   var LEGACY_SEEN_KEY2 = "gbti-notif-seen";
@@ -28214,7 +29431,7 @@ ${link}` : ""}`;
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS38 = `
+  var CSS40 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -28398,7 +29615,7 @@ ${link}` : ""}`;
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS38) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -28448,12 +29665,14 @@ ${link}` : ""}`;
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
+  init_base();
+  init_member_avatars();
   var SITE19 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS39 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -28558,11 +29777,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS39) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -28585,7 +29804,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE19}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS39) + `
+      this.set(this.css(CSS41) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -28607,6 +29826,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-notifications-settings", GbtiNotificationsSettings);
+
+  // client-ui/src/elements/gbti-news.mjs
+  init_base();
 
   // membership/topic-map.mjs
   function topicMapFromParsed(parsed) {
@@ -28667,7 +29889,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS40 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -28829,12 +30051,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS40) + head + `<div data-body></div>`);
+      this.set(this.css(CSS42) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -28943,7 +30165,11 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-news", GbtiNews);
 
+  // client-ui/src/elements/gbti-news-reader.mjs
+  init_base();
+
   // client-ui/src/elements/gbti-news-admin.mjs
+  init_base();
   var NEWS_ADMIN_COPY = {
     eyebrow: "Superadmin",
     weightLabel: "Modify source weight",
@@ -28968,7 +30194,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS41 = `
+  var CSS43 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -29094,13 +30320,16 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS41) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS43) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
     }
   };
   define("gbti-news-admin", GbtiNewsAdmin);
+
+  // client-ui/src/elements/gbti-news-share.mjs
+  init_base();
 
   // client-ui/src/social-composer.mjs
   var REDDIT_SUB = "GBTI_network";
@@ -29192,7 +30421,7 @@ ${BLOCKED_PILL_CSS}
   var discordPreviewHtml = (msg) => String(msg || "").split("\n").map((line) => esc2(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^_(.+)_$/, "<em>$1</em>")).join("<br>");
   var listOr = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} or ${a[a.length - 1]}`;
   var listAnd = (a) => a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
-  var CSS42 = `
+  var CSS44 = `
   :host { display:block; margin:16px 0 0; }
   :host([hidden]) { display:none !important; } /* the host's own display would otherwise beat the hidden attribute */
   .ns { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; display:flex; flex-direction:column; gap:14px;
@@ -29390,13 +30619,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._story) {
-        this.set(this.css(CSS42));
+        this.set(this.css(CSS44));
         return;
       }
       const ch = this._target;
       const cov = this._statusErr ? `<p class="cov msg err" role="status">${esc2(this._statusErr)} <button type="button" class="link" data-retry>Try again</button></p>` : `<p class="cov">${esc2(this._coverage())}</p>`;
       const body = ch ? '<div class="sep"></div>' + (ch === "discord" ? "" : this._linkChoice()) + this._composer(ch) + `<p class="note">${esc2(NOTES[ch] || "")}</p>` + (this._msg?.text === DONE_MSG ? "" : this._postedLine(ch)) + this._actions(ch) + (this._msg ? `<p class="msg${this._msg.err ? " err" : ""}" role="status">${esc2(this._msg.text)}</p>` : "") : '<p class="hint">Pick a channel to write its post.</p>';
-      this.set(this.css(CSS42) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
+      this.set(this.css(CSS44) + '<section class="ns" aria-label="Share to our channels"><div class="hd"><span class="eyebrow">Share to our channels</span><span class="who">Superadmin</span></div>' + cov + `<div class="pills" role="group" aria-label="Channel">${PILLS.map((c) => this._pill(c)).join("")}</div>` + body + "</section>");
       this._wire();
     }
     _wire() {
@@ -29537,7 +30766,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS43 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -29725,12 +30954,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it2 = this._item;
       if (!it2) {
-        this.set(this.css(CSS43) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it2.link || it2.openHref);
@@ -29749,7 +30978,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.sourceName || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + (this._share ? "<div data-share-slot></div>" : "");
-      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (this._share) this.$("[data-share-slot]")?.replaceWith(this._share);
       if (!this._wiredErr) {
@@ -29766,6 +30995,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-news-reader", GbtiNewsReader);
+
+  // client-ui/src/elements/gbti-reader.mjs
+  init_base();
 
   // client/src/share-source.mjs
   var PLATFORMS = {
@@ -29897,6 +31129,12 @@ ${BLOCKED_PILL_CSS}
     };
   }
 
+  // client-ui/src/elements/gbti-reader.mjs
+  init_image_layout_ui();
+  init_content_blocks();
+  init_list_style_ui();
+  init_assets();
+
   // client-ui/src/members-index.mjs
   var SITE21 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -29911,11 +31149,19 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
+  // client-ui/src/elements/gbti-reader.mjs
+  init_video_embed();
+  init_tweet_embed();
+
   // membership/prompt-kind.mjs
   var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
-  var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+  var KIND_LABEL2 = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+
+  // client-ui/src/elements/gbti-reader.mjs
+  init_member_avatars();
 
   // client-ui/src/project-view.mjs
+  init_assets();
   var REPOSITORY2 = "repository";
   var PRICING_LABELS = { free: "Free", freemium: "Freemium", paid: "Paid" };
   var str6 = (v2) => typeof v2 === "string" ? v2.trim() : "";
@@ -29999,6 +31245,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/reader-project.mjs
+  init_base();
   var ICON2 = {
     github: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12 1.6a10.4 10.4 0 0 0-3.29 20.27c.52.1.71-.22.71-.5l-.01-1.75c-2.9.63-3.51-1.4-3.51-1.4-.47-1.2-1.16-1.52-1.16-1.52-.95-.65.07-.64.07-.64 1.05.08 1.6 1.08 1.6 1.08.93 1.6 2.44 1.13 3.04.87.09-.68.36-1.13.66-1.39-2.31-.26-4.74-1.16-4.74-5.14 0-1.14.4-2.06 1.07-2.79-.11-.27-.46-1.32.1-2.76 0 0 .87-.28 2.85 1.06a9.8 9.8 0 0 1 5.19 0c1.98-1.34 2.85-1.06 2.85-1.06.57 1.44.21 2.49.1 2.76.67.73 1.07 1.65 1.07 2.79 0 3.99-2.43 4.87-4.75 5.13.38.32.71.95.71 1.92l-.01 2.85c0 .28.19.61.72.5A10.4 10.4 0 0 0 12 1.6Z"/></svg>',
     download: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
@@ -30132,11 +31379,11 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE22 = "https://gbti.network";
-  var KIND_ICON = {
+  var KIND_ICON2 = {
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS44 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS46 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc8(a);
@@ -30195,7 +31442,7 @@ ${BLOCKED_PILL_CSS}
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
     return `${base}${v2.replace(/^@/, "")}`;
   }
-  var CSS44 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -30573,7 +31820,7 @@ ${BLOCKED_PILL_CSS}
       const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
       const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc2(it2.type)}" data-gbti-author="${esc2(it2.author || "")}" data-gbti-slug="${esc2(slug)}"${it2.type === "share" ? ` data-gbti-id="${esc2(it2.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
       const kind2 = this._kind(it2);
-      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc2(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
+      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON2[kind2]}${esc2(KIND_LABEL2[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
       return `<div class="meta">${badge}<span class="who">${av}<b>${esc2(name)}</b></span>${when2 ? `<span>· ${esc2(dateStr(when2))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it2) {
@@ -30755,6 +32002,10 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-reader", GbtiReader);
 
+  // client-ui/src/elements/gbti-member-view.mjs
+  init_base();
+  init_assets();
+
   // client-ui/src/member-view-core.mjs
   var lc9 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
@@ -30776,11 +32027,12 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
+  init_member_avatars();
   var SITE23 = "https://gbti.network";
   var lc10 = (s) => String(s || "").toLowerCase();
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS45 = `
+  var CSS47 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -30904,7 +32156,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS45) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS47) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -30912,7 +32164,7 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
-      this.set(this.css(CSS45) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS47) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -30937,6 +32189,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
+  init_base();
   var SITE24 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
@@ -30956,7 +32209,7 @@ ${BLOCKED_PILL_CSS}
     } catch {
     }
   }
-  var CSS46 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -31096,7 +32349,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS46) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS48) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -31109,7 +32362,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
-      this.set(this.css(CSS46) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS48) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -31169,6 +32422,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-browse", GbtiBrowse);
 
   // client-ui/src/elements/gbti-app.mjs
+  init_base();
   var TABS3 = [
     { id: "author", label: "Author", tag: "gbti-content-editor" },
     { id: "shares", label: "Shares", tag: "gbti-shares" },
@@ -31231,6 +32485,9 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-app", GbtiApp);
+
+  // client-ui/src/index.mjs
+  init_base();
 
   // client-ui/src/client.mjs
   var GbtiClientError = class extends Error {
@@ -31548,6 +32805,9 @@ ${BLOCKED_PILL_CSS}
     return client;
   }
 
+  // client-ui/src/elements/gbti-social-queue.mjs
+  init_base();
+
   // client-ui/src/social-queue-core.mjs
   var LISTS = ["pending", "done"];
   function locate(data, id) {
@@ -31599,6 +32859,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // membership/markdown-plain.mjs
+  init_list_attrs();
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
@@ -31806,7 +33067,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var CSS47 = `
+  var CSS49 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -31927,19 +33188,19 @@ ${BLOCKED_PILL_CSS}
       const keepScroll = this._resetScroll ? 0 : this.$(".body")?.scrollTop || 0;
       this._resetScroll = false;
       if (!this.client) {
-        this.set(this.css(CSS47) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS47) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS47) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS49) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -31953,7 +33214,7 @@ ${BLOCKED_PILL_CSS}
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v2, l, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS47) + this._shell(`
+      this.set(this.css(CSS49) + this._shell(`
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc2(hint)}</p>
       <div class="fbar">
@@ -32163,6 +33424,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-social-queue", GbtiSocialQueue);
 
   // client-ui/src/elements/gbti-debug-panel.mjs
+  init_base();
   var fmtTime = (ms) => {
     try {
       return new Date(ms).toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -32179,7 +33441,7 @@ ${BLOCKED_PILL_CSS}
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS48 = `
+  var CSS50 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -32286,7 +33548,7 @@ ${BLOCKED_PILL_CSS}
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc2(e.realm || "app")}</span></td>
             <td>${esc2(e.area)}</td><td class="msg">${esc2(e.msg)}</td>
             <td class="data">${esc2(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS48) + `
+      this.set(this.css(CSS50) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -32323,10 +33585,11 @@ ${BLOCKED_PILL_CSS}
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/elements/gbti-signin-splash.mjs
+  init_base();
   var SITE25 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS49 = `
+  var CSS51 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
@@ -32374,7 +33637,7 @@ ${BLOCKED_PILL_CSS}
            <p class="note">Waiting for GitHub&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc2(who)}` : "Sign in with GitHub"}</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS49) + `<div class="splashwrap">
+      this.set(this.css(CSS51) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>

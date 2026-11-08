@@ -35,7 +35,7 @@ a:hover { color: var(--green); }
 .cm-mute { color: var(--fg-mute); }
 .cm-soft { color: var(--fg-soft); }
 
-.cm-badge { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 1.2; }
+.cm-badge { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
 .cm-badge svg { width: 14px; height: 14px; flex: none; }
 .cm-badge.k-poll, .cm-badge.k-typed { background: var(--green-tint); color: var(--green-700); }
 .cm-badge.k-topic { background: var(--blue-tint); color: var(--blue-700); }
