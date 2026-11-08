@@ -414,3 +414,42 @@ test('the Worker exports the object by the name wrangler binds, in both environm
   const routes = fs.readFileSync(new URL('../workers/signup/member-routes.mjs', import.meta.url), 'utf8');
   assert.match(routes, /Object\.prototype\.hasOwnProperty\.call\(COMMUNITY_ROUTES, pathname\)/, 'a path like /membership/community/constructor cannot reach a prototype key');
 });
+
+test('a first call that fails inside its transaction does not leave the store without its tables', () => {
+  // Production's object wraps every op in transactionSync, which ROLLS BACK on a throw, including the table creation
+  // the first op ran. The very first live call was a lookup of a missing id: tables made, not_found thrown, tables
+  // rolled back, and every later call failed on a missing table. Reproduce it with a real BEGIN/ROLLBACK.
+  const { store } = makeStore();
+  const db = store.sql.db;
+  const transact = (fn) => { db.exec('BEGIN'); try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } };
+  const first = runOp(store, { op: 'get', viewer: SUPER, args: { id: 'abcdefghjkmnpqrs' } }, null, { transact });
+  assert.equal(first.status, 404);
+  const list = runOp(store, { op: 'list', viewer: SUPER, args: {} }, null, { transact });
+  assert.equal(list.status, 200, 'the next call still finds its tables');
+  const made = runOp(store, { op: 'create', viewer: SUPER, args: { input: { kind: 'topic', title: 'After a failed first call' } } }, null, { transact });
+  assert.equal(made.status, 200);
+});
+
+test('the Durable Object class itself: start-up creates the tables, and a failing first call cannot undo them', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { CommunityDO } = await import('../workers/signup/community-do.mjs');
+  const db = new DatabaseSync(':memory:');
+  // The parts of ctx.storage the object uses: sql.exec(...).toArray() (BLOBs as ArrayBuffer), and transactionSync,
+  // which rolls back on a throw exactly as the platform's does.
+  const sql = { exec: (q, ...b) => ({ toArray: () => db.prepare(q).all(...b.map((x) => (x instanceof ArrayBuffer ? new Uint8Array(x) : x))).map((r) => ({ ...r })) }) };
+  const storage = { sql, transactionSync: (fn) => { db.exec('BEGIN'); try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
+  let started = 0;
+  const ctx = { storage, blockConcurrencyWhile: (fn) => { started++; return fn(); } };
+  const obj = new CommunityDO(ctx, {});
+  assert.equal(started, 1);
+  const send = (msg, bytes) => obj.fetch(new Request('https://community.internal/rpc', { method: 'POST', body: encodeRpc(msg, bytes) }));
+  assert.equal((await send({ op: 'get', viewer: SUPER, args: { id: 'abcdefghjkmnpqrs' } })).status, 404);
+  assert.equal((await send({ op: 'list', viewer: SUPER, args: {} })).status, 200);
+  const made = await (await send({ op: 'create', viewer: SUPER, args: { input: { kind: 'topic', title: 'Desks' }, open: true } })).json();
+  const up = await send({ op: 'putImage', viewer: PRIYA, args: { id: made.id, name: 'desk.png' } }, PNG);
+  assert.equal(up.status, 200);
+  const img = await send({ op: 'image', viewer: PRIYA, args: { id: made.id, img: (await up.json()).id } });
+  assert.deepEqual([...new Uint8Array(await img.arrayBuffer())], [...PNG], 'bytes survive the ArrayBuffer round trip');
+  assert.equal((await obj.fetch(new Request('https://community.internal/rpc', { method: 'GET' }))).status, 405);
+  assert.equal((await obj.fetch(new Request('https://community.internal/rpc', { method: 'POST', body: new Uint8Array([1]) }))).status, 400);
+});

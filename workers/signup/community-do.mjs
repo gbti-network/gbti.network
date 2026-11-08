@@ -145,6 +145,10 @@ export function runOp(store, msg, bytes, { transact = (fn) => fn(), limiter = nu
     }
     return replyJson({ ok: true, ...(value && typeof value === 'object' ? value : {}) });
   } catch (e) {
+    // The transaction rolled back everything this op wrote, which can include the tables a first op created. The
+    // store's "migrated" flag is memory and survives the rollback, so clear it: the next op checks its tables again.
+    // Found live on 2026-11-07: the first call was a lookup of a missing id, and every call after it failed.
+    store.ready = false;
     if (e instanceof CommunityError) return failure(e.status, e.code, e.message);
     log(e);
     return failure(500, 'internal', 'Something went wrong. Try again.');
@@ -158,6 +162,8 @@ export class CommunityDO {
     this.env = env;
     this.store = new CommunityStore(doSqlAdapter(ctx.storage.sql), { randomBytes: (n) => crypto.getRandomValues(new Uint8Array(n)) });
     this.limiter = new WriteLimiter();
+    // Create the tables once, at start-up and outside any op's transaction, so a failing op can never roll them back.
+    ctx.blockConcurrencyWhile?.(async () => { this.store.migrate(); });
   }
 
   async fetch(request) {
