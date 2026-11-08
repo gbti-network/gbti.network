@@ -186,11 +186,13 @@ const blocksCss = dataBlocksCss('.prose-gbti', {
      sow-496 (owner, 2026-11-08: "we want the footnotes to be smaller text. fitting for footnotes"): 0.75em, 12.4px on
      the 16.5px article body (was 0.8em, 13.2px), with a tighter line height. 12.4px is the reader's size too. Every rule also names the WorkBench preview's classes
      (client/src/markdown.mjs emits section.md-footnotes, a visible h2 and a.md-fn-back), which had no rule at all, so
-     the preview printed the list at full body size under a full-size "Footnotes" heading. Its heading is hidden the way
-     the site's sr-only one is, so the preview reads like the page. */
+     the preview printed the list at full body size under a full-size "Footnotes" heading.
+     The heading is SHOWN on both (owner, 2026-11-08: "we still want a headere above the footnotes that says
+     Footnotes"): remark-gfm ships the site's as sr-only and the preview's as a plain h2, and this rule undoes the
+     sr-only clip (Tailwind's sr-only clips with clip-path too, so both are reset) and sizes both to the footnotes, 1.35em of 12.4px (about 16.7px), not an article h2. */
   .prose-gbti sup a { text-decoration: none; font-weight: 700; padding: 0 1px; }
   .prose-gbti section[data-footnotes], .prose-gbti .md-footnotes { margin-top: 2.5em; padding-top: 1.2em; border-top: 1px solid var(--line); font-size: 0.75em; line-height: 1.6; color: var(--fg-mute); }
-  .prose-gbti .md-footnotes > h2 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .prose-gbti section[data-footnotes] > h2, .prose-gbti .md-footnotes > h2 { position: static; width: auto; height: auto; margin: 0 0 0.8em; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; border: 0; font-family: var(--f-display); font-weight: 800; font-size: 1.35em; line-height: 1.25; color: var(--fg); }
   .prose-gbti section[data-footnotes] p, .prose-gbti .md-footnotes p { margin: 0 0 0.5em; }
   .prose-gbti section[data-footnotes] p:last-child, .prose-gbti .md-footnotes p:last-child { margin: 0; }
   .prose-gbti section[data-footnotes] li, .prose-gbti .md-footnotes li { margin: 0.4em 0; }
