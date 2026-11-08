@@ -127,28 +127,6 @@ A proxy joins several servers into one network that players move between. Veloci
 
 ![Proxies running at least one bStats plugin, monthly average: Jan 2024: Velocity 4,246, BungeeCord 7,265; Jul 2024: Velocity 6,452, BungeeCord 6,056; Jan 2025: Velocity 7,863, BungeeCord 5,284; Jul 2025: Velocity 9,547, BungeeCord 4,327; Jan 2026: Velocity 11,258, BungeeCord 3,488; Jul 2026: Velocity 12,953, BungeeCord 2,607; Oct 2026: Velocity 13,391, BungeeCord 2,115.](./images/proxies.svg)
 
-## How we measured
-
-We measured Paper-family servers through bStats, which collects statistics from Paper itself and from every server running a plugin that reports to it. We read its overall version, software, Java and proxy charts, plus the version chart each server software publishes there. We took full readings on the first, fourth and last day of the week from 17 October 2026 to 24 October 2026, and a shorter reading every three hours in between. For Fabric, Forge, NeoForge and Quilt we counted downloads of the 500 most downloaded mods on Modrinth during the same week. From CurseForge we used only each platform's weekly total, because its per-version counters barely moved.
-
-```reveal Show the full method
----
-bStats numbers count servers that run at least one plugin with bStats enabled. Each server submits once every 30 minutes to the global charts, and the same server appears once no matter how many bStats plugins it runs. bStats caps submissions at 16 servers per IP address each half hour on the global charts, and at 8 per IP on per-software pages. Servers behind a single address that run more than that are undercounted.
-
-We took full readings on the first, fourth and last day of the week from 17 October 2026 to 24 October 2026: the version, software, Java runtime and proxy charts, and every per-software version page that bStats lists. Every three hours in between, a shorter reading recorded the global version and software charts and the version charts of Paper, Purpur, Leaf, UniverseSpigot and Folia. Three of those were missed on 18 October, when the machine taking them was off.
-
-For Fabric, Forge, NeoForge and Quilt we tallied downloads on Modrinth for the 500 most downloaded mods of each platform from 17 October 2026 to 24 October 2026. Those 500 mods covered between 69.51% and 91.71% of each platform's Modrinth downloads that week. A mod built for several platforms counts toward each platform's total. Modrinth counts one download per address per project in any 15 seconds, and at most six per address per project in six hours.
-
-Version strings were cleaned against Mojang's version manifest. Strings that matched a known Java release were grouped under that release. Anything else, such as mod version strings, git builds and typos, was counted as other and left out of the shares.
-
-CurseForge counts downloads per mod and per file. During the week its per-file counts grew by only 1.8% as much as its per-mod counts, so its per-version figures could not be used, and the article uses CurseForge's weekly totals per platform instead.
-
-The limits of this measurement are:
-- Servers with bStats switched off are missing entirely.
-- ViaVersion and ViaBackwards allow players to join on a different client version than the server runs, so the server version chart does not necessarily match the versions players use.
-- Proxy counts include only those proxies that run at least one bStats plugin.
-```
-
 ## Short answers about Minecraft Java versions
 
 **What is the latest version of Minecraft Java?** The latest release is 26.3. Mojang shipped it on 15 September 2026.
