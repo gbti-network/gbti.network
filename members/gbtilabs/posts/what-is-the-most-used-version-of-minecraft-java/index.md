@@ -95,12 +95,6 @@ Fabric API is a library mod that most Fabric mods need, according to Fabric's ow
 
 *Fabric API on Modrinth, 17 October 2026 to 24 October 2026.*
 
-#### Side by side with Paper
-
-This chart sets Paper's versions next to Fabric's. Paper's side is a share of servers, and Fabric's is a share of a week's mod downloads.
-
-![Paper and Fabric side by side. Paper servers (share of 178,346 servers, 24 October 2026): 26.3 30.5%, 26.2 25.4%, 1.21.11 19.8%, 26.1.2 7.4%, 1.21.4 3.1%, 1.21.10 2.6%. Fabric mod downloads (share of one week of downloads, Modrinth): 26.3 22.1%, 1.20.1 16.2%, 1.21.1 14.9%, 1.21.11 13.0%, 26.2 9.4%, 1.21 4.9%. The download week runs from 17 October 2026 to 24 October 2026.](./images/paper-and-fabric.svg)
-
 ### Forge servers
 
 Forge's most downloaded version is 1.20.1 at 66.30%, ahead of 1.20 at 13.02%. Forge [treats](https://forums.minecraftforge.net/topic/154387-forge-474-minecraft-1201/) 1.20.1 as its long-term version.
