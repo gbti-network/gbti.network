@@ -18692,8 +18692,88 @@ function embedProblem(provider, raw) {
   return `This link is not ${wants.replace(/ link$/, "")}. Paste ${wants}.`;
 }
 
+// client/src/content-cards.mjs
+var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+var CARD_KEYS = ["title", "text", "meta", "link", "label"];
+var CARD_IMAGE_LINE = /^!\[([^\]]*)\]\(\s*([^\s)]+)\s*\)$/;
+var cardImageSrcOk = (src) => /^https:\/\/[^\s<>"']+$/i.test(src) || /^\/(?!\/)[^\s<>"']*$/.test(src) || /^\.\/[^\s<>"']+$/.test(src);
+function parseCards(body, meta3 = "") {
+  const opt = String(meta3 ?? "").trim();
+  const cols = opt === "3" ? 3 : 2;
+  const colsBad = opt && opt !== "2" && opt !== "3" ? opt : null;
+  const groups = [[]];
+  for (const raw of String(body ?? "").split("\n")) {
+    const l = raw.trim();
+    if (l === "---") {
+      groups.push([]);
+      continue;
+    }
+    if (l) groups[groups.length - 1].push(l);
+  }
+  const cards = groups.filter((g) => g.length).map((g) => {
+    const c = { title: "", text: "", meta: "", link: null, linkBad: null, label: "", image: null, imageBad: [], extraImages: 0, unknown: [] };
+    for (const l of g) {
+      if (l.startsWith("![")) {
+        const m = l.match(CARD_IMAGE_LINE);
+        if (!m) {
+          c.imageBad.push({ line: l, why: "form" });
+          continue;
+        }
+        if (!cardImageSrcOk(m[2])) {
+          c.imageBad.push({ line: m[2], why: "src" });
+          continue;
+        }
+        if (c.image) {
+          c.extraImages++;
+          continue;
+        }
+        c.image = { alt: m[1].trim(), src: m[2] };
+        continue;
+      }
+      const i = l.indexOf(":");
+      const k = i > 0 ? l.slice(0, i).trim().toLowerCase() : "";
+      const v = i > 0 ? l.slice(i + 1).trim() : "";
+      if (!CARD_KEYS.includes(k)) {
+        c.unknown.push(l);
+        continue;
+      }
+      if (k === "link") {
+        if (safeUrl(v)) c.link = safeUrl(v);
+        else c.linkBad = v;
+        continue;
+      }
+      c[k] = v;
+    }
+    return c;
+  });
+  return { cols, colsBad, cards };
+}
+function cardsWarnings(text, meta3 = "") {
+  const out = [];
+  const p = parseCards(text, meta3);
+  if (p.colsBad) out.push(`cards option "${p.colsBad}" is not known; use 2 or 3 columns (it shows as 2)`);
+  if (!p.cards.some((c) => c.title)) out.push('cards needs at least one card with a "title:" line; start each further card with a line holding ---');
+  p.cards.forEach((c, i) => {
+    const name = c.title ? `card "${c.title}"` : `card ${i + 1}`;
+    if (!c.title) out.push(`cards: ${name} has no "title:" line; it is left out`);
+    for (const u of c.unknown) out.push(`cards line "${u}" is not an image line or title:, text:, meta:, link: or label:; it is left out`);
+    for (const b of c.imageBad) {
+      out.push(b.why === "form" ? `cards line "${b.line}" starts like an image but is not ![alt text](path); it is left out` : `cards image "${b.line}" is not an https address, a site path or a ./images/ file; it is left out`);
+    }
+    if (c.image && !c.image.alt) out.push(`cards: ${name} has an image with no alt text; describe the picture between the [ ]`);
+    if (c.extraImages) out.push(`cards: ${name} has more than one image line; only the first shows`);
+    if (c.linkBad != null) out.push(`cards: ${name} link "${c.linkBad}" is not an http or https address; the card shows without a link`);
+    if (c.label && !c.link && c.linkBad == null) out.push(`cards: ${name} has label: but no link: line to go with it`);
+    for (const k of ["title", "text", "meta", "label"]) {
+      if (/\[[^\]]*\]\([^)]*\)/.test(c[k])) out.push(`cards: ${name} ${k} has a markdown link, which shows as text; a card links through its link: line`);
+      if (/\[\^[^\]]+\]/.test(c[k])) out.push(`cards: ${name} ${k} has a footnote marker, which shows as text in a card`);
+    }
+  });
+  return out;
+}
+
 // client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq", "cards"];
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18701,7 +18781,7 @@ function parsePercent(v) {
   const n = Number(m[1]);
   return n >= 0 && n <= 100 ? n : null;
 }
-var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+var safeUrl2 = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
 function keyValue(line) {
   const i = line.indexOf(":");
   if (i <= 0) return { k: null, v: line };
@@ -18759,7 +18839,7 @@ function parseButton(body) {
   let label = ls[0] ?? "";
   let url2 = ls[1] ?? "";
   if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
-  return { label, url: safeUrl(url2), rawUrl: url2 };
+  return { label, url: safeUrl2(url2), rawUrl: url2 };
 }
 var REVEAL_MAX_PARTS = 6;
 var REVEAL_DEFAULT_LABEL = "Show more";
@@ -18836,7 +18916,7 @@ function parseAudio(body, meta3 = "") {
       if (e && !out.embed) out.embed = e;
       else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v };
     } else if (key === "link") {
-      if (safeUrl(v)) out.link = safeUrl(v);
+      if (safeUrl2(v)) out.link = safeUrl2(v);
       else out.linkBad = v;
     } else if (key === "link-label") out.linkLabel = v;
     else if (key === "style") {
@@ -18939,6 +19019,7 @@ function checkComponentBlocks(md) {
         if (/\[\^[^\]]+\]/.test(it.q)) warn(`faq question "${it.q}" has a footnote marker, which shows as text in a question; put it in the answer`);
       }
     }
+    if (name === "cards") for (const m of cardsWarnings(text, meta3)) warn(m);
     i = j;
   }
   return out;
@@ -20951,6 +21032,37 @@ Q: Why do some servers still run 1.8?
 The sources do not state a reason.
 ${F}`,
     renders: "Site, preview and reader: the questions as rows between rules, each answer closed until its question is clicked. Cross-posts: every question in bold with its answer written out under it."
+  },
+  {
+    name: "cards",
+    kind: "fence",
+    purpose: "A grid of cards, such as products or projects to try: two across in the article column (three with cards 3) and one on a phone. Each card is a picture, a name, a line of text and a small meta line (versions, a price), and with a link: the whole card is the link, with label: as its link line (Read more when there is none). A line holding only --- starts the next card. The picture is an ordinary image line, ./images/<file> beside the article, an https address or a site path, and it is shown at 16 by 10. Every field is plain text, so put no links or footnote markers in them.",
+    syntax: `${F}cards [3]
+![<alt text>](./images/<file>.webp)
+title: <name>
+text: <one line>
+meta: <small print>
+link: https://<address>
+label: <link line>
+---
+<the next card>
+${F}`,
+    example: `${F}cards
+![Jockey Radio music discs in many colours](./images/jockey-radio.webp)
+title: Jockey Radio
+text: Live radio, streams and your own audio on music discs, heard through Simple Voice Chat.
+meta: Minecraft 26.2 · Free
+link: https://gbti.network/projects/jockey-radio/
+label: See the plugin
+---
+![A Traveler's Chest on a sandy shore](./images/travelers-chest.webp)
+title: Traveler's Chest
+text: Chests that refill themselves after a cooldown you set.
+meta: Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11, 26.1 to 26.3
+link: https://gbti.network/projects/travelers-chest/
+label: See the plugin
+${F}`,
+    renders: "Site, preview and reader: the cards in a grid that steps down to one column as the page narrows; on the site the pictures are resized like any article image. Cross-posts: each card as its picture, its name in bold linking to its page with its line, and its meta in italics."
   },
   {
     name: "image layout",

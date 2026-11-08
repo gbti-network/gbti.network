@@ -8,7 +8,8 @@ import { embedUrl, bareVideoLine, embedPoster } from '../../client/src/video-emb
 import { bareTweetLine } from '../../client/src/tweet-embed.mjs'; // sow-261: a comment's bare tweet line
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';
-import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor, parseFaq, faqItemOpen, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE } from '../../client/src/content-blocks.mjs'; // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
+import { DATA_BLOCKS, renderDataBlock, sortListPlaceholder, audioBaseFor, parseFaq, faqItemOpen, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE } from '../../client/src/content-blocks.mjs';
+import { parseCards, cardsOpen, cardOpen, cardClose, cardBodyHtml, CARD_MEDIA_OPEN, CARD_MEDIA_CLOSE, CARDS_CLOSE } from '../../client/src/content-cards.mjs'; // sow-497 // sow-453: tags, bar, facts, button      // - a {square} -> <ul class="list-square"> (sow-322)
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -229,6 +230,29 @@ function faqNodes(value, proc, ids) {
   return out;
 }
 
+// sow-497: a ```cards block becomes raw HTML around a REAL image node per card. Astro collects the images to optimize
+// from the mdast tree AFTER this plugin runs (remarkCollectImages follows the user remark plugins in
+// @astrojs/markdown-remark), so a card's picture is resized and served from /_astro/ like any body image. Written as
+// an <img> inside the HTML string it would ship as the raw ./images/ path, which 404s on the built page.
+function cardsNodes(value, meta) {
+  const p = parseCards(value, meta);
+  const cards = p.cards.filter((c) => c.title);
+  if (!cards.length) return null;
+  const out = [];
+  let html = cardsOpen(p.cols);
+  for (const c of cards) {
+    html += cardOpen(c);
+    if (c.image) {
+      out.push({ type: 'html', value: html + CARD_MEDIA_OPEN });
+      out.push({ type: 'image', url: c.image.src, alt: c.image.alt, title: null });
+      html = CARD_MEDIA_CLOSE;
+    }
+    html += cardBodyHtml(c) + cardClose(c);
+  }
+  out.push({ type: 'html', value: html + CARDS_CLOSE });
+  return out;
+}
+
 export function remarkContentBlocks() {
   const proc = this; // the processor (unified binds it), for parsing an faq answer with the page's own parser
   return (tree, file) => {
@@ -251,6 +275,10 @@ export function remarkContentBlocks() {
         }
         if (n && n.type === 'code' && n.lang === 'faq' && proc && typeof proc.parse === 'function') {
           const rep = faqNodes(n.value, proc, fnIds);
+          if (rep) { node.children.splice(i, 1, ...rep); i += rep.length - 1; continue; }
+        }
+        if (n && n.type === 'code' && n.lang === 'cards') {
+          const rep = cardsNodes(n.value, n.meta);
           if (rep) { node.children.splice(i, 1, ...rep); i += rep.length - 1; continue; }
         }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {

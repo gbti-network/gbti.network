@@ -2405,6 +2405,103 @@ ${String(lines2[i]).trimStart()}`;
     }
   });
 
+  // client/src/content-cards.mjs
+  function parseCards(body, meta = "") {
+    const opt = String(meta ?? "").trim();
+    const cols = opt === "3" ? 3 : 2;
+    const colsBad = opt && opt !== "2" && opt !== "3" ? opt : null;
+    const groups = [[]];
+    for (const raw of String(body ?? "").split("\n")) {
+      const l = raw.trim();
+      if (l === "---") {
+        groups.push([]);
+        continue;
+      }
+      if (l) groups[groups.length - 1].push(l);
+    }
+    const cards = groups.filter((g) => g.length).map((g) => {
+      const c = { title: "", text: "", meta: "", link: null, linkBad: null, label: "", image: null, imageBad: [], extraImages: 0, unknown: [] };
+      for (const l of g) {
+        if (l.startsWith("![")) {
+          const m = l.match(CARD_IMAGE_LINE);
+          if (!m) {
+            c.imageBad.push({ line: l, why: "form" });
+            continue;
+          }
+          if (!cardImageSrcOk(m[2])) {
+            c.imageBad.push({ line: m[2], why: "src" });
+            continue;
+          }
+          if (c.image) {
+            c.extraImages++;
+            continue;
+          }
+          c.image = { alt: m[1].trim(), src: m[2] };
+          continue;
+        }
+        const i = l.indexOf(":");
+        const k = i > 0 ? l.slice(0, i).trim().toLowerCase() : "";
+        const v2 = i > 0 ? l.slice(i + 1).trim() : "";
+        if (!CARD_KEYS.includes(k)) {
+          c.unknown.push(l);
+          continue;
+        }
+        if (k === "link") {
+          if (safeUrl(v2)) c.link = safeUrl(v2);
+          else c.linkBad = v2;
+          continue;
+        }
+        c[k] = v2;
+      }
+      return c;
+    });
+    return { cols, colsBad, cards };
+  }
+  function cardBodyHtml(c) {
+    return `<span class="gbti-card-body"><span class="gbti-card-title">${esc3(c.title)}</span>` + (c.text ? `<span class="gbti-card-text">${esc3(c.text)}</span>` : "") + (c.meta ? `<span class="gbti-card-meta">${esc3(c.meta)}</span>` : "") + (c.link ? `<span class="gbti-card-cta">${esc3(c.label || CARD_DEFAULT_LABEL)}</span>` : "") + "</span>";
+  }
+  function renderCards(body, meta = "") {
+    const p = parseCards(body, meta);
+    const cards = p.cards.filter((c) => c.title);
+    if (!cards.length) return null;
+    const img = (im) => `${CARD_MEDIA_OPEN}<img src="${esc3(im.src)}" alt="${esc3(im.alt)}" loading="lazy">${CARD_MEDIA_CLOSE}`;
+    return cardsOpen(p.cols) + cards.map((c) => cardOpen(c) + (c.image ? img(c.image) : "") + cardBodyHtml(c) + cardClose(c)).join("") + CARDS_CLOSE;
+  }
+  function cardsCss(s, t) {
+    return `${s} .gbti-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,max(240px,calc((100% - 16px)/2))),1fr));gap:16px;margin:1.4em 0}
+${s} .gbti-cards-3{grid-template-columns:repeat(auto-fill,minmax(min(100%,max(180px,calc((100% - 32px)/3))),1fr))}
+${s} .gbti-card{display:flex;flex-direction:column;min-width:0;border:1px solid ${t.line};border-radius:12px;overflow:hidden;background:${t.card};color:inherit;text-decoration:none}
+${s} a.gbti-card:hover{border-color:${t.greenBorder};color:inherit}
+${s} a.gbti-card:focus-visible{outline:2px solid ${t.green};outline-offset:2px}
+${s} .gbti-card-media{display:block}
+${s} .gbti-card-media img{display:block;width:100%;max-width:none;height:auto;aspect-ratio:16/10;object-fit:cover;margin:0;border-radius:0}
+${s} .gbti-card-body{display:flex;flex-direction:column;flex:1;gap:6px;padding:14px 16px 16px}
+${s} .gbti-card-title{font-family:var(--f-display,inherit);font-weight:800;font-size:1.12em;line-height:1.25;color:${t.fg}}
+${s} .gbti-card-text{font-size:.86em;line-height:1.55;color:${t.soft}}
+${s} .gbti-card-meta{margin-top:2px;font-family:${t.mono};font-size:.68em;line-height:1.5;color:${t.mute}}
+${s} .gbti-card-cta{margin-top:auto;padding-top:6px;font-weight:700;font-size:.86em;line-height:1.3;color:${t.green700}}
+${s} .gbti-card-cta::after{content:" \\2192";content:" \\2192" / ""}
+${s} a.gbti-card:hover .gbti-card-cta{text-decoration:underline;text-underline-offset:3px}`;
+  }
+  var esc3, safeUrl, CARD_KEYS, CARD_DEFAULT_LABEL, CARD_IMAGE_LINE, cardImageSrcOk, CARDS_CLOSE, CARD_MEDIA_OPEN, CARD_MEDIA_CLOSE, cardsOpen, cardOpen, cardClose;
+  var init_content_cards = __esm({
+    "client/src/content-cards.mjs"() {
+      "use strict";
+      esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+      CARD_KEYS = ["title", "text", "meta", "link", "label"];
+      CARD_DEFAULT_LABEL = "Read more";
+      CARD_IMAGE_LINE = /^!\[([^\]]*)\]\(\s*([^\s)]+)\s*\)$/;
+      cardImageSrcOk = (src) => /^https:\/\/[^\s<>"']+$/i.test(src) || /^\/(?!\/)[^\s<>"']*$/.test(src) || /^\.\/[^\s<>"']+$/.test(src);
+      CARDS_CLOSE = "</div>";
+      CARD_MEDIA_OPEN = '<span class="gbti-card-media">';
+      CARD_MEDIA_CLOSE = "</span>";
+      cardsOpen = (cols) => `<div class="gbti-cards${cols === 3 ? " gbti-cards-3" : ""}">`;
+      cardOpen = (c) => c.link ? `<a class="gbti-card" href="${esc3(c.link)}">` : '<div class="gbti-card">';
+      cardClose = (c) => c.link ? "</a>" : "</div>";
+    }
+  });
+
   // client/src/content-blocks.mjs
   function parsePercent(v2) {
     const m = String(v2 ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -2472,7 +2569,7 @@ ${String(lines2[i]).trimStart()}`;
     let label = ls[0] ?? "";
     let url = ls[1] ?? "";
     if (ls.length === 1 && label.includes("|")) [label, url] = label.split("|").map((s) => s.trim());
-    return { label, url: safeUrl(url), rawUrl: url };
+    return { label, url: safeUrl2(url), rawUrl: url };
   }
   function parseWeights(v2) {
     const parts = String(v2 ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -2508,8 +2605,8 @@ ${String(lines2[i]).trimStart()}`;
     let list = [];
     let blank2 = false;
     const flush = () => {
-      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
-      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc3(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
+      if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc4(l))).join(" ")}</p>`);
+      if (list.length) out.push(`<ul>${list.map((it2) => `<li>${inlineMd(esc4(it2.text))}${it2.sub.some((s) => s.trim()) ? revealBodyHtml(it2.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
       para = [];
       list = [];
     };
@@ -2598,7 +2695,7 @@ ${String(lines2[i]).trimStart()}`;
         if (e && !out.embed) out.embed = e;
         else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v2 };
       } else if (key === "link") {
-        if (safeUrl(v2)) out.link = safeUrl(v2);
+        if (safeUrl2(v2)) out.link = safeUrl2(v2);
         else out.linkBad = v2;
       } else if (key === "link-label") out.linkLabel = v2;
       else if (key === "style") {
@@ -2631,12 +2728,12 @@ ${String(lines2[i]).trimStart()}`;
   }
   function renderAudio(body, meta, { origin = "", audioBase = null, relativeAudio = false } = {}) {
     const a = parseAudio(body, meta);
-    const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
-    const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
+    const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc4(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc4(a.length)}</span>` : "") + "</div>";
+    const link = a.link ? `<a class="gbti-audio-link" href="${esc4(a.link)}" target="_blank" rel="noopener nofollow">${esc4(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
     if (a.embed) {
       const e = a.embed;
       const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
-      return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
+      return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc4(e.src)}" title="${esc4(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
     }
     if (!a.sources.length) return null;
     const served = a.sources.map((x) => {
@@ -2644,7 +2741,7 @@ ${String(lines2[i]).trimStart()}`;
       return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
     }).filter((x) => x.url);
     if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
-    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + served.map((x) => `<source src="${esc3(x.url)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
+    return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc4(a.label)}">` + served.map((x) => `<source src="${esc4(x.url)}" type="${esc4(x.type)}">`).join("") + `</audio>${link}</div>`;
   }
   function weightWidths(weights) {
     const total = weights.reduce((a, w2) => a + w2.n, 0) || 1;
@@ -2659,41 +2756,42 @@ ${String(lines2[i]).trimStart()}`;
     let top = "";
     if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
       const ws = weightWidths(r.weights);
-      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
-    } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
-    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
+      top += '<div class="gbti-reveal-weights">' + r.weights.map((w2, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w2, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc4(w2.name)}</span> <span class="gbti-reveal-pct">${w2.n}%</span></span>`).join(" ") + "</div>";
+    } else if (r.weightsRaw) top += `<p>${esc4(r.weightsRaw)}</p>`;
+    if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc4(r.note))}</div>`;
     if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
-    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+    return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc4(r.label)}</span><span class="gbti-reveal-hide">${esc4(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
   }
   function renderDataBlock(name, body, meta = "", opts = {}) {
     if (name === "reveal") return renderReveal(body, meta);
     if (name === "faq") return renderFaq(body, opts.answerHtml);
     if (name === "audio") return renderAudio(body, meta, opts);
+    if (name === "cards") return renderCards(body, meta);
     if (name === "tags") {
       const { tags } = parseTags(body);
       if (!tags.length) return null;
-      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
+      return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc4(t)}</span>`).join("")}</div>`;
     }
     if (name === "bar") {
       const b = parseBar(body);
-      if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
-      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
+      if (b.value == null) return b.label || b.note ? `<p>${esc4([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
+      return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc4(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc4(b.note)}</div>` : "") + "</div>";
     }
     if (name === "facts") {
       const { rows } = parseFacts(body);
       if (!rows.length) return null;
-      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
+      return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc4(r.k)}</dt><dd><span>${esc4(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
     }
     if (name === "button") {
       const b = parseButton(body);
       if (!b.label) return null;
       const cls = String(meta).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
-      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
+      return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc4(b.url)}">${esc4(b.label)}</a></div>` : `<p>${esc4(b.label)}</p>`;
     }
     if (name === "stats") {
       const s = parseStats(body);
       if (!s.stats.length) return null;
-      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
+      return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc4(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc4(x.value)}</span> <span class="gbti-stat-label">${esc4(x.label)}</span></div>`).join(" ")}</div></div>`;
     }
     return null;
   }
@@ -2779,6 +2877,7 @@ ${s} .gbti-faq-a{padding:0 44px 18px 0;font-size:.93em;line-height:1.7;color:${t
 ${s} .gbti-faq-a p{margin:0 0 10px}
 ${s} .gbti-faq-a ul{margin:0 0 10px}
 ${s} .gbti-faq-a > :last-child{margin-bottom:0}
+${cardsCss(s, t)}
 ${s} .gbti-audio{margin:1.2em 0}
 ${s} > .gbti-audio:first-child{margin-top:14px}
 ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
@@ -2834,15 +2933,16 @@ ${s} .gbti-audio-row .gbti-audio-link{flex-basis:100%;margin-left:0}
 }
 ${barWidthCss(s)}`;
   }
-  var DATA_BLOCKS, esc3, lines, safeUrl, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, FAQ_Q, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE, faqItemOpen, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
+  var DATA_BLOCKS, esc4, lines, safeUrl2, REVEAL_MAX_PARTS, REVEAL_DEFAULT_LABEL, inlineMd, FAQ_Q, FAQ_OPEN, FAQ_ITEM_CLOSE, FAQ_CLOSE, faqItemOpen, AUDIO_SRC_RE, ITEM_FILE_RE, AUDIO_TYPES, AUDIO_STYLES, AUDIO_DEFAULT_LABEL, EMBED_ALLOW, APPLE_SANDBOX, DIRECTORY_STYLES, KNOWN_FENCES;
   var init_content_blocks = __esm({
     "client/src/content-blocks.mjs"() {
       "use strict";
       init_audio_embed();
-      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
-      esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      init_content_cards();
+      DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq", "cards"];
+      esc4 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-      safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+      safeUrl2 = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
       REVEAL_MAX_PARTS = 6;
       REVEAL_DEFAULT_LABEL = "Show more";
       inlineMd = (escaped) => escaped.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
@@ -2850,7 +2950,7 @@ ${barWidthCss(s)}`;
       FAQ_OPEN = '<div class="gbti-faq">';
       FAQ_ITEM_CLOSE = "</div></details>";
       FAQ_CLOSE = "</div>";
-      faqItemOpen = (q2) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc3(q2))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
+      faqItemOpen = (q2) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc4(q2))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
       AUDIO_SRC_RE = /^(?:\/media\/podcasts\/|\.\/audio\/)[a-z0-9][a-z0-9_-]*\.(ogg|mp3)$/;
       ITEM_FILE_RE = /(?:^|[\\/])members[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/](posts|projects|products|prompts)[\\/]([a-z0-9][a-z0-9-]{0,63})[\\/]index\.mdx?$/;
       AUDIO_TYPES = { ogg: "audio/ogg; codecs=opus", mp3: "audio/mpeg" };
@@ -3378,9 +3478,9 @@ ${barWidthCss(s)}`;
           continue;
         }
       }
-      const esc11 = escapeKeepingLinks(line, linkKeep);
+      const esc12 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc11)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc12)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -3460,7 +3560,7 @@ ${barWidthCss(s)}`;
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc11, line)];
+      const para = [hardBreak(esc12, line)];
       i++;
       while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
         para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));
@@ -9005,7 +9105,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/prepared-editor.mjs
-  var esc4 = (v2) => String(v2 ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc5 = (v2) => String(v2 ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var PREP_KEYS = ["id", "recipientName", "message", "suggestedNote", "githubLogin", "campaign", "code", "link", "state", "inviteState"];
   function blankPrepared() {
     return { id: null, recipientName: "", message: "", suggestedNote: "", githubLogin: "", campaign: "", code: null, link: null, state: null, inviteState: null };
@@ -9140,27 +9240,27 @@ ${listStyleProseCss(".doc-blocks")}
     const revoked = s.state === "revoked";
     const locked = bindingLockedFor(s);
     const camps = Array.isArray(campaigns) ? campaigns : [];
-    const opt = (c, sel) => `<option value="${esc4(c.code)}"${sel ? " selected" : ""}>${esc4(c.code)}${c.freeDays ? ` (${esc4(String(c.freeDays))} free days)` : ""}</option>`;
+    const opt = (c, sel) => `<option value="${esc5(c.code)}"${sel ? " selected" : ""}>${esc5(c.code)}${c.freeDays ? ` (${esc5(String(c.freeDays))} free days)` : ""}</option>`;
     const chosen = s.campaign || camps[0]?.code || "";
     const campaignField = saved ? `<select id="prep-camp" data-prep="campaign" disabled>${opt({ code: s.campaign, freeDays: camps.find((c) => c.code === s.campaign)?.freeDays }, true)}</select>
        <p class="pnote">The campaign is fixed while this invitation is out. To change it, revoke the invitation and send it again with another campaign.</p>` : camps.length ? `<select id="prep-camp" data-prep="campaign">${camps.map((c) => opt(c, c.code === chosen)).join("")}</select>
          <p class="pnote">The free year the invitation carries. An account that is already a member is offered none.</p>` : `<select id="prep-camp" data-prep="campaign"><option value="">No active campaign</option></select>
          <p class="pnote warn">Activate a campaign in Admin, Coupons first. The invitation needs one for its free year.</p>`;
     const status = !saved ? '<p class="pnote">Nothing is sent. Save listing stores this project privately and gives you an invitation link to send yourself.</p>' : revoked ? '<p class="pnote warn">This invitation is revoked, so its link no longer works. Edits still save; Send again in the invite manager gives it a new link.</p>' : "";
-    const link = saved && !revoked && s.link ? `<div class="plink"><label for="prep-link">Invitation link</label><input id="prep-link" class="plinkval" readonly value="${esc4(s.link)}" />
+    const link = saved && !revoked && s.link ? `<div class="plink"><label for="prep-link">Invitation link</label><input id="prep-link" class="plinkval" readonly value="${esc5(s.link)}" />
         <div class="pbtns"><button type="button" class="prepbtn" data-prep-copy>Copy link</button><button type="button" class="prepbtn" data-prep-open>Open</button></div>
         <p class="pnote">Send it yourself; nothing is emailed. Opening it while signed in as you shows the page without a Publish button.</p></div>` : "";
     return `<section class="rcard prepcard" id="prepcard">
     <div class="rcard-h"><span class="rcard-t">Prepared for</span></div>
     <div class="rcard-b">
       ${status}
-      <div class="pfld"><label for="prep-name">Greeting name</label><input id="prep-name" data-prep="recipientName" type="text" maxlength="${MAX_RECIPIENT_NAME}" autocomplete="off" placeholder="Sam" value="${esc4(s.recipientName)}" /></div>
-      <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc4(s.githubLogin)}"${locked ? " readonly" : ""} />
+      <div class="pfld"><label for="prep-name">Greeting name</label><input id="prep-name" data-prep="recipientName" type="text" maxlength="${MAX_RECIPIENT_NAME}" autocomplete="off" placeholder="Sam" value="${esc5(s.recipientName)}" /></div>
+      <div class="pfld"><label for="prep-login">GitHub account (optional)</label><input id="prep-login" data-prep="githubLogin" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="@their-login" value="${esc5(s.githubLogin)}"${locked ? " readonly" : ""} />
         <p class="pnote">${locked ? "The free year was already taken through this link, so the account it is tied to can no longer change." : "Ties the invitation to that one account. Leave it empty and whoever opens the link first can claim it."}</p></div>
-      <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc4(s.message)}</textarea>
+      <div class="pfld"><label for="prep-msg">Personal message</label><textarea id="prep-msg" data-prep="message" maxlength="${MAX_MESSAGE}" placeholder="Why you thought of them, in your own words.">${esc5(s.message)}</textarea>
         <p class="pnote">Shown to them as plain text above the listing, after a greeting the page adds on its own ("Hi Sam,"), so start after the greeting. Their author note is theirs to publish when they claim it.</p></div>
-      <div class="pfld"><label for="prep-note">Suggested note (optional)</label><textarea id="prep-note" data-prep="suggestedNote" maxlength="${MAX_SUGGESTED_NOTE}" placeholder="Pre-fills their author note when they claim it.">${esc4(s.suggestedNote)}</textarea>
-        <p class="pnote">${esc4(SUGGESTED_NOTE_HINT)}</p></div>
+      <div class="pfld"><label for="prep-note">Suggested note (optional)</label><textarea id="prep-note" data-prep="suggestedNote" maxlength="${MAX_SUGGESTED_NOTE}" placeholder="Pre-fills their author note when they claim it.">${esc5(s.suggestedNote)}</textarea>
+        <p class="pnote">${esc5(SUGGESTED_NOTE_HINT)}</p></div>
       <div class="pfld"><label for="prep-camp">Campaign</label>${campaignField}</div>
       ${link}
     </div>
@@ -9237,14 +9337,14 @@ ${listStyleProseCss(".doc-blocks")}
     }
     const problem = preparedTextProblem(p);
     if (problem) {
-      editor.out(esc4(problem), "danger");
+      editor.out(esc5(problem), "danger");
       return null;
     }
     let gathered;
     try {
       gathered = editor.gather();
     } catch (err) {
-      editor.out(esc4(failHint(err).text), "danger");
+      editor.out(esc5(failHint(err).text), "danger");
       return null;
     }
     const payload = buildPreparedPayload({ prepared: p, gathered });
@@ -9259,15 +9359,15 @@ ${listStyleProseCss(".doc-blocks")}
       const res = await client.preparedSave(payload);
       Object.assign(p, preparedAfterSave(p, res));
       editor._setChip?.("Saved", "ok");
-      editor.out(`<span class="tag ok">saved</span> ${esc4(res?.created ? "Saved privately with its invitation. Copy the link from the Prepared for card and send it yourself." : "Saved. The invitation link has not changed.")}`);
+      editor.out(`<span class="tag ok">saved</span> ${esc5(res?.created ? "Saved privately with its invitation. Copy the link from the Prepared for card and send it yourself." : "Saved. The invitation link has not changed.")}`);
       refreshPreparedCard(editor);
       editor.emit?.("gbti-prepared-change", { prepared: { ...p }, frontmatter: payload.draft.frontmatter, body: payload.draft.body });
       return res;
     } catch (err) {
       editor._setChip?.("");
       const text2 = failHint(err).text;
-      editor._banner?.(esc4(text2), "danger");
-      editor.out(esc4(text2), "danger");
+      editor._banner?.(esc5(text2), "danger");
+      editor.out(esc5(text2), "danger");
       return null;
     } finally {
       restore();
@@ -11415,13 +11515,13 @@ ${listStyleProseCss(".doc-blocks")}
     return `Your saved draft is behind. The ${noun} changed on ${f(pub)}, after the draft was saved on ${f(saved)}.`;
   }
   var CLOCK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
-  function rowDraftParts({ draft, item, index, esc: esc11, discardedPath = null }) {
+  function rowDraftParts({ draft, item, index, esc: esc12, discardedPath = null }) {
     const behind = rowDraftBehind(draft, item);
     const done = !draft && discardedPath && item?.path === discardedPath ? '<span class="tag ok">draft discarded</span>' : "";
     if (!draft) return { tag: done, line: "" };
     if (!behind) return { tag: '<span class="tag">staged edits</span>', line: "" };
     const msg = behindRowMessage({ ...behind, type: item.type });
-    return { tag: "", line: `<span class="behind">${CLOCK}<span>${esc11(msg)} <button class="lnk" data-behind-discard="${Number(index)}" type="button">Discard draft</button></span></span>` };
+    return { tag: "", line: `<span class="behind">${CLOCK}<span>${esc12(msg)} <button class="lnk" data-behind-discard="${Number(index)}" type="button">Discard draft</button></span></span>` };
   }
   var BEHIND_ROW_CSS = `
   :host { --behind-fg:#8a5500; }
@@ -19037,7 +19137,7 @@ ${listStyleProseCss(".doc-blocks")}
   });
 
   // src/lib/skill-page.mjs
-  function esc5(s) {
+  function esc6(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
   var SKILL_SHELL = Object.freeze({
@@ -19063,7 +19163,7 @@ ${listStyleProseCss(".doc-blocks")}
     "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
   };
   var icon3 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
-  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc5(r.text)}</code>` : esc5(r.text)).join("");
+  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc6(r.text)}</code>` : esc6(r.text)).join("");
   var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
   function sharedFolderNote(tab, tabs, field2 = "folder") {
     const mine = tab?.[field2];
@@ -19083,16 +19183,16 @@ ${listStyleProseCss(".doc-blocks")}
     const many = tabs.length > 1;
     const tabId = (t) => `skill-tab-${t.key}`;
     const panelId = (t) => `skill-panel-${t.key}`;
-    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc5(t.key)}">${esc5(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc5(tabs[0].label)}</p>`;
-    const download = fileHref ? `<a class="skill-btn" href="${esc5(fileHref)}" download="SKILL.md">${icon3("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
-    const makeFolder = (text2, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ""}><p class="skill-step-t">${text2}</p><div class="${s.cmd}"><code>${esc5(cmd)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc5(cmd)}">${icon3("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc5(shared)}</p>` : "") + `</div>`;
-    const scopeSwitch = (t) => `<div class="${s.toolsRow} ${s.scope}"><span id="skill-scope-l-${esc5(t.key)}" class="skill-tools-label">Install for</span><div class="${s.tools}" role="radiogroup" aria-labelledby="skill-scope-l-${esc5(t.key)}"><button type="button" role="radio" aria-checked="true" tabindex="0" data-skill-scope="all">All projects</button><button type="button" role="radio" aria-checked="false" tabindex="-1" data-skill-scope="project">This project</button></div></div>`;
+    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc6(t.key)}">${esc6(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc6(tabs[0].label)}</p>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc6(fileHref)}" download="SKILL.md">${icon3("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const makeFolder = (text2, cmd, shared, scope) => `<div class="skill-step"${scope ? ` data-scope-only="${scope}"` : ""}><p class="skill-step-t">${text2}</p><div class="${s.cmd}"><code>${esc6(cmd)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc6(cmd)}">${icon3("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc6(shared)}</p>` : "") + `</div>`;
+    const scopeSwitch = (t) => `<div class="${s.toolsRow} ${s.scope}"><span id="skill-scope-l-${esc6(t.key)}" class="skill-tools-label">Install for</span><div class="${s.tools}" role="radiogroup" aria-labelledby="skill-scope-l-${esc6(t.key)}"><button type="button" role="radio" aria-checked="true" tabindex="0" data-skill-scope="all">All projects</button><button type="button" role="radio" aria-checked="false" tabindex="-1" data-skill-scope="project">This project</button></div></div>`;
     const panels = tabs.map((t, i) => {
       const project = typeof t.localFolder === "string" && t.localFolder && t.localMkdir;
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc5(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `>` + (project ? scopeSwitch(t) : "") + `<ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span>` + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? "all" : "") + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, "localFolder"), "project") : "") + `</li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon3("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol></div>`;
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc6(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `>` + (project ? scopeSwitch(t) : "") + `<ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span>` + makeFolder("Make the skill's folder.", t.mkdir, sharedFolderNote(t, tabs), project ? "all" : "") + (project ? makeFolder("In your project's folder, make the skill's folder.", t.localMkdir, sharedFolderNote(t, tabs, "localFolder"), "project") : "") + `</li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon3("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol></div>`;
     }).join("");
     const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon3("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc5(also)}</p>` : "") + `</section>`;
+    return `<section class="${s.install}" data-skill-install data-scope="all" aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon3("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc6(also)}</p>` : "") + `</section>`;
   }
   function wireSkillPage(root = document, storage = globalThis.localStorage) {
     const box = root.querySelector("[data-skill-install]");
@@ -19886,7 +19986,7 @@ ${SKILL_BOX_CSS}`;
     const words = L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "text";
     return { line: words, button: words, icon: words, link: L2 !== "html", image: L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "image", html: L2 === "html" };
   }
-  var esc6 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc7 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -19898,31 +19998,31 @@ ${SKILL_BOX_CSS}`;
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L2 = ctaLayoutOf(cta);
     const uses = layoutUses(L2);
-    const href = esc6(hrefOverride || cta?.destination);
+    const href = esc7(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v2) => Number.isInteger(v2) && v2 > 0 ? ` ${k}="${v2}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc6(image.url)}" alt="${esc6(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    const img = (alt) => image && image.url ? `<img src="${esc7(image.url)}" alt="${esc7(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
     if (L2 === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc6(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc6(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+      return `${linkOpen("pcta-io", ` aria-label="${esc7(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc7(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
     if (L2 === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L2 === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc6(cta?.label)}</p><p class="pcta-line">${esc6(cta?.line)}</p></div></div>`);
+    if (L2 === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc7(cta?.label)}</p><p class="pcta-line">${esc7(cta?.line)}</p></div></div>`);
     const showTitle = L2 === "below" || L2 === "first" || L2 === "text" || L2 === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc6(cta?.label)}</p>`);
-    if (L2 === "below" || L2 === "first" || L2 === "text") parts.push(`<p class="pcta-line">${esc6(cta?.line)}</p>`);
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc7(cta?.label)}</p>`);
+    if (L2 === "below" || L2 === "first" || L2 === "text") parts.push(`<p class="pcta-line">${esc7(cta?.line)}</p>`);
     if (L2 === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
     if (L2 === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc6(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc7(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc6(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc7(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -20359,7 +20459,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc7 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc8 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -20382,23 +20482,23 @@ ${SKILL_BOX_CSS}`;
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc7(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc8(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc7(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc8(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc7(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc7(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc7(rowSummary(c))}</p>
-        <p class="sub mono">${esc7(c.partner || "no partner")} · on ${plural2(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc7(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc8(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc8(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc8(rowSummary(c))}</p>
+        <p class="sub mono">${esc8(c.partner || "no partner")} · on ${plural2(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc8(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc7(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc7(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc8(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc8(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -20407,7 +20507,7 @@ ${SKILL_BOX_CSS}`;
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc7(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc8(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
@@ -20416,13 +20516,13 @@ ${SKILL_BOX_CSS}`;
   function field(st2, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
     const err = shownError(st2, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc7(placeholder)}">${esc7(st2.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc7(st2.d[k])}" placeholder="${esc7(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc7(err)}</span></label>`;
+    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc8(placeholder)}">${esc8(st2.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc8(st2.d[k])}" placeholder="${esc8(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc8(err)}</span></label>`;
   }
   function layoutSection(st2) {
     const tiles = CTA_LAYOUTS.map((k) => `<button class="${st2.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st2.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc7(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc7(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc7(LAYOUT_HINT[st2.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+    ${SKETCH[k]}<div><p class="tile-n">${esc8(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc8(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc8(LAYOUT_HINT[st2.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
   function wordsSection(st2) {
     const u = layoutUses(st2.d.layout);
@@ -20433,7 +20533,7 @@ ${SKILL_BOX_CSS}`;
     ${u.line ? field(st2, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
     ${u.button ? field(st2, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
     ${u.link ? field(st2, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc7(st2.d.note)}</textarea></label>
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc8(st2.d.note)}</textarea></label>
     <label class="check fld wide"><input type="checkbox" data-f="enabled"${st2.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
@@ -20453,8 +20553,8 @@ ${SKILL_BOX_CSS}`;
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc7(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc7(name)}</p>
+      ${img.url ? `<img src="${esc8(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc8(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
@@ -20462,24 +20562,24 @@ ${SKILL_BOX_CSS}`;
     </div>`;
     }
     return `${body}${st2.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc7(err)}</p>
-    ${st2.imageMsg ? `<p class="et" style="margin-top: 6px">${esc7(st2.imageMsg)}</p>` : ""}`;
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc8(err)}</p>
+    ${st2.imageMsg ? `<p class="et" style="margin-top: 6px">${esc8(st2.imageMsg)}</p>` : ""}`;
   }
   function iconResults(st2) {
     const ic3 = st2.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc7(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc8(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
     const q2 = st2.iconQuery.trim();
     const count2 = !q2 ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
     const sel = st2.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc7(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc7(i.name)}</span></button>`).join("");
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc8(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc8(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
   function iconSection(st2) {
     const sel = st2.d.icon;
-    const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc7(s.id)}">${esc7(s.name)}</button>`).join("") : "";
+    const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc8(s.id)}">${esc8(s.name)}</button>`).join("") : "";
     const pop = st2.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc7(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc8(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st2)}</div>
     </div>` : "";
@@ -20487,46 +20587,46 @@ ${SKILL_BOX_CSS}`;
     <div class="ip-row">
       <button class="${st2.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st2.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc7(sel ? sel.name : "Choose an icon")}</b><span>${esc7(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
+        <span class="ip-name"><b>${esc8(sel ? sel.name : "Choose an icon")}</b><span>${esc8(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc7(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc7(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc8(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc8(h)}">Allow</button>`).join("")}</div>`;
   }
   function htmlSection(st2, found) {
     const d = st2.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc7(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc7(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc8(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc8(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural2(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc7(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc7(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc8(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc8(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc7(st2.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st2.hostErr ? "" : " hidden"}>${esc7(st2.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc8(st2.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st2.hostErr ? "" : " hidden"}>${esc8(st2.hostErr)}</p>
     </div></div>`;
   }
   function candidateList(st2) {
     if (!st2.pageQuery.trim()) return "";
     if (!st2.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st2.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc7(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc7(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+    return `<ul class="results">${st2.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc8(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc8(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
   function pagesSection(st2) {
     const d = st2.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc7(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc7(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc8(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc8(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural2(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc7(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc8(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st2)}</div></div>`;
   }
   function previewCard(st2) {
@@ -20556,7 +20656,7 @@ ${SKILL_BOX_CSS}`;
       <div class="segs">${seg2(!st2.pvPhone, "pv-side", "Sidebar")}${seg2(st2.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st2.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st2)}</div>
-    <p class="pv-note" data-region="pvnote">${esc7(previewNote(st2.d))}</p>
+    <p class="pv-note" data-region="pvnote">${esc8(previewNote(st2.d))}</p>
   </aside>`;
   }
   function editorView(st2, found = []) {
@@ -20564,11 +20664,11 @@ ${SKILL_BOX_CSS}`;
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc7(editTitle(st2))}</h3>
+      <h3 class="ed-title" data-region="title">${esc8(editTitle(st2))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st2.saving ? " disabled" : ""}>${st2.saving ? "Saving…" : st2.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st2.msg ? "" : " hidden"}>${esc7(st2.msg)}</p>
+    <p class="${st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st2.msg ? "" : " hidden"}>${esc8(st2.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
         ${layoutSection(st2)}
@@ -32904,7 +33004,7 @@ ${BLOCKED_PILL_CSS}
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc8(s) {
+  function esc9(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function safeHref2(url) {
@@ -33049,7 +33149,7 @@ ${BLOCKED_PILL_CSS}
     const render2 = (text2) => {
       const store2 = [];
       const masked = maskRuns(text2, store2);
-      const safe = esc8(masked);
+      const safe = esc9(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline3(safe, {
         bold: (t) => `<strong>${t}</strong>`,
@@ -33057,14 +33157,14 @@ ${BLOCKED_PILL_CSS}
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
           const href = safeHref2(resolve(url));
-          const inner = String(label || "").trim() || esc8(resolve(url));
-          return href ? `<a href="${esc8(href)}">${inner}</a>` : inner;
+          const inner = String(label || "").trim() || esc9(resolve(url));
+          return href ? `<a href="${esc9(href)}">${inner}</a>` : inner;
         }
       });
       return done.replace(MASK_RE, (_m, i) => {
         const run = store2[Number(i)];
         if (!run) return "";
-        return run.kind === "code" ? `<code>${esc8(run.raw)}</code>` : esc8(run.raw);
+        return run.kind === "code" ? `<code>${esc9(run.raw)}</code>` : esc9(run.raw);
       });
     };
     const out = [];
@@ -33075,7 +33175,7 @@ ${BLOCKED_PILL_CSS}
         continue;
       }
       if (b.kind === "fence") {
-        out.push(`<pre><code>${esc8(b.lines.join("\n"))}</code></pre>`);
+        out.push(`<pre><code>${esc9(b.lines.join("\n"))}</code></pre>`);
         continue;
       }
       if (b.kind === "heading") {
@@ -34053,7 +34153,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // extension/src/quick-launch.mjs
-  var esc9 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc10 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var GLYPH = {
     gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -34070,7 +34170,7 @@ ${BLOCKED_PILL_CSS}
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
     const icon4 = icons[item.id];
     if (typeof icon4 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon4)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon4}" alt="" /></span>`;
-    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc9(letterFor(item.name))}</span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc10(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
     try {
@@ -34130,7 +34230,7 @@ ${BLOCKED_PILL_CSS}
     }
   }
   function barHtml() {
-    const links = barItems(STATE).map((it2) => `<a class="nt-app ql-go" href="${esc9(it2.url)}" target="_blank" rel="noopener noreferrer" title="${esc9(it2.name)}" aria-label="${esc9(it2.name)}, opens in a new tab">${markHtml(it2, ICONS3)}</a>`).join("");
+    const links = barItems(STATE).map((it2) => `<a class="nt-app ql-go" href="${esc10(it2.url)}" target="_blank" rel="noopener noreferrer" title="${esc10(it2.name)}" aria-label="${esc10(it2.name)}, opens in a new tab">${markHtml(it2, ICONS3)}</a>`).join("");
     return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
@@ -34185,14 +34285,14 @@ ${BLOCKED_PILL_CSS}
   function rowHtml(it2, rank) {
     const inBar = it2.on && rank < QL_CAP;
     const left = it2.on && !inBar;
-    const tools = it2.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc9(it2.id)}" aria-label="Edit ${esc9(it2.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc9(it2.id)}" aria-label="Remove ${esc9(it2.name)}" title="Remove">${glyph("trash")}</button>` : "";
-    const open = left ? `<a class="ql-tool" href="${esc9(it2.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc9(it2.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
-    return `<li class="ql-row" data-ql-row="${esc9(it2.id)}" data-group="${esc9(it2.group)}" draggable="true">
-    <button class="ql-grip" type="button" data-ql-grip="${esc9(it2.id)}" aria-label="Move ${esc9(it2.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    const tools = it2.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc10(it2.id)}" aria-label="Edit ${esc10(it2.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc10(it2.id)}" aria-label="Remove ${esc10(it2.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc10(it2.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc10(it2.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc10(it2.id)}" data-group="${esc10(it2.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc10(it2.id)}" aria-label="Move ${esc10(it2.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
     ${markHtml(it2, ICONS3)}
-    <span class="ql-txt"><b>${esc9(it2.name)}</b><small>${esc9(displayHost(it2.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+    <span class="ql-txt"><b>${esc10(it2.name)}</b><small>${esc10(displayHost(it2.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
     ${open}${tools}
-    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc9(it2.id)}" aria-checked="${it2.on ? "true" : "false"}" aria-label="Show ${esc9(it2.name)} in the bar"><span></span></button>
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc10(it2.id)}" aria-checked="${it2.on ? "true" : "false"}" aria-label="Show ${esc10(it2.name)} in the bar"><span></span></button>
   </li>`;
   }
   function listsHtml() {
@@ -34200,21 +34300,21 @@ ${BLOCKED_PILL_CSS}
     return GROUPS.map((g) => {
       const rows = STATE.items.filter((it2) => it2.group === g.key);
       const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it2) => rowHtml(it2, onRank.get(it2.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
-      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc9(g.label)}</h3>${body}</section>`;
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc10(g.label)}</h3>${body}</section>`;
     }).join("");
   }
   function previewHtml() {
     const items = barItems(STATE);
-    const icons = items.map((it2) => `<span class="ql-pv" title="${esc9(it2.name)}">${markHtml(it2, ICONS3)}</span>`).join("");
+    const icons = items.map((it2) => `<span class="ql-pv" title="${esc10(it2.name)}">${markHtml(it2, ICONS3)}</span>`).join("");
     return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
-    return `<form class="ql-form" data-ql-form="${esc9(id)}" novalidate>
+    return `<form class="ql-form" data-ql-form="${esc10(id)}" novalidate>
     <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
-    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc9(url)}" required /></label>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc10(url)}" required /></label>
     <div class="ql-form-row">
       <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS3)}</span>
-      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc9(name)}" placeholder="Found from the site" /></label>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc10(name)}" placeholder="Found from the site" /></label>
     </div>
     <p class="ql-status" data-ql-status aria-live="polite"></p>
     <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
@@ -34658,7 +34758,7 @@ ${BLOCKED_PILL_CSS}
   // extension/src/shell.mjs
   var SITE27 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc10 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc11 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG3 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -34755,7 +34855,7 @@ ${BLOCKED_PILL_CSS}
         a.href = `${SITE27}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc10(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc11(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;

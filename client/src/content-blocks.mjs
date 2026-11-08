@@ -8,8 +8,9 @@
 // is a class (gbti-bar-w-<0..100>) because the sanitizer does not admit an inline width.
 
 import { AUDIO_PROVIDERS, PROVIDER_NAMES, DEFAULT_LINK_LABELS, audioEmbed, embedProblem } from './audio-embed.mjs';
+import { renderCards, cardsToMarkdown, cardsWarnings, cardsCss } from './content-cards.mjs'; // sow-497: ```cards
 
-export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio', 'faq']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26; faq: sow-495
+export const DATA_BLOCKS = ['tags', 'bar', 'facts', 'button', 'stats', 'reveal', 'audio', 'faq', 'cards']; // stats: option A, picked 2026-10-13; reveal: sow-455; audio: 2026-10-26; faq: sow-495; cards: sow-497
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lines = (body) => String(body ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -381,6 +382,7 @@ export function renderDataBlock(name, body, meta = '', opts = {}) {
   if (name === 'reveal') return renderReveal(body, meta);
   if (name === 'faq') return renderFaq(body, opts.answerHtml); // opts.answerHtml: the preview's nested renderer
   if (name === 'audio') return renderAudio(body, meta, opts);
+  if (name === 'cards') return renderCards(body, meta);
   if (name === 'tags') {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
@@ -433,6 +435,7 @@ export function dataBlockToMarkdown(name, body, meta = '', opts = {}) {
     const out = `[${a.label}](${target})${a.length ? ` (${a.length})` : ''}`;
     return a.link && a.link !== target ? `${out} · [${audioLinkLabel(a.link, a.linkLabel)}](${a.link})` : out;
   }
+  if (name === 'cards') return cardsToMarkdown(body, meta); // each card's picture, its linked name in bold, its meta
   if (name === 'tags') return parseTags(body).tags.map((t) => `_${t}_`).join(' · ');
   if (name === 'bar') {
     const b = parseBar(body);
@@ -558,6 +561,7 @@ export function checkComponentBlocks(md) {
         if (/\[\^[^\]]+\]/.test(it.q)) warn(`faq question "${it.q}" has a footnote marker, which shows as text in a question; put it in the answer`);
       }
     }
+    if (name === 'cards') for (const m of cardsWarnings(text, meta)) warn(m);
     i = j;
   }
   return out;
@@ -641,6 +645,7 @@ ${s} .gbti-faq-a{padding:0 44px 18px 0;font-size:.93em;line-height:1.7;color:${t
 ${s} .gbti-faq-a p{margin:0 0 10px}
 ${s} .gbti-faq-a ul{margin:0 0 10px}
 ${s} .gbti-faq-a > :last-child{margin-bottom:0}
+${cardsCss(s, t)}
 ${s} .gbti-audio{margin:1.2em 0}
 ${s} > .gbti-audio:first-child{margin-top:14px}
 ${s} .gbti-audio-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}

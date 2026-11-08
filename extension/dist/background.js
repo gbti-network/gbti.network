@@ -18354,9 +18354,84 @@ function audioEmbed(provider, raw) {
   return null;
 }
 
-// client/src/content-blocks.mjs
-var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq"];
+// client/src/content-cards.mjs
 var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+var CARD_KEYS = ["title", "text", "meta", "link", "label"];
+var CARD_DEFAULT_LABEL = "Read more";
+var CARD_IMAGE_LINE = /^!\[([^\]]*)\]\(\s*([^\s)]+)\s*\)$/;
+var cardImageSrcOk = (src) => /^https:\/\/[^\s<>"']+$/i.test(src) || /^\/(?!\/)[^\s<>"']*$/.test(src) || /^\.\/[^\s<>"']+$/.test(src);
+function parseCards(body, meta3 = "") {
+  const opt = String(meta3 ?? "").trim();
+  const cols = opt === "3" ? 3 : 2;
+  const colsBad = opt && opt !== "2" && opt !== "3" ? opt : null;
+  const groups = [[]];
+  for (const raw of String(body ?? "").split("\n")) {
+    const l = raw.trim();
+    if (l === "---") {
+      groups.push([]);
+      continue;
+    }
+    if (l) groups[groups.length - 1].push(l);
+  }
+  const cards = groups.filter((g) => g.length).map((g) => {
+    const c = { title: "", text: "", meta: "", link: null, linkBad: null, label: "", image: null, imageBad: [], extraImages: 0, unknown: [] };
+    for (const l of g) {
+      if (l.startsWith("![")) {
+        const m = l.match(CARD_IMAGE_LINE);
+        if (!m) {
+          c.imageBad.push({ line: l, why: "form" });
+          continue;
+        }
+        if (!cardImageSrcOk(m[2])) {
+          c.imageBad.push({ line: m[2], why: "src" });
+          continue;
+        }
+        if (c.image) {
+          c.extraImages++;
+          continue;
+        }
+        c.image = { alt: m[1].trim(), src: m[2] };
+        continue;
+      }
+      const i = l.indexOf(":");
+      const k = i > 0 ? l.slice(0, i).trim().toLowerCase() : "";
+      const v = i > 0 ? l.slice(i + 1).trim() : "";
+      if (!CARD_KEYS.includes(k)) {
+        c.unknown.push(l);
+        continue;
+      }
+      if (k === "link") {
+        if (safeUrl(v)) c.link = safeUrl(v);
+        else c.linkBad = v;
+        continue;
+      }
+      c[k] = v;
+    }
+    return c;
+  });
+  return { cols, colsBad, cards };
+}
+var CARDS_CLOSE = "</div>";
+var CARD_MEDIA_OPEN = '<span class="gbti-card-media">';
+var CARD_MEDIA_CLOSE = "</span>";
+var cardsOpen = (cols) => `<div class="gbti-cards${cols === 3 ? " gbti-cards-3" : ""}">`;
+var cardOpen = (c) => c.link ? `<a class="gbti-card" href="${esc2(c.link)}">` : '<div class="gbti-card">';
+var cardClose = (c) => c.link ? "</a>" : "</div>";
+function cardBodyHtml(c) {
+  return `<span class="gbti-card-body"><span class="gbti-card-title">${esc2(c.title)}</span>` + (c.text ? `<span class="gbti-card-text">${esc2(c.text)}</span>` : "") + (c.meta ? `<span class="gbti-card-meta">${esc2(c.meta)}</span>` : "") + (c.link ? `<span class="gbti-card-cta">${esc2(c.label || CARD_DEFAULT_LABEL)}</span>` : "") + "</span>";
+}
+function renderCards(body, meta3 = "") {
+  const p = parseCards(body, meta3);
+  const cards = p.cards.filter((c) => c.title);
+  if (!cards.length) return null;
+  const img = (im) => `${CARD_MEDIA_OPEN}<img src="${esc2(im.src)}" alt="${esc2(im.alt)}" loading="lazy">${CARD_MEDIA_CLOSE}`;
+  return cardsOpen(p.cols) + cards.map((c) => cardOpen(c) + (c.image ? img(c.image) : "") + cardBodyHtml(c) + cardClose(c)).join("") + CARDS_CLOSE;
+}
+
+// client/src/content-blocks.mjs
+var DATA_BLOCKS = ["tags", "bar", "facts", "button", "stats", "reveal", "audio", "faq", "cards"];
+var esc3 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var lines = (body) => String(body ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 function parsePercent(v) {
   const m = String(v ?? "").trim().match(/^(\d{1,3})\s*%$/);
@@ -18364,7 +18439,7 @@ function parsePercent(v) {
   const n = Number(m[1]);
   return n >= 0 && n <= 100 ? n : null;
 }
-var safeUrl = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
+var safeUrl2 = (u) => /^https?:\/\/[^\s<>"']+$/i.test(String(u ?? "").trim()) ? String(u).trim() : null;
 function keyValue(line) {
   const i = line.indexOf(":");
   if (i <= 0) return { k: null, v: line };
@@ -18425,7 +18500,7 @@ function parseButton(body) {
   let label = ls[0] ?? "";
   let url2 = ls[1] ?? "";
   if (ls.length === 1 && label.includes("|")) [label, url2] = label.split("|").map((s) => s.trim());
-  return { label, url: safeUrl(url2), rawUrl: url2 };
+  return { label, url: safeUrl2(url2), rawUrl: url2 };
 }
 var REVEAL_MAX_PARTS = 6;
 var REVEAL_DEFAULT_LABEL = "Show more";
@@ -18464,8 +18539,8 @@ function revealBodyHtml(md) {
   let list = [];
   let blank = false;
   const flush = () => {
-    if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc2(l))).join(" ")}</p>`);
-    if (list.length) out.push(`<ul>${list.map((it) => `<li>${inlineMd(esc2(it.text))}${it.sub.some((s) => s.trim()) ? revealBodyHtml(it.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
+    if (para.length) out.push(`<p>${para.map((l) => inlineMd(esc3(l))).join(" ")}</p>`);
+    if (list.length) out.push(`<ul>${list.map((it) => `<li>${inlineMd(esc3(it.text))}${it.sub.some((s) => s.trim()) ? revealBodyHtml(it.sub.join("\n")) : ""}</li>`).join("")}</ul>`);
     para = [];
     list = [];
   };
@@ -18517,7 +18592,7 @@ function parseFaq(body) {
 var FAQ_OPEN = '<div class="gbti-faq">';
 var FAQ_ITEM_CLOSE = "</div></details>";
 var FAQ_CLOSE = "</div>";
-var faqItemOpen = (q) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc2(q))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
+var faqItemOpen = (q) => `<details class="gbti-faq-item"><summary class="gbti-faq-q"><span class="gbti-faq-q-text">${inlineMd(esc3(q))}</span><span class="gbti-faq-icon"></span></summary><div class="gbti-faq-a">`;
 function renderFaq(body, answerHtml) {
   const items = parseFaq(body).items.filter((it) => it.q);
   if (!items.length) return null;
@@ -18564,7 +18639,7 @@ function parseAudio(body, meta3 = "") {
       if (e && !out.embed) out.embed = e;
       else if (!e && !out.embedBad) out.embedBad = { provider: key, raw: v };
     } else if (key === "link") {
-      if (safeUrl(v)) out.link = safeUrl(v);
+      if (safeUrl2(v)) out.link = safeUrl2(v);
       else out.linkBad = v;
     } else if (key === "link-label") out.linkLabel = v;
     else if (key === "style") {
@@ -18599,12 +18674,12 @@ var EMBED_ALLOW = {
 var APPLE_SANDBOX = "allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation";
 function renderAudio(body, meta3, { origin = "", audioBase = null, relativeAudio = false } = {}) {
   const a = parseAudio(body, meta3);
-  const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc2(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc2(a.length)}</span>` : "") + "</div>";
-  const link = a.link ? `<a class="gbti-audio-link" href="${esc2(a.link)}" target="_blank" rel="noopener nofollow">${esc2(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
+  const head = `<div class="gbti-audio-head"><span class="gbti-audio-label">${esc3(a.label)}</span>` + (a.length ? ` <span class="gbti-audio-length">${esc3(a.length)}</span>` : "") + "</div>";
+  const link = a.link ? `<a class="gbti-audio-link" href="${esc3(a.link)}" target="_blank" rel="noopener nofollow">${esc3(audioLinkLabel(a.link, a.linkLabel))}</a>` : "";
   if (a.embed) {
     const e = a.embed;
     const size = e.height > 200 ? `gbti-audio-embed-${e.provider}-tall` : `gbti-audio-embed-${e.provider}`;
-    return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc2(e.src)}" title="${esc2(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
+    return `<div class="gbti-audio">${head}<div class="gbti-audio-embed ${size}"><iframe src="${esc3(e.src)}" title="${esc3(`${PROVIDER_NAMES[e.provider]} player: ${a.label}`)}" loading="lazy" allow="${EMBED_ALLOW[e.provider]}"` + (e.provider === "apple" ? ` sandbox="${APPLE_SANDBOX}"` : "") + `></iframe></div>${link}</div>`;
   }
   if (!a.sources.length) return null;
   const served = a.sources.map((x) => {
@@ -18612,7 +18687,7 @@ function renderAudio(body, meta3, { origin = "", audioBase = null, relativeAudio
     return { ...x, url: path ? origin + path : relativeAudio ? x.src : null };
   }).filter((x) => x.url);
   if (!served.length) return `<div class="gbti-audio">${head}${link}</div>`;
-  return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc2(a.label)}">` + served.map((x) => `<source src="${esc2(x.url)}" type="${esc2(x.type)}">`).join("") + `</audio>${link}</div>`;
+  return `<div class="gbti-audio${a.style === "card" ? " gbti-audio-card" : ""}">${head}<audio class="gbti-audio-player" controls preload="none" aria-label="${esc3(a.label)}">` + served.map((x) => `<source src="${esc3(x.url)}" type="${esc3(x.type)}">`).join("") + `</audio>${link}</div>`;
 }
 function weightWidths(weights) {
   const total = weights.reduce((a, w) => a + w.n, 0) || 1;
@@ -18627,41 +18702,42 @@ function renderReveal(body, meta3) {
   let top = "";
   if (r.weights && r.weights.length <= REVEAL_MAX_PARTS) {
     const ws = weightWidths(r.weights);
-    top += '<div class="gbti-reveal-weights">' + r.weights.map((w, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc2(w.name)}</span> <span class="gbti-reveal-pct">${w.n}%</span></span>`).join(" ") + "</div>";
-  } else if (r.weightsRaw) top += `<p>${esc2(r.weightsRaw)}</p>`;
-  if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc2(r.note))}</div>`;
+    top += '<div class="gbti-reveal-weights">' + r.weights.map((w, i) => `<span class="gbti-reveal-seg gbti-reveal-seg-${i + 1} gbti-bar-w-${ws[i]}"></span>`).join("") + '</div><div class="gbti-reveal-legend">' + r.weights.map((w, i) => `<span class="gbti-reveal-key"><span class="gbti-reveal-swatch gbti-reveal-seg-${i + 1}"></span><span class="gbti-reveal-name">${esc3(w.name)}</span> <span class="gbti-reveal-pct">${w.n}%</span></span>`).join(" ") + "</div>";
+  } else if (r.weightsRaw) top += `<p>${esc3(r.weightsRaw)}</p>`;
+  if (r.note) top += `<div class="gbti-reveal-note">${inlineMd(esc3(r.note))}</div>`;
   if (!r.body) return `<div class="gbti-reveal">${top}</div>`;
-  return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc2(r.label)}</span><span class="gbti-reveal-hide">${esc2(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
+  return `<div class="gbti-reveal">${top}<details class="gbti-reveal-more"><summary class="gbti-reveal-toggle"><span class="gbti-reveal-chev"></span><span class="gbti-reveal-show">${esc3(r.label)}</span><span class="gbti-reveal-hide">${esc3(hide)}</span></summary><div class="gbti-reveal-body">${revealBodyHtml(r.body)}</div></details></div>`;
 }
 function renderDataBlock(name, body, meta3 = "", opts = {}) {
   if (name === "reveal") return renderReveal(body, meta3);
   if (name === "faq") return renderFaq(body, opts.answerHtml);
   if (name === "audio") return renderAudio(body, meta3, opts);
+  if (name === "cards") return renderCards(body, meta3);
   if (name === "tags") {
     const { tags } = parseTags(body);
     if (!tags.length) return null;
-    return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc2(t)}</span>`).join("")}</div>`;
+    return `<div class="gbti-tags">${tags.map((t, i) => `<span class="gbti-tag${i === 0 ? " gbti-tag-primary" : ""}">${esc3(t)}</span>`).join("")}</div>`;
   }
   if (name === "bar") {
     const b = parseBar(body);
-    if (b.value == null) return b.label || b.note ? `<p>${esc2([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
-    return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc2(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc2(b.note)}</div>` : "") + "</div>";
+    if (b.value == null) return b.label || b.note ? `<p>${esc3([b.label, b.raw, b.note].filter(Boolean).join(" · "))}</p>` : null;
+    return `<div class="gbti-bar"><div class="gbti-bar-head"><span class="gbti-bar-label">${esc3(b.label)}</span><span class="gbti-bar-value">${b.value}%</span></div><span class="gbti-bar-track"><span class="gbti-bar-fill gbti-bar-w-${b.value}"></span></span>` + (b.note ? `<div class="gbti-bar-note">${esc3(b.note)}</div>` : "") + "</div>";
   }
   if (name === "facts") {
     const { rows } = parseFacts(body);
     if (!rows.length) return null;
-    return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc2(r.k)}</dt><dd><span>${esc2(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
+    return `<dl class="gbti-facts">${rows.map((r) => `<div class="gbti-fact"><dt>${esc3(r.k)}</dt><dd><span>${esc3(r.v)}</span>` + (r.bar != null ? `<span class="gbti-bar-track gbti-bar-mini"><span class="gbti-bar-fill gbti-bar-w-${r.bar}"></span></span>` : "") + "</dd></div>").join("")}</dl>`;
   }
   if (name === "button") {
     const b = parseButton(body);
     if (!b.label) return null;
     const cls = String(meta3).trim() === "primary" ? "gbti-button gbti-button-primary" : "gbti-button";
-    return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc2(b.url)}">${esc2(b.label)}</a></div>` : `<p>${esc2(b.label)}</p>`;
+    return b.url ? `<div class="gbti-button-row"><a class="${cls}" href="${esc3(b.url)}">${esc3(b.label)}</a></div>` : `<p>${esc3(b.label)}</p>`;
   }
   if (name === "stats") {
     const s = parseStats(body);
     if (!s.stats.length) return null;
-    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc2(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc2(x.value)}</span> <span class="gbti-stat-label">${esc2(x.label)}</span></div>`).join(" ")}</div></div>`;
+    return '<div class="gbti-stats">' + (s.caption ? `<div class="gbti-stats-caption">${esc3(s.caption)}</div>` : "") + `<div class="gbti-stats-row">${s.stats.map((x) => `<div class="gbti-stat"><span class="gbti-stat-value">${esc3(x.value)}</span> <span class="gbti-stat-label">${esc3(x.label)}</span></div>`).join(" ")}</div></div>`;
   }
   return null;
 }
@@ -21216,9 +21292,9 @@ function renderDoc(md, ids, opts = {}, nest = null) {
         continue;
       }
     }
-    const esc3 = escapeKeepingLinks(line, linkKeep);
+    const esc4 = escapeKeepingLinks(line, linkKeep);
     let m;
-    if (m = /^(#{1,6})\s+(.*)$/.exec(esc3)) {
+    if (m = /^(#{1,6})\s+(.*)$/.exec(esc4)) {
       flushList();
       emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
       i++;
@@ -21298,7 +21374,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     }
     flushList();
     const paraStart = i;
-    const para = [hardBreak(esc3, line)];
+    const para = [hardBreak(esc4, line)];
     i++;
     while (i < lines2.length && !/^\s*$/.test(lines2[i]) && !COMMENT_LINE.test(lines2[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines2[i]) && !(autoEmbed && (bareVideoLine(lines2[i]) || bareTweetLine(lines2[i])))) {
       para.push(hardBreak(escapeKeepingLinks(lines2[i], linkKeep), lines2[i]));

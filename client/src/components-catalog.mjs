@@ -97,6 +97,14 @@ export const COMPONENTS = Object.freeze([
     renders: 'Site, preview and reader: the questions as rows between rules, each answer closed until its question is clicked. Cross-posts: every question in bold with its answer written out under it.',
   },
   {
+    name: 'cards',
+    kind: 'fence',
+    purpose: 'A grid of cards, such as products or projects to try: two across in the article column (three with cards 3) and one on a phone. Each card is a picture, a name, a line of text and a small meta line (versions, a price), and with a link: the whole card is the link, with label: as its link line (Read more when there is none). A line holding only --- starts the next card. The picture is an ordinary image line, ./images/<file> beside the article, an https address or a site path, and it is shown at 16 by 10. Every field is plain text, so put no links or footnote markers in them.',
+    syntax: `${F}cards [3]\n![<alt text>](./images/<file>.webp)\ntitle: <name>\ntext: <one line>\nmeta: <small print>\nlink: https://<address>\nlabel: <link line>\n---\n<the next card>\n${F}`,
+    example: `${F}cards\n![Jockey Radio music discs in many colours](./images/jockey-radio.webp)\ntitle: Jockey Radio\ntext: Live radio, streams and your own audio on music discs, heard through Simple Voice Chat.\nmeta: Minecraft 26.2 · Free\nlink: https://gbti.network/projects/jockey-radio/\nlabel: See the plugin\n---\n![A Traveler's Chest on a sandy shore](./images/travelers-chest.webp)\ntitle: Traveler's Chest\ntext: Chests that refill themselves after a cooldown you set.\nmeta: Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11, 26.1 to 26.3\nlink: https://gbti.network/projects/travelers-chest/\nlabel: See the plugin\n${F}`,
+    renders: 'Site, preview and reader: the cards in a grid that steps down to one column as the page narrows; on the site the pictures are resized like any article image. Cross-posts: each card as its picture, its name in bold linking to its page with its line, and its meta in italics.',
+  },
+  {
     name: 'image layout',
     kind: 'suffix',
     purpose: `Place an image. Add words in braces after the image line: ${IMAGE_LAYOUT_WORDS.join(', ')} (wrap goes with left or right).`,
