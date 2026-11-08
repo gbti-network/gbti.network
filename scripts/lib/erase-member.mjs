@@ -32,6 +32,7 @@ import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
 import { erasePreparedListings } from './erase-prepared-listings.mjs'; // sow-427: its own module (this file was over the cap)
+import { eraseCommunity, COMMUNITY_TOKEN_ENV } from './erase-community.mjs'; // sow-494: the Community store, through the Worker
 import { deleteKvKey, listKvByPrefix, putKvValue, readKvValueStrict } from './kv-rest.mjs';
 import { eraseMailRecords } from './erase-mail.mjs';
 import { eraseContent } from './erase-content.mjs';
@@ -491,6 +492,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'prefs', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-046: hard-delete the member's prefs (prefs:${githubId}: category interests + followed news channels).` },
     { step: 'shoptalk', auto: true, tool: 'erase-member.mjs --apply', action: `sow-314: remove the member's address from the Saturday Shop Talk event (a Google Calendar guest list this project does not own; Google mails the un-invite), drop it from shoptalk:placed, and delete shoptalk:optout:${githubId} plus shoptalk:addr:${githubId} (sow-466: the address they chose for the invitation). Fails closed without calendar credentials.` },
     { step: 'drafts', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-157: hard-delete the hosted draft store (drafts:${githubId}), which may contain unpublished text.` },
+    { step: 'community', auto: true, tool: 'erase-member.mjs --apply', action: `sow-494: through the Worker's superadmin route, delete the member's Community answers, reactions, images and access grants, and turn their posts into removed placeholders that name nobody. Needs ${COMMUNITY_TOKEN_ENV} (a superadmin's own GitHub token, for example from gh auth token); without it the step records incomplete.` },
     { step: 'prepared-listings', auto: true, tool: 'erase-member.mjs --apply', action: `sow-427: sweep invite-listing:* and invite:*. A prepared listing tied to github_id ${githubId}, redeemed by them or pending their claim, and never claimed, is DELETED with its images (invite-listing-img:<id>:*), and its invitation is revoked before its tie is removed. A listing they claimed keeps only the fact of the claim (the greeting name, title, slug, claimant fields and tie are nulled). Invites naming them as claimant, pending claimant or tied account have those fields nulled. Runs before redeemed-invites, which it reads.` },
     { step: 'redeemed-invites', auto: true, tool: 'erase-member.mjs --apply', action: `Minimize every invite this member redeemed (invite:*): null redeemedBy + redeemedByLogin, KEEP redeemedAt (a date with nobody attached identifies nobody). The superadmin administration note is deliberately left alone; redacting an admin's own outreach text is the owner's call, not a cleanup step's.` },
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
@@ -616,6 +618,7 @@ export async function runErasure({
   await runStep('drafts', () => eraseDrafts({ githubId, env, fetchImpl })); // SOW-157: hosted draft staging
   await runStep('draft-images', () => eraseDraftImages({ githubId, env, fetchImpl })); // the staged image bytes beside those drafts
   await runStep('draft-audio', () => eraseDraftAudio({ githubId, env, fetchImpl })); // sow-483: the staged recordings beside them
+  await runStep('community', () => eraseCommunity({ githubId, env, fetchImpl })); // sow-494: answers, posts, images, grants in the Durable Object
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
   await runStep('coupon-grant', () => minimizeCouponGrant({ githubId, env, fetchImpl })); // SOW-119: minimize, never delete (owner ruling)
