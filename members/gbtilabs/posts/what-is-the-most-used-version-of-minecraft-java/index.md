@@ -70,14 +70,6 @@ Fabric, Forge, NeoForge and Quilt servers do not have the same reporting mechani
 **Did you know?** Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that Minecraft would number its versions by year. The first number is the year, the second is the release within that year, and the third is the hotfix, so 26.1.2 is the second hotfix of the first release of 2026. The last version numbered the old way, starting with "1.", was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
 ```
 
-### Paper-family servers
-
-26.3, 1.21.11 and 26.2 together run on 69.55% of the 196,558 Paper-family servers. Just over half of all servers (53.67%) run one of the new year-based versions, and 36.46% are still on a 1.21.x version. A few older versions hold on: 1.20.1 at 2.20% and 1.8.8 at 2.15%.
-
-After the ten most used versions, 58 others share the remaining 7.99%. The number of Paper-family servers reporting to bStats grew from about 150,000 a month on average in October 2023 to about 188,000 in October 2026.
-
-![The most used Minecraft Java versions on servers that report to bStats, read 24 October 2026, as a share of the 196,558 servers on a known Minecraft release: 26.3 23.4%; 1.21.11 23.1%; 26.2 23.1%; 26.1.2 6.9%; 1.21.4 3.6%; 1.21.10 2.6%; 1.21.1 2.5%; 1.21.8 2.5%; 1.20.1 2.2%; 1.8.8 2.1%; the other 58 versions together 8.0%.](./images/most-used-versions.svg)
-
 ## What is the most popular Minecraft version for mods?
 
 It depends on the platform. On Modrinth, Fabric and Quilt mods are downloaded most for 26.3, Forge mods for 1.20.1 and NeoForge mods for 1.21.1.
