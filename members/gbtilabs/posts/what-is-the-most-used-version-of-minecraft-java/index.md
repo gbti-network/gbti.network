@@ -137,14 +137,41 @@ Q: Which versions do Fabric and Forge players use most?
 On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
 ```
 
+## Minecraft plugins from GBTI
+
+The GBTI Network builds Fabric plugins for Minecraft servers. Here is what each one does and which versions it runs on.
+
+```cards
+![Jockey Radio music discs in many colours](./images/jockey-radio.webp)
+title: Jockey Radio
+text: Live radio, streams and your own audio on music discs, heard through Simple Voice Chat.
+meta: Minecraft 26.2 · Free
+link: https://gbti.network/projects/jockey-radio/
+label: See the plugin
+---
+![A Traveler's Chest on a sandy shore](./images/travelers-chest.webp)
+title: Traveler's Chest
+text: Chests that refill themselves after a cooldown you set.
+meta: Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11, 26.1 to 26.3
+link: https://gbti.network/projects/travelers-chest/
+label: See the plugin
+---
+![A page of the Traveler's Journal book](./images/travelers-journal.webp)
+title: Traveler's Journal
+text: An in-game book you write in a Markdown file on the server.
+meta: Minecraft 1.21.1
+link: https://gbti.network/projects/travelers-journal/
+label: See the plugin
+---
+![A Traveler's Lectern book with a Take Book button](./images/travelers-lectern.webp)
+title: Traveler's Lectern
+text: Lecterns whose book comes back after a player takes it.
+meta: Minecraft 1.20 to 1.20.4, 1.21 to 1.21.11, 26.1 to 26.3
+link: https://gbti.network/projects/travelers-lectern/
+label: See the plugin
+```
+
 ## Thanks for reading!
-
-The GBTI Network makes Minecraft mods too. All four run on Fabric:
-
-- [Jockey Radio](https://gbti.network/projects/jockey-radio/) puts live radio, streams and your own audio on music discs. Place a disc in a jukebox and nearby players hear it through Simple Voice Chat.
-- [Traveler's Chest](https://gbti.network/projects/travelers-chest/) refills itself with the same items in the same slots, after a cooldown you set.
-- [Traveler's Lectern](https://gbti.network/projects/travelers-lectern/) puts its book back after a player takes it, once the cooldown you set has passed.
-- [Traveler's Journal](https://gbti.network/projects/travelers-journal/) hands players an in-game book written in a Markdown file on the server. Change the file and every copy players hold updates.
 
 The GBTI Network offers publishing and networking opportunities to content creators and product developers across the internet. Every Tuesday we send a free digest of the week's member-submitted content. If you are looking for a private community of people who keep each other informed, see our [membership](https://gbti.network/membership/) options. We also make a [Chrome extension](https://gbti.network/extension/) for following the network from your browser.
 
