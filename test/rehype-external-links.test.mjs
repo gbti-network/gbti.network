@@ -11,6 +11,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { isExternalHref, relFor, rehypeExternalLinks } from '../src/lib/rehype-external-links.mjs';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import rehypeStringify from 'rehype-stringify';
+import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
+import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from '../src/lib/markdown-sanitize.mjs';
 
 const a = (href, props = {}) => ({ type: 'element', tagName: 'a', properties: { href, ...props }, children: [] });
 const run = (tree) => { rehypeExternalLinks()(tree); return tree; };
@@ -59,4 +68,36 @@ test('sow-378: the pass runs after the sanitizer and before the sponsored pass',
   assert.match(chain, /rehypeSanitize/, 'the rehype chain line was not found, so this guard checked nothing');
   assert.ok(chain.indexOf('rehypeSanitize') < chain.indexOf('rehypeExternalLinks'), 'must run after the sanitizer');
   assert.ok(chain.indexOf('rehypeExternalLinks') < chain.indexOf('rehypeSponsoredLinks'), 'must run before the sponsored pass');
+});
+
+// 2026-11-08, owner: "make sure the footnotes links are nofollow please". They already were: the footnotes section is
+// part of the body tree, so this pass reaches it (measured on a live article: 3 of 3 source links carried nofollow).
+// Nothing pinned it, though. This runs the real markdown chain, in astro.config.mjs order, over a footnote whose
+// definition links out, one cited from inside an ```faq answer (sow-495, whose answers are spliced in as parsed
+// markdown), and one that links back to the site.
+test('owner 2026-11-08: a source link in a footnote is nofollow on the published page; the back arrows and own-site links are not', async () => {
+  const md = 'Servers report to bStats.[^a]\n\n```faq\nQ: Why?\nHypixel said so.[^b]\n```\n\nOur own note.[^c]\n\n'
+    + '[^a]: [bStats](https://bstats.org/global/bukkit): the charts.\n\n[^b]: [Hypixel](https://hypixel.net/threads/x.1/): the post.\n\n'
+    + '[^c]: [About GBTI](https://gbti.network/about/): our page.\n';
+  const html = String(await unified()
+    .use(remarkParse).use(remarkGfm).use(remarkContentBlocks)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeRaw).use(rehypeSanitize, sanitizeSchema)
+    .use(rehypeIframeHostAllowlist).use(rehypeStyleAllowlist).use(rehypeIdSafety)
+    .use(rehypeExternalLinks).use(rehypeStringify).process(md));
+  const section = (/<section[^>]*data-footnotes[\s\S]*?<\/section>/.exec(html) || [''])[0];
+  assert.ok(section, 'the footnotes section was not found, so nothing below checks anything');
+  const links = section.match(/<a\b[^>]*>/g) || [];
+  for (const href of ['https://bstats.org/global/bukkit', 'https://hypixel.net/threads/x.1/']) {
+    const tag = links.find((t) => t.includes(`href="${href}"`));
+    assert.ok(tag, `no link to ${href} in the footnotes`);
+    assert.match(tag, /rel="noopener nofollow"/, `${href} must be nofollow`);
+    assert.match(tag, /target="_blank"/);
+  }
+  const own = links.find((t) => t.includes('href="https://gbti.network/about/"'));
+  assert.ok(own);
+  assert.doesNotMatch(own, /nofollow/, 'a link back to the site is not nofollow');
+  const back = links.filter((t) => t.includes('data-footnote-backref'));
+  assert.equal(back.length, 3, 'one back arrow per note');
+  for (const t of back) assert.doesNotMatch(t, /\brel=|target=/, 'a back arrow stays a plain in-page link');
 });
