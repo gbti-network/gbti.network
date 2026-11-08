@@ -43,6 +43,7 @@ import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner
 import { listSharesFeed, listMyShares } from './membership-shares.mjs';
 import { listNetworkContent, listNetworkShares, listOwnContent } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
+import { COMMUNITY_ROUTES, handleCommunity, imageHeaders } from './membership-community.mjs'; // sow-494: Community
 import { corsHeaders } from './cors.mjs'; // sow-158 Phase 1b: credentialed reflected-origin CORS for cookie routes
 import { json, clientsFromEnv, MEMBERSHIP_CORS } from './route-helpers.mjs';
 
@@ -585,6 +586,21 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
       const checkJoin = (githubId) => discordJoinEligibility({ kv: env.SIGNUP_KV, stripe: clientsFromEnv(env).stripe, githubId, priceTierMap: buildEnvPriceTierMap(env) });
       const r = await handleDiscordInvite(request, env, { discord, checkJoin });
       return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+    }
+  }
+
+  // sow-494: COMMUNITY, members only. One table of exact paths, each with its methods (COMMUNITY_ROUTES in
+  // membership-community.mjs): reads, the live poll, private image bytes, and the writes. Credentialed, so a cookie
+  // POST clears the CSRF gate in resolveIdentity. JSON is never cached; an image is private to the viewer.
+  const communityRoute = Object.prototype.hasOwnProperty.call(COMMUNITY_ROUTES, pathname) ? COMMUNITY_ROUTES[pathname] : null;
+  if (communityRoute) {
+    const cors = corsHeaders(request, env, { credentials: true, methods: `${Object.keys(communityRoute).join(', ')}, OPTIONS` });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    const route = communityRoute[method];
+    if (route) {
+      const r = await handleCommunity(request, env, route);
+      if (r.raw) return new Response(r.raw, { status: 200, headers: { ...cors, ...imageHeaders(r.contentType) } });
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Origin, Authorization, Cookie' });
     }
   }
 

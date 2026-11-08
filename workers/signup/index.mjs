@@ -61,6 +61,9 @@ import { runScheduled } from './cron.mjs';
 
 export { packState, unpackState, consumeStateJti, readOauthNonce, safeReturnTo } from './oauth-state.mjs';
 export { mailDrainDeps, resolveCronJob } from './cron.mjs';
+// sow-494: the Community Durable Object. Wrangler finds a Durable Object class among the entry module's exports, so
+// it is exported here by the name wrangler.toml binds (class_name "CommunityDO").
+export { CommunityDO } from './community-do.mjs';
 
 // The route groups, in the order the router checks them. Each returns a Response for a path it serves, or null
 // to hand the request on. They sit where their blocks stood in the single-file router, between the /auth/* routes

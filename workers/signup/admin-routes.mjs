@@ -11,6 +11,7 @@ import { membershipPreparedGet, membershipPreparedPost } from './membership-prep
 import { preparedFinalizeHook } from './membership-claim.mjs'; // sow-427: finalize claims as the manager loads
 import { newsItemDecide, newsRemovedList } from './membership-admin-news.mjs'; // sow-338: superadmin news removal
 import { membershipAdminAiProbe } from './membership-admin-ai-probe.mjs'; // sow-493: one Workers AI call, raw reply shown (superadmin)
+import { membershipAdminCommunity, membershipAdminCommunityMembers } from './membership-community.mjs'; // sow-494: Community, superadmin
 import { membershipMemberLookup } from './membership-member-lookup.mjs'; // sow-331: the superadmin member lookup
 import { membershipAdminCtaPool } from './membership-admin-ctas.mjs'; // sow-281: the CTA registry pool read (superadmin)
 import { membershipAdminSkillInstallPool } from './membership-admin-skills.mjs'; // sow-109: Skill install, every tool and its steps (superadmin)
@@ -169,6 +170,26 @@ export async function handleAdminRoutes(request, env, ctx, { pathname, method })
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (method === 'POST') {
       const r = await membershipAdminAiProbe(request, env, { allowCookie: true });
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+    }
+  }
+
+  // sow-494: COMMUNITY, superadmin only. One POST takes every entry op (create, edit, open, close, publish, unpublish,
+  // lock, unlock, delete, access, moderate, tidy, erase-member); the GET is the member picker for chosen access.
+  // Credentialed, so the cookie POST clears the CSRF gate. Never cached.
+  if (pathname === '/membership/admin/community') {
+    const cors = corsHeaders(request, env, { credentials: true, methods: 'POST, OPTIONS' });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (method === 'POST') {
+      const r = await membershipAdminCommunity(request, env);
+      return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+    }
+  }
+  if (pathname === '/membership/admin/community/members') {
+    const cors = corsHeaders(request, env, { credentials: true });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (method === 'GET') {
+      const r = await membershipAdminCommunityMembers(request, env);
       return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
     }
   }

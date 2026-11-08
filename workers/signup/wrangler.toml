@@ -155,6 +155,18 @@ preview_id = "9abe9b8204b14c04b0a8f69f48a8545c"
 [ai]
 binding = "AI"
 
+# sow-494: COMMUNITY, the one SQLite-backed Durable Object that holds every Community entry, answer, discussion post,
+# reaction and image (workers/signup/community-do.mjs, exported from index.mjs). The binding is NOT inherited, so it is
+# repeated under [env.production]; the migration IS inherited, so it is declared once, here. A migration tag is
+# permanent once deployed: never edit or reuse "community-v1", add a new tag for any later change to the class.
+[[durable_objects.bindings]]
+name = "COMMUNITY"
+class_name = "CommunityDO"
+
+[[migrations]]
+tag = "community-v1"
+new_sqlite_classes = ["CommunityDO"]
+
 # SOW-061: Workers Analytics Engine dataset for extension usage by tier. Aggregate-only, no PII, no extra latency
 # (writeDataPoint is fire-and-forget). recordUsage no-ops until this binding exists. Wrangler does NOT inherit
 # bindings into named envs, so it is repeated under [env.production].
@@ -334,6 +346,11 @@ id = "64b09b4d03764c979447cc008ffe528c"
 # SOW-087: Workers AI for production (no inheritance from the top-level [ai]).
 [env.production.ai]
 binding = "AI"
+
+# sow-494: the Community Durable Object for production (bindings are not inherited; the migration above is).
+[[env.production.durable_objects.bindings]]
+name = "COMMUNITY"
+class_name = "CommunityDO"
 
 # SOW-061: the Analytics Engine dataset for production (wrangler does not inherit top-level bindings into named envs).
 [[env.production.analytics_engine_datasets]]
