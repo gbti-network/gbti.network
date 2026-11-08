@@ -44,6 +44,7 @@ export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
   { label: 'Projects', href: '/feeds/projects/' },
   { label: 'Prompts & Skills', href: '/feeds/prompts/' },
   { label: 'Shares', href: '/feeds/shares/' },
+  { label: 'Community', href: '/community/' }, // sow-494: members only; a non-member meets the membership note there
 ];
 
 /**

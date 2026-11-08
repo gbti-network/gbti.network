@@ -284,3 +284,54 @@ test('delete removes an entry and everything under it', () => {
   assert.equal(err(() => store.getEntry(SUPER, id)).code, 'not_found');
   for (const t of ['posts', 'images', 'answers', 'reactions', 'entry_members']) assert.equal(store.q(`SELECT COUNT(*) AS n FROM ${t}`)[0].n, 0, t);
 });
+
+test('a meeting is its label and its date, so each week is its own filter option', () => {
+  const { store, advance } = makeStore();
+  const mk = (title, meeting) => { advance(1000); return store.createEntry(SUPER, { kind: 'topic', title, meeting }, { open: true }).id; };
+  const a = mk('Week one', { label: 'Shop Talk', date: '2026-10-31' });
+  const b = mk('Week two', { label: 'Shop Talk', date: '2026-11-07' });
+  const c = mk('Between', { label: '', date: '' });
+  const priv = store.createEntry(SUPER, { kind: 'topic', title: 'Private', meeting: { label: 'Circle', date: '2026-11-08' }, access: { mode: 'chosen', members: [PRIYA.githubId] } }, { open: true }).id;
+  const all = store.listEntries(BEN);
+  assert.deepEqual(all.meetings.map((m) => m.key), ['Shop Talk|2026-11-07', 'Shop Talk|2026-10-31'], 'newest first, and a meeting Ben has no entry in is not offered');
+  assert.deepEqual(store.listEntries(BEN, { meeting: 'Shop Talk|2026-11-07' }).entries.map((e) => e.id), [b]);
+  assert.deepEqual(store.listEntries(BEN, { meeting: '-' }).entries.map((e) => e.id), [c]);
+  assert.deepEqual(store.listEntries(BEN, { meeting: 'Shop Talk' }).entries, [], 'a bare label no longer matches dated meetings');
+  assert.equal(store.listEntries(PRIYA).meetings[0].key, 'Circle|2026-11-08');
+  assert.equal(store.getEntry(BEN, a).entry.meeting.key, 'Shop Talk|2026-10-31');
+  assert.ok(priv);
+});
+
+test('the viewer sees which group holds their own answer, and nothing about anyone else', () => {
+  const { store } = makeStore();
+  const typed = store.createEntry(SUPER, { kind: 'typed', title: 'Movie?' }, { open: true }).id;
+  store.answer(PRIYA, typed, { text: 'Project Hail Mary' });
+  store.answer(BEN, typed, { text: 'project hail mary!' });
+  store.answer(member(3), typed, { text: 'Arrival' });
+  store.setStatus(SUPER, typed, 'close');
+  store.setStatus(SUPER, typed, 'publish');
+  const ben = store.getEntry(BEN, typed).results.groups;
+  assert.deepEqual(ben.map((g) => [g.label, g.count, g.mine]), [['Project Hail Mary', 2, true], ['Arrival', 1, false]]);
+  assert.equal(ben[0].norms, undefined, 'a member never receives the spellings');
+  const poll = store.createEntry(SUPER, { kind: 'poll', title: 'Q', options: ['a', 'b'] }, { open: true }).id;
+  store.answer(PRIYA, poll, { choice: 1 });
+  store.setStatus(SUPER, poll, 'close');
+  store.setStatus(SUPER, poll, 'publish');
+  assert.deepEqual(store.getEntry(PRIYA, poll).results.groups.map((g) => [g.label, g.mine]), [['b', true], ['a', false]]);
+  assert.ok(store.getEntry(BEN, poll).results.groups.every((g) => g.mine === undefined), 'no answer, no mark');
+});
+
+test('a prompt image stays on an edit by the other superadmin, and a stranger cannot attach theirs', () => {
+  const { store } = makeStore();
+  const OTHER = { githubId: '125175037', login: 'atwellpub', superadmin: true };
+  const { id } = store.createEntry(SUPER, { kind: 'topic', title: 'Desks' });
+  const img = store.putImage(SUPER, id, { name: 'desk.png', contentType: 'image/png', bytes: PNG }).id;
+  store.editEntry(SUPER, id, { kind: 'topic', title: 'Desks', promptImages: [img] });
+  store.editEntry(OTHER, id, { kind: 'topic', title: 'Desks, again', promptImages: [img] });
+  assert.deepEqual(store.getEntry(SUPER, id).entry.promptImages.map((i) => i.id), [img]);
+  store.setStatus(SUPER, id, 'open');
+  const stray = store.putImage(PRIYA, id, { name: 'mine.png', contentType: 'image/png', bytes: PNG }).id;
+  store.editEntry(OTHER, id, { kind: 'topic', title: 'Desks, again', promptImages: [img, stray] });
+  assert.deepEqual(store.getEntry(SUPER, id).entry.promptImages.map((i) => i.id), [img], 'a member upload is never pulled onto the prompt');
+});
+

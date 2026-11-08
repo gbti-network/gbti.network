@@ -1,0 +1,30 @@
+---
+// sow-494: COMMUNITY, members only. Polls and topics from our meetings, each with its own page and discussion. This is a
+// static shell: the entries are read at run time from the signup Worker over the cookie session, which answers only
+// for an effective paid member and lists only the entries shared with them. Nothing about an entry is in the build.
+// noindex, and filtered out of the sitemap (astro.config.mjs).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Community" description="Polls and topics from GBTI Network meetings, for members." noindex={true}>
+  <section class="band band-app">
+    <div class="wrap community-wrap">
+      <div class="cm-signin" data-cm-signedout hidden>
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-grid"/></svg></span>
+        <h1 class="h2 mt16">Sign in to see Community</h1>
+        <p class="lead">Polls and topics from our meetings are for members. Sign in with GitHub to take part.</p>
+        <a href="/login/?return_to=%2Fcommunity%2F" class="btn btn-primary btn-lg mt16">Sign in <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+      </div>
+      <div data-cm-mount>
+        <gbti-community-list></gbti-community-list>
+      </div>
+    </div>
+  </section>
+  <script>
+    import { mountCommunity } from '../../lib/community-page';
+    mountCommunity({ tag: 'gbti-community-list', element: () => import('../../../client-ui/src/elements/gbti-community-list.mjs') });
+  </script>
+  <style>
+    .community-wrap { max-width: 1080px; }
+    .cm-signin { text-align: center; padding: 24px 0; }
+  </style>
+</BaseLayout>

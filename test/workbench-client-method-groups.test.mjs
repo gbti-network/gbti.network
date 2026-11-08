@@ -19,7 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = path.join(ROOT, 'src/lib/workbench-client.ts');
 
 // The groups spread into the client's returned object, with the module that defines each.
-const GROUPS = { adminMethods: 'src/lib/workbench-client-admin.ts', preparedMethods: 'src/lib/workbench-prepared.ts' };
+const GROUPS = { adminMethods: 'src/lib/workbench-client-admin.ts', preparedMethods: 'src/lib/workbench-prepared.ts', communityMethods: 'src/lib/workbench-community.ts' }; // sow-494: Community
 
 /** The client's OWN method names (the non-spread keys of the object literal that spreads the groups in), and every
  *  spread in it that is NOT a known group: a new group, or a spread of a plain object, whose names this test cannot see. */

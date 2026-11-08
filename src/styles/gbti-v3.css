@@ -41,6 +41,12 @@
   /* sow-366: the personalize control's blue. It was only ever a fallback inside var(), so it never had a dark
      value and sat at the light ink on a dark surface. Declared here, and lifted on dark like --amber. */
   --blue-700:   #3557a0;
+  /* sow-494: the Topic badge's tint beside --blue-700, and an error colour. V3 had no error token; Community's
+     upload errors (an image over 1 MB) needed one that reads on white and on the dark card. */
+  --blue-tint:  #eaf0fa;
+  --err:        #a8432b;
+  --err-tint:   #fbeee9;
+  --green-bar:  #9ad3b4;   /* sow-494: a result bar that is not the leading one (the leader is --green) */
 
   /* text */
   --fg:         #24222a;

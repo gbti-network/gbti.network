@@ -43,6 +43,7 @@ import { WorkbenchClientError, err, readCsrf, createWorkerTransport } from './wo
 import { TYPE_LABEL, hostedItemId, createPublish } from './workbench-client-publish'; // publish, and the two names flipStatus shares with it
 import { adminMethods } from './workbench-client-admin'; // the admin, channel-map, invite and editorial methods
 import { preparedMethods } from './workbench-prepared'; // sow-427: prepared project listings (Worker-gated superadmin route)
+import { communityMethods } from './workbench-community'; // sow-494: Community entries, answers and discussion
 import { createAudioStaging } from './workbench-client-audio'; // sow-483: the podcast block's staged recordings
 import { contentBase } from '../../client/src/content-base.mjs'; // sow-482: the published version a draft started from
 
@@ -560,6 +561,7 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     // issued invites and the editorial review queue. Spread HERE so every name keeps its place in this object.
     ...adminMethods({ workerGet, workerPost, workerPatch, isSuperadmin }),
     ...preparedMethods({ workerGet, workerPost, isSuperadmin }), // sow-427: get/image/save always, list/revoke/resend/delete for a superadmin
+    ...communityMethods({ workerGet, workerPost, base, isSuperadmin }), // sow-494: the member methods always, communityAdmin + communityMembers for a superadmin
 
     // ----- SOW-043/046: interactive News over the cookie session (free-tier perk; authorizeSignedIn) -----
     getNews({ category, since, limit }: any = {}) {

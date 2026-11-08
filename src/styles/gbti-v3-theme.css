@@ -30,6 +30,10 @@
   --green-600:   #46c089;
 
   --blue-700:    #8fb0ee;   /* sow-366: lifted for dark, as amber is */
+  --blue-tint:   rgba(143,176,238,.14); /* sow-494 */
+  --err:         #f0a08c;
+  --err-tint:    rgba(240,160,140,.12);
+  --green-bar:   #3f8f68;
 
   /* amber lifts to the design's lighter tone so it reads on dark surfaces (sow-172) */
   --amber:       #e0a94b;

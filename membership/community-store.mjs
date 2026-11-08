@@ -61,6 +61,8 @@ const SCHEMA = [
 const asBytes = (v) => (v instanceof Uint8Array ? v : v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(0));
 const parseJson = (s, fallback) => { try { const v = JSON.parse(s); return v ?? fallback; } catch { return fallback; } };
 const bool = (v) => v === 1 || v === true;
+/** A meeting is its label and its date together (`Shop Talk|2026-11-07`), or its label alone when it has no date. */
+export const meetingKey = (row) => (row.meeting_label ? (row.meeting_date ? `${row.meeting_label}|${row.meeting_date}` : row.meeting_label) : '');
 
 /** A viewer is `{ githubId, login, superadmin }`, built by the Worker from a verified identity. Never from input. */
 function checkViewer(viewer) {
@@ -139,7 +141,7 @@ export class CommunityStore {
     }
     return {
       id: row.id, kind: row.kind, title: row.title, status: row.status, locked: bool(row.locked),
-      meeting: { label: row.meeting_label, date: row.meeting_date },
+      meeting: { label: row.meeting_label, date: row.meeting_date, key: meetingKey(row) },
       author: { githubId: row.created_by, login: row.created_login },
       access: { mode: row.access_mode, count: row.access_mode === 'all' ? null : this.one('SELECT COUNT(*) AS n FROM entry_members WHERE entry_id = ?', row.id).n },
       counts: { answers, posts, withImages, options: options.length },
@@ -159,11 +161,18 @@ export class CommunityStore {
       if (!this.canSee(v, row)) continue;
       if (kind === 'poll' && !isPollKind(row.kind)) continue;
       if (kind === 'topic' && row.kind !== 'topic') continue;
-      if (meeting && (meeting === '-' ? row.meeting_label !== '' : row.meeting_label !== meeting)) continue;
+      if (meeting && (meeting === '-' ? row.meeting_label !== '' : meetingKey(row) !== meeting)) continue;
       out.push(this.summary(row, v));
     }
     out.sort((a, b) => (b.status === 'live') - (a.status === 'live') || b.activityAt - a.activityAt);
-    const meetings = [...new Set(rows.filter((r) => this.canSee(v, r)).map((r) => r.meeting_label).filter(Boolean))];
+    // One filter option per meeting the viewer has an entry in: a label and a date together, newest first, so each
+    // week's Shop Talk is its own meeting rather than one "Shop Talk" holding them all.
+    const seen = new Map();
+    for (const r of rows) {
+      const key = meetingKey(r);
+      if (key && !seen.has(key) && this.canSee(v, r)) seen.set(key, { key, label: r.meeting_label, date: r.meeting_date });
+    }
+    const meetings = [...seen.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.label.localeCompare(b.label));
     return { entries: out, meetings };
   }
 
@@ -211,11 +220,18 @@ export class CommunityStore {
   /** One entry as this viewer may see it: the entry, their own answer, results when allowed, and the discussion. */
   getEntry(viewer, id) {
     const { v, row } = this.visible(viewer, id);
-    const mine = isPollKind(row.kind) ? this.one('SELECT value FROM answers WHERE entry_id = ? AND github_id = ?', row.id, v.githubId) : null;
+    const mine = isPollKind(row.kind) ? this.one('SELECT value, norm FROM answers WHERE entry_id = ? AND github_id = ?', row.id, v.githubId) : null;
     const members = row.access_mode === 'chosen'
       ? this.q('SELECT github_id, login FROM entry_members WHERE entry_id = ? ORDER BY login', row.id).map((m) => ({ githubId: m.github_id, login: m.login }))
       : [];
     const showResults = row.status === 'published' || v.superadmin;
+    const results = showResults ? this.results(row, v.superadmin) : null;
+    // Mark the group holding the viewer's own answer ("Includes yours"). For a typed poll the member's view carries no
+    // spellings, so the group is found on the full results and marked by its key; nothing about anyone else changes.
+    if (results && mine) {
+      const hit = row.kind === 'poll' ? mine.value : (this.results(row, true).groups.find((g) => g.norms.includes(mine.norm)) || {}).key;
+      for (const g of results.groups) g.mine = g.key === hit;
+    }
     return {
       entry: {
         ...this.summary(row, v),
@@ -225,7 +241,7 @@ export class CommunityStore {
         access: { mode: row.access_mode, count: row.access_mode === 'all' ? null : members.length, members },
       },
       mine: mine ? (row.kind === 'poll' ? { choice: Number(mine.value) } : { text: mine.value }) : null,
-      results: showResults ? this.results(row, v.superadmin) : null,
+      results,
       discussion: this.discussion(row, v),
       viewer: { githubId: v.githubId, superadmin: v.superadmin },
       version: row.version,
@@ -298,8 +314,14 @@ export class CommunityStore {
   attachPromptImages(v, id, ids) {
     if (!Array.isArray(ids)) return;
     const list = [...new Set(ids.map(String))].filter(isId).slice(0, LIMITS.promptImages);
+    // An image already on the prompt stays when it is listed again, whoever uploaded it (two superadmins share a
+    // prompt). A new one must be the caller's own unposted upload to this entry.
+    const current = new Set(this.q('SELECT id FROM images WHERE entry_id = ? AND prompt = 1', id).map((r) => r.id));
     this.q('UPDATE images SET prompt = 0 WHERE entry_id = ? AND prompt = 1', id);
-    for (const img of list) this.q('UPDATE images SET prompt = 1 WHERE id = ? AND entry_id = ? AND owner = ? AND post_id IS NULL', img, id, v.githubId);
+    for (const img of list) {
+      if (current.has(img)) this.q('UPDATE images SET prompt = 1 WHERE id = ? AND entry_id = ?', img, id);
+      else this.q('UPDATE images SET prompt = 1 WHERE id = ? AND entry_id = ? AND owner = ? AND post_id IS NULL', img, id, v.githubId);
+    }
   }
 
   editEntry(viewer, id, input) {

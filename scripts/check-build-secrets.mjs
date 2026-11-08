@@ -598,6 +598,32 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
+  // sow-494: COMMUNITY IS READ AT RUN TIME, NEVER BUILT. Its entries, answers and discussion live in a Durable Object
+  // behind the members-only Worker, and each entry is shared with chosen members, so nothing about one may reach this
+  // public bundle. dist/community/ must hold exactly the two static shells, each mounting its element and carrying no
+  // entry data. Both directions: a missing shell is reported too, so the check cannot pass on an empty folder.
+  const communityDir = path.join(distDir, 'community');
+  if (fs.existsSync(communityDir)) {
+    const shells = { 'index.html': '<gbti-community-list', 'entry/index.html': '<gbti-community-entry' };
+    const found = [];
+    const walk = (dir, rel = '') => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const r = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) walk(path.join(dir, e.name), r); else found.push(r);
+      }
+    };
+    walk(communityDir);
+    for (const f of found) if (!shells[f]) errors.push(`dist/community/${f} is not one of the two Community shells. Community entries are read at run time and never built.`);
+    for (const [f, tag] of Object.entries(shells)) {
+      const file = path.join(communityDir, f);
+      if (!fs.existsSync(file)) { errors.push(`dist/community/${f} is missing, so the Community check has nothing to look at.`); continue; }
+      const html = fs.readFileSync(file, 'utf8');
+      if (!html.includes(tag)) errors.push(`dist/community/${f} does not mount ${tag}>.`);
+      if (/"(discussion|answers|entry_members|promptImages)"\s*:/.test(html)) errors.push(`dist/community/${f} carries Community entry data. It must stay a shell.`);
+      if (!/<meta name="robots" content="noindex/.test(html)) errors.push(`dist/community/${f} is not marked noindex.`);
+    }
+  }
+
   return { errors, notes, checked };
 }
 
