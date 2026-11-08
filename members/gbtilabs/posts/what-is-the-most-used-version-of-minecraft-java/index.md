@@ -108,6 +108,8 @@ It depends on the site. Fabric mods are downloaded most on Modrinth, ahead of Fo
 
 *The 500 most downloaded mods per platform, 17 October 2026 to 24 October 2026.*
 
+![Weekly mod downloads by platform, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per platform. Modrinth: Fabric 263,147,623, Forge 206,867,186, NeoForge 237,817,761, Quilt 168,295,563. CurseForge: Fabric 241,759,579, Forge 275,835,894, NeoForge 289,926,225, Quilt 124,002,301. A mod made for several platforms counts for each of them.](./images/downloads-by-platform.svg)
+
 ## Which is more popular, Paper, Spigot or Purpur?
 
 Paper is the most popular by far. bStats records which server software each server runs, in a separate chart that counts 190,740 servers. Paper runs on 74.39% of them, Purpur on 9.05% and Spigot on 6.30%. After them come Leaf on 2.31%, UniverseSpigot on 1.10%, [Arclight](https://github.com/IzzelAliz/Arclight) on 0.80% and Folia on 0.71%. Another 2.77% report a name bStats does not recognize.

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="288" viewBox="0 0 760 288" role="img" aria-label="Weekly mod downloads by platform, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per platform. Modrinth: Fabric 263,147,623, Forge 206,867,186, NeoForge 237,817,761, Quilt 168,295,563. CurseForge: Fabric 241,759,579, Forge 275,835,894, NeoForge 289,926,225, Quilt 124,002,301. A mod made for several platforms counts for each of them." font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<title>Weekly mod downloads by platform, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods per platform. Modrinth: Fabric 263,147,623, Forge 206,867,186, NeoForge 237,817,761, Quilt 168,295,563. CurseForge: Fabric 241,759,579, Forge 275,835,894, NeoForge 289,926,225, Quilt 124,002,301. A mod made for several platforms counts for each of them.</title>
+<rect x="0.5" y="0.5" width="759" height="287" rx="12" fill="#fcfcfb" stroke="rgba(11,11,11,0.10)"/>
+<text x="28.0" y="46.0" font-size="19" font-weight="650" fill="#0b0b0b" text-anchor="start">Weekly mod downloads by platform</text>
+<text x="28.0" y="70.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">The 500 most downloaded mods per platform; a mod made for several platforms counts for each</text>
+<text x="28.0" y="117.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">Modrinth</text>
+<text x="28.0" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">Fabric</text>
+<path d="M106.0,132.0 H256.3 Q260.3,132.0 260.3,136.0 V146.0 Q260.3,150.0 256.3,150.0 H106.0 Z" fill="#2a78d6"/>
+<text x="266.3" y="146.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">263.1 million</text>
+<text x="28.0" y="174.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Forge</text>
+<path d="M106.0,160.0 H223.3 Q227.3,160.0 227.3,164.0 V174.0 Q227.3,178.0 223.3,178.0 H106.0 Z" fill="#2a78d6"/>
+<text x="233.3" y="174.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">206.9 million</text>
+<text x="28.0" y="202.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">NeoForge</text>
+<path d="M106.0,188.0 H241.4 Q245.4,188.0 245.4,192.0 V202.0 Q245.4,206.0 241.4,206.0 H106.0 Z" fill="#2a78d6"/>
+<text x="251.4" y="202.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">237.8 million</text>
+<text x="28.0" y="230.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Quilt</text>
+<path d="M106.0,216.0 H200.7 Q204.7,216.0 204.7,220.0 V230.0 Q204.7,234.0 200.7,234.0 H106.0 Z" fill="#2a78d6"/>
+<text x="210.7" y="230.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">168.3 million</text>
+<text x="392.0" y="117.0" font-size="16" font-weight="650" fill="#0b0b0b" text-anchor="start">CurseForge</text>
+<text x="392.0" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Fabric</text>
+<path d="M470.0,132.0 H607.8 Q611.8,132.0 611.8,136.0 V146.0 Q611.8,150.0 607.8,150.0 H470.0 Z" fill="#2a78d6"/>
+<text x="617.8" y="146.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">241.8 million</text>
+<text x="392.0" y="174.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Forge</text>
+<path d="M470.0,160.0 H627.7 Q631.7,160.0 631.7,164.0 V174.0 Q631.7,178.0 627.7,178.0 H470.0 Z" fill="#2a78d6"/>
+<text x="637.7" y="174.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">275.8 million</text>
+<text x="392.0" y="202.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">NeoForge</text>
+<path d="M470.0,188.0 H636.0 Q640.0,188.0 640.0,192.0 V202.0 Q640.0,206.0 636.0,206.0 H470.0 Z" fill="#2a78d6"/>
+<text x="646.0" y="202.0" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">289.9 million</text>
+<text x="392.0" y="230.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">Quilt</text>
+<path d="M470.0,216.0 H538.7 Q542.7,216.0 542.7,220.0 V230.0 Q542.7,234.0 538.7,234.0 H470.0 Z" fill="#2a78d6"/>
+<text x="548.7" y="230.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">124.0 million</text>
+<text x="28.0" y="270.0" font-size="11" font-weight="400" fill="#898781" text-anchor="start">Source: Modrinth and CurseForge download counts, 17 October 2026 to 24 October 2026. GBTI Network research.</text>
+</svg>
