@@ -135,12 +135,7 @@ The latest release is 26.3. Mojang shipped it on 15 September 2026[^8].
 
 Q: Which versions do Fabric and Forge players use most?
 On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
-
-Q: Why do some servers still run 1.8?
-The sources do not state a reason. Hypixel[^9] said in 2018 that it was still optimized for 1.8.9, but that does not explain why other servers stayed.
 ```
-
-Paper-family servers report their Minecraft versions directly to bStats[^1], a statistics service integrated into Paper. This allows the article to count servers by version. Fabric, Forge, NeoForge and Quilt servers do not provide equivalent reporting, so the article estimates their version usage based on mod download activity for each Minecraft version on Modrinth[^2], with each platform's weekly totals from CurseForge[^4].
 
 [^1]: [bStats global charts](https://bstats.org/global/bukkit): bStats collects usage statistics from Minecraft servers, and its charts give the share of servers on each Minecraft version, server software and Java runtime, read several times a day from 17 October 2026 to 24 October 2026.
 
@@ -157,5 +152,3 @@ Paper-family servers report their Minecraft versions directly to bStats[^1], a s
 [^7]: [bStats proxy charts for Velocity](https://bstats.org/global/velocity) and [BungeeCord](https://bstats.org/global/bungeecord): the proxy counts.
 
 [^8]: [Mojang version manifest](https://piston-meta.mojang.com/mc/game/version_manifest_v2.json): the release date of every Minecraft Java version.
-
-[^9]: [Hypixel's 2018 announcement](https://hypixel.net/threads/hypixel-now-supports-minecraft-version-1-13.1698790/): Hypixel said it was still optimized for 1.8.9.
