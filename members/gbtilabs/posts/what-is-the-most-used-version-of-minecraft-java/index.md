@@ -137,6 +137,17 @@ Q: Which versions do Fabric and Forge players use most?
 On Modrinth, in the week we measured, Fabric's most downloaded version was 26.3. Forge's was 1.20.1. NeoForge's was 1.21.1, and Quilt's was 26.3.
 ```
 
+## Thanks for reading!
+
+The GBTI Network makes Minecraft mods too. All four run on Fabric:
+
+- [Jockey Radio](https://gbti.network/projects/jockey-radio/) puts live radio, streams and your own audio on music discs. Place a disc in a jukebox and nearby players hear it through Simple Voice Chat.
+- [Traveler's Chest](https://gbti.network/projects/travelers-chest/) refills itself with the same items in the same slots, after a cooldown you set.
+- [Traveler's Lectern](https://gbti.network/projects/travelers-lectern/) puts its book back after a player takes it, once the cooldown you set has passed.
+- [Traveler's Journal](https://gbti.network/projects/travelers-journal/) hands players an in-game book written in a Markdown file on the server. Change the file and every copy players hold updates.
+
+The GBTI Network offers publishing and networking opportunities to content creators and product developers across the internet. Every Tuesday we send a free digest of the week's member-submitted content. If you are looking for a private community of people who keep each other informed, see our [membership](https://gbti.network/membership/) options. We also make a [Chrome extension](https://gbti.network/extension/) for following the network from your browser.
+
 [^1]: [bStats global charts](https://bstats.org/global/bukkit): bStats collects usage statistics from Minecraft servers, and its charts give the share of servers on each Minecraft version, server software and Java runtime, read several times a day from 17 October 2026 to 24 October 2026.
 
 [^2]: [Modrinth API](https://api.modrinth.com/v2): one week of downloads, 17 October 2026 to 24 October 2026, for the 500 most downloaded mods of each platform, split by Minecraft version.
