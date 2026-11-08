@@ -66,12 +66,6 @@ Paper-family servers report their version to bStats[^1]. bStats is the built-in 
 
 Fabric, Forge, NeoForge and Quilt servers do not have the same reporting mechanisms, so we had to take a different path to understand version-usage stats by reviewing known statistics of the last week of mod download data publicly available from each platform's 500 most downloaded mods on Modrinth[^2], one of the most popular mod hosting sites.
 
-On Paper-family servers, 1.21.11 and 26.2 were close behind 26.3, at 23.12% and 23.06%. We read bStats 55 times that week, and 26.2 led in 50 of those readings; 26.3 moved ahead only on the last day.
-
-Modrinth counts downloads per release, and a release lists every Minecraft version it supports, so a download cannot be tied to one version. We split each release's downloads evenly across the versions it lists. Releases that list a single version need no split, and they hold 57.11% to 66.73% of each platform's downloads that week. Counted from those alone, the top version on every platform is the same, though the order below first place shifts. For Quilt even first place is close, as the Quilt section explains.
-
-Servers running Mojang's own server software report to no statistics service either, so the chart has no panel for them.
-
 ```callout info
 **Did you know?** Mojang [announced](https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system) on 2 December 2025 that Minecraft would number its versions by year. The first number is the year, the second is the release within that year, and the third is the hotfix, so 26.1.2 is the second hotfix of the first release of 2026. The last version numbered the old way, starting with "1.", was 1.21.11, according to the [Minecraft Wiki](https://minecraft.wiki/w/Version_formats).
 ```
