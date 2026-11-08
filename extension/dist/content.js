@@ -31543,7 +31543,7 @@ ${BLOCKED_PILL_CSS}
   .body .md-embed iframe { width:100%; height:100%; border:0; }
   /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */
   .body sup.md-fnref { line-height:0; } .body sup.md-fnref a { text-decoration:none; font-weight:600; padding:0 1px; }
-  .body .md-footnotes { margin-top:28px; padding-top:12px; border-top:1px solid var(--line); font-size:.87em; color:var(--muted); }
+  .body .md-footnotes { margin-top:28px; padding-top:12px; border-top:1px solid var(--line); font-size:.8em; line-height:1.6; color:var(--muted); } /* sow-496: 12.4px on the 15.5px body, the article page's size */
   .body .md-footnotes h2 { font-size:1.05em; margin:0 0 .6em; }
   .body .md-footnotes li { margin:0 0 .55em; }
   .body .md-fn-back { text-decoration:none; margin-left:4px; }
