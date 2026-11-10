@@ -4,7 +4,7 @@ slug: what-is-the-most-used-version-of-minecraft-java
 status: published
 visibility: public
 publicStub: false
-excerpt: "26.3 leads on Paper-family servers and in Fabric and Quilt mod downloads; Forge mods are downloaded most for 1.20.1 and NeoForge mods for 1.21.1."
+excerpt: "Averaged across five kinds of server, 1.20.1 is the most used Minecraft Java version; 26.3 leads on Paper-family servers and in Fabric and Quilt mod downloads."
 categories:
   - entertainment
   - gaming
