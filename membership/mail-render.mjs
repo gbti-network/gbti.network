@@ -52,11 +52,12 @@ import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBox
 import { WEEKLY_HEADER_LINE, CLOSING_LEAD, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
 import { memberAvatarUrl } from './member-avatar.mjs'; // sow-428: avatars by account number, addressed by folder
 import { isoWeek } from './iso-week.mjs'; // the ISO week, shared with the Social Queue post's {week} token
-// The web edition's social image: the engraved coffee cup in line and flat tone, chosen by the owner on 2026-09-29
-// (it replaced the first pick, og.png, the same day). Served from the site, 1200 x 630. A new design gets a NEW
-// file name: link previews cache the image by its address, so overwriting the old file would leave every preview
-// already fetched showing the old picture.
-export const DIGEST_OG_IMAGE = '/brand/digest/og-engraved.png';
+// The web edition's social image: a Pexels photo of a breakfast table (hands round a mug, a bowl of granola, an open
+// magazine; by THE 5TH, pexels.com/photo/179912) above an ink band with the title, option E picked by the owner on
+// 2026-11-11. It replaced the engraved coffee cup (og-engraved.png, 2026-09-29), which stays on disk for previews that
+// already fetched it. Served from the site, 1200 x 630. A new design gets a NEW file name: link previews cache the
+// image by its address, so overwriting the old file would leave every preview already fetched showing the old picture.
+export const DIGEST_OG_IMAGE = '/brand/digest/og-reading.png';
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
