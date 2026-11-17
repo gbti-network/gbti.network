@@ -532,6 +532,11 @@ covers:
     lookup: https://apiiro.com/blog/coding-agents-leaking-secrets-github-dont-ask-again
     failed: no-preview
     triedAt: '2026-11-08'
+  gbtilabs/20261117135854-il-lo-cynnes-official-visualizer:
+    source: https://i.ytimg.com/vi/KNFQxRYKTzQ/maxresdefault.jpg
+    file: 20261117135854-il-lo-cynnes-official-visualizer-cb76d550.webp
+    sha256: cb76d55079b92e7962a3a112a3132493f095d51a7f90a5980f63ac181ed08435
+    copiedAt: '2026-11-17'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
