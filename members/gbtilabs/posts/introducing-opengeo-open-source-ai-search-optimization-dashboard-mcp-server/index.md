@@ -6,7 +6,6 @@ visibility: public
 publicStub: false
 excerpt: "OpenGEO is a free, open-source app that shows whether ChatGPT and other AI assistants mention your brand and link to your website. A tour of its dashboard and MCP server."
 coverImage: ./images/introducing-opengeo-cover.webp
-coverAlt: "The night side of Earth from space with the Anthropic, OpenAI, Grok, DeepSeek and Gemini logos beneath the title Introducing OpenGEO"
 categories:
   - business
   - marketing
@@ -25,7 +24,7 @@ type: post
 author: gbtilabs
 ---
 
-Someone asks an AI assistant for help finding a product or service. The assistant writes an answer. It might name your brand, link to your website, or leave both out.
+For years, businesses competed for a place on Google’s first page. Now, a growing number of consumers are skipping the results page and asking ChatGPT, Grok, or Perplexity for a recommendation instead. Generative Engine Optimization (GEO) is quickly emerging as the next frontier beyond traditional SEO and businesses of every size are asking how to get noticed. When someone asks an AI assistant to find a product or service, its answer could feature your brand, include a link to your website, or make no mention of you at all.
 
 OpenGEO is a free app that helps website owners and agencies inspect those answers. It is open source, which means its code is public for people to inspect, change and share. The original application code uses the MIT licence, which permits reuse under its terms. SurfacedBy maintains the project.[^opengeo]
 
@@ -223,4 +222,4 @@ Content provides a place to research, write and review drafts.
 
 [^home]: [SurfacedBy](/outbound/surfacedby): the hosted service, the platforms it monitors and its free AI visibility check. Read 4 November 2026.
 
-[^example]: The screenshots show OpenGEO tracking savepoint.fm, the website of SavePoint Station Manager, on 16 November 2026, used with its owner's permission.
+[^example]: The screenshots show OpenGEO tracking savepoint.fm, the website of SavePoint Station Manager, on 16 November 2026, used with its owner's permission. The cover image shows the night side of Earth from space (photo by Zelch Csaba on Pexels) with the Anthropic, OpenAI, Grok, DeepSeek and Gemini logos beneath the title Introducing OpenGEO.
