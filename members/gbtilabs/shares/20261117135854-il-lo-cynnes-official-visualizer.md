@@ -9,7 +9,8 @@ tags:
   - electronic-music
   - visualizer
   - ambient-music
-image: https://i.ytimg.com/vi/KNFQxRYKTzQ/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20261117135854-il-lo-cynnes-official-visualizer-cb76d550.webp
+imageSource: https://i.ytimg.com/vi/KNFQxRYKTzQ/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@illomusic
 creatorName: il:lo
 sourceName: YouTube
