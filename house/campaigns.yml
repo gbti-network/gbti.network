@@ -15,6 +15,10 @@ campaigns:
     tier: member
     active: true
     lander: /member-invite/
+  - id: AIINTRODUCER
+    tier: member
+    active: true
+    lander: /member-invite/
   - id: CODEABLEYEAR
     tier: member
     active: true
