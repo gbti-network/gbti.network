@@ -26,11 +26,13 @@ author: gbtilabs
 
 For years, businesses competed for a place on Google’s first page. Now, a growing number of consumers are skipping the results page and asking ChatGPT, Grok, or Perplexity for a recommendation instead. Generative Engine Optimization (GEO) is quickly emerging as the next frontier beyond traditional SEO and businesses of every size are asking how to get noticed. When someone asks an AI assistant to find a product or service, its answer could feature your brand, include a link to your website, or make no mention of you at all.
 
+This practice is currently being called a lot of different things: AI search optimization, AI search engine optimization, generative engine optimization (GEO), or answer engine optimization (AEO). However you describe it, the main industry players are becoming more settled on GEO as the official acronym that will be competitive with yesterday's SEO.
+
+In this article you will be formally introduced to OpenGEO as a modern analytics engine that is self-hosted, not SaaS. It will also explain how you can empower your current AI workflow using agents such as Claude Code, OpenClaw and Codex, which can connect to OpenGEO through its MCP server.
+
+## Introducing OpenGEO: An Open Source GEO Analytics Platform
+
 OpenGEO is a free, open-source project maintained by SurfacedBy. Its code is public under the MIT licence, so anyone can read it, change it and share it.[^opengeo] It is being built to work with the major AI models. You choose the key phrases and questions your customers ask, the ones you hope will lead them to your products. OpenGEO collects the answers and shows which ones mention your brand, which ones link to your website, and which ones leave you out. Its goal is to do more than give you one look. It repeats the same questions over time, so you can follow how you are doing across the major models. It reaches those models in three ways: through an API key (a private pass that lets one program use another), through a ChatGPT subscription you already pay for, or through research services such as SurfacedBy that collect answers from many models at once.
-
-This work is called AI search optimization, AI search engine optimization, generative engine optimization (GEO), or answer engine optimization (AEO). The names describe work aimed at improving a brand's presence in AI answers. OpenGEO provides evidence to guide that work. It cannot promise a mention, a citation or a ranking.
-
-The rest of this article explains how OpenGEO works and how it can help you run your company's GEO campaigns. It also shows how AI agents such as Claude Code, OpenClaw and Codex can connect to OpenGEO through its MCP server. A connected agent can read your progress, try out new questions that may be worth monitoring, and write you a weekly report to read on any of your devices. Adding a question to the tracked list is still a step you take in the app. OpenGEO is a public beta. Version 0.1.0-beta.7 came out on 13 November 2026.[^release]
 
 ## OpenGEO and brand visibility in AI answers
 
@@ -38,7 +40,7 @@ A mention means an answer names your brand. A citation means it links to your we
 
 People searching for ChatGPT SEO, how to rank in ChatGPT, or how to get cited by ChatGPT can start by checking what answers contain today. OpenGEO lets you check brand visibility in ChatGPT, read the answers behind the results, and repeat the same questions later.
 
-A visibility check collects a sample of answers to questions you choose. Missing answers stay missing. OpenGEO does not treat a failed request as an answer that ignored your brand.
+A visibility check collects a sample of answers to questions you choose. Missing answers stay missing. OpenGEO does not treat a failed request as an answer that ignored your brand. It also cannot promise a mention, a citation or a ranking.
 
 Results can also differ from a conversation in a chat app. To compare checks fairly, keep the questions, language, connection and answer settings the same. Even then, a change does not prove that a website edit caused it.
 
@@ -102,7 +104,7 @@ Paid work requires spending approval where applicable. Expired access, service l
 
 An MCP server is a bridge that lets an AI assistant use an app's tools through Model Context Protocol, a shared communication format. OpenGEO's MCP server lets an AI agent, software that can call tools to complete tasks, read projects and request work.[^dev]
 
-Version 0.1.0-beta.7 exposes twelve tools, grouped here by job:
+Version 0.1.0-beta.7 exposes twelve tools, grouped here by job:[^release]
 
 - **Read projects:** `list_projects` lists local projects. `read_workspace` reads saved evidence, opportunities and drafts.
 - **Start work:** `start_audit` checks public pages without a paid provider. `start_workflow` starts a selected provider workflow with an explicitly approved budget.
@@ -135,7 +137,7 @@ In a read-only example run, Claude Code could use only `list_projects` and `read
 
 ## Installing OpenGEO and keeping data local
 
-Desktop downloads are available for Windows and for Mac computers with Apple or Intel processors. The desktop app includes the software needed to run it. Linux users and server operators can use Docker or run from source code.[^install]
+OpenGEO is a public beta. Desktop downloads are available for Windows and for Mac computers with Apple or Intel processors. The desktop app includes the software needed to run it. Linux users and server operators can use Docker or run from source code.[^install]
 
 Windows beta builds are unsigned. Mac builds do not have Apple's publisher verification or notarization, so either system may warn or block installation. Follow the installation guide rather than disabling security protections.
 
