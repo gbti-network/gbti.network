@@ -28,11 +28,21 @@ For years, businesses competed for a place on Google’s first page. Now, a grow
 
 This practice is currently being called a lot of different things: AI search optimization, AI search engine optimization, generative engine optimization (GEO), or answer engine optimization (AEO). However you describe it, the main industry players are becoming more settled on GEO as the official acronym that will be competitive with yesterday's SEO.
 
-In this article you will be formally introduced to OpenGEO as a modern analytics engine that is self-hosted, not SaaS. It will also explain how you can empower your current AI workflow using agents such as Claude Code, OpenClaw and Codex, which can connect to OpenGEO through its MCP server.
+In this article you will be formally introduced to [OpenGEO](https://github.com/surfacedby/OpenGEO) as a modern analytics engine that is self-hosted, not SaaS, and to [SurfacedBy](/outbound/surfacedby), a service that searches the major LLMs for you. It will also explain how you can empower your current AI workflow using agents such as Claude Code, OpenClaw and Codex, which can connect to OpenGEO through its MCP server.
 
 ## Introducing OpenGEO: An Open Source GEO Analytics Platform
 
-OpenGEO is a free, open-source project maintained by SurfacedBy. Its code is public under the MIT licence, so anyone can read it, change it and share it.[^opengeo] It is being built to work with the major AI models. You choose the key phrases and questions your customers ask, the ones you hope will lead them to your products. OpenGEO collects the answers and shows which ones mention your brand, which ones link to your website, and which ones leave you out. Its goal is to do more than give you one look. It repeats the same questions over time, so you can follow how you are doing across the major models. It reaches those models in three ways: through an API key (a private pass that lets one program use another), through a ChatGPT subscription you already pay for, or through research services such as SurfacedBy that collect answers from many models at once.
+![The OpenGEO logo](./images/opengeo-logo.webp){center}
+
+OpenGEO is a free, open-source project maintained by SurfacedBy. Its code is public under the MIT licence, so anyone can read it, change it and share it.[^opengeo] It is being built to work with the major AI models. You choose the key phrases and questions your customers ask, the ones you hope will lead them to your products.
+
+For example, imagine you run a small online shop that sells standing desks. You want to know whether ChatGPT recommends your desks when people ask questions like these:
+
+- What is the best standing desk for a small home office?
+- Which standing desks are good for tall people?
+- Which standing desk brands have the best warranty?
+
+OpenGEO collects the answers and shows which ones mention your brand, which ones link to your website, and which ones leave you out. Its goal is to do more than give you one look. It repeats the same questions over time, so you can follow how you are doing across the major models. It reaches those models in three ways: through an API key (a private pass that lets one program use another), through a ChatGPT subscription you already pay for, or through research services such as SurfacedBy that collect answers from many models at once.
 
 ## OpenGEO and brand visibility in AI answers
 
