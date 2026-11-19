@@ -34,7 +34,10 @@ jobs:
   # would report success forever, which is the vacuous pass this SOW exists to catch. The flag turns both
   # skip paths, the import and the launch, into failures.
   preview-shell:
-    runs-on: ubuntu-latest
+    # Pinned (2026-11-19): ubuntu-latest moved to 26.04, where Playwright has no Chromium build ("Playwright does not
+    # support chromium on ubuntu26.04-x64"), so `playwright install --with-deps` failed every run. Back to
+    # ubuntu-latest once the installed Playwright supports 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,7 +54,10 @@ jobs:
   # client-ui source in memory and drives every admin section with a stub client, so like preview-shell it needs no
   # dist, no network and no secrets, and REQUIRE_BROWSER=1 turns a missing browser into a failure.
   load-retry:
-    runs-on: ubuntu-latest
+    # Pinned (2026-11-19): ubuntu-latest moved to 26.04, where Playwright has no Chromium build ("Playwright does not
+    # support chromium on ubuntu26.04-x64"), so `playwright install --with-deps` failed every run. Back to
+    # ubuntu-latest once the installed Playwright supports 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

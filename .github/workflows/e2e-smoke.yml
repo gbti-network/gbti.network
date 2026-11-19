@@ -99,7 +99,10 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
   ext-ui:
-    runs-on: ubuntu-latest
+    # Pinned (2026-11-19): ubuntu-latest moved to 26.04, where Playwright has no Chromium build ("Playwright does not
+    # support chromium on ubuntu26.04-x64"), so `playwright install --with-deps` failed every run. Back to
+    # ubuntu-latest once the installed Playwright supports 26.04.
+    runs-on: ubuntu-24.04
     steps:
       # sow-295: a manual run from a branch other than main would run that branch's code against live systems. Refuse
       # it before anything else. This stops accidents, not a malicious branch (a branch's own copy of this file can drop
