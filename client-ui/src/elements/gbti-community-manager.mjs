@@ -11,7 +11,7 @@ const CSS = `
   .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
   .bar p { margin: 0; color: var(--fg-soft); font-size: 14px; flex: 1; min-width: 220px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-  .chip { min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); font-weight: 600; font-size: 13px; }
+  .chip { min-height: 34px; padding: 0 14px; border-radius: var(--cm-r); border: 1px solid var(--line-2); background: var(--paper); font-weight: 600; font-size: 13px; }
   .chip:hover { background: var(--tint); }
   .chip[aria-pressed="true"] { background: var(--fg); color: var(--paper); border-color: var(--fg); }
   .chip[aria-pressed="true"]:hover { background: var(--fg); }

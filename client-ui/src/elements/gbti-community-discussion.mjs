@@ -12,7 +12,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS } from './community-css.mjs';
-import { initials, plural, uploadProblem, formatBytes, REACTIONS, LIMITS } from '../community-core.mjs';
+import { faceHtml, plural, uploadProblem, formatBytes, REACTIONS, LIMITS } from '../community-core.mjs';
 import './gbti-prose-editor.mjs';
 
 const EMOJI = Object.fromEntries(REACTIONS);
@@ -35,37 +35,37 @@ const CSS = `
   .md { font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
   .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
   .md img { max-width: 100%; }
-  .md pre { white-space: pre-wrap; background: var(--tint); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .md pre { white-space: pre-wrap; background: var(--tint); padding: 10px 12px; border-radius: var(--cm-r); font-size: 14px; }
   .md blockquote { margin: 0 0 .7em; padding-left: 12px; border-left: 3px solid var(--line-2); color: var(--fg-soft); }
   .imgs { display: flex; flex-wrap: wrap; gap: 10px; }
   .img { position: relative; flex: 1 1 240px; max-width: 420px; min-width: 0; }
-  .img img { display: block; width: 100%; max-height: 360px; object-fit: cover; border-radius: 8px; background: var(--tint); }
+  .img img { display: block; width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--cm-r); background: var(--tint); }
   .img a { display: block; }
   .img .rm { position: absolute; top: 6px; right: 6px; }
   .rx { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); font-size: 13px; font-weight: 600; color: var(--fg-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: var(--cm-r); border: 1px solid var(--line-2); background: var(--paper); font-size: 13px; font-weight: 600; color: var(--fg-soft); }
   .chip:hover { background: var(--tint); }
   .chip.on { border-color: var(--green); background: var(--green-tint); color: var(--green-700); }
   .chip.on:hover { background: var(--green-tint); }
-  .pick { display: flex; gap: 4px; padding: 6px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 30px rgba(37,35,43,.12); flex-wrap: wrap; }
-  .pick button { width: 36px; height: 36px; border-radius: 8px; font-size: 18px; }
+  .pick { display: flex; gap: 4px; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--cm-r); background: var(--paper); box-shadow: 0 12px 30px rgba(37,35,43,.12); flex-wrap: wrap; }
+  .pick button { width: 36px; height: 36px; border-radius: var(--cm-r); font-size: 18px; }
   .pick button:hover { background: var(--tint); }
   .pa { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .pa .n { font-size: 13px; color: var(--fg-mute); }
   .replies { display: flex; flex-direction: column; gap: 12px; margin-left: 12px; padding-left: 16px; border-left: 2px solid var(--line); }
   .reply { display: flex; flex-direction: column; gap: 8px; }
-  .gone { padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: 10px; color: var(--fg-mute); font-size: 14px; }
+  .gone { padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: var(--cm-r); color: var(--fg-mute); font-size: 14px; }
   .menu { position: relative; }
-  .menu > button { width: 34px; height: 34px; border-radius: 8px; color: var(--fg-soft); font-size: 18px; line-height: 1; }
+  .menu > button { width: 34px; height: 34px; border-radius: var(--cm-r); color: var(--fg-soft); font-size: 18px; line-height: 1; }
   .menu > button:hover { background: var(--tint); }
-  .menu .pop { position: absolute; right: 0; top: 38px; z-index: 5; min-width: 190px; padding: 6px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 30px rgba(37,35,43,.14); display: flex; flex-direction: column; }
-  .menu .pop button { text-align: left; padding: 9px 10px; border-radius: 6px; font-size: 14px; font-weight: 500; }
+  .menu .pop { position: absolute; right: 0; top: 38px; z-index: 5; min-width: 190px; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--cm-r); background: var(--paper); box-shadow: 0 12px 30px rgba(37,35,43,.14); display: flex; flex-direction: column; }
+  .menu .pop button { text-align: left; padding: 9px 10px; border-radius: var(--cm-r); font-size: 14px; font-weight: 500; }
   .menu .pop button:hover { background: var(--tint); }
-  .comp { border: 1.5px solid var(--green); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: var(--paper); }
+  .comp { border: 1.5px solid var(--green); border-radius: var(--cm-r); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: var(--paper); }
   .comp.sub { border-width: 1px; border-color: var(--line-2); padding: 12px 14px; }
   .att { display: flex; flex-direction: column; gap: 8px; }
-  .a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-  .a img, .a .th { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; background: var(--tint); flex: none; }
+  .a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--cm-r); }
+  .a img, .a .th { width: 56px; height: 42px; object-fit: cover; border-radius: var(--cm-r); background: var(--tint); flex: none; }
   .a .nm { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
   .a .nm small { display: block; color: var(--fg-mute); font-size: 12px; }
   .a .st { font-size: 13px; font-weight: 600; color: var(--green-700); }
@@ -75,7 +75,7 @@ const CSS = `
   .foot .go { margin-left: auto; display: flex; gap: 10px; align-items: center; }
   .flash { font-size: 14px; font-weight: 600; color: var(--green-700); }
   .bad { font-size: 14px; font-weight: 600; color: var(--err); }
-  .closed { padding: 14px 16px; border-radius: 10px; background: var(--tint); color: var(--fg-soft); font-size: 14px; }
+  .closed { padding: 14px 16px; border-radius: var(--cm-r); background: var(--tint); color: var(--fg-soft); font-size: 14px; }
   .first { padding: 28px 22px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
   .first strong { font-size: 17px; }
   .first span { color: var(--fg-soft); font-size: 15px; }
@@ -158,13 +158,14 @@ class GbtiCommunityDiscussion extends GbtiElement {
     const closed = this.$('[data-closed]');
     if (closed) {
       closed.innerHTML = this.entry.status === 'draft'
-        ? '<div class="closed">The discussion opens with the entry.</div>'
+        ? `<div class="closed">The discussion opens with the ${this.entry.kind === 'topic' ? 'topic' : 'poll'}.</div>`
         : this.locked ? `<div class="closed">${this.entry.kind === 'topic' ? 'This topic is closed. Everything posted stays here to read; new posts and replies are off.' : 'This discussion is closed. Everything here stays to read.'}</div>` : '';
     }
     this.syncPost();
   }
 
   emptyHtml() {
+    if (this.entry.status === 'draft') return ''; // sow-498: the one note below says when it opens
     if (this.locked) return '<div class="cm-card first"><span>No posts were made here.</span></div>';
     return this.entry.kind === 'topic'
       ? '<div class="cm-card first"><strong>Be the first to post</strong><span>Add text, links and images. Everyone on this topic sees it within seconds.</span></div>'
@@ -215,7 +216,7 @@ class GbtiCommunityDiscussion extends GbtiElement {
   headHtml(p) {
     const name = p.author?.login || '';
     const edited = p.editedAt ? ' · edited' : '';
-    return `<div class="ph"><span class="cm-av lg" aria-hidden="true">${esc(initials(name))}</span><strong>${esc(name)}</strong>
+    return `<div class="ph">${faceHtml(p.author || { login: name }, 'lg')}<strong>${esc(name)}</strong>
       <span class="when" title="${esc(absTime(p.at))}">${esc(relTime(p.at))}${edited}</span>
       ${p.pinned ? '<span class="cm-pill live">Pinned by the host</span>' : ''}${p.hidden ? '<span class="cm-pill muted">Hidden by the host</span>' : ''}
       <span class="sp"></span>${this.menuHtml(p)}</div>`;

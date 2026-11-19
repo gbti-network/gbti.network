@@ -27,7 +27,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     mountCommunity({ tag: 'gbti-community-entry', element: () => import('../../../client-ui/src/elements/gbti-community-entry.mjs') });
   </script>
   <style>
-    .community-entry-wrap { max-width: 840px; }
+    /* sow-498: the full container, for the right sidebar (the run sheet, or a member's status). */
+    .community-entry-wrap { max-width: var(--maxw); }
     .cm-signin { text-align: center; padding: 24px 0; }
   </style>
 </BaseLayout>

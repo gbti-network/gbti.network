@@ -352,3 +352,16 @@ test('an edit keeps every field it leaves out, above all who can see the entry',
   store.editEntry(SUPER, id, { access: { mode: 'all' } });
   assert.equal(store.getEntry(BEN, id).entry.access.mode, 'all', 'an access the edit does give still applies');
 });
+
+test('sow-498: the list carries the latest poster\'s account number for their face, and erasure clears it', () => {
+  const { store } = makeStore();
+  const topic = store.createEntry(SUPER, TOPIC, { open: true }).id;
+  assert.equal(store.listEntries(PRIYA).entries[0].lastPost, null);
+  store.post(PRIYA, topic, { body: 'my desk' });
+  const last = store.listEntries(BEN).entries[0].lastPost;
+  assert.deepEqual([last.login, last.githubId], ['priya', PRIYA.githubId]);
+  store.eraseMember(PRIYA.githubId);
+  const after = store.listEntries(BEN).entries[0].lastPost;
+  assert.equal(after.githubId, null, 'no account number survives erasure');
+  assert.equal(after.login, '');
+});

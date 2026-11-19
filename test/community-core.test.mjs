@@ -4,17 +4,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  initials, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
+  faceSrc, faceHtml, runSheet, memberStatusLine, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
   pollDelay, formatBytes, uploadProblem, imageSrc, sharedLine, threadCounts, answeredLine, shoptalkMeetings, plural,
 } from '../client-ui/src/community-core.mjs';
 
 const clean = (s) => assert.doesNotMatch(String(s), /[—–]|n't|'re|'ll|'ve/, `shipped copy: ${s}`);
 
-test('names and meetings read the way the boards show them', () => {
-  assert.equal(initials('priya'), 'PR');
-  assert.equal(initials('kai-dev'), 'KD');
-  assert.equal(initials('@gbtilabs'), 'GB');
-  assert.equal(initials(''), '?');
+test('meetings read the way the boards show them', () => {
   assert.equal(meetingDate('2026-11-07'), 'November 7');
   assert.equal(meetingDate('2026-13-01'), '');
   assert.equal(meetingText({ label: 'Shop Talk', date: '2026-11-07' }), 'Shop Talk, November 7');
@@ -97,4 +93,93 @@ test('the meeting picker offers this Saturday and the weeks around it', () => {
   assert.equal(list.find((m) => m.next).text, 'Shop Talk, Saturday November 7');
   const sat = shoptalkMeetings(new Date(2026, 10, 7, 23, 0));
   assert.equal(sat.find((m) => m.next).date, '2026-11-07', 'on the day itself, the call that day is next');
+});
+
+// ---- sow-498: real faces and the host's run sheet ---------------------------------------------------------------
+
+test('a face is GitHub\'s picture for the account NUMBER, the network Gravatar for the house account, else the blobatar alone', () => {
+  assert.equal(faceSrc({ githubId: '583231', login: 'octocat' }), 'https://avatars.githubusercontent.com/u/583231?s=96&v=4');
+  assert.match(faceSrc({ githubId: '125175036', login: 'gbtilabs' }), /^https:\/\/secure\.gravatar\.com\/avatar\//);
+  assert.match(faceSrc({ githubId: '1', username: 'GBTILabs' }), /gravatar/, 'the picker passes username, case-folded');
+  assert.equal(faceSrc({ login: 'priya' }), '', 'no account number: no picture, never a lookup by name');
+  assert.equal(faceSrc({ githubId: 'not-a-number', login: 'priya' }), '');
+  const html = faceHtml({ githubId: '583231', login: 'octocat' }, 'lg');
+  assert.match(html, /^<span class="cm-av lg" aria-hidden="true">/);
+  assert.match(html, /<img data-blob /, 'the blobatar is always underneath');
+  assert.match(html, /<img data-avphoto src="https:\/\/avatars\.githubusercontent\.com\/u\/583231\?s=96&amp;v=4"/);
+  assert.doesNotMatch(faceHtml({ login: 'priya' }), /data-avphoto/);
+  assert.doesNotMatch(faceHtml({ githubId: '1', login: '"><script>' }), /<script>/, 'the seed is escaped');
+  assert.doesNotMatch(faceHtml({ githubId: '1', login: 'x' }), /github\.com\/x\.png/);
+});
+
+const sheet = (kind, status, extra = {}) => runSheet({ kind, status, access: { mode: 'chosen', count: 5 }, ...extra }, { total: 14, openedText: '11:04' });
+const states = (r) => r.steps.map((s) => s.status).join(',');
+
+test('the run sheet: a poll has five steps and one next step at a time, in the words of the board', () => {
+  const draft = sheet('typed', 'draft');
+  assert.equal(draft.title, 'Run this poll');
+  assert.deepEqual(draft.steps.map((s) => s.title), ['Choose who can see it', 'Share the link in the call chat', 'Open the poll', 'Close voting', 'Publish the results']);
+  assert.equal(states(draft), 'done,ready,current,next,next');
+  assert.equal(draft.done, 1);
+  assert.deepEqual([draft.steps[2].op, draft.steps[2].label], ['open', 'Open the poll']);
+  assert.equal(draft.steps[1].link, true, 'the link shows before the poll opens');
+  assert.equal(draft.steps[0].detail, '5 chosen members. Change it at any time.');
+  assert.deepEqual(draft.steps[0].quiet, { action: 'access', label: 'Change who can see it' });
+
+  const live = sheet('poll', 'live');
+  assert.equal(states(live), 'done,current,done,current,next', 'live: share now, and close is the button');
+  assert.deepEqual([live.steps[3].op, live.steps[3].label], ['close', 'Close voting']);
+  assert.equal(live.steps[3].detail, '14 answers so far. Answers stay hidden from members.');
+  assert.equal(live.steps[2].detail, 'Opened at 11:04.');
+  assert.equal(live.steps.filter((s) => s.op).length, 1, 'one button at a time');
+
+  const closed = sheet('typed', 'closed');
+  assert.equal(states(closed), 'done,done,done,done,current');
+  assert.deepEqual([closed.steps[4].op, closed.steps[4].label], ['publish', 'Publish results']);
+  assert.deepEqual(closed.steps[3].quiet, { op: 'open', label: 'Reopen voting' });
+  assert.equal(closed.steps[1].detail, 'The link keeps working. Only the 5 chosen members can open it.');
+
+  const pub = sheet('poll', 'published');
+  assert.equal(states(pub), 'done,done,done,done,done');
+  assert.equal(pub.done, 5);
+  assert.equal(pub.steps.filter((s) => s.op).length, 0);
+  assert.deepEqual(pub.steps[4].quiet, { op: 'unpublish', label: 'Unpublish results' });
+  assert.equal(runSheet({ kind: 'poll', status: 'closed' }, { total: 1 }).steps[3].detail, '1 answer is in.');
+});
+
+test('the run sheet: a topic has four steps and closes instead of publishing', () => {
+  assert.equal(sheet('topic', 'draft').title, 'Run this topic');
+  assert.deepEqual(sheet('topic', 'draft').steps.map((s) => s.title), ['Choose who can see it', 'Share the link in the call chat', 'Open the topic', 'Close the topic']);
+  assert.equal(states(sheet('topic', 'draft')), 'done,ready,current,next');
+  assert.equal(states(sheet('topic', 'live')), 'done,current,done,current');
+  assert.deepEqual([sheet('topic', 'live').steps[3].op, sheet('topic', 'live').steps[3].label], ['close', 'Close the topic']);
+  const closed = sheet('topic', 'closed');
+  assert.equal(states(closed), 'done,done,done,done');
+  assert.deepEqual(closed.steps[3].quiet, { op: 'open', label: 'Reopen topic' });
+});
+
+test('the run sheet names who can open the link, and every string is shippable copy', () => {
+  const all = runSheet({ kind: 'poll', status: 'draft', access: { mode: 'all' } });
+  assert.equal(all.steps[0].detail, 'All members. Change it at any time.');
+  assert.match(all.steps[1].detail, /Every member can open it\.$/);
+  assert.match(sheet('poll', 'draft').steps[1].detail, /Only the 5 chosen members can open it\.$/);
+  assert.match(runSheet({ kind: 'poll', status: 'draft', access: { mode: 'chosen', members: [{}] } }).steps[1].detail, /Only the 1 chosen member can/);
+  for (const kind of ['poll', 'typed', 'topic']) {
+    for (const status of ['draft', 'live', 'closed', 'published']) {
+      const r = sheet(kind, status);
+      clean(r.title);
+      for (const s of r.steps) { clean(s.title); clean(s.detail); if (s.label) clean(s.label); if (s.quiet) clean(s.quiet.label); }
+      clean(memberStatusLine({ kind, status }));
+    }
+  }
+});
+
+test('a member\'s status line follows the state, and never promises a change the host turned off', () => {
+  assert.equal(memberStatusLine({ kind: 'typed', status: 'live' }), 'Open now. You can change your answer until the host closes voting.');
+  assert.equal(memberStatusLine({ kind: 'poll', status: 'live', settings: { changeable: false } }), 'Open now. Your first answer is the one that counts.');
+  assert.equal(memberStatusLine({ kind: 'topic', status: 'live' }), 'Open now. Post and reply below.');
+  assert.equal(memberStatusLine({ kind: 'poll', status: 'closed' }), 'Voting is closed. The host publishes the results soon.');
+  assert.equal(memberStatusLine({ kind: 'topic', status: 'closed' }), 'This topic is closed. Everything posted stays to read.');
+  assert.equal(memberStatusLine({ kind: 'poll', status: 'published' }), 'The results are published.');
+  assert.equal(memberStatusLine({ kind: 'poll', status: 'draft' }), '');
 });

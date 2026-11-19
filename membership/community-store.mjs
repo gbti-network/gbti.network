@@ -146,7 +146,7 @@ export class CommunityStore {
       access: { mode: row.access_mode, count: row.access_mode === 'all' ? null : this.one('SELECT COUNT(*) AS n FROM entry_members WHERE entry_id = ?', row.id).n },
       counts: { answers, posts, withImages, options: options.length },
       lead: row.status === 'published' || v.superadmin ? lead : null,
-      lastPost: row.last_post_at ? { at: row.last_post_at, login: row.last_post_login } : null,
+      lastPost: row.last_post_at ? { at: row.last_post_at, login: row.last_post_login, githubId: row.last_post_by || null } : null, // sow-498: the face
       createdAt: row.created_at, activityAt: row.activity_at, version: row.version,
     };
   }

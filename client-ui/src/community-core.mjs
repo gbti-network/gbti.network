@@ -1,18 +1,30 @@
 // sow-494: the pure view rules for Community, shared by the list, the entry page, the discussion and the manager.
 // Node-free and DOM-free, so test/community-core.test.mjs pins every label a member reads.
 import { KIND_LABEL, isPollKind, LIMITS, REACTIONS, normalizeTyped, typedMax } from '../../membership/community-shared.mjs';
+import { idAvatarUrl, NETWORK_AVATAR, NETWORK_FOLDERS } from '../../membership/member-avatar.mjs';
+import { avatarLayers } from './member-avatars.mjs';
 
 export { KIND_LABEL, isPollKind, LIMITS, REACTIONS, normalizeTyped, typedMax };
 
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** Two letters for an avatar circle, from a GBTI name or GitHub login. */
-export function initials(name) {
-  const s = String(name || '').replace(/^@/, '').trim();
-  if (!s) return '?';
-  const parts = s.split(/[\s._-]+/).filter(Boolean);
-  const two = parts.length > 1 ? parts[0][0] + parts[1][0] : s.slice(0, 2);
-  return two.toUpperCase();
+/**
+ * sow-498: a member's real picture. Every person Community knows carries their GitHub ACCOUNT NUMBER, so the face is
+ * GitHub's own picture for that number: the same picture /avatar/<folder> redirects to (sow-428), with no folder
+ * lookup, and never github.com/<name>.png (a name can belong to someone else). The network account shows its
+ * Gravatar, as everywhere else on the site. '' when there is no number: the blobatar alone then.
+ */
+export function faceSrc(person) {
+  const name = String(person?.login ?? person?.username ?? '').trim().toLowerCase();
+  if (NETWORK_FOLDERS.includes(name)) return NETWORK_AVATAR;
+  return idAvatarUrl(person?.githubId, 96);
+}
+
+/** A round face: the blobatar underneath (seeded by the name), the picture over it. A picture that fails is removed
+ *  by base.mjs's fallback listener, so the blobatar shows. */
+export function faceHtml(person, cls = '') {
+  const seed = String(person?.login || person?.username || person?.githubId || 'member');
+  return `<span class="cm-av${cls ? ` ${cls}` : ''}" aria-hidden="true">${avatarLayers(seed, faceSrc(person))}</span>`;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -167,4 +179,78 @@ export function shoptalkMeetings(now = new Date(), { label = 'Shop Talk', back =
     out.push({ label, date: ymd, text: `${label}, Saturday ${meetingDate(ymd)}`, next: i === 0 });
   }
   return out;
+}
+
+/**
+ * sow-498: the host's run sheet, the numbered steps in the entry page's sidebar (design round 4, option C). Each step
+ * is `done`, `current` (outlined, with its button), `ready` (step 2 before the entry is live: its link always works)
+ * or `next` (muted). `op` and `label` are the current step's button, sent to the existing host actions; `quiet` is a
+ * small link under a step (`op`, or `access` for Manage access). Sharing the link counts as done once the entry has
+ * been live and moved on, so a finished poll reads 5 of 5.
+ *
+ * `total` is the answer count; `openedText` is how the page writes the opening time ("11:04").
+ */
+export function runSheet(entry, { total = 0, openedText = '' } = {}) {
+  const poll = isPollKind(entry?.kind);
+  const st = entry?.status || 'draft';
+  const access = entry?.access || {};
+  const chosen = access.mode === 'chosen';
+  const n = Number(access.count ?? access.members?.length ?? 0);
+  const answers = Number(total) || 0;
+  const after = st === 'closed' || st === 'published';
+  const steps = [
+    {
+      key: 'access', title: 'Choose who can see it', status: 'done',
+      detail: `${chosen ? plural(n, 'chosen member') : 'All members'}. Change it at any time.`,
+      quiet: { action: 'access', label: 'Change who can see it' },
+    },
+    {
+      key: 'share', title: 'Share the link in the call chat', link: true,
+      status: st === 'live' ? 'current' : after ? 'done' : 'ready',
+      detail: `${st === 'live' ? `The ${poll ? 'poll' : 'topic'} is open, so paste it now.` : after ? 'The link keeps working.' : `Paste it once the ${poll ? 'poll' : 'topic'} is open.`} ${chosen ? `Only the ${plural(n, 'chosen member')} can open it.` : 'Every member can open it.'}`,
+    },
+    {
+      key: 'open', title: poll ? 'Open the poll' : 'Open the topic',
+      status: st === 'draft' ? 'current' : 'done',
+      detail: st === 'draft' ? (poll ? 'Members can answer from the moment it opens.' : 'Members can post from the moment it opens.') : (openedText ? `Opened at ${openedText}.` : 'Opened.'),
+      ...(st === 'draft' ? { op: 'open', label: poll ? 'Open the poll' : 'Open the topic' } : {}),
+    },
+  ];
+  if (poll) {
+    steps.push({
+      key: 'close', title: 'Close voting',
+      status: st === 'live' ? 'current' : after ? 'done' : 'next',
+      detail: st === 'live' ? `${plural(answers, 'answer')} so far. Answers stay hidden from members.` : after ? `${plural(answers, 'answer')} ${answers === 1 ? 'is' : 'are'} in.` : 'Answers stay hidden from members until you publish.',
+      ...(st === 'live' ? { op: 'close', label: 'Close voting' } : {}),
+      ...(st === 'closed' ? { quiet: { op: 'open', label: 'Reopen voting' } } : {}),
+    }, {
+      key: 'publish', title: 'Publish the results',
+      status: st === 'closed' ? 'current' : st === 'published' ? 'done' : 'next',
+      detail: st === 'published' ? 'Everyone on this entry can see them.' : 'Members see the results the moment you publish.',
+      ...(st === 'closed' ? { op: 'publish', label: 'Publish results' } : {}),
+      ...(st === 'published' ? { quiet: { op: 'unpublish', label: 'Unpublish results' } } : {}),
+    });
+  } else {
+    steps.push({
+      key: 'close', title: 'Close the topic',
+      status: st === 'live' ? 'current' : st === 'closed' ? 'done' : 'next',
+      detail: st === 'closed' ? 'Closed. Everything posted stays to read.' : 'Closing turns new posts and replies off. Everything posted stays to read.',
+      ...(st === 'live' ? { op: 'close', label: 'Close the topic' } : {}),
+      ...(st === 'closed' ? { quiet: { op: 'open', label: 'Reopen topic' } } : {}),
+    });
+  }
+  return { title: poll ? 'Run this poll' : 'Run this topic', steps, done: steps.filter((s) => s.status === 'done').length };
+}
+
+/** The member's Status card line in the entry sidebar. */
+export function memberStatusLine(entry) {
+  const poll = isPollKind(entry?.kind);
+  switch (entry?.status) {
+    case 'live':
+      if (!poll) return 'Open now. Post and reply below.';
+      return entry.settings?.changeable === false ? 'Open now. Your first answer is the one that counts.' : 'Open now. You can change your answer until the host closes voting.';
+    case 'closed': return poll ? 'Voting is closed. The host publishes the results soon.' : 'This topic is closed. Everything posted stays to read.';
+    case 'published': return 'The results are published.';
+    default: return '';
+  }
 }

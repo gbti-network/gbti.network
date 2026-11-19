@@ -1,7 +1,9 @@
 // sow-494: <gbti-community-entry entry-id="...">, one Community entry's page at /community/entry/?id=. It renders by
 // the entry's kind: a poll with choices, a poll with a typed answer, or a topic (the host's prompt). Every kind has
-// its discussion underneath (<gbti-community-discussion>). A superadmin also gets the host panel: live tallies, the
-// state actions, Edit, Manage access, and the typed-answer tidy-up.
+// its discussion underneath (<gbti-community-discussion>). A right sidebar (sow-498, design round 4 option C) holds
+// the host's run sheet (the numbered steps, the link for the call chat, Edit and Delete) or a member's Status card, then
+// who can see the entry and the facts about it. A superadmin also gets the live tallies and the typed-answer tidy-up
+// in the main column.
 //
 // LIVE. While the entry is live and the tab is in view, the page asks the Worker every 4 seconds whether anything
 // changed (`updates`, the cheap gate), and every 20 seconds otherwise; it stops while the tab is hidden. A reply of
@@ -13,23 +15,35 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
 import {
-  KIND_LABEL, isPollKind, initials, meetingText, statusPill, barRows, answerState, pollDelay, sharedLine,
-  answeredLine, threadCounts, plural, normalizeTyped, typedMax, entryHref,
+  KIND_LABEL, isPollKind, faceHtml, meetingText, statusPill, barRows, answerState, pollDelay,
+  answeredLine, plural, normalizeTyped, typedMax, entryHref,
 } from '../community-core.mjs';
+import { SIDE_CSS, sideHtml } from './community-entry-side.mjs';
 import './gbti-community-discussion.mjs';
 
 const CSS = `
-  .crumb { font-size: 14px; color: var(--fg-mute); margin-bottom: 18px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "head side" "body side";
+    grid-template-rows: auto 1fr; column-gap: 40px; row-gap: 24px; align-items: start; }
+  .layout > .head { grid-area: head; min-width: 0; }
+  .layout > .side { grid-area: side; }
+  .layout > .body { grid-area: body; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+  .crumb { font-size: 14px; color: var(--fg-mute); margin-bottom: 14px; }
   .crumb a { color: var(--green-700); }
-  .hdr { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .hdr { display: flex; flex-direction: column; gap: 12px; }
   .hdr .line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--fg-mute); }
-  h1 { font-family: var(--f-display); font-size: 38px; line-height: 1.1; font-weight: 700; overflow-wrap: anywhere; }
-  .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--fg-soft); }
+  .hdr .meet { margin: 0; font-size: 16px; color: var(--fg-soft); }
+  h1 { font-family: var(--f-display); font-size: 40px; line-height: 1.1; font-weight: 700; overflow-wrap: anywhere; }
   .stack { display: flex; flex-direction: column; gap: 24px; }
+  .pv { border: 1px dashed var(--line-2); border-radius: var(--cm-r); background: var(--paper); }
+  .pv .strip { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 20px; border-bottom: 1px dashed var(--line-2); font-size: 14px; color: var(--fg-soft); }
+  .pv .in { padding: 22px 26px; display: flex; flex-direction: column; gap: 14px; opacity: .72; }
+  .tally { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+  .tally .tt { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .tally .only { margin-left: auto; color: var(--amber-text); }
   .ans { padding: 26px 28px; display: flex; flex-direction: column; gap: 16px; }
   .ans legend, .ans .ask { font-size: 15px; color: var(--fg-soft); margin-bottom: 8px; padding: 0; }
   fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-  .opt { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 18px; border: 1.5px solid var(--line-2); border-radius: 10px; cursor: pointer; background: var(--paper); }
+  .opt { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 18px; border: 1.5px solid var(--line-2); border-radius: var(--cm-r); cursor: pointer; background: var(--paper); }
   .opt span { font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
   .opt:hover { border-color: var(--green); }
   .opt.on { border-color: var(--green); background: var(--green-tint); }
@@ -43,7 +57,7 @@ const CSS = `
   .acts { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .acts .msg { font-size: 14px; color: var(--fg-mute); }
   .every { display: flex; flex-wrap: wrap; gap: 8px; }
-  .every span { padding: 6px 12px; border-radius: 999px; background: var(--tint); font-size: 14px; overflow-wrap: anywhere; }
+  .every span { padding: 6px 12px; border-radius: var(--cm-r); background: var(--tint); font-size: 14px; overflow-wrap: anywhere; }
   .sub { font-size: 15px; font-weight: 700; margin: 4px 0 0; }
   .prompt { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
   .prompt .by { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--fg-mute); }
@@ -52,25 +66,26 @@ const CSS = `
   .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
   .md img { max-width: 100%; }
   .pimgs { display: flex; flex-wrap: wrap; gap: 10px; }
-  .pimgs img { max-width: 420px; width: 100%; max-height: 320px; object-fit: cover; border-radius: 8px; background: var(--tint); }
-  .closed-note { padding: 14px 16px; border-radius: 10px; background: var(--tint); color: var(--fg-soft); font-size: 14px; }
-  .host { padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; border: 1.5px dashed var(--line-2); background: var(--paper-2); }
-  .host .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--fg-mute); }
+  .pimgs img { max-width: 420px; width: 100%; max-height: 320px; object-fit: cover; border-radius: var(--cm-r); background: var(--tint); }
+  .closed-note { padding: 14px 16px; border-radius: var(--cm-r); background: var(--tint); color: var(--fg-soft); font-size: 14px; }
   .big { display: flex; align-items: baseline; gap: 10px; }
   .big b { font-family: var(--f-display); font-size: 44px; line-height: 1; }
   .big span { color: var(--fg-soft); font-size: 15px; }
-  .host .rule { font-size: 13px; color: var(--fg-mute); }
   .tidy { display: flex; flex-direction: column; gap: 10px; }
-  .grp { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+  .grp { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--cm-r); background: var(--paper); }
   .grp .nm { font-weight: 700; overflow-wrap: anywhere; }
   .grp .sp { grid-column: 1 / -1; font-size: 13px; color: var(--fg-mute); overflow-wrap: anywhere; }
   .grp .ops { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .grp input, .grp select { min-height: 34px; padding: 0 8px; font-size: 14px; }
   .flash { font-size: 14px; color: var(--green-700); font-weight: 600; }
   .bad { font-size: 14px; color: var(--err); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "body" "side"; grid-template-rows: auto; }
+    .layout.host { grid-template-areas: "head" "side" "body"; }
+  }
   @media (max-width: 640px) {
     h1 { font-size: 30px; }
-    .ans, .prompt, .host { padding: 18px; }
+    .ans, .prompt, .tally, .pv .in { padding: 18px; }
     .grp { grid-template-columns: 1fr; }
     .grp .ops { justify-content: flex-start; }
   }
@@ -104,7 +119,7 @@ class GbtiCommunityEntry extends GbtiElement {
   skipClientRender() { return this._state === 'ok'; }
 
   render() {
-    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS) + '<div class="cm-skel"></div>'); return; }
+    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS) + '<div class="cm-skel"></div>'); return; }
     if (this._state === 'idle') { this.load(); return; }
     this.draw();
   }
@@ -170,6 +185,10 @@ class GbtiCommunityEntry extends GbtiElement {
     const t = this.$('[data-text]');
     const keep = t && !t.disabled ? { value: t.value, focused: this.root.activeElement === t, at: t.selectionStart } : null;
     main.innerHTML = this.mainHtml();
+    const head = this.$('[data-head]');
+    if (head) head.innerHTML = this.headHtml();
+    const side = this.$('[data-side]');
+    if (side) side.innerHTML = this.sideMarkup();
     const n = this.$('[data-text]');
     if (keep && n && !n.disabled) {
       n.value = keep.value;
@@ -196,12 +215,13 @@ class GbtiCommunityEntry extends GbtiElement {
     } else if (this._state === 'error') {
       body = `<div class="cm-card cm-state"><h2>This entry did not load</h2><p>${esc(this._error?.message || 'Something went wrong.')}</p><button type="button" class="cm-btn2" data-retry>Try again</button></div>`;
     } else {
-      const kind = this._d.entry.kind;
-      body = `<nav class="crumb" aria-label="Breadcrumb"><a href="/community/">Community</a> › ${esc(KIND_LABEL[kind] || kind)}</nav>
-        <div data-main>${this.mainHtml()}</div>
-        <gbti-community-discussion></gbti-community-discussion>`;
+      body = `<div class="layout ${this.isHost ? 'host' : 'member'}">
+          <div class="head" data-head>${this.headHtml()}</div>
+          <aside class="side" data-side aria-label="About this entry">${this.sideMarkup()}</aside>
+          <div class="body"><div data-main>${this.mainHtml()}</div><gbti-community-discussion></gbti-community-discussion></div>
+        </div>`;
     }
-    this.set(this.css(COMMUNITY_CSS + CSS) + body);
+    this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS) + body);
     this.on('[data-retry]', 'click', () => this.load());
     if (this._state === 'ok') {
       const disc = this.$('gbti-community-discussion');
@@ -230,29 +250,32 @@ class GbtiCommunityEntry extends GbtiElement {
 
   // ---- the page body -----------------------------------------------------------------------------------------
 
+  /** The page head: breadcrumb, kind and state, the question, one meeting line. */
+  headHtml() {
+    const { entry } = this._d;
+    const kind = entry.kind;
+    const pill = statusPill(entry);
+    return `<nav class="crumb" aria-label="Breadcrumb"><a href="/community/">Community</a> / ${esc(KIND_LABEL[kind] || kind)}</nav>
+      <div class="hdr">
+        <div class="line"><span class="cm-badge k-${esc(kind)}">${KIND_ICON[kind] || ''}${esc(KIND_LABEL[kind] || kind)}</span>${pill ? `<span class="cm-pill ${pill.tone}">${esc(pill.text)}</span>` : ''}</div>
+        <h1>${esc(entry.title)}</h1>
+        <p class="meet">${esc(meetingText(entry.meeting))}</p>
+      </div>`;
+  }
+
+  /** The right sidebar (community-entry-side.mjs): the run sheet or Status, who can see it, about. */
+  sideMarkup() {
+    const { entry, results, discussion } = this._d;
+    const openedText = entry.openedAt ? new Date(entry.openedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
+    const origin = typeof location !== 'undefined' ? location.origin : '';
+    return sideHtml({ entry, results, discussion, isHost: this.isHost, link: `${origin}${entryHref(this.entryId)}`, openedText });
+  }
+
   mainHtml() {
     const { entry } = this._d;
-    const pill = statusPill(entry);
-    const kind = entry.kind;
-    const counts = threadCounts(this._d.discussion);
-    const stats = kind === 'topic' ? ` · ${plural(counts.posts, 'post')} · ${plural(counts.replies, 'reply', 'replies')}` : '';
-    const faces = (entry.access?.members || []).slice(0, 6).map((m) => `<span class="cm-av" title="${esc(m.login)}">${esc(initials(m.login))}</span>`).join('');
-    return `<div class="hdr">
-        <div class="line">
-          <span class="cm-badge k-${esc(kind)}">${KIND_ICON[kind] || ''}${esc(KIND_LABEL[kind] || kind)}</span>
-          ${pill ? `<span class="cm-pill ${pill.tone}">${esc(pill.text)}</span>` : ''}
-          <span>${esc(meetingText(entry.meeting))} · started by ${esc(entry.author?.login || 'the host')}${esc(stats)}</span>
-        </div>
-        <h1>${esc(entry.title)}</h1>
-        <div class="who">
-          ${faces ? `<span class="cm-faces" aria-hidden="true">${faces}</span>` : ''}
-          <span>${esc(sharedLine(entry.access))}</span>
-          ${this.isHost ? '<button type="button" class="cm-btn2 sm" data-access>Manage access</button>' : ''}
-        </div>
-      </div>
-      <div class="stack">
-        ${this.isHost ? this.hostHtml() : ''}
-        ${kind === 'topic' ? this.promptHtml() : this.pollHtml()}
+    return `<div class="stack">
+        ${this.isHost ? this.tallyHtml() : ''}
+        ${entry.kind === 'topic' ? this.promptHtml() : this.pollHtml()}
       </div>`;
   }
 
@@ -263,7 +286,7 @@ class GbtiCommunityEntry extends GbtiElement {
     const closed = entry.status === 'closed' ? `<div class="closed-note">This topic closed${entry.closedAt ? ` on ${esc(new Date(entry.closedAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }))}` : ''}. Everything posted stays here to read; new posts and replies are off.</div>` : '';
     if (!html && !imgs) return closed;
     return `<section class="cm-card prompt" aria-label="The host's prompt">
-        <div class="by"><span class="cm-av lg" aria-hidden="true">${esc(initials(entry.author?.login))}</span><strong>${esc(entry.author?.login || '')}</strong><span>Host</span></div>
+        <div class="by">${faceHtml(entry.author, 'lg')}<strong>${esc(entry.author?.login || '')}</strong><span>Host</span></div>
         ${html ? `<div class="md">${html}</div>` : ''}${imgs ? `<div class="pimgs">${imgs}</div>` : ''}
       </section>${closed}`;
   }
@@ -276,7 +299,10 @@ class GbtiCommunityEntry extends GbtiElement {
     const { entry, mine, results } = this._d;
     const state = answerState(entry, mine);
     if (state === 'published') return this.resultsHtml(results, mine);
-    if (state === 'draft') return `<section class="cm-card cm-raised ans"><p class="ask">This poll has not opened yet. Members cannot see it until you open it.</p>${entry.kind === 'poll' ? this.choicesHtml(true) : this.typedHtml(true)}</section>`;
+    if (state === 'draft') {
+      return `<section class="pv" aria-label="What members will see"><div class="strip"><span class="cm-mono cm-mute">Preview</span><span>Members see this once you open the poll.</span></div>
+        <div class="in">${entry.kind === 'poll' ? this.choicesHtml(true) : this.typedHtml(true)}<div class="acts"><button type="button" class="cm-btn" disabled>Send my answer</button></div></div></section>`;
+    }
     const locked = state === 'closed' || (state === 'answered' && !this._changing);
     const block = entry.kind === 'poll' ? this.choicesHtml(locked) : this.typedHtml(locked);
     let acts;
@@ -334,37 +360,21 @@ class GbtiCommunityEntry extends GbtiElement {
       </section>`;
   }
 
-  // ---- the host panel ----------------------------------------------------------------------------------------
+  // ---- the host's tallies ------------------------------------------------------------------------------------
 
-  hostHtml() {
+  /** Live counts while a poll is open or closed, for superadmins only: bars for choices, the tidy-up for typed. */
+  tallyHtml() {
     const { entry, results } = this._d;
-    const poll = isPollKind(entry.kind);
-    const st = entry.status;
-    const btn = (op, label, cls = 'cm-btn2') => `<button type="button" class="${cls}" data-op="${op}">${esc(label)}</button>`;
-    const acts = [];
-    if (st === 'draft') acts.push(btn('open', 'Open now', 'cm-btn'));
-    if (st === 'live') acts.push(btn('close', poll ? 'Close voting' : 'Close topic', 'cm-btn'));
-    if (poll && st === 'closed') acts.push(btn('publish', 'Publish results', 'cm-btn'), btn('open', 'Reopen voting'));
-    if (poll && st === 'live') acts.push(`<button type="button" class="cm-btn2" disabled title="Close voting first">Publish results</button>`);
-    if (poll && st === 'published') acts.push(btn('unpublish', 'Unpublish results'));
-    if (!poll && st === 'closed') acts.push(btn('open', 'Reopen topic'));
-    if (poll && st !== 'draft') acts.push(btn(entry.locked ? 'unlock' : 'lock', entry.locked ? 'Reopen the discussion' : 'Close the discussion'));
-    acts.push('<button type="button" class="cm-btn2" data-copy>Copy the link</button>', '<button type="button" class="cm-btn2" data-edit>Edit</button>', '<button type="button" class="cm-quiet cm-danger" data-op="delete">Delete</button>');
-    const opened = entry.openedAt ? `Opened ${new Date(entry.openedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ` : '';
-    let live = '';
-    if (poll && results) {
-      const rows = barRows(results);
-      live = `<div class="big"><b>${results.total}</b><span>${st === 'live' ? 'answers so far, updating live' : plural(results.total, 'answer')}</span></div>
-        ${entry.kind === 'poll' ? `<div class="cm-bars">${rows.map((r) => `<div class="cm-bar${r.lead ? ' lead' : ''}"><span class="lbl">${esc(r.label)}</span><span class="num">${r.count} · ${r.pct}%</span><span class="trk"><span class="fill" style="width:${r.pct}%"></span></span></div>`).join('')}</div>` : this.tidyHtml(results)}
-        ${st !== 'published' ? `<div class="cm-note">Only superadmins see ${entry.kind === 'typed' ? 'answers' : 'these counts'} while voting is open. Members see results after you publish them.</div>` : ''}`;
-    }
-    const rule = poll ? 'Edit locks the question and answers once the first member answers. Publish unlocks once voting is closed.' : 'Closing a topic turns new posts and replies off. Everything posted stays to read.';
-    return `<section class="cm-card host" aria-label="Host controls">
-        <div class="top"><span class="cm-mono">You are the host</span><span>${esc(opened)}${esc(meetingText(entry.meeting))}</span></div>
-        ${live}
-        <div class="acts">${acts.join('')}</div>
-        <div data-host-msg></div>
-        <p class="rule" style="margin:0">${esc(rule)}</p>
+    if (!isPollKind(entry.kind) || !results || !['live', 'closed'].includes(entry.status)) return '';
+    const live = entry.status === 'live';
+    const rows = barRows(results);
+    const body = entry.kind === 'poll'
+      ? `<div class="cm-bars">${rows.map((r) => `<div class="cm-bar${r.lead ? ' lead' : ''}"><span class="lbl">${esc(r.label)}</span><span class="num">${r.count} · ${r.pct}%</span><span class="trk"><span class="fill" style="width:${r.pct}%"></span></span></div>`).join('')}</div>`
+      : this.tidyHtml(results);
+    const word = results.total === 1 ? 'answer' : 'answers';
+    return `<section class="cm-card tally" aria-label="Answers so far">
+        <div class="tt"><span class="big"><b>${results.total}</b><span>${live ? `${word} so far, updating live` : `${word}. Voting is closed.`}</span></span><span class="cm-mono only">Only superadmins see this</span></div>
+        ${body}
       </section>`;
   }
 

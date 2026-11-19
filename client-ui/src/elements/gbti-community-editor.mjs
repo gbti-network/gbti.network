@@ -7,7 +7,7 @@
 // on every call; this dialog is only drawn for a client that carries the superadmin methods.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
-import { KIND_LABEL, LIMITS, shoptalkMeetings, meetingText, initials, plural, uploadProblem, formatBytes } from '../community-core.mjs';
+import { KIND_LABEL, LIMITS, shoptalkMeetings, meetingText, faceHtml, plural, uploadProblem, formatBytes } from '../community-core.mjs';
 import './gbti-prose-editor.mjs';
 
 const KINDS = [
@@ -17,21 +17,21 @@ const KINDS = [
 ];
 
 const CSS = `
-  dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line-2); border-radius: 14px;
+  dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line-2); border-radius: var(--cm-r);
     background: var(--paper); color: var(--fg); box-shadow: 0 28px 60px rgba(37,35,43,.25); }
   dialog::backdrop { background: rgba(28,26,33,.55); }
   .dlg { display: flex; flex-direction: column; max-height: calc(100vh - 50px); }
   .top { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
   .top h2 { font-family: var(--f-display); font-size: 26px; font-weight: 700; line-height: 1.15; }
   .top p { margin: 4px 0 0; font-size: 14px; color: var(--fg-mute); overflow-wrap: anywhere; }
-  .top .x { margin-left: auto; width: 36px; height: 36px; border-radius: 8px; font-size: 22px; color: var(--fg-soft); flex: none; }
+  .top .x { margin-left: auto; width: 36px; height: 36px; border-radius: var(--cm-r); font-size: 22px; color: var(--fg-soft); flex: none; }
   .top .x:hover { background: var(--tint); }
   .body { padding: 18px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
   .bot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 24px 18px; border-top: 1px solid var(--line); }
   .bot .msg { flex: 1; min-width: 160px; font-size: 14px; }
   .lbl { display: block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); margin-bottom: 8px; }
   .kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .kind { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1.5px solid var(--line-2); border-radius: 10px; text-align: left; background: var(--paper); }
+  .kind { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1.5px solid var(--line-2); border-radius: var(--cm-r); text-align: left; background: var(--paper); }
   .kind:hover { border-color: var(--green); background: var(--paper); }
   .kind[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); }
   .kind[aria-pressed="true"]:hover { background: var(--green-tint); }
@@ -42,19 +42,19 @@ const CSS = `
   .opts { display: flex; flex-direction: column; gap: 8px; }
   .optrow { display: flex; gap: 8px; align-items: center; }
   .optrow .inp { flex: 1; }
-  .optrow button { width: 34px; height: 34px; border-radius: 8px; color: var(--fg-soft); flex: none; font-size: 16px; }
+  .optrow button { width: 34px; height: 34px; border-radius: var(--cm-r); color: var(--fg-soft); flex: none; font-size: 16px; }
   .optrow button:hover { background: var(--tint); }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .radio, .check { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; cursor: pointer; padding: 4px 0; }
   .radio small, .check small { display: block; font-size: 13px; color: var(--fg-mute); }
-  .people { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-2); }
+  .people { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--cm-r); background: var(--paper-2); }
   .found { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
-  .who { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: var(--paper); }
+  .who { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--cm-r); background: var(--paper); }
   .who .nm { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
   .who .nm small { color: var(--fg-mute); }
   .pimgs { display: flex; flex-direction: column; gap: 8px; }
   .pi { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .pi img { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; background: var(--tint); }
+  .pi img { width: 56px; height: 42px; object-fit: cover; border-radius: var(--cm-r); background: var(--tint); }
   .pi .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .lockd { font-size: 13px; color: var(--amber-text); }
   input[type="file"] { display: none; }
@@ -208,7 +208,7 @@ class GbtiCommunityEditor extends GbtiElement {
   accessHtml() {
     const a = this._f.access;
     const chosen = a.mode === 'chosen';
-    const picked = a.members.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc(initials(m.username))}</span><span class="nm">${esc(m.username || m.githubId)}</span>
+    const picked = a.members.map((m) => `<div class="who">${faceHtml({ githubId: m.githubId, login: m.username })}<span class="nm">${esc(m.username || m.githubId)}</span>
       <button type="button" class="cm-quiet" data-unpick="${esc(m.githubId)}">Remove</button></div>`).join('');
     let found = '';
     if (chosen) {
@@ -218,7 +218,7 @@ class GbtiCommunityEditor extends GbtiElement {
         const q = this._q.trim().toLowerCase();
         const have = new Set(a.members.map((m) => m.githubId));
         const hits = this._members.list.filter((m) => !have.has(m.githubId) && (!q || m.username.toLowerCase().includes(q))).slice(0, 30);
-        found = hits.length ? hits.map((m) => `<div class="who"><span class="cm-av" aria-hidden="true">${esc(initials(m.username))}</span><span class="nm">${esc(m.username)}</span>
+        found = hits.length ? hits.map((m) => `<div class="who">${faceHtml({ githubId: m.githubId, login: m.username })}<span class="nm">${esc(m.username)}</span>
           <button type="button" class="cm-btn2 sm" data-pick="${esc(m.githubId)}">Add</button></div>`).join('') : `<p class="cm-mute" style="margin:0;font-size:14px">${q ? 'No member by that name.' : 'Everyone is on it.'}</p>`;
       }
     }

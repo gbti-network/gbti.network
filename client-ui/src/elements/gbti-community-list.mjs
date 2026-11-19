@@ -8,7 +8,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
 import {
-  KIND_LABEL, initials, meetingText, rowMeta, discussionCell, resultLine, entryHref, statusPill, isPollKind, plural,
+  KIND_LABEL, faceHtml, meetingText, rowMeta, discussionCell, resultLine, entryHref, statusPill, isPollKind, plural,
 } from '../community-core.mjs';
 
 const PAGE = 20;
@@ -21,13 +21,13 @@ const CSS = `
   .lead { margin: 0; font-size: 16px; color: var(--fg-soft); max-width: 640px; }
   .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); color: var(--fg); font-weight: 600; font-size: 14px; }
+  .chip { min-height: 40px; padding: 0 16px; border-radius: var(--cm-r); border: 1px solid var(--line-2); background: var(--paper); color: var(--fg); font-weight: 600; font-size: 14px; }
   .chip:hover { background: var(--tint); }
   .chip[aria-pressed="true"] { background: var(--fg); color: var(--paper); border-color: var(--fg); }
   .chip[aria-pressed="true"]:hover { background: var(--fg); }
   .meet { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg-soft); }
   .meet select { min-height: 40px; padding: 0 10px; font-size: 14px; font-weight: 500; max-width: 260px; }
-  .table { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .table { background: var(--paper); border: 1px solid var(--line); border-radius: var(--cm-r); overflow: hidden; }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 180px; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
   .row:last-child { border-bottom: 0; }
   .row.hd { padding: 12px 22px; background: var(--paper-2); color: var(--fg-mute); }
@@ -119,7 +119,7 @@ class GbtiCommunityList extends GbtiElement {
     const kind = e.kind;
     const pill = statusPill(e);
     const disc = discussionCell(e);
-    const last = e.lastPost ? { name: e.lastPost.login, at: e.lastPost.at } : { name: e.author?.login || '', at: e.createdAt };
+    const last = e.lastPost ? { name: e.lastPost.login, githubId: e.lastPost.githubId, at: e.lastPost.at } : { name: e.author?.login || '', githubId: e.author?.githubId, at: e.createdAt };
     const result = resultLine(e);
     return `<div class="row${e.status === 'live' ? ' live' : ''}" role="row">
       <div class="ent" role="cell">
@@ -131,7 +131,7 @@ class GbtiCommunityList extends GbtiElement {
         </div>
       </div>
       <span class="disc" role="cell" aria-label="${esc(`${plural(disc.count, 'post')}${disc.sub ? `, ${disc.sub}` : ''}`)}">${disc.count}<small>${esc(disc.sub || (disc.count === 1 ? 'post' : 'posts'))}</small></span>
-      <span class="last" role="cell"><span class="cm-av" aria-hidden="true">${esc(initials(last.name))}</span>
+      <span class="last" role="cell">${faceHtml({ githubId: last.githubId, login: last.name })}
         <span>${esc(last.name)}<span class="when" title="${esc(absTime(last.at))}">${esc(relTime(last.at))}</span></span></span>
     </div>`;
   }
