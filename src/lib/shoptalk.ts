@@ -15,6 +15,7 @@ import {
   normalizeShoptalk,
   displayWhen,
   displayTimeShort,
+  displayTimeOfDay,
   buildShoptalkIcs,
 } from './shoptalk-core.mjs';
 
@@ -39,6 +40,11 @@ export function loadShoptalk(): Shoptalk {
  *  hardcoded abbreviation: America/Chicago is CDT for roughly eight months of the year. */
 export function shoptalkWhen(): string {
   return displayWhen(loadShoptalk());
+}
+
+/** sow-498: the time of day alone ("11:00 AM Central Time"), or '' when the call is not on Saturdays. */
+export function shoptalkTimeOfDay(): string {
+  return displayTimeOfDay(loadShoptalk());
 }
 
 /** The short chip under the event tile, for example "Sat, 11:00 AM CT". */

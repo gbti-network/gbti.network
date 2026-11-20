@@ -254,3 +254,31 @@ export function memberStatusLine(entry) {
     default: return '';
   }
 }
+
+/**
+ * sow-498, the list page's sidebar (round 4b, option L1 "Now and next"). What is live, and for a superadmin what is
+ * waiting on them: drafts to open, and polls whose voting closed with the results not yet published.
+ */
+export function listOverview(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  return {
+    live: list.filter((e) => e.status === 'live'),
+    drafts: list.filter((e) => e.status === 'draft'),
+    toPublish: list.filter((e) => e.status === 'closed' && isPollKind(e.kind)),
+  };
+}
+
+/** A live entry's count line in the sidebar: answers for a poll, posts for a topic. */
+export function liveCountLine(entry) {
+  const c = entry?.counts || {};
+  return isPollKind(entry?.kind) ? plural(Number(c.answers) || 0, 'answer') : plural(Number(c.posts) || 0, 'post');
+}
+
+/** The next Shop Talk (a Saturday) as the sidebar names it: "Today" on the day, else "Saturday, November 21". */
+export function nextShoptalk(now = new Date()) {
+  const m = shoptalkMeetings(now, { back: 0, ahead: 1 })[0];
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ymd = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const today = m.date === ymd;
+  return { date: m.date, today, day: today ? 'Today' : `Saturday, ${meetingDate(m.date)}` };
+}

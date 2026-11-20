@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faceSrc, faceHtml, runSheet, memberStatusLine, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
+  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
   pollDelay, formatBytes, uploadProblem, imageSrc, sharedLine, threadCounts, answeredLine, shoptalkMeetings, plural,
 } from '../client-ui/src/community-core.mjs';
 
@@ -182,4 +182,25 @@ test('a member\'s status line follows the state, and never promises a change the
   assert.equal(memberStatusLine({ kind: 'topic', status: 'closed' }), 'This topic is closed. Everything posted stays to read.');
   assert.equal(memberStatusLine({ kind: 'poll', status: 'published' }), 'The results are published.');
   assert.equal(memberStatusLine({ kind: 'poll', status: 'draft' }), '');
+});
+
+// ---- sow-498: the list page's sidebar (round 4b, L1) -----------------------------------------------------------
+
+test('the list sidebar: what is live, and what waits on a host', () => {
+  const e = (id, kind, status, counts = {}) => ({ id, kind, status, counts, title: id });
+  const o = listOverview([e('a', 'typed', 'live', { answers: 14 }), e('b', 'topic', 'live', { posts: 1 }), e('c', 'poll', 'draft'), e('d', 'poll', 'closed'), e('f', 'topic', 'closed'), e('g', 'poll', 'published')]);
+  assert.deepEqual(o.live.map((x) => x.id), ['a', 'b']);
+  assert.deepEqual(o.drafts.map((x) => x.id), ['c']);
+  assert.deepEqual(o.toPublish.map((x) => x.id), ['d'], 'a closed topic has nothing to publish');
+  assert.deepEqual(listOverview(undefined), { live: [], drafts: [], toPublish: [] });
+  assert.equal(liveCountLine(o.live[0]), '14 answers');
+  assert.equal(liveCountLine(o.live[1]), '1 post');
+  assert.equal(liveCountLine({ kind: 'poll' }), '0 answers');
+});
+
+test('the next Shop Talk is the coming Saturday on the viewer\'s calendar, and Today on the day', () => {
+  assert.deepEqual(nextShoptalk(new Date(2026, 10, 19, 15)), { date: '2026-11-21', today: false, day: 'Saturday, November 21' });
+  assert.deepEqual(nextShoptalk(new Date(2026, 10, 21, 9)), { date: '2026-11-21', today: true, day: 'Today' });
+  assert.equal(nextShoptalk(new Date(2026, 10, 22, 9)).day, 'Saturday, November 28');
+  assert.equal(nextShoptalk(new Date(2026, 11, 31, 9)).day, 'Saturday, January 2', 'across the year');
 });

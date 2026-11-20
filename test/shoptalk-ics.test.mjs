@@ -17,6 +17,7 @@ import {
   timezoneLabel,
   displayWhen,
   displayTimeShort,
+  displayTimeOfDay,
   buildShoptalkIcs,
   googleCalendarUrl,
   outlookCalendarUrl,
@@ -145,6 +146,11 @@ test('the timezone label is derived and is never the season-wrong literal CST', 
   // member converting from another zone into arriving an hour early.
   assert.ok(!displayWhen(ev).includes('CST'), 'the display line hardcodes CST, which is wrong March to November');
   assert.ok(!displayTimeShort(ev).includes('CST'), 'the short time chip hardcodes CST');
+  // sow-498: the time alone, for the Community sidebar's "Saturday, November 21 at ..." line; nothing for a call that
+  // is not on Saturdays, because that line names a Saturday.
+  assert.equal(displayTimeOfDay(ev), '11:00 AM Central Time');
+  assert.equal(displayTimeOfDay({ ...ev, recurrence: 'FREQ=WEEKLY;BYDAY=FR' }), '');
+  assert.equal(displayTimeOfDay({ ...ev, startHour: '13', startMinute: '30' }), '1:30 PM Central Time');
 });
 
 test('normalizeShoptalk rejects a malformed edit rather than shipping a broken event', () => {

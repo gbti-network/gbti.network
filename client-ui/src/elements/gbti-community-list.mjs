@@ -4,9 +4,15 @@
 //
 // The first load runs when a client arrives (render-triggered). A failed load shows its own Retry and is never
 // retried on its own, so a Worker outage cannot turn into a request storm.
+//
+// sow-498: a right sidebar (design round 4b, option L1): Live now, the next Shop Talk, and for a superadmin what is
+// waiting on them, with New entry (community-list-side.mjs). It reads the entries this page already loaded, keeping
+// the last UNFILTERED load so a filter on the table does not empty "Live now". The page passes the call's time in
+// the `call-time` attribute, from house/shoptalk.yml at build time.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
+import { LIST_SIDE_CSS, listSideHtml } from './community-list-side.mjs';
 import {
   KIND_LABEL, faceHtml, meetingText, rowMeta, discussionCell, resultLine, entryHref, statusPill, isPollKind, plural,
 } from '../community-core.mjs';
@@ -14,6 +20,11 @@ import {
 const PAGE = 20;
 
 const CSS = `
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "body side";
+    grid-template-rows: auto 1fr; column-gap: 40px; row-gap: 22px; align-items: start; }
+  .layout > .head { grid-area: head; margin-bottom: 0; }
+  .layout > .side { grid-area: side; }
+  .layout > .body { grid-area: body; min-width: 0; }
   .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
   .head .txt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .kick { color: var(--green-700); }
@@ -48,6 +59,10 @@ const CSS = `
   .skel { display: flex; flex-direction: column; gap: 10px; }
   .empty { padding: 40px 22px; text-align: center; color: var(--fg-soft); }
   .empty strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "body" "side"; grid-template-rows: auto; }
+    .layout.host { grid-template-areas: "head" "side" "body"; }
+  }
   @media (max-width: 760px) {
     h1 { font-size: 38px; }
     .row.hd { display: none; }
@@ -76,7 +91,7 @@ class GbtiCommunityList extends GbtiElement {
   get isHost() { return typeof this.client?.communityAdmin === 'function'; }
 
   render() {
-    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS) + this.headHtml() + '<div class="skel"><div class="cm-skel"></div><div class="cm-skel"></div></div>'); return; }
+    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS + LIST_SIDE_CSS) + this.headHtml() + '<div class="skel"><div class="cm-skel"></div><div class="cm-skel"></div></div>'); return; }
     if (this._state === 'idle') { this.load(); return; }
     this.draw();
   }
@@ -86,6 +101,7 @@ class GbtiCommunityList extends GbtiElement {
     this.draw();
     try {
       this._data = await this.client.communityList({ kind: this._kind, meeting: this._meeting });
+      if (!this._kind && !this._meeting) this._overview = this._data?.entries || [];
       this._state = 'ok';
     } catch (e) {
       this._error = e;
@@ -102,7 +118,7 @@ class GbtiCommunityList extends GbtiElement {
         <span class="cm-mono kick">Members · Our meetings</span>
         <h1>Community</h1>
         <p class="lead">Polls and topics from our meetings. Open any entry to take part or join its discussion.</p>
-      </div>${this.isHost ? '<button type="button" class="cm-btn" data-new>New entry</button>' : ''}</div>`;
+      </div></div>`;
   }
 
   filtersHtml() {
@@ -162,7 +178,13 @@ class GbtiCommunityList extends GbtiElement {
           ? '<strong>Nothing matches these filters</strong>Try Everything, or All meetings.'
           : `<strong>Nothing here yet</strong>${this.isHost ? 'Start the first entry with New entry.' : 'Entries from our meetings appear here once the host shares them with you.'}`}</div></div>`);
     }
-    this.set(this.css(COMMUNITY_CSS + CSS) + this.headHtml() + body);
+    if (this._state === 'ok') {
+      const side = listSideHtml({ entries: this._overview || this._data?.entries || [], isHost: this.isHost, callTime: this.getAttribute('call-time') || '' });
+      body = `<div class="layout ${this.isHost ? 'host' : 'member'}">${this.headHtml()}<aside class="side" aria-label="Now and next">${side}</aside><div class="body">${body}</div></div>`;
+    } else {
+      body = this.headHtml() + body;
+    }
+    this.set(this.css(COMMUNITY_CSS + CSS + LIST_SIDE_CSS) + body);
     this.wire();
   }
 

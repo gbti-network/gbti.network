@@ -4,6 +4,9 @@
 // for an effective paid member and lists only the entries shared with them. Nothing about an entry is in the build.
 // noindex, and filtered out of the sitemap (astro.config.mjs).
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { shoptalkTimeOfDay } from '../../lib/shoptalk';
+// sow-498: the call's time for the sidebar's Next meeting card, from house/shoptalk.yml (the zone label derived).
+const callTime = shoptalkTimeOfDay();
 ---
 <BaseLayout title="Community" description="Polls and topics from GBTI Network meetings, for members." noindex={true}>
   <section class="band band-app">
@@ -15,7 +18,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <a href="/login/?return_to=%2Fcommunity%2F" class="btn btn-primary btn-lg mt16">Sign in <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
       </div>
       <div data-cm-mount>
-        <gbti-community-list></gbti-community-list>
+        <gbti-community-list call-time={callTime || undefined}></gbti-community-list>
       </div>
     </div>
   </section>
@@ -24,7 +27,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     mountCommunity({ tag: 'gbti-community-list', element: () => import('../../../client-ui/src/elements/gbti-community-list.mjs') });
   </script>
   <style>
-    .community-wrap { max-width: 1080px; }
+    /* sow-498: the full container, for the right sidebar (now and next). */
+    .community-wrap { max-width: var(--maxw); }
     .cm-signin { text-align: center; padding: 24px 0; }
   </style>
 </BaseLayout>

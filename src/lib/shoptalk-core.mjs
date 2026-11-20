@@ -135,6 +135,17 @@ export function displayWhen(event) {
   return `${day} \u00b7 ${h12}:${event.startMinute} ${suffix} ${timezoneLabel(event.timezone)}`;
 }
 
+/** sow-498: the time of day alone, for example "11:00 AM Central Time", for a line that already names the day (the
+ *  Community sidebar's "Saturday, November 21 at 11:00 AM Central Time"). '' when the call is not on Saturdays,
+ *  because that sidebar names a Saturday, and a wrong day is worse than no line. */
+export function displayTimeOfDay(event) {
+  if (!/BYDAY=SA/i.test(String(event?.recurrence || ''))) return '';
+  const h = Number(event.startHour);
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${event.startMinute} ${suffix} ${timezoneLabel(event.timezone)}`;
+}
+
 /** The short time chip, for example "Sat \u00b7 11:00 AM CT". */
 export function displayTimeShort(event) {
   const h = Number(event.startHour);
