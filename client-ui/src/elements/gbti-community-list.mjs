@@ -39,19 +39,20 @@ const CSS = `
   .meet { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg-soft); }
   .meet select { min-height: 40px; padding: 0 10px; font-size: 14px; font-weight: 500; max-width: 260px; }
   .table { background: var(--paper); border: 1px solid var(--line); border-radius: var(--cm-r); overflow: hidden; }
-  .row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 180px; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 172px; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
   .row:last-child { border-bottom: 0; }
   .row.hd { padding: 12px 22px; background: var(--paper-2); color: var(--fg-mute); }
   .row.live { background: var(--green-tint); }
-  .ent { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
-  .ent .cm-badge { min-width: 104px; }
-  .ttl { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  .ttl a { font-size: 17px; font-weight: 700; line-height: 1.35; color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
-  .ttl a:hover { color: var(--green-700); text-decoration: underline; text-underline-offset: 3px; }
+  /* sow-498: the kind and the state ride one line above the title, so the title has the whole column. */
+  .ent { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tags { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ent > a { font-size: 17px; font-weight: 700; line-height: 1.35; color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+  .ent > a:hover { color: var(--green-700); text-decoration: underline; text-underline-offset: 3px; }
   .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--fg-mute); }
   .res { font-size: 13px; color: var(--fg-soft); }
-  .disc { text-align: right; font-size: 15px; font-weight: 700; align-self: center; }
+  .disc { text-align: right; font-size: 14px; font-weight: 700; align-self: center; }
   .disc small { display: block; font-size: 12px; font-weight: 500; color: var(--fg-mute); }
+  .disc.quiet { font-weight: 500; color: var(--fg-mute); }
   .last { display: flex; gap: 10px; align-items: center; align-self: center; min-width: 0; font-size: 13px; color: var(--fg-soft); line-height: 1.3; }
   .last span.when { display: block; color: var(--fg-mute); }
   .more { display: block; margin: 18px auto 0; color: var(--green-700); font-weight: 600; font-size: 15px; padding: 8px 12px; }
@@ -67,8 +68,7 @@ const CSS = `
     h1 { font-size: 38px; }
     .row.hd { display: none; }
     .row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; padding: 16px; }
-    .ent { grid-column: 1 / -1; flex-direction: column; gap: 10px; }
-    .ent .cm-badge { min-width: 0; }
+    .ent { grid-column: 1 / -1; gap: 8px; }
     .disc { text-align: left; order: 2; display: flex; gap: 6px; align-items: baseline; }
     .disc small { display: inline; }
     .last { order: 1; }
@@ -135,20 +135,19 @@ class GbtiCommunityList extends GbtiElement {
     const kind = e.kind;
     const pill = statusPill(e);
     const disc = discussionCell(e);
-    const last = e.lastPost ? { name: e.lastPost.login, githubId: e.lastPost.githubId, at: e.lastPost.at } : { name: e.author?.login || '', githubId: e.author?.githubId, at: e.createdAt };
+    // With no post yet, the latest thing that happened is the entry being started, and the line says so.
+    const last = e.lastPost ? { name: e.lastPost.login, githubId: e.lastPost.githubId, at: e.lastPost.at, verb: '' } : { name: e.author?.login || '', githubId: e.author?.githubId, at: e.createdAt, verb: 'started ' };
     const result = resultLine(e);
     return `<div class="row${e.status === 'live' ? ' live' : ''}" role="row">
       <div class="ent" role="cell">
-        <span class="cm-badge k-${esc(kind)}">${KIND_ICON[kind] || ''}${esc(KIND_LABEL[kind] || kind)}</span>
-        <div class="ttl">
-          <a href="${esc(entryHref(e.id))}">${esc(e.title)}</a>
-          <span class="meta">${pill && pill.tone !== 'outline' ? `<span class="cm-pill ${pill.tone}">${esc(pill.text)}</span>` : ''}<span>${esc(rowMeta(e))}</span></span>
-          ${result ? `<span class="res">${esc(result)}</span>` : ''}
-        </div>
+        <span class="tags"><span class="cm-badge k-${esc(kind)}">${KIND_ICON[kind] || ''}${esc(KIND_LABEL[kind] || kind)}</span>${pill ? `<span class="cm-pill ${pill.tone}">${esc(pill.text)}</span>` : ''}</span>
+        <a href="${esc(entryHref(e.id))}">${esc(e.title)}</a>
+        <span class="meta">${esc(rowMeta(e))}</span>
+        ${result ? `<span class="res">${esc(result)}</span>` : ''}
       </div>
-      <span class="disc" role="cell" aria-label="${esc(`${plural(disc.count, 'post')}${disc.sub ? `, ${disc.sub}` : ''}`)}">${disc.count}<small>${esc(disc.sub || (disc.count === 1 ? 'post' : 'posts'))}</small></span>
+      <span class="disc${disc.quiet ? ' quiet' : ''}" role="cell">${esc(disc.primary)}${disc.secondary ? `<small>${esc(disc.secondary)}</small>` : ''}</span>
       <span class="last" role="cell">${faceHtml({ githubId: last.githubId, login: last.name })}
-        <span>${esc(last.name)}<span class="when" title="${esc(absTime(last.at))}">${esc(relTime(last.at))}</span></span></span>
+        <span>${esc(last.name)}<span class="when" title="${esc(absTime(last.at))}">${esc(last.verb)}${esc(relTime(last.at))}</span></span></span>
     </div>`;
   }
 
@@ -171,7 +170,7 @@ class GbtiCommunityList extends GbtiElement {
       const filtered = this._kind || this._meeting;
       body = this.filtersHtml() + (entries.length
         ? `<div class="table" role="table" aria-label="Entries">
-            <div class="row hd" role="row"><span class="cm-mono" role="columnheader">Entry</span><span class="cm-mono" role="columnheader" style="text-align:right">Discussion</span><span class="cm-mono" role="columnheader">Latest</span></div>
+            <div class="row hd" role="row"><span class="cm-mono" role="columnheader">Entry</span><span class="cm-mono" role="columnheader" style="text-align:right">Activity</span><span class="cm-mono" role="columnheader">Latest</span></div>
             ${shown.map((e) => this.rowHtml(e)).join('')}
           </div>${entries.length > shown.length ? '<button type="button" class="more" data-more>Show older entries</button>' : ''}`
         : `<div class="table"><div class="empty">${filtered

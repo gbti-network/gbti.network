@@ -57,24 +57,27 @@ export function statusPill(entry) {
   }
 }
 
-/** The line under a list row's title: the meeting, who started it, and where a poll stands. */
+/**
+ * The line under a list row's title: the meeting, and who it is shared with when that is a chosen group. The state
+ * is the pill beside the kind badge, and the host is always a superadmin, so neither is repeated here (sow-498).
+ */
 export function rowMeta(entry) {
   const parts = [meetingText(entry?.meeting)];
-  if (entry?.author?.login) parts.push(entry.author.login);
-  if (entry?.status === 'published') parts.push('results published');
-  else if (entry?.status === 'closed' && isPollKind(entry.kind)) parts.push('voting closed');
-  else if (entry?.status === 'draft') parts.push('only superadmins see it');
-  if (entry?.access?.mode === 'chosen') parts.push(`shared with ${plural(entry.access.count ?? 0, 'member')}`);
+  if (entry?.access?.mode === 'chosen') parts.push(`Shared with ${plural(entry.access.count ?? 0, 'member')}`);
   return parts.join(' · ');
 }
 
-/** The list's Discussion column: the post count, with answers or photos beneath. */
+/**
+ * The list's Activity column, every number labelled (sow-498): a poll leads with its answers, a topic with its posts.
+ * A draft has none yet, so it says so instead of showing zeros.
+ */
 export function discussionCell(entry) {
+  if (entry?.status === 'draft') return { primary: 'Not open yet', secondary: '', quiet: true };
   const c = entry?.counts || {};
-  const posts = Number(c.posts) || 0;
-  if (isPollKind(entry?.kind)) return { count: posts, sub: plural(Number(c.answers) || 0, 'answer') };
+  const posts = plural(Number(c.posts) || 0, 'post');
+  if (isPollKind(entry?.kind)) return { primary: plural(Number(c.answers) || 0, 'answer'), secondary: posts, quiet: false };
   const photos = Number(c.withImages) || 0;
-  return { count: posts, sub: photos ? `${photos} with photos` : '' };
+  return { primary: posts, secondary: photos ? `${photos} with photos` : '', quiet: false };
 }
 
 /** A published poll's one-line result for the list: "Results: Agents led with 52% of 23 answers". */

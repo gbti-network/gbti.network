@@ -44,14 +44,14 @@ function liveHtml(live) {
     </section>`;
 }
 
-function callHtml(callTime, now) {
+function callHtml(callTime, now, idle) {
   if (!callTime) return '';
   const next = nextShoptalk(now);
   return `<section class="cm-card sc call" aria-label="Next meeting">
       <h2 class="sh">Next meeting</h2>
       <strong class="disp">Shop Talk</strong>
       <span class="when">${esc(next.day)} at ${esc(callTime)}</span>
-      <p class="quiet-line">New polls and topics open during the call. Keep this page open.</p>
+      <p class="quiet-line">${idle ? 'Nothing is live right now. ' : ''}New polls and topics open during the call. Keep this page open.</p>
       <a href="/shoptalk.ics">Add the call to your calendar</a>
     </section>`;
 }
@@ -72,5 +72,8 @@ function hostHtml({ drafts, toPublish }) {
 /** The whole sidebar. `entries` as the page loaded them; `callTime` from the page ("11:00 AM Central Time"). */
 export function listSideHtml({ entries, isHost, callTime = '', now = new Date() }) {
   const o = listOverview(entries);
-  return `${liveHtml(o.live)}${callHtml(callTime, now)}${isHost ? hostHtml(o) : ''}`;
+  const host = isHost ? hostHtml(o) : '';
+  // Nothing live: lead with the next meeting, which says so, rather than a card that only says it is empty.
+  if (!o.live.length && callTime) return `${callHtml(callTime, now, true)}${host}`;
+  return `${liveHtml(o.live)}${callHtml(callTime, now, false)}${host}`;
 }

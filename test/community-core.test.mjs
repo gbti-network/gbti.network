@@ -21,17 +21,20 @@ test('meetings read the way the boards show them', () => {
 
 test('a row says where its entry stands, and who it is shared with', () => {
   const base = { kind: 'poll', author: { login: 'gbtilabs' }, meeting: { label: 'Shop Talk', date: '2026-11-07' }, access: { mode: 'all', count: null } };
-  assert.equal(rowMeta({ ...base, status: 'live' }), 'Shop Talk, November 7 · gbtilabs');
-  assert.equal(rowMeta({ ...base, status: 'published' }), 'Shop Talk, November 7 · gbtilabs · results published');
-  assert.equal(rowMeta({ ...base, status: 'closed' }), 'Shop Talk, November 7 · gbtilabs · voting closed');
-  assert.equal(rowMeta({ ...base, kind: 'topic', status: 'closed' }), 'Shop Talk, November 7 · gbtilabs');
-  assert.equal(rowMeta({ ...base, status: 'live', access: { mode: 'chosen', count: 1 } }), 'Shop Talk, November 7 · gbtilabs · shared with 1 member');
+  // sow-498: the state is the pill and the host is always a superadmin, so the line is the meeting and the audience.
+  assert.equal(rowMeta({ ...base, status: 'live' }), 'Shop Talk, November 7');
+  assert.equal(rowMeta({ ...base, status: 'draft' }), 'Shop Talk, November 7');
+  assert.equal(rowMeta({ ...base, status: 'published' }), 'Shop Talk, November 7');
+  assert.equal(rowMeta({ ...base, status: 'live', access: { mode: 'chosen', count: 1 } }), 'Shop Talk, November 7 · Shared with 1 member');
+  assert.equal(rowMeta({ ...base, meeting: null, access: { mode: 'chosen', count: 5 } }), 'Between meetings · Shared with 5 members');
   assert.deepEqual(statusPill({ kind: 'poll', status: 'closed' }), { tone: 'muted', text: 'Voting closed' });
   assert.deepEqual(statusPill({ kind: 'topic', status: 'closed' }), { tone: 'muted', text: 'Closed' });
   assert.equal(statusPill({ kind: 'topic', status: 'live' }).text, 'Live');
-  assert.deepEqual(discussionCell({ kind: 'typed', counts: { posts: 6, answers: 14 } }), { count: 6, sub: '14 answers' });
-  assert.deepEqual(discussionCell({ kind: 'topic', counts: { posts: 32, withImages: 9 } }), { count: 32, sub: '9 with photos' });
-  assert.deepEqual(discussionCell({ kind: 'topic', counts: { posts: 15, withImages: 0 } }), { count: 15, sub: '' });
+  assert.deepEqual(discussionCell({ kind: 'typed', status: 'live', counts: { posts: 6, answers: 14 } }), { primary: '14 answers', secondary: '6 posts', quiet: false });
+  assert.deepEqual(discussionCell({ kind: 'poll', status: 'closed', counts: { posts: 1, answers: 1 } }), { primary: '1 answer', secondary: '1 post', quiet: false });
+  assert.deepEqual(discussionCell({ kind: 'topic', status: 'live', counts: { posts: 32, withImages: 9 } }), { primary: '32 posts', secondary: '9 with photos', quiet: false });
+  assert.deepEqual(discussionCell({ kind: 'topic', status: 'closed', counts: { posts: 15, withImages: 0 } }), { primary: '15 posts', secondary: '', quiet: false });
+  assert.deepEqual(discussionCell({ kind: 'typed', status: 'draft', counts: { posts: 0, answers: 0 } }), { primary: 'Not open yet', secondary: '', quiet: true }, 'a draft shows no zeros');
   assert.equal(resultLine({ status: 'published', lead: { label: 'Agents', count: 12, total: 23 } }), 'Results: Agents led with 52% of 23 answers');
   assert.equal(resultLine({ status: 'live', lead: { label: 'Agents', count: 12, total: 23 } }), '', 'a live tally is never on the list');
   assert.equal(entryHref('abc def'), '/community/entry/?id=abc%20def');
