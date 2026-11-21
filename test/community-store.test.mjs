@@ -64,7 +64,7 @@ test('poll lifecycle: members see results only once published; every one of twen
   for (let n = 1; n <= 20; n++) store.answer(member(n), id, { choice: n % 4 });
   assert.equal(store.getEntry(member(1), id).results, null, 'hidden while live');
   assert.equal(store.getEntry(SUPER, id).results.total, 20, 'the host sees live counts');
-  assert.deepEqual(store.getEntry(member(1), id).mine, { choice: 1 });
+  assert.deepEqual(store.getEntry(member(1), id).mine, { choice: 1, public: false }, 'anonymous unless the member says public (sow-499)');
   store.answer(member(1), id, { choice: 3 });
   assert.equal(store.getEntry(SUPER, id).results.total, 20, 'changing an answer moves it, never doubles it');
   assert.equal(store.getEntry(SUPER, id).results.byOption[3].count, 6);
@@ -364,4 +364,96 @@ test('sow-498: the list carries the latest poster\'s account number for their fa
   const after = store.listEntries(BEN).entries[0].lastPost;
   assert.equal(after.githubId, null, 'no account number survives erasure');
   assert.equal(after.login, '');
+});
+
+// ---- sow-499: anonymous or public answers ------------------------------------------------------------------------
+
+test('an answer is anonymous unless the member says public, and switching works until voting closes', () => {
+  const { store } = makeStore();
+  const id = store.createEntry(SUPER, POLL, { open: true }).id;
+  assert.deepEqual(store.answer(PRIYA, id, { choice: 1 }).mine, { choice: 1, public: false });
+  assert.deepEqual(store.answer(PRIYA, id, { choice: 1, public: true }).mine, { choice: 1, public: true });
+  assert.equal(store.getEntry(PRIYA, id).mine.public, true);
+  assert.deepEqual(store.answer(PRIYA, id, { choice: 1, public: 'yes' }).mine.public, false, 'only true makes it public');
+  store.setStatus(SUPER, id, 'close');
+  assert.equal(store.getEntry(PRIYA, id).mine.public, false);
+});
+
+test('results name the public answers only; members see them once published, the host sees them live', () => {
+  const { store } = makeStore();
+  const id = store.createEntry(SUPER, POLL, { open: true }).id;
+  store.answer(PRIYA, id, { choice: 0, public: true });
+  store.answer(BEN, id, { choice: 0 });
+  store.answer(member(3, 'marco'), id, { choice: 2, public: true });
+  const live = store.getEntry(SUPER, id).results;
+  const first = live.byOption[0];
+  assert.equal(first.count, 2);
+  assert.deepEqual(first.people, [{ githubId: PRIYA.githubId, login: 'priya' }], 'Ben answered anonymously: a count only');
+  assert.deepEqual(live.byOption[2].people, [{ githubId: '1003', login: 'marco' }]);
+  assert.equal(store.getEntry(PRIYA, id).results, null, 'members see no names while voting is open');
+  store.setStatus(SUPER, id, 'close');
+  store.setStatus(SUPER, id, 'publish');
+  const pub = store.getEntry(BEN, id).results;
+  assert.deepEqual(pub.groups.find((g) => g.key === '0').people.map((p) => p.login), ['priya']);
+  assert.ok(!JSON.stringify(pub).includes(BEN.githubId), 'an anonymous answerer is never in the results');
+});
+
+test('a typed poll names public answers on their group, never in the typed list, and hidden answers stay out', () => {
+  const { store } = makeStore();
+  const id = store.createEntry(SUPER, TYPED, { open: true }).id;
+  store.answer(PRIYA, id, { text: 'Sinners', public: true });
+  store.answer(BEN, id, { text: 'sinners' });
+  store.answer(member(3, 'marco'), id, { text: 'Weapons', public: true });
+  store.tidy(SUPER, id, { action: 'hide', norm: 'weapons' });
+  store.setStatus(SUPER, id, 'close');
+  store.setStatus(SUPER, id, 'publish');
+  const r = store.getEntry(BEN, id).results;
+  assert.deepEqual(r.groups.map((g) => [g.label, g.count, g.people.map((p) => p.login)]), [['Sinners', 2, ['priya']]]);
+  assert.ok(r.every.every((x) => typeof x === 'string'), 'the typed list is the answers alone');
+  assert.ok(!JSON.stringify(r).includes('marco'), 'a hidden answer is not named either');
+});
+
+test('switching to public is allowed on a poll that refuses a changed answer; changing the answer still is not', () => {
+  const { store } = makeStore();
+  const id = store.createEntry(SUPER, { ...POLL, settings: { changeable: false } }, { open: true }).id;
+  store.answer(PRIYA, id, { choice: 1 });
+  assert.equal(store.answer(PRIYA, id, { choice: 1, public: true }).mine.public, true);
+  assert.equal(err(() => store.answer(PRIYA, id, { choice: 2, public: true })).code, 'conflict');
+});
+
+test('erasure leaves no public name behind', () => {
+  const { store } = makeStore();
+  const id = store.createEntry(SUPER, POLL, { open: true }).id;
+  store.answer(PRIYA, id, { choice: 0, public: true });
+  store.eraseMember(PRIYA.githubId);
+  const r = store.getEntry(SUPER, id).results;
+  assert.equal(r.total, 0);
+  assert.ok(!JSON.stringify(r).includes('priya'));
+  assert.equal(store.q("SELECT COUNT(*) AS n FROM answers WHERE login = 'priya'")[0].n, 0);
+});
+
+test('a version 1 database migrates once: the old answer stays anonymous, and a second run changes nothing', async () => {
+  const { sqliteAdapter } = await import('./lib/community-sqlite.mjs');
+  const { CommunityStore } = await import('../membership/community-store.mjs');
+  const sql = sqliteAdapter();
+  // The schema as it shipped in sow-494, with one answer in it.
+  sql.exec('CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)');
+  sql.exec("INSERT INTO meta (k, v) VALUES ('schema', '1')");
+  sql.exec('CREATE TABLE answers (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, value TEXT NOT NULL, norm TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (entry_id, github_id))');
+  sql.exec("INSERT INTO answers VALUES ('e1', '2001', '1', '1', 1)");
+  const store = new CommunityStore(sql, { now: () => 2 });
+  store.migrate();
+  assert.deepEqual(sql.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '2' }]);
+  assert.deepEqual(sql.exec('SELECT public, login FROM answers'), [{ public: 0, login: '' }]);
+  const again = new CommunityStore(sql, { now: () => 3 });
+  again.migrate();
+  assert.deepEqual(sql.exec('SELECT public, login FROM answers'), [{ public: 0, login: '' }]);
+  // A half-finished earlier attempt (one column added, version not yet recorded) completes on the next run.
+  const half = sqliteAdapter();
+  half.exec('CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)');
+  half.exec("INSERT INTO meta (k, v) VALUES ('schema', '1')");
+  half.exec('CREATE TABLE answers (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, value TEXT NOT NULL, norm TEXT NOT NULL, at INTEGER NOT NULL, public INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (entry_id, github_id))');
+  new CommunityStore(half, { now: () => 4 }).migrate();
+  assert.deepEqual(half.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '2' }]);
+  assert.deepEqual(half.exec("SELECT name FROM pragma_table_info('answers') WHERE name IN ('public', 'login') ORDER BY name").map((r) => r.name), ['login', 'public']);
 });

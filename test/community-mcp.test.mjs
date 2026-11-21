@@ -39,7 +39,7 @@ function world() {
     const request = new Request(url, { method: init.method || 'GET', headers: init.headers, body: init.body });
     let r;
     const route = COMMUNITY_ROUTES[u.pathname]?.[request.method];
-    if (route) r = await handleCommunity(request, {}, route, { call, full: gate, cheap: gate });
+    if (route) r = await handleCommunity(request, {}, route, { call, full: gate, cheap: gate, readIndex: async () => new Map([[PRIYA.githubId, 'priya'], [BEN.githubId, 'ben']]) });
     else if (u.pathname === '/membership/admin/community') r = await membershipAdminCommunity(request, {}, { call, superadmin: superGate });
     else if (u.pathname === '/membership/admin/community/members') {
       r = await membershipAdminCommunityMembers(request, {}, { superadmin: superGate, readIndex: async () => new Map([[PRIYA.githubId, 'priya'], [BEN.githubId, 'ben']]) });
@@ -59,7 +59,7 @@ test('a member reads the list and an entry, answers, posts with an image, reacts
   assert.deepEqual(list.entries[0].meeting, { label: 'Shop Talk', date: '2026-11-14', key: 'Shop Talk|2026-11-14' });
   assert.match(list.entries[0].url, /\/community\/entry\/\?id=/);
   const ans = await answerCommunityPollOp(p, { id, choice: 1 });
-  assert.deepEqual(ans, { saved: true, yourAnswer: { choice: 1 } });
+  assert.deepEqual(ans, { saved: true, yourAnswer: { choice: 1, public: false } });
   const posted = await postCommunityOp(p, { id, body: 'Testing, our suite is slow.', images: [{ name: 'desk.png', dataBase64: toB64(PNG) }] });
   assert.equal(posted.posted, true);
   const r1 = await reactCommunityPostOp(ctx('tok-ben'), { id, postId: posted.postId, reaction: 'heart' });
@@ -169,4 +169,19 @@ test('the twelve tools are registered, grouped in the guide, and their copy foll
     assert.equal(typeof t.handler, 'function');
     if (/^(create|manage|set|moderate|tidy)_/.test(t.name)) assert.match(t.description, /^SUPERADMIN ONLY\./, t.name);
   }
+});
+
+test('sow-499: an agent answers publicly only when told to; the host reads the public name with its GBTI name', async () => {
+  const { store, ctx } = world();
+  const { id } = store.createEntry(SUPER, { kind: 'poll', title: 'Breakfast?', options: ['Coffee', 'Eggs'] }, { open: true });
+  assert.deepEqual((await answerCommunityPollOp(ctx('tok-priya'), { id, choice: 0, public: true })).yourAnswer, { choice: 0, public: true });
+  assert.equal((await answerCommunityPollOp(ctx('tok-ben'), { id, choice: 0 })).yourAnswer.public, false, 'anonymous by default');
+  assert.equal((await answerCommunityPollOp(ctx('tok-ben'), { id, choice: 0, public: 'yes' })).yourAnswer.public, false, 'only true is public');
+  const host = await readCommunityEntryOp(ctx('tok-super'), { id });
+  const coffee = host.results.groups.find((g) => g.key === '0');
+  assert.deepEqual(coffee.people, [{ githubId: PRIYA.githubId, login: 'priya', folder: 'priya' }]);
+  assert.equal((await readCommunityEntryOp(ctx('tok-priya'), { id })).yourAnswer.public, true);
+  const tool = TOOLS.find((t) => t.name === 'answer_community_poll');
+  assert.equal(tool.inputSchema.properties.public.type, 'boolean');
+  assert.match(tool.description, /anonymous unless public is true/);
 });

@@ -28,7 +28,7 @@ const bad = (message) => new CommunityError(400, 'bad_request', message);
 const conflict = (message) => new CommunityError(409, 'conflict', message);
 const forbidden = (message) => new CommunityError(403, 'forbidden', message);
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2; // 2 (sow-499): answers carry `public` and the answerer's login
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`,
   `CREATE TABLE IF NOT EXISTS entries (
@@ -43,7 +43,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS entry_members (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, login TEXT NOT NULL DEFAULT '',
      PRIMARY KEY (entry_id, github_id))`,
   `CREATE TABLE IF NOT EXISTS answers (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, value TEXT NOT NULL, norm TEXT NOT NULL,
-     at INTEGER NOT NULL, PRIMARY KEY (entry_id, github_id))`,
+     at INTEGER NOT NULL, public INTEGER NOT NULL DEFAULT 0, login TEXT NOT NULL DEFAULT '', PRIMARY KEY (entry_id, github_id))`,
   `CREATE TABLE IF NOT EXISTS answer_groups (entry_id TEXT NOT NULL, norm TEXT NOT NULL, label TEXT, hidden INTEGER NOT NULL DEFAULT 0,
      PRIMARY KEY (entry_id, norm))`,
   `CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, entry_id TEXT NOT NULL, parent_id TEXT, github_id TEXT NOT NULL,
@@ -92,7 +92,21 @@ export class CommunityStore {
     for (const stmt of SCHEMA) this.q(stmt);
     const row = this.one('SELECT v FROM meta WHERE k = ?', 'schema');
     if (!row) this.q('INSERT INTO meta (k, v) VALUES (?, ?)', 'schema', String(SCHEMA_VERSION));
+    else if (Number(row.v) < 2) {
+      // sow-499: an answer is anonymous or public. A database made at version 1 gains the two columns once; every
+      // answer given before this reads as anonymous (the default 0). A column that a half-finished earlier attempt
+      // already added is skipped, so the step can be re-run.
+      this.addColumn('answers', 'public INTEGER NOT NULL DEFAULT 0');
+      this.addColumn('answers', "login TEXT NOT NULL DEFAULT ''");
+      this.q('UPDATE meta SET v = ? WHERE k = ?', '2', 'schema');
+    }
     this.ready = true;
+  }
+
+  addColumn(table, definition) {
+    try { this.q(`ALTER TABLE ${table} ADD COLUMN ${definition}`); } catch (e) {
+      if (!/duplicate column/i.test(String(e?.message || ''))) throw e;
+    }
   }
 
   id() { return newId(this.randomBytes); }
@@ -182,12 +196,19 @@ export class CommunityStore {
    */
   results(row, full = false) {
     if (!isPollKind(row.kind)) return null;
-    const answers = this.q('SELECT value, norm FROM answers WHERE entry_id = ? ORDER BY at, github_id', row.id);
+    // sow-499: `people` on every group are the PUBLIC answers only, in the order they were given. An anonymous answer
+    // is a count and nothing else, in every view.
+    const answers = this.q('SELECT value, norm, github_id, login, public FROM answers WHERE entry_id = ? ORDER BY at, github_id', row.id);
+    const person = (a) => ({ githubId: a.github_id, login: a.login });
     if (row.kind === 'poll') {
       const options = parseJson(row.options, []);
-      const counts = options.map(() => 0);
-      for (const a of answers) { const i = Number(a.value); if (Number.isInteger(i) && i >= 0 && i < counts.length) counts[i]++; }
-      const groups = options.map((label, i) => ({ key: String(i), label, count: counts[i] }));
+      const groups = options.map((label, i) => ({ key: String(i), label, count: 0, people: [] }));
+      for (const a of answers) {
+        const i = Number(a.value);
+        if (!Number.isInteger(i) || i < 0 || i >= groups.length) continue;
+        groups[i].count++;
+        if (bool(a.public)) groups[i].people.push(person(a));
+      }
       const ordered = [...groups].sort((a, b) => b.count - a.count);
       return { total: answers.length, groups: ordered, byOption: groups };
     }
@@ -202,17 +223,18 @@ export class CommunityStore {
       every.push(a.value);
       const label = (t && t.label) || null;
       const key = countMatching ? (label ? `label:${label.toLowerCase()}` : `norm:${a.norm}`) : `raw:${a.value}`;
-      const g = groups.get(key) || { key, label, count: 0, spellings: new Map(), norms: new Set() };
+      const g = groups.get(key) || { key, label, count: 0, spellings: new Map(), norms: new Set(), people: [] };
       g.count++;
+      if (bool(a.public)) g.people.push(person(a));
       g.norms.add(a.norm);
       g.spellings.set(a.value, (g.spellings.get(a.value) || 0) + 1);
       groups.set(key, g);
     }
     const list = [...groups.values()].map((g) => {
       const top = [...g.spellings.entries()].sort((x, y) => y[1] - x[1])[0]; // ties keep the first spelling typed
-      return { key: g.key, label: g.label || (top ? top[0] : ''), count: g.count, norms: [...g.norms], spellings: [...g.spellings.keys()] };
+      return { key: g.key, label: g.label || (top ? top[0] : ''), count: g.count, people: g.people, norms: [...g.norms], spellings: [...g.spellings.keys()] };
     }).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-    const out = { total: every.length, groups: full ? list : list.map(({ key, label, count }) => ({ key, label, count })), every: every.sort((a, b) => a.localeCompare(b)) };
+    const out = { total: every.length, groups: full ? list : list.map(({ key, label, count, people }) => ({ key, label, count, people })), every: every.sort((a, b) => a.localeCompare(b)) };
     if (full) out.hidden = hiddenAnswers.sort((a, b) => a.localeCompare(b));
     return out;
   }
@@ -220,7 +242,7 @@ export class CommunityStore {
   /** One entry as this viewer may see it: the entry, their own answer, results when allowed, and the discussion. */
   getEntry(viewer, id) {
     const { v, row } = this.visible(viewer, id);
-    const mine = isPollKind(row.kind) ? this.one('SELECT value, norm FROM answers WHERE entry_id = ? AND github_id = ?', row.id, v.githubId) : null;
+    const mine = isPollKind(row.kind) ? this.one('SELECT value, norm, public FROM answers WHERE entry_id = ? AND github_id = ?', row.id, v.githubId) : null;
     const members = row.access_mode === 'chosen'
       ? this.q('SELECT github_id, login FROM entry_members WHERE entry_id = ? ORDER BY login', row.id).map((m) => ({ githubId: m.github_id, login: m.login }))
       : [];
@@ -240,7 +262,7 @@ export class CommunityStore {
         openedAt: row.opened_at, closedAt: row.closed_at, publishedAt: row.published_at,
         access: { mode: row.access_mode, count: row.access_mode === 'all' ? null : members.length, members },
       },
-      mine: mine ? (row.kind === 'poll' ? { choice: Number(mine.value) } : { text: mine.value }) : null,
+      mine: mine ? { ...(row.kind === 'poll' ? { choice: Number(mine.value) } : { text: mine.value }), public: bool(mine.public) } : null,
       results,
       discussion: this.discussion(row, v),
       viewer: { githubId: v.githubId, superadmin: v.superadmin },
@@ -446,12 +468,15 @@ export class CommunityStore {
     const entry = { kind: row.kind, options: parseJson(row.options, []), settings: parseJson(row.settings, {}) };
     const r = validateAnswer(entry, input);
     if (!r.ok) throw bad(r.problem);
+    // sow-499: anonymous unless the member says public. Switching between the two is not changing the answer, so a
+    // poll that refuses a changed answer still lets a member switch.
+    const pub = input?.public === true ? 1 : 0;
     const prev = this.one('SELECT value FROM answers WHERE entry_id = ? AND github_id = ?', id, v.githubId);
     if (prev && entry.settings.changeable === false && prev.value !== r.value.value) throw conflict('Answers on this poll cannot be changed.');
-    this.q('INSERT INTO answers (entry_id, github_id, value, norm, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (entry_id, github_id) DO UPDATE SET value = excluded.value, norm = excluded.norm, at = excluded.at',
-      id, v.githubId, r.value.value, r.value.norm, this.now());
+    this.q('INSERT INTO answers (entry_id, github_id, value, norm, at, public, login) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (entry_id, github_id) DO UPDATE SET value = excluded.value, norm = excluded.norm, at = excluded.at, public = excluded.public, login = excluded.login',
+      id, v.githubId, r.value.value, r.value.norm, this.now(), pub, cleanLine(v.login).slice(0, 60));
     this.bump(id);
-    return { saved: true, mine: row.kind === 'poll' ? { choice: Number(r.value.value) } : { text: r.value.value } };
+    return { saved: true, mine: { ...(row.kind === 'poll' ? { choice: Number(r.value.value) } : { text: r.value.value }), public: pub === 1 } };
   }
 
   // ---- members: posts ------------------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import worker from '../workers/signup/index.mjs';
 import { signSession } from '../workers/signup/session.mjs';
-import {
+import { withFolders,
   handleCommunity, COMMUNITY_ROUTES, communityOkKey, COMMUNITY_OK_TTL, adminCall,
   membershipAdminCommunity, membershipAdminCommunityMembers, imageHeaders,
 } from '../workers/signup/membership-community.mjs';
@@ -452,4 +452,50 @@ test('the Durable Object class itself: start-up creates the tables, and a failin
   assert.deepEqual([...new Uint8Array(await img.arrayBuffer())], [...PNG], 'bytes survive the ArrayBuffer round trip');
   assert.equal((await obj.fetch(new Request('https://community.internal/rpc', { method: 'GET' }))).status, 405);
   assert.equal((await obj.fetch(new Request('https://community.internal/rpc', { method: 'POST', body: new Uint8Array([1]) }))).status, 400);
+});
+
+// ---- sow-499: anonymous or public answers ------------------------------------------------------------------------
+
+test('the answer route forwards public only when it is exactly true', () => {
+  const body = route('/membership/community/answer', 'POST').body;
+  assert.deepEqual(body({ id: 'e1', choice: 1, public: true }).input, { choice: 1, text: undefined, public: true });
+  assert.equal(body({ id: 'e1', choice: 1, public: 'true' }).input.public, false);
+  assert.equal(body({ id: 'e1', choice: 1 }).input.public, false);
+});
+
+test('a public answer gets its GBTI name from the members index, never the login, and nothing when the index fails', async () => {
+  const make = () => ({ results: {
+    groups: [{ key: '0', people: [{ githubId: '2001', login: 'priya' }, { githubId: '2002', login: 'ben' }] }],
+    byOption: [{ key: '0', people: [{ githubId: '2001', login: 'priya' }] }],
+  } });
+  const index = async () => new Map([['2001', 'priya-dev']]);
+  const a = await withFolders(make(), {}, { readIndex: index });
+  assert.equal(a.results.groups[0].people[0].folder, 'priya-dev');
+  assert.equal(a.results.byOption[0].people[0].folder, 'priya-dev');
+  assert.equal(a.results.groups[0].people[1].folder, undefined, 'not in the index: no folder, and never the login');
+  const numeric = await withFolders(make(), {}, { readIndex: async () => new Map([[2001, 'priya-dev']]) });
+  assert.equal(numeric.results.groups[0].people[0].folder, 'priya-dev', 'an index keyed by number works too');
+  const failed = await withFolders(make(), {}, { readIndex: async () => { throw new Error('github down'); } });
+  assert.ok(failed.results.groups[0].people.every((p) => !('folder' in p)), 'a failed read leaves every picture unlinked');
+  let asked = 0;
+  await withFolders({ results: { groups: [{ key: '0', people: [] }] } }, {}, { readIndex: async () => { asked++; return new Map(); } });
+  await withFolders({ unchanged: true }, {}, { readIndex: async () => { asked++; return new Map(); } });
+  assert.equal(asked, 0, 'with nobody public, the index is never read');
+});
+
+test('end to end: a published poll names a public answer with its GBTI name, and an anonymous one not at all', async () => {
+  const { env, store } = setup();
+  const { id } = store.createEntry(SUPER, { kind: 'poll', title: 'Breakfast?', options: ['Coffee', 'Eggs'] }, { open: true });
+  store.answer(PRIYA, id, { choice: 0, public: true });
+  store.answer(BEN, id, { choice: 0 });
+  store.setStatus(SUPER, id, 'close');
+  store.setStatus(SUPER, id, 'publish');
+  const deps = { paid: paidGate([BEN.githubId]), readIndex: async () => new Map([[PRIYA.githubId, 'priya-dev'], [BEN.githubId, 'ben']]) };
+  deps.resolve = async () => ({ ok: true, githubId: BEN.githubId, login: BEN.login, via: 'cookie' });
+  const r = await handleCommunity(hreq(`/membership/community/entry?id=${id}`, BEN), env, route('/membership/community/entry', 'GET'), deps);
+  assert.equal(r.status, 200);
+  const coffee = r.body.results.groups.find((g) => g.key === '0');
+  assert.equal(coffee.count, 2);
+  assert.deepEqual(coffee.people, [{ githubId: PRIYA.githubId, login: 'priya', folder: 'priya-dev' }]);
+  assert.ok(!JSON.stringify(r.body.results).includes(BEN.githubId), 'the anonymous answer names nobody');
 });

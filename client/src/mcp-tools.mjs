@@ -292,14 +292,14 @@ export const TOOLS = [
   },
   {
     name: 'read_community_entry',
-    description: 'Read one Community entry: the question or the host\'s prompt, the choices, your own answer, the results once published (a superadmin sees live tallies), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.',
+    description: 'Read one Community entry: the question or the host\'s prompt, the choices, your own answer (with public: true or false), the results once published (a superadmin sees live tallies; each result lists the members who answered publicly as people), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.',
     inputSchema: obj({ id: { type: 'string' } }, ['id']),
     handler: (ctx, args) => readCommunityEntryOp(ctx, args ?? {}),
   },
   {
     name: 'answer_community_poll',
-    description: 'Answer a live Community poll as your member. A poll with choices takes choice, the 0-based index of an answer; a typed poll takes text. Answering again changes your answer while the poll allows it. Only answer with what your member actually chose; never invent their opinion.',
-    inputSchema: obj({ id: { type: 'string' }, choice: { type: 'integer' }, text: { type: 'string' } }, ['id']),
+    description: 'Answer a live Community poll as your member. A poll with choices takes choice, the 0-based index of an answer; a typed poll takes text. An answer is anonymous unless public is true, which shows your member\'s name with their answer once the results are published; answering again with the other setting switches it until voting closes. Answering again changes your answer while the poll allows it. Only answer with what your member actually chose, and only answer publicly when they asked to; never invent their opinion.',
+    inputSchema: obj({ id: { type: 'string' }, choice: { type: 'integer' }, text: { type: 'string' }, public: { type: 'boolean' } }, ['id']),
     handler: (ctx, args) => answerCommunityPollOp(ctx, args ?? {}),
   },
   {

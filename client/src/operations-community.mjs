@@ -94,10 +94,11 @@ export async function readCommunityEntryOp(ctx, { id } = {}) {
   };
 }
 
-export async function answerCommunityPollOp(ctx, { id, choice, text } = {}) {
+export async function answerCommunityPollOp(ctx, { id, choice, text, public: isPublic } = {}) {
   const hasChoice = choice !== undefined && choice !== null && choice !== '';
   if (hasChoice === (text !== undefined && text !== null && text !== '')) throw new OperationError('bad-request', 'Pass choice (the 0-based index of an answer) for a poll with choices, or text for a typed poll.');
-  const body = { id: needId(id), ...(hasChoice ? { choice: Number(choice) } : { text: String(text) }) };
+  // sow-499: anonymous unless public is exactly true.
+  const body = { id: needId(id), ...(hasChoice ? { choice: Number(choice) } : { text: String(text) }), public: isPublic === true };
   const r = await call(ctx, `${R}/answer`, { method: 'POST', body });
   return { saved: true, yourAnswer: r.mine ?? null };
 }

@@ -6,7 +6,7 @@
 //   GET  /membership/community/entry?id=                one entry, with its discussion
 //   GET  /membership/community/updates?id=&v=           the live poll: { unchanged } or the fresh entry
 //   GET  /membership/community/image?id=&img=           an image's bytes, private
-//   POST /membership/community/answer                   { id, choice } or { id, text }
+//   POST /membership/community/answer                   { id, choice } or { id, text }, plus public: true (sow-499)
 //   POST /membership/community/post                     { id, body, images, parentId }
 //   POST /membership/community/post-edit                { id, postId, body, images }
 //   POST /membership/community/post-delete              { id, postId }
@@ -130,7 +130,7 @@ export const COMMUNITY_ROUTES = {
     GET: { gate: 'cheap', op: 'image', args: (u) => ({ id: q(u, 'id'), img: q(u, 'img') }) },
     POST: { gate: 'full', op: 'putImage', upload: true },
   },
-  '/membership/community/answer': { POST: { gate: 'full', op: 'answer', body: (b) => ({ id: b.id, input: { choice: b.choice, text: b.text } }) } },
+  '/membership/community/answer': { POST: { gate: 'full', op: 'answer', body: (b) => ({ id: b.id, input: { choice: b.choice, text: b.text, public: b.public === true } }) } },
   '/membership/community/post': { POST: { gate: 'full', op: 'post', body: (b) => ({ id: b.id, input: { body: b.body, images: b.images, parentId: b.parentId } }) } },
   '/membership/community/post-edit': { POST: { gate: 'full', op: 'editPost', body: (b) => ({ id: b.id, postId: b.postId, input: { body: b.body, images: b.images } }) } },
   '/membership/community/post-delete': { POST: { gate: 'full', op: 'deletePost', body: (b) => ({ id: b.id, postId: b.postId }) } },
@@ -168,7 +168,29 @@ export async function handleCommunity(request, env, route, deps = {}) {
   const r = await relay(env, { op: route.op, viewer: auth.viewer, args }, bytes, call);
   if (!r.ok) return { status: r.status, body: r.body };
   if (r.raw) return { status: 200, raw: r.raw, contentType: r.contentType };
+  if (route.op === 'get' || route.op === 'updates') return { status: 200, body: await withFolders(r.body, env, deps) };
   return { status: 200, body: r.body };
+}
+
+/**
+ * sow-499: the GBTI name (folder) of each person on a PUBLIC answer, so the page can link their profile. It comes from
+ * the members index (account number to folder, cached for minutes); the store only knows the account number and the
+ * GitHub login. A failed read leaves the folder off and the picture unlinked. The login is never used in its place: a
+ * folder can differ from the login (sow-428), so a guess could link a picture to someone else.
+ */
+export async function withFolders(body, env, deps = {}) {
+  const groups = body?.results?.groups;
+  if (!Array.isArray(groups) || !groups.some((g) => Array.isArray(g.people) && g.people.length)) return body;
+  const { readIndex = readMembersIndexCached } = deps;
+  let map;
+  try { map = await readIndex(env, deps); } catch { return body; }
+  const folderOf = (id) => map?.get?.(String(id)) ?? map?.get?.(Number(id)) ?? null;
+  for (const list of [groups, body.results.byOption]) {
+    for (const g of list || []) {
+      for (const p of g.people || []) { const f = folderOf(p.githubId); if (f) p.folder = String(f); }
+    }
+  }
+  return body;
 }
 
 /** The headers an image is served with: private to the viewer, and never sniffed into anything but an image. */
