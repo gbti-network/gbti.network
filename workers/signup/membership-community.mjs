@@ -7,6 +7,7 @@
 //   GET  /membership/community/updates?id=&v=           the live poll: { unchanged } or the fresh entry
 //   GET  /membership/community/image?id=&img=           an image's bytes, private
 //   POST /membership/community/answer                   { id, choice } or { id, text }, plus public: true (sow-499)
+//   POST /membership/community/join                     { id, code }: the host's share link adds the caller (sow-500)
 //   POST /membership/community/post                     { id, body, images, parentId }
 //   POST /membership/community/post-edit                { id, postId, body, images }
 //   POST /membership/community/post-delete              { id, postId }
@@ -130,6 +131,7 @@ export const COMMUNITY_ROUTES = {
     GET: { gate: 'cheap', op: 'image', args: (u) => ({ id: q(u, 'id'), img: q(u, 'img') }) },
     POST: { gate: 'full', op: 'putImage', upload: true },
   },
+  '/membership/community/join': { POST: { gate: 'full', op: 'join', body: (b) => ({ id: b.id, code: typeof b.code === 'string' ? b.code : '' }) } },
   '/membership/community/answer': { POST: { gate: 'full', op: 'answer', body: (b) => ({ id: b.id, input: { choice: b.choice, text: b.text, public: b.public === true } }) } },
   '/membership/community/post': { POST: { gate: 'full', op: 'post', body: (b) => ({ id: b.id, input: { body: b.body, images: b.images, parentId: b.parentId } }) } },
   '/membership/community/post-edit': { POST: { gate: 'full', op: 'editPost', body: (b) => ({ id: b.id, postId: b.postId, input: { body: b.body, images: b.images } }) } },
@@ -218,6 +220,7 @@ export function adminCall(b) {
   if (STATUS_OPS.has(op)) return { op: 'status', args: { id, action: op } };
   if (op === 'access') return { op: 'access', args: { id, access: b.access || {} } };
   if (op === 'moderate') return { op: 'moderate', args: { id, postId: String(b.postId || ''), action: String(b.action || ''), imageId: b.imageId ? String(b.imageId) : null } };
+  if (op === 'join-link') return { op: 'joinLink', args: { id, action: String(b.action || '') } };
   if (op === 'tidy') return { op: 'tidy', args: { id, tidy: { action: b.action, norm: b.norm, label: b.label, into: b.into } } };
   if (op === 'erase-member') return { op: 'erase', args: { githubId: String(b.githubId || '') } };
   return null;

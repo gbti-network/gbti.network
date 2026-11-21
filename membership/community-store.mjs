@@ -28,7 +28,8 @@ const bad = (message) => new CommunityError(400, 'bad_request', message);
 const conflict = (message) => new CommunityError(409, 'conflict', message);
 const forbidden = (message) => new CommunityError(403, 'forbidden', message);
 
-const SCHEMA_VERSION = 2; // 2 (sow-499): answers carry `public` and the answerer's login
+// 2 (sow-499): answers carry `public` and the answerer's login. 3 (sow-500): entries carry a join code.
+const SCHEMA_VERSION = 3;
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`,
   `CREATE TABLE IF NOT EXISTS entries (
@@ -39,7 +40,7 @@ const SCHEMA = [
      created_by TEXT NOT NULL, created_login TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL, opened_at INTEGER, closed_at INTEGER, published_at INTEGER,
      activity_at INTEGER NOT NULL, last_post_at INTEGER, last_post_by TEXT, last_post_login TEXT,
-     version INTEGER NOT NULL DEFAULT 1)`,
+     version INTEGER NOT NULL DEFAULT 1, join_code TEXT)`,
   `CREATE TABLE IF NOT EXISTS entry_members (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, login TEXT NOT NULL DEFAULT '',
      PRIMARY KEY (entry_id, github_id))`,
   `CREATE TABLE IF NOT EXISTS answers (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, value TEXT NOT NULL, norm TEXT NOT NULL,
@@ -69,6 +70,16 @@ function checkViewer(viewer) {
   if (!viewer || !isGithubId(String(viewer.githubId ?? ''))) throw new CommunityError(401, 'not-authenticated', 'Sign in to continue.');
   return { githubId: String(viewer.githubId), login: String(viewer.login || ''), superadmin: viewer.superadmin === true };
 }
+/** Compare a join code without stopping at the first different character. */
+function sameCode(given, actual) {
+  const a = String(given ?? '');
+  const b = String(actual ?? '');
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 function requireSuperadmin(viewer) {
   const v = checkViewer(viewer);
   if (!v.superadmin) throw forbidden('Only a superadmin can do that.');
@@ -92,13 +103,22 @@ export class CommunityStore {
     for (const stmt of SCHEMA) this.q(stmt);
     const row = this.one('SELECT v FROM meta WHERE k = ?', 'schema');
     if (!row) this.q('INSERT INTO meta (k, v) VALUES (?, ?)', 'schema', String(SCHEMA_VERSION));
-    else if (Number(row.v) < 2) {
-      // sow-499: an answer is anonymous or public. A database made at version 1 gains the two columns once; every
-      // answer given before this reads as anonymous (the default 0). A column that a half-finished earlier attempt
-      // already added is skipped, so the step can be re-run.
-      this.addColumn('answers', 'public INTEGER NOT NULL DEFAULT 0');
-      this.addColumn('answers', "login TEXT NOT NULL DEFAULT ''");
-      this.q('UPDATE meta SET v = ? WHERE k = ?', '2', 'schema');
+    else if (Number(row.v) < SCHEMA_VERSION) {
+      // Each step runs once, in order, and records nothing until all are done. A column that a half-finished earlier
+      // attempt already added is skipped, so the steps can be re-run.
+      if (Number(row.v) < 2) {
+        // sow-499: an answer is anonymous or public. Every answer given before this reads as anonymous (the default 0).
+        this.addColumn('answers', 'public INTEGER NOT NULL DEFAULT 0');
+        this.addColumn('answers', "login TEXT NOT NULL DEFAULT ''");
+      }
+      if (Number(row.v) < 3) {
+        // sow-500: an entry shared with chosen members has a join link. Each one that exists already gets its code.
+        this.addColumn('entries', 'join_code TEXT');
+        for (const e of this.q("SELECT id FROM entries WHERE access_mode = 'chosen' AND join_code IS NULL")) {
+          this.q('UPDATE entries SET join_code = ? WHERE id = ?', this.id(), e.id);
+        }
+      }
+      this.q('UPDATE meta SET v = ? WHERE k = ?', String(SCHEMA_VERSION), 'schema');
     }
     this.ready = true;
   }
@@ -260,6 +280,8 @@ export class CommunityStore {
         prompt: row.prompt, options: parseJson(row.options, []), settings: parseJson(row.settings, {}),
         promptImages: this.q('SELECT id, name FROM images WHERE entry_id = ? AND prompt = 1 ORDER BY at', row.id),
         openedAt: row.opened_at, closedAt: row.closed_at, publishedAt: row.published_at,
+        // sow-500: the join code is the host's alone. A member never receives it, whatever they can see.
+        ...(v.superadmin ? { joinCode: row.access_mode === 'chosen' && row.join_code ? row.join_code : null } : {}),
         access: { mode: row.access_mode, count: row.access_mode === 'all' ? null : members.length, members },
       },
       mine: mine ? { ...(row.kind === 'poll' ? { choice: Number(mine.value) } : { text: mine.value }), public: bool(mine.public) } : null,
@@ -329,6 +351,9 @@ export class CommunityStore {
   writeMembers(id, access, logins) {
     this.q('DELETE FROM entry_members WHERE entry_id = ?', id);
     if (access.mode !== 'chosen') return;
+    // sow-500: an entry shared with chosen members starts with a join link. NULL is "never had one"; a link the host
+    // turned off is stored as '' and stays off through every later edit.
+    this.q('UPDATE entries SET join_code = ? WHERE id = ? AND join_code IS NULL', this.id(), id);
     const names = logins && typeof logins === 'object' ? logins : {};
     for (const gid of access.members) this.q('INSERT INTO entry_members (entry_id, github_id, login) VALUES (?, ?, ?)', id, gid, cleanLine(names[gid]).slice(0, 60));
   }
@@ -457,6 +482,39 @@ export class CommunityStore {
     else throw bad('Unknown action.');
     this.bump(id, { activity: false });
     return this.results(this.entryRow(id), true);
+  }
+
+  // ---- members: joining by the share link (sow-500) -------------------------------------------------------------
+
+  /**
+   * A signed-in member opened the host's share link. Someone who can already see the entry is left as they are. Anyone
+   * else is added to the chosen members when the entry is not a draft, is shared with chosen members, has its join
+   * link on, and the code matches. Every refusal is the same not_found a missing entry gives, so a wrong code, a
+   * turned-off link and an entry that does not exist cannot be told apart. The link never expires (owner, 2026-11-21).
+   */
+  join(viewer, id, code) {
+    const v = checkViewer(viewer);
+    this.migrate();
+    const row = this.entryRow(id);
+    if (this.canSee(v, row)) return { joined: false, id };
+    if (!row || row.status === 'draft' || row.access_mode !== 'chosen' || !row.join_code || !sameCode(code, row.join_code)) throw notFound();
+    const n = this.one('SELECT COUNT(*) AS n FROM entry_members WHERE entry_id = ?', id).n;
+    if (n >= LIMITS.chosenMax) throw conflict('This entry is full.');
+    this.q('INSERT OR IGNORE INTO entry_members (entry_id, github_id, login) VALUES (?, ?, ?)', id, v.githubId, cleanLine(v.login).slice(0, 60));
+    this.bump(id, { activity: false });
+    return { joined: true, id };
+  }
+
+  /** The host turns the join link off, or makes a new one (which also turns it on). The old code stops at once. */
+  setJoinLink(viewer, id, action) {
+    requireSuperadmin(viewer);
+    const { row } = this.visible(viewer, id);
+    if (action !== 'off' && action !== 'new') throw bad('The join link can be turned off or made new.');
+    if (row.access_mode !== 'chosen') throw bad('Only an entry shared with chosen members has a join link.');
+    const code = action === 'new' ? this.id() : '';
+    this.q('UPDATE entries SET join_code = ? WHERE id = ?', code, id);
+    this.bump(id, { activity: false });
+    return { id, joinCode: code || null };
   }
 
   // ---- members: answers ----------------------------------------------------------------------------------------

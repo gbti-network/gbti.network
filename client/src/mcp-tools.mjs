@@ -292,7 +292,7 @@ export const TOOLS = [
   },
   {
     name: 'read_community_entry',
-    description: 'Read one Community entry: the question or the host\'s prompt, the choices, your own answer (with public: true or false), the results once published (a superadmin sees live tallies; each result lists the members who answered publicly as people), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.',
+    description: 'Read one Community entry: the question or the host\'s prompt, the choices, your own answer (with public: true or false), for a host joinUrl (the share link that adds a signed-in member who opens it, while it is on), the results once published (a superadmin sees live tallies; each result lists the members who answered publicly as people), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.',
     inputSchema: obj({ id: { type: 'string' } }, ['id']),
     handler: (ctx, args) => readCommunityEntryOp(ctx, args ?? {}),
   },
@@ -342,8 +342,8 @@ export const TOOLS = [
   },
   {
     name: 'manage_community_entry',
-    description: 'SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll\'s results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll\'s question and answers lock once a member has answered.',
-    inputSchema: obj({ id: { type: 'string' }, action: { type: 'string', enum: ['edit', 'open', 'close', 'publish', 'unpublish', 'lock', 'unlock', 'delete'] }, input: { type: 'object' } }, ['id', 'action']),
+    description: 'SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll\'s results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), "join-link-off" or "join-link-new" (the share link of an entry shared with chosen members, which adds any signed-in member who opens it; new replaces the old code), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll\'s question and answers lock once a member has answered.',
+    inputSchema: obj({ id: { type: 'string' }, action: { type: 'string', enum: ['edit', 'open', 'close', 'publish', 'unpublish', 'lock', 'unlock', 'delete', 'join-link-off', 'join-link-new'] }, input: { type: 'object' } }, ['id', 'action']),
     handler: (ctx, args) => manageCommunityEntryOp(ctx, args ?? {}),
   },
   {

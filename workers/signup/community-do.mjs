@@ -92,6 +92,7 @@ export const OPS = {
     },
   },
   image: { kind: 'bytes', run: (s, v, a) => s.getImage(v, str(a.id), str(a.img)) },
+  join: { kind: 'write', run: (s, v, a) => s.join(v, str(a.id), str(a.code)) }, // sow-500
   answer: { kind: 'write', run: (s, v, a) => s.answer(v, str(a.id), a.input || {}) },
   post: { kind: 'write', run: (s, v, a) => s.post(v, str(a.id), a.input || {}) },
   editPost: { kind: 'write', run: (s, v, a) => s.editPost(v, str(a.id), str(a.postId), a.input || {}) },
@@ -113,6 +114,7 @@ export const OPS = {
   access: { kind: 'admin', run: (s, v, a) => s.setAccess(v, str(a.id), a.access || {}) },
   status: { kind: 'admin', run: (s, v, a) => s.setStatus(v, str(a.id), str(a.action)) },
   tidy: { kind: 'admin', run: (s, v, a) => s.tidy(v, str(a.id), a.tidy || {}) },
+  joinLink: { kind: 'admin', run: (s, v, a) => s.setJoinLink(v, str(a.id), str(a.action)) }, // sow-500
   moderate: { kind: 'admin', run: (s, v, a) => s.moderate(v, str(a.id), str(a.postId), str(a.action), a.imageId ? str(a.imageId) : null) },
   erase: { kind: 'admin', run: (s, v, a) => s.eraseMember(str(a.githubId)) },
 };

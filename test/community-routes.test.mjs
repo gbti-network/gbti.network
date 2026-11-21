@@ -103,7 +103,7 @@ test('signed out, every Community route answers 401 before anything is read', as
 test('a cookie POST without the CSRF token is refused, on member and superadmin routes alike', async () => {
   const { env, ns } = setup();
   const c = await cookie(SUPER);
-  for (const path of ['/membership/community/post', '/membership/community/answer', '/membership/admin/community']) {
+  for (const path of ['/membership/community/post', '/membership/community/answer', '/membership/community/join', '/membership/admin/community']) {
     const res = await worker.fetch(req(path, { method: 'POST', cookie: c, body: { op: 'create' }, csrf: false }), env, ctx);
     assert.equal(res.status, 403, path);
   }
@@ -498,4 +498,33 @@ test('end to end: a published poll names a public answer with its GBTI name, and
   assert.equal(coffee.count, 2);
   assert.deepEqual(coffee.people, [{ githubId: PRIYA.githubId, login: 'priya', folder: 'priya-dev' }]);
   assert.ok(!JSON.stringify(r.body.results).includes(BEN.githubId), 'the anonymous answer names nobody');
+});
+
+// ---- sow-500: the share link adds a signed-in member who opens it ------------------------------------------------
+
+test('the join route forwards the id and a string code; join-link maps onto the host op', () => {
+  const body = route('/membership/community/join', 'POST').body;
+  assert.deepEqual(body({ id: 'e1', code: 'k3m9q2wdabcdefgh' }), { id: 'e1', code: 'k3m9q2wdabcdefgh' });
+  assert.deepEqual(body({ id: 'e1', code: { $ne: '' } }), { id: 'e1', code: '' }, 'anything but a string is no code');
+  assert.equal(route('/membership/community/join', 'POST').gate, 'full', 'joining takes the full paid check');
+  assert.deepEqual(adminCall({ op: 'join-link', id: 'e1', action: 'new' }), { op: 'joinLink', args: { id: 'e1', action: 'new' } });
+});
+
+test('end to end through the Worker: a paid member with the code is added; with a wrong code nothing changes', async () => {
+  const { env, store } = setup();
+  const { id } = store.createEntry(SUPER, { kind: 'topic', title: 'Meeting Nov 21 2026', access: { mode: 'chosen', members: [BEN.githubId] } }, { open: true });
+  const code = store.getEntry(SUPER, id).entry.joinCode;
+  const deps = { paid: paidGate([PRIYA.githubId]) };
+  deps.resolve = async () => ({ ok: true, githubId: PRIYA.githubId, login: PRIYA.login, via: 'cookie' });
+  const join = (c) => handleCommunity(hreq('/membership/community/join', PRIYA, { method: 'POST', body: { id, code: c } }), env, route('/membership/community/join', 'POST'), deps);
+  const wrong = await join('wrongwrongwrong1');
+  assert.equal(wrong.status, 404);
+  assert.equal(store.getEntry(SUPER, id).entry.access.members.length, 1);
+  const ok = await join(code);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.joined, true);
+  assert.ok(store.getEntry(SUPER, id).entry.access.members.some((m) => m.githubId === PRIYA.githubId));
+  const r = await handleCommunity(hreq(`/membership/community/entry?id=${id}`, PRIYA), env, route('/membership/community/entry', 'GET'), deps);
+  assert.equal(r.status, 200, 'the member can now open it');
+  assert.ok(!('joinCode' in r.body.entry), 'and never sees the code');
 });

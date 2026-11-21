@@ -185,3 +185,18 @@ test('sow-499: an agent answers publicly only when told to; the host reads the p
   assert.equal(tool.inputSchema.properties.public.type, 'boolean');
   assert.match(tool.description, /anonymous unless public is true/);
 });
+
+test('sow-500: a host reads the join link, replaces it and turns it off; a member never sees it', async () => {
+  const { store, ctx } = world();
+  const { id } = store.createEntry(SUPER, { kind: 'topic', title: 'Meeting Nov 21 2026', access: { mode: 'chosen', members: [BEN.githubId] } }, { open: true });
+  const host = await readCommunityEntryOp(ctx('tok-super'), { id });
+  assert.match(host.joinUrl, new RegExp(`/community/entry/\\?id=${id}&join=[a-z0-9]{16}$`));
+  assert.ok(!('joinUrl' in await readCommunityEntryOp(ctx('tok-ben'), { id })), 'a member never gets it');
+  const made = await manageCommunityEntryOp(ctx('tok-super'), { id, action: 'join-link-new' });
+  assert.notEqual(made.joinUrl, host.joinUrl);
+  assert.equal((await readCommunityEntryOp(ctx('tok-super'), { id })).joinUrl, made.joinUrl);
+  assert.deepEqual(await manageCommunityEntryOp(ctx('tok-super'), { id, action: 'join-link-off' }), { id, joinUrl: null });
+  assert.ok(!('joinUrl' in await readCommunityEntryOp(ctx('tok-super'), { id })));
+  const tool = TOOLS.find((t) => t.name === 'manage_community_entry');
+  assert.ok(tool.inputSchema.properties.action.enum.includes('join-link-new'));
+});

@@ -47,6 +47,7 @@ const needId = (v, what = 'id') => {
   return s;
 };
 const entryUrl = (id) => `${SITE_BASE}/community/entry/?id=${q(id)}`;
+const joinUrl = (id, code) => `${entryUrl(id)}&join=${q(code)}`;
 
 /** A list row an agent can read at a glance. */
 function row(e) {
@@ -91,6 +92,8 @@ export async function readCommunityEntryOp(ctx, { id } = {}) {
     results: r.results ?? null,
     discussion: { locked: !!r.discussion?.locked, count: r.discussion?.count ?? 0, posts: (r.discussion?.posts || []).map(post) },
     youAreHost: r.viewer?.superadmin === true,
+    // sow-500: the share link that adds whoever opens it signed in. Hosts only, and only while it is on.
+    ...(e.joinCode ? { joinUrl: joinUrl(e.id || id, e.joinCode) } : {}),
   };
 }
 
@@ -205,7 +208,12 @@ export async function manageCommunityEntryOp(ctx, { id, action, input } = {}) {
     await admin(ctx, { op: 'edit', id: entry, input: body });
     return { id: entry, edited: true };
   }
-  if (!STATUS_ACTIONS.includes(action)) throw new OperationError('bad-request', `action is edit or one of ${STATUS_ACTIONS.join(', ')}.`);
+  // sow-500: turn the join link off, or make a new one (which turns it on and stops the old code).
+  if (action === 'join-link-off' || action === 'join-link-new') {
+    const r = await admin(ctx, { op: 'join-link', id: entry, action: action === 'join-link-new' ? 'new' : 'off' });
+    return { id: entry, joinUrl: r.joinCode ? joinUrl(entry, r.joinCode) : null };
+  }
+  if (!STATUS_ACTIONS.includes(action)) throw new OperationError('bad-request', `action is edit, join-link-off, join-link-new or one of ${STATUS_ACTIONS.join(', ')}.`);
   const r = await admin(ctx, { op: action, id: entry });
   return { id: entry, ...(action === 'delete' ? { deleted: true } : { status: r.status ?? null }) };
 }

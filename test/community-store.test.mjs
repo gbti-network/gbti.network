@@ -443,7 +443,7 @@ test('a version 1 database migrates once: the old answer stays anonymous, and a 
   sql.exec("INSERT INTO answers VALUES ('e1', '2001', '1', '1', 1)");
   const store = new CommunityStore(sql, { now: () => 2 });
   store.migrate();
-  assert.deepEqual(sql.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '2' }]);
+  assert.deepEqual(sql.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '3' }]);
   assert.deepEqual(sql.exec('SELECT public, login FROM answers'), [{ public: 0, login: '' }]);
   const again = new CommunityStore(sql, { now: () => 3 });
   again.migrate();
@@ -454,6 +454,6 @@ test('a version 1 database migrates once: the old answer stays anonymous, and a 
   half.exec("INSERT INTO meta (k, v) VALUES ('schema', '1')");
   half.exec('CREATE TABLE answers (entry_id TEXT NOT NULL, github_id TEXT NOT NULL, value TEXT NOT NULL, norm TEXT NOT NULL, at INTEGER NOT NULL, public INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (entry_id, github_id))');
   new CommunityStore(half, { now: () => 4 }).migrate();
-  assert.deepEqual(half.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '2' }]);
+  assert.deepEqual(half.exec("SELECT v FROM meta WHERE k = 'schema'"), [{ v: '3' }]);
   assert.deepEqual(half.exec("SELECT name FROM pragma_table_info('answers') WHERE name IN ('public', 'login') ORDER BY name").map((r) => r.name), ['login', 'public']);
 });

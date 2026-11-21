@@ -20528,6 +20528,7 @@ var needId = (v, what = "id") => {
   return s;
 };
 var entryUrl = (id) => `${SITE_BASE}/community/entry/?id=${q(id)}`;
+var joinUrl = (id, code) => `${entryUrl(id)}&join=${q(code)}`;
 function row(e) {
   return {
     id: e.id,
@@ -20579,7 +20580,9 @@ async function readCommunityEntryOp(ctx2, { id } = {}) {
     yourAnswer: r.mine ?? null,
     results: r.results ?? null,
     discussion: { locked: !!r.discussion?.locked, count: r.discussion?.count ?? 0, posts: (r.discussion?.posts || []).map(post) },
-    youAreHost: r.viewer?.superadmin === true
+    youAreHost: r.viewer?.superadmin === true,
+    // sow-500: the share link that adds whoever opens it signed in. Hosts only, and only while it is on.
+    ...e.joinCode ? { joinUrl: joinUrl(e.id || id, e.joinCode) } : {}
   };
 }
 async function answerCommunityPollOp(ctx2, { id, choice, text, public: isPublic } = {}) {
@@ -20687,7 +20690,11 @@ async function manageCommunityEntryOp(ctx2, { id, action, input } = {}) {
     await admin(ctx2, { op: "edit", id: entry, input: body });
     return { id: entry, edited: true };
   }
-  if (!STATUS_ACTIONS.includes(action)) throw new OperationError("bad-request", `action is edit or one of ${STATUS_ACTIONS.join(", ")}.`);
+  if (action === "join-link-off" || action === "join-link-new") {
+    const r2 = await admin(ctx2, { op: "join-link", id: entry, action: action === "join-link-new" ? "new" : "off" });
+    return { id: entry, joinUrl: r2.joinCode ? joinUrl(entry, r2.joinCode) : null };
+  }
+  if (!STATUS_ACTIONS.includes(action)) throw new OperationError("bad-request", `action is edit, join-link-off, join-link-new or one of ${STATUS_ACTIONS.join(", ")}.`);
   const r = await admin(ctx2, { op: action, id: entry });
   return { id: entry, ...action === "delete" ? { deleted: true } : { status: r.status ?? null } };
 }
@@ -21309,7 +21316,7 @@ var TOOLS = [
   },
   {
     name: "read_community_entry",
-    description: "Read one Community entry: the question or the host's prompt, the choices, your own answer (with public: true or false), the results once published (a superadmin sees live tallies; each result lists the members who answered publicly as people), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.",
+    description: "Read one Community entry: the question or the host's prompt, the choices, your own answer (with public: true or false), for a host joinUrl (the share link that adds a signed-in member who opens it, while it is on), the results once published (a superadmin sees live tallies; each result lists the members who answered publicly as people), who it is shared with, and the whole discussion with post ids, replies and reactions. Images come as ids and names only.",
     inputSchema: obj({ id: { type: "string" } }, ["id"]),
     handler: (ctx2, args) => readCommunityEntryOp(ctx2, args ?? {})
   },
@@ -21366,8 +21373,8 @@ var TOOLS = [
   },
   {
     name: "manage_community_entry",
-    description: `SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll's results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll's question and answers lock once a member has answered.`,
-    inputSchema: obj({ id: { type: "string" }, action: { type: "string", enum: ["edit", "open", "close", "publish", "unpublish", "lock", "unlock", "delete"] }, input: { type: "object" } }, ["id", "action"]),
+    description: `SUPERADMIN ONLY. Run a Community entry through its states. action: "open", "close" (voting for a poll, posting for a topic), "publish" (a closed poll's results), "unpublish", "lock" or "unlock" (the discussion), "delete" (the entry, its answers and discussion, for good), "join-link-off" or "join-link-new" (the share link of an entry shared with chosen members, which adds any signed-in member who opens it; new replaces the old code), or "edit" with input (any of title, prompt, options, settings, meeting, access; a field left out keeps its value). A poll's question and answers lock once a member has answered.`,
+    inputSchema: obj({ id: { type: "string" }, action: { type: "string", enum: ["edit", "open", "close", "publish", "unpublish", "lock", "unlock", "delete", "join-link-off", "join-link-new"] }, input: { type: "object" } }, ["id", "action"]),
     handler: (ctx2, args) => manageCommunityEntryOp(ctx2, args ?? {})
   },
   {
