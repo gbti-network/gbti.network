@@ -10,26 +10,26 @@ import { KIND_ICON } from './community-css.mjs';
 import { KIND_LABEL, listOverview, liveCountLine, nextShoptalk, entryHref, plural } from '../community-core.mjs';
 
 export const LIST_SIDE_CSS = `
-  .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .sc { padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .sc { padding: 14px; display: flex; flex-direction: column; gap: 5px; }
   .sh { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); font-weight: 500; }
   .sc .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
   .open-n { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--green-700); }
   .open-n::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-  .sl { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--fg); }
+  .sl { display: flex; gap: 9px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--fg); }
   .sl:first-of-type { border-top: 0; }
   .sl:hover strong { color: var(--green-700); text-decoration: underline; text-underline-offset: 3px; }
   .sl .cm-badge { padding: 5px 7px; }
   .sl span.t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .sl strong { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
-  .sl small { font-size: 13px; color: var(--fg-mute); }
-  .quiet-line { margin: 0; font-size: 14px; line-height: 1.5; color: var(--fg-soft); }
-  .call strong.disp { font-family: var(--f-display); font-size: 22px; line-height: 1.15; }
-  .call .when { font-size: 15px; }
-  .call a { font-size: 14px; font-weight: 600; margin-top: 4px; }
-  .host-box { border-color: var(--line-2); gap: 10px; }
+  .sl strong { font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
+  .sl small { font-size: 12px; color: var(--fg-mute); }
+  .quiet-line { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg-soft); }
+  .call strong.disp { font-family: var(--f-display); font-size: 18px; line-height: 1.15; }
+  .call .when { font-size: 14px; }
+  .call a { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .host-box { border-color: var(--line-2); gap: 8px; }
   .host-box .cm-btn { width: 100%; }
-  .qn { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: var(--cm-r); display: inline-grid; place-items: center; font-size: 13px; font-weight: 800; background: var(--tint); color: var(--fg-soft); }
+  .qn { flex: none; min-width: 22px; height: 22px; padding: 0 5px; border-radius: var(--cm-r); display: inline-grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--tint); color: var(--fg-soft); }
   .qn.amber { background: var(--amber-tint); color: var(--amber-text); }
 `;
 

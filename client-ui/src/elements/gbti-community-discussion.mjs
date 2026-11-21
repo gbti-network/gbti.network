@@ -18,21 +18,21 @@ import './gbti-prose-editor.mjs';
 const EMOJI = Object.fromEntries(REACTIONS);
 
 const CSS = `
-  .disc { display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; margin-top: 24px; }
+  .disc { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
   .dh { display: flex; align-items: baseline; gap: 10px; }
-  .dh h2 { font-size: 22px; font-weight: 700; }
-  .dh span { font-size: 15px; color: var(--fg-mute); }
-  .list { display: flex; flex-direction: column; gap: 14px; }
-  .post { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+  .dh h2 { font-size: 18px; font-weight: 700; }
+  .dh span { font-size: 13px; color: var(--fg-mute); }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .post { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; position: relative; }
   .post.pinned { border-color: var(--green); }
   .ph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-right: 40px; }
   .reply { position: relative; }
   .ph .menu { position: absolute; top: 12px; right: 12px; }
   .reply .ph .menu { top: -4px; right: 0; }
-  .ph strong { font-size: 15px; }
-  .ph .when { font-size: 13px; color: var(--fg-mute); }
+  .ph strong { font-size: 14px; }
+  .ph .when { font-size: 12px; color: var(--fg-mute); }
   .ph .sp { flex: 1; }
-  .md { font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+  .md { font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
   .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
   .md img { max-width: 100%; }
   .md pre { white-space: pre-wrap; background: var(--tint); padding: 10px 12px; border-radius: var(--cm-r); font-size: 14px; }
@@ -43,7 +43,7 @@ const CSS = `
   .img a { display: block; }
   .img .rm { position: absolute; top: 6px; right: 6px; }
   .rx { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: var(--cm-r); border: 1px solid var(--line-2); background: var(--paper); font-size: 13px; font-weight: 600; color: var(--fg-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 0 8px; border-radius: var(--cm-r); border: 1px solid var(--line-2); background: var(--paper); font-size: 13px; font-weight: 600; color: var(--fg-soft); }
   .chip:hover { background: var(--tint); }
   .chip.on { border-color: var(--green); background: var(--green-tint); color: var(--green-700); }
   .chip.on:hover { background: var(--green-tint); }
@@ -52,17 +52,17 @@ const CSS = `
   .pick button:hover { background: var(--tint); }
   .pa { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .pa .n { font-size: 13px; color: var(--fg-mute); }
-  .replies { display: flex; flex-direction: column; gap: 12px; margin-left: 12px; padding-left: 16px; border-left: 2px solid var(--line); }
+  .replies { display: flex; flex-direction: column; gap: 9px; margin-left: 12px; padding-left: 16px; border-left: 2px solid var(--line); }
   .reply { display: flex; flex-direction: column; gap: 8px; }
-  .gone { padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: var(--cm-r); color: var(--fg-mute); font-size: 14px; }
+  .gone { padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: var(--cm-r); color: var(--fg-mute); font-size: 14px; }
   .menu { position: relative; }
   .menu > button { width: 34px; height: 34px; border-radius: var(--cm-r); color: var(--fg-soft); font-size: 18px; line-height: 1; }
   .menu > button:hover { background: var(--tint); }
   .menu .pop { position: absolute; right: 0; top: 38px; z-index: 5; min-width: 190px; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--cm-r); background: var(--paper); box-shadow: 0 12px 30px rgba(37,35,43,.14); display: flex; flex-direction: column; }
   .menu .pop button { text-align: left; padding: 9px 10px; border-radius: var(--cm-r); font-size: 14px; font-weight: 500; }
   .menu .pop button:hover { background: var(--tint); }
-  .comp { border: 1.5px solid var(--green); border-radius: var(--cm-r); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: var(--paper); }
-  .comp.sub { border-width: 1px; border-color: var(--line-2); padding: 12px 14px; }
+  .comp { border: 1.5px solid var(--green); border-radius: var(--cm-r); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: var(--paper); }
+  .comp.sub { border-width: 1px; border-color: var(--line-2); padding: 10px 12px; }
   .att { display: flex; flex-direction: column; gap: 8px; }
   .a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--cm-r); }
   .a img, .a .th { width: 56px; height: 42px; object-fit: cover; border-radius: var(--cm-r); background: var(--tint); flex: none; }
@@ -75,12 +75,12 @@ const CSS = `
   .foot .go { margin-left: auto; display: flex; gap: 10px; align-items: center; }
   .flash { font-size: 14px; font-weight: 600; color: var(--green-700); }
   .bad { font-size: 14px; font-weight: 600; color: var(--err); }
-  .closed { padding: 14px 16px; border-radius: var(--cm-r); background: var(--tint); color: var(--fg-soft); font-size: 14px; }
-  .first { padding: 28px 22px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
-  .first strong { font-size: 17px; }
-  .first span { color: var(--fg-soft); font-size: 15px; }
+  .closed { padding: 10px 12px; border-radius: var(--cm-r); background: var(--tint); color: var(--fg-soft); font-size: 14px; }
+  .first { padding: 20px 16px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .first strong { font-size: 15px; }
+  .first span { color: var(--fg-soft); font-size: 14px; }
   input[type="file"] { display: none; }
-  @media (max-width: 640px) { .post { padding: 14px; } .replies { margin-left: 4px; padding-left: 12px; } }
+  @media (max-width: 640px) { .post { padding: 11px; } .replies { margin-left: 4px; padding-left: 12px; } }
 `;
 
 class GbtiCommunityDiscussion extends GbtiElement {
