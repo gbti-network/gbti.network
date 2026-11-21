@@ -22,6 +22,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     import { mountCommunity } from '../../lib/community-page';
     const id = new URLSearchParams(location.search).get('id') || '';
     document.querySelector('gbti-community-entry')?.setAttribute('entry-id', id);
+    // sow-500: the host's share link carries a join code; the element asks to be added, then drops it from the address.
+    const join = new URLSearchParams(location.search).get('join') || '';
+    if (join) document.querySelector('gbti-community-entry')?.setAttribute('join-code', join);
     const back = document.querySelector('[data-cm-return]') as HTMLAnchorElement | null;
     if (back) back.href = `/login/?return_to=${encodeURIComponent(location.pathname + location.search)}`;
     mountCommunity({ tag: 'gbti-community-entry', element: () => import('../../../client-ui/src/elements/gbti-community-entry.mjs') });

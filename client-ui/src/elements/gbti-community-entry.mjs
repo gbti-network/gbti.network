@@ -16,7 +16,7 @@ import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
 import {
   KIND_LABEL, isPollKind, faceHtml, meetingText, statusPill, barRows, answerState, pollDelay,
-  answeredLine, plural, normalizeTyped, typedMax, entryHref,
+  answeredLine, plural, normalizeTyped, typedMax, entryHref, joinHref,
 } from '../community-core.mjs';
 import { SIDE_CSS, sideHtml } from './community-entry-side.mjs';
 import { ANSWER_CSS, visibilityHtml, savedVisibilityHtml, peopleHtml, loadKnownProfiles } from './community-entry-answer.mjs';
@@ -104,6 +104,25 @@ class GbtiCommunityEntry extends GbtiElement {
   }
 
   get entryId() { return this.getAttribute('entry-id') || ''; }
+
+  /**
+   * sow-500: opened from the host's share link (?join=<code>). Ask to be added first; a refusal is ignored, because the
+   * load that follows shows the entry or the usual not-found page either way. The code then leaves the address bar
+   * (once, whatever the answer), so a link copied from the browser lets nobody else in.
+   */
+  async joinFromLink() {
+    const code = this.getAttribute('join-code') || '';
+    if (!code || this._joinTried) return;
+    this._joinTried = true;
+    try { await this.client.communityJoin(this.entryId, code); } catch { /* the load below decides what shows */ }
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.has('join')) {
+        u.searchParams.delete('join');
+        history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+      }
+    } catch { /* an address that cannot be rewritten is left alone */ }
+  }
   get isHost() { return typeof this.client?.communityAdmin === 'function'; }
 
   connectedCallback() {
@@ -137,6 +156,7 @@ class GbtiCommunityEntry extends GbtiElement {
     if (!this.entryId) { this._state = 'missing'; this.draw(); return; }
     this._state = 'loading';
     this.draw();
+    await this.joinFromLink();
     try {
       this.accept(await this.client.communityEntry(this.entryId));
       this._state = 'ok';
@@ -274,7 +294,7 @@ class GbtiCommunityEntry extends GbtiElement {
     const { entry, results, discussion } = this._d;
     const openedText = entry.openedAt ? new Date(entry.openedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
     const origin = typeof location !== 'undefined' ? location.origin : '';
-    return sideHtml({ entry, results, discussion, isHost: this.isHost, link: `${origin}${entryHref(this.entryId)}`, openedText });
+    return sideHtml({ entry, results, discussion, isHost: this.isHost, link: `${origin}${joinHref(this.entryId, entry.joinCode)}`, openedText });
   }
 
   mainHtml() {
@@ -425,6 +445,7 @@ class GbtiCommunityEntry extends GbtiElement {
     for (const b of this.$$('[data-vis-switch]')) b.addEventListener('click', () => this.switchVisibility(b.dataset.visSwitch === 'public', b));
     for (const b of this.$$('[data-op]')) b.addEventListener('click', () => this.hostOp(b.dataset.op, b));
     this.on('[data-copy]', 'click', () => this.copyLink());
+    for (const b of this.$$('[data-join-link]')) b.addEventListener('click', () => this.joinLink(b.dataset.joinLink, b));
     this.on('[data-edit]', 'click', () => this.openEditor('edit'));
     this.on('[data-access]', 'click', () => this.openEditor('access'));
     const groups = this._d?.results?.groups || [];
@@ -505,8 +526,21 @@ class GbtiCommunityEntry extends GbtiElement {
     await this.pull();
   }
 
+  /** sow-500: turn the join link off, or make a new one (which turns it on and stops the old code). */
+  async joinLink(action, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await this.client.communityAdmin('join-link', { id: this.entryId, action });
+      await this.pull();
+      this.say('[data-host-msg]', action === 'off' ? 'The join link is off. The link now opens only for the chosen members.' : 'New join link ready. The old one no longer adds anyone.');
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      this.say('[data-host-msg]', e?.message || 'That did not work.', true);
+    }
+  }
+
   async copyLink() {
-    const url = `${location.origin}${entryHref(this.entryId)}`;
+    const url = `${location.origin}${joinHref(this.entryId, this._d?.entry?.joinCode)}`;
     try { await navigator.clipboard.writeText(url); this.say('[data-host-msg]', 'Link copied. Paste it into the call chat.'); } catch { prompt('Copy this link', url); }
   }
 

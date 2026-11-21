@@ -20,7 +20,7 @@ export const COMMUNITY_ADMIN_ROUTE = '/membership/admin/community';
 const q = (v: unknown) => encodeURIComponent(String(v ?? ''));
 
 /** The superadmin ops the Worker accepts. Anything else is refused here, before a request is made. */
-export const COMMUNITY_ADMIN_OPS = Object.freeze(['create', 'edit', 'open', 'close', 'publish', 'unpublish', 'lock', 'unlock', 'delete', 'access', 'moderate', 'tidy']);
+export const COMMUNITY_ADMIN_OPS = Object.freeze(['create', 'edit', 'open', 'close', 'publish', 'unpublish', 'lock', 'unlock', 'delete', 'access', 'moderate', 'tidy', 'join-link']);
 
 export function communityMethods({ workerGet, workerPost, base, isSuperadmin = false }: { workerGet: WorkerGet; workerPost: WorkerPost; base: string; isSuperadmin?: boolean }): Record<string, any> {
   const origin = String(base || '').replace(/\/$/, '');
@@ -38,6 +38,8 @@ export function communityMethods({ workerGet, workerPost, base, isSuperadmin = f
     communityAnswer(id: string, answer: { choice?: number; text?: string; public?: boolean } = {}) {
       return workerPost(`${COMMUNITY_ROUTE}/answer`, { id, choice: answer.choice, text: answer.text, public: answer.public === true });
     },
+    /** sow-500: the host's share link adds the caller. { ok, joined, id }; a refusal is not_found. */
+    communityJoin(id: string, code: string) { return workerPost(`${COMMUNITY_ROUTE}/join`, { id, code }); },
     communityPost(id: string, { body = '', images = [], parentId = null }: { body?: string; images?: string[]; parentId?: string | null } = {}) {
       return workerPost(`${COMMUNITY_ROUTE}/post`, { id, body, images, parentId });
     },
@@ -57,7 +59,7 @@ export function communityMethods({ workerGet, workerPost, base, isSuperadmin = f
   if (!isSuperadmin) return always;
   return {
     ...always,
-    /** One superadmin op: create, edit, open, close, publish, unpublish, lock, unlock, delete, access, moderate, tidy. */
+    /** One superadmin op: create, edit, open, close, publish, unpublish, lock, unlock, delete, access, moderate, tidy, join-link. */
     communityAdmin(op: string, payload: Record<string, unknown> = {}) {
       if (!COMMUNITY_ADMIN_OPS.includes(op)) return Promise.reject(Object.assign(new Error('Unknown operation.'), { code: 'bad_request' }));
       return workerPost(COMMUNITY_ADMIN_ROUTE, { ...payload, op });

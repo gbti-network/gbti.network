@@ -35,6 +35,7 @@ export const SIDE_CSS = `
   .lk code { display: block; align-self: stretch; padding: 7px 8px; border: 1px solid var(--line-2); border-radius: var(--cm-r); background: var(--paper-2);
     font-family: var(--f-mono); font-size: 12px; line-height: 1.45; color: var(--fg); word-break: break-all; user-select: all; }
   .lk .cm-btn2 { min-height: 34px; }
+  .jl { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; }
   .tools { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line); padding-top: 4px; }
   .tools .cm-danger { margin-left: auto; }
   .stat .cm-pill { align-self: flex-start; }
@@ -67,9 +68,13 @@ function stepHtml(s, i, link) {
   const lk = s.link
     ? `<div class="lk"><code data-link aria-label="Link for the call chat">${esc(String(link).replace(/^https?:\/\//, ''))}</code><button type="button" class="cm-btn2" data-copy>Copy the link</button></div>`
     : '';
+  // sow-500: the join link's own quiet controls, under the link.
+  const join = s.joinLink === 'on'
+    ? `<span class="jl"><button type="button" class="cm-quiet" data-join-link="off">Turn off the join link</button><button type="button" class="cm-quiet" data-join-link="new">Make a new link</button></span>`
+    : s.joinLink === 'off' ? `<span class="jl"><button type="button" class="cm-quiet" data-join-link="new">Turn on the join link</button></span>` : '';
   return `<li class="step ${esc(s.status)}"${s.status === 'current' ? ' aria-current="step"' : ''}>
       <span class="mk" aria-hidden="true">${mark}</span>
-      <div class="sb"><strong>${esc(s.title)}<span class="cm-sr"> (${state})</span></strong><span class="d">${esc(s.detail)}</span>${lk}${btn}${quiet}</div>
+      <div class="sb"><strong>${esc(s.title)}<span class="cm-sr"> (${state})</span></strong><span class="d">${esc(s.detail)}</span>${lk}${join}${btn}${quiet}</div>
     </li>`;
 }
 

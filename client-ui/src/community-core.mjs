@@ -88,6 +88,8 @@ export function resultLine(entry) {
 }
 
 export const entryHref = (id) => `/community/entry/?id=${encodeURIComponent(String(id || ''))}`;
+/** sow-500: the host's share link, which adds a signed-in member who opens it. The plain address when there is no code. */
+export const joinHref = (id, code) => (code ? `${entryHref(id)}&join=${encodeURIComponent(String(code))}` : entryHref(id));
 
 /**
  * Result bars from a results block: label, count, a whole percent of the total, the leading group (or groups, on a
@@ -193,6 +195,19 @@ export function shoptalkMeetings(now = new Date(), { label = 'Shop Talk', back =
  *
  * `total` is the answer count; `openedText` is how the page writes the opening time ("11:04").
  */
+/** Step 2's line: when to paste the link, and who it lets in. */
+function shareDetail({ st, poll, chosen, n, joins }) {
+  const thing = poll ? 'poll' : 'topic';
+  const after = st === 'closed' || st === 'published';
+  if (joins) {
+    if (st === 'live') return `The ${thing} is open, so paste it now. Anyone signed in who opens this link is added to who can see it.`;
+    if (after) return 'The link keeps working, and still adds anyone signed in who opens it.';
+    return `Paste it once the ${thing} is open. Anyone signed in who opens it then is added to who can see it.`;
+  }
+  const when = st === 'live' ? `The ${thing} is open, so paste it now.` : after ? 'The link keeps working.' : `Paste it once the ${thing} is open.`;
+  return `${when} ${chosen ? `Only the ${plural(n, 'chosen member')} can open it.` : 'Every member can open it.'}`;
+}
+
 export function runSheet(entry, { total = 0, openedText = '' } = {}) {
   const poll = isPollKind(entry?.kind);
   const st = entry?.status || 'draft';
@@ -210,7 +225,9 @@ export function runSheet(entry, { total = 0, openedText = '' } = {}) {
     {
       key: 'share', title: 'Share the link in the call chat', link: true,
       status: st === 'live' ? 'current' : after ? 'done' : 'ready',
-      detail: `${st === 'live' ? `The ${poll ? 'poll' : 'topic'} is open, so paste it now.` : after ? 'The link keeps working.' : `Paste it once the ${poll ? 'poll' : 'topic'} is open.`} ${chosen ? `Only the ${plural(n, 'chosen member')} can open it.` : 'Every member can open it.'}`,
+      detail: shareDetail({ st, poll, chosen, n, joins: chosen && !!entry?.joinCode }),
+      // sow-500: on an entry shared with chosen members, the join link can be turned off, made new, or turned on.
+      ...(chosen ? { joinLink: entry?.joinCode ? 'on' : 'off' } : {}),
     },
     {
       key: 'open', title: poll ? 'Open the poll' : 'Open the topic',

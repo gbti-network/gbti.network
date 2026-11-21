@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, peopleLine, profileHref, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
+  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, peopleLine, profileHref, joinHref, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
   pollDelay, formatBytes, uploadProblem, imageSrc, sharedLine, threadCounts, answeredLine, shoptalkMeetings, plural,
 } from '../client-ui/src/community-core.mjs';
 
@@ -238,4 +238,26 @@ test('the anonymous-or-public copy says Anonymous and Public, and never mentions
   }
   const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n').replace(/faceHtml/g, '');
   assert.doesNotMatch(code, /face/i, 'no face in the shipped strings');
+});
+
+// ---- sow-500: the share link adds a signed-in member who opens it ------------------------------------------------
+
+test('the join link: the address carries the code, and the plain address when there is none', () => {
+  assert.equal(joinHref('7x7s47n23wtsrn94', 'k3m9q2wdabcdefgh'), '/community/entry/?id=7x7s47n23wtsrn94&join=k3m9q2wdabcdefgh');
+  assert.equal(joinHref('7x7s47n23wtsrn94', null), '/community/entry/?id=7x7s47n23wtsrn94');
+  assert.equal(joinHref('7x7s47n23wtsrn94', ''), '/community/entry/?id=7x7s47n23wtsrn94');
+});
+
+test('step 2 says who the link lets in, in every state, with the join link on and off', () => {
+  const step = (status, joinCode, kind = 'topic') => runSheet({ kind, status, joinCode, access: { mode: 'chosen', count: 6 } }).steps[1];
+  assert.equal(step('live', 'c').detail, 'The topic is open, so paste it now. Anyone signed in who opens this link is added to who can see it.');
+  assert.equal(step('draft', 'c').detail, 'Paste it once the topic is open. Anyone signed in who opens it then is added to who can see it.');
+  assert.equal(step('closed', 'c').detail, 'The link keeps working, and still adds anyone signed in who opens it.');
+  assert.equal(step('published', 'c', 'poll').detail, 'The link keeps working, and still adds anyone signed in who opens it.');
+  assert.equal(step('live', 'c').joinLink, 'on');
+  assert.equal(step('live', null).detail, 'The topic is open, so paste it now. Only the 6 chosen members can open it.');
+  assert.equal(step('live', null).joinLink, 'off');
+  const all = runSheet({ kind: 'topic', status: 'live', access: { mode: 'all' } }).steps[1];
+  assert.equal(all.joinLink, undefined, 'an all-members entry has no join link controls');
+  for (const s of ['live', 'draft', 'closed']) for (const c of ['c', null]) clean(step(s, c).detail);
 });
