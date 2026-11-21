@@ -34,8 +34,9 @@ export function communityMethods({ workerGet, workerPost, base, isSuperadmin = f
     /** { ok, unchanged: true, version } when nothing moved, else the same shape as communityEntry. */
     communityUpdates(id: string, version: number) { return workerGet(`${COMMUNITY_ROUTE}/updates?id=${q(id)}&v=${q(version)}`); },
     /** `answer` is { choice } for a poll or { text } for a typed poll. */
-    communityAnswer(id: string, answer: { choice?: number; text?: string } = {}) {
-      return workerPost(`${COMMUNITY_ROUTE}/answer`, { id, choice: answer.choice, text: answer.text });
+    // sow-499: `public: true` answers publicly; anything else is anonymous.
+    communityAnswer(id: string, answer: { choice?: number; text?: string; public?: boolean } = {}) {
+      return workerPost(`${COMMUNITY_ROUTE}/answer`, { id, choice: answer.choice, text: answer.text, public: answer.public === true });
     },
     communityPost(id: string, { body = '', images = [], parentId = null }: { body?: string; images?: string[]; parentId?: string | null } = {}) {
       return workerPost(`${COMMUNITY_ROUTE}/post`, { id, body, images, parentId });

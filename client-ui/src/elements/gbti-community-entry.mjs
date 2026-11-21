@@ -19,6 +19,7 @@ import {
   answeredLine, plural, normalizeTyped, typedMax, entryHref,
 } from '../community-core.mjs';
 import { SIDE_CSS, sideHtml } from './community-entry-side.mjs';
+import { ANSWER_CSS, visibilityHtml, savedVisibilityHtml, peopleHtml, loadKnownProfiles } from './community-entry-answer.mjs';
 import './gbti-community-discussion.mjs';
 
 const CSS = `
@@ -119,7 +120,7 @@ class GbtiCommunityEntry extends GbtiElement {
   skipClientRender() { return this._state === 'ok'; }
 
   render() {
-    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS) + '<div class="cm-skel"></div>'); return; }
+    if (!this.client) { this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS + ANSWER_CSS) + '<div class="cm-skel"></div>'); return; }
     if (this._state === 'idle') { this.load(); return; }
     this.draw();
   }
@@ -151,7 +152,7 @@ class GbtiCommunityEntry extends GbtiElement {
   accept(d) {
     const before = JSON.stringify(this._d?.mine ?? null);
     this._d = d;
-    if (JSON.stringify(d?.mine ?? null) !== before) { this._choice = null; this._changing = false; }
+    if (JSON.stringify(d?.mine ?? null) !== before) { this._choice = null; this._changing = false; this._public = null; }
     if (typeof document !== 'undefined' && d?.entry?.title) document.title = `${d.entry.title} · Community · GBTI Network`;
   }
 
@@ -221,7 +222,7 @@ class GbtiCommunityEntry extends GbtiElement {
           <div class="body"><div data-main>${this.mainHtml()}</div><gbti-community-discussion></gbti-community-discussion></div>
         </div>`;
     }
-    this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS) + body);
+    this.set(this.css(COMMUNITY_CSS + CSS + SIDE_CSS + ANSWER_CSS) + body);
     this.on('[data-retry]', 'click', () => this.load());
     if (this._state === 'ok') {
       const disc = this.$('gbti-community-discussion');
@@ -231,8 +232,13 @@ class GbtiCommunityEntry extends GbtiElement {
       }
       this.wireMain();
       this.feedDiscussion();
+      // sow-499: which public answerers have a profile page; the chips gain their links once this arrives.
+      loadKnownProfiles().then((k) => { if (this._known !== k) { this._known = k; if (this._state === 'ok') this.refresh(); } });
     }
   }
+
+  /** Anonymous unless the member picked Public (or their saved answer is public and they have not picked again). */
+  selectedPublic() { return this._public ?? this._d?.mine?.public === true; }
 
   feedDiscussion() {
     const disc = this.$('gbti-community-discussion');
@@ -301,7 +307,7 @@ class GbtiCommunityEntry extends GbtiElement {
     if (state === 'published') return this.resultsHtml(results, mine);
     if (state === 'draft') {
       return `<section class="pv" aria-label="What members will see"><div class="strip"><span class="cm-mono cm-mute">Preview</span><span>Members see this once you open the poll.</span></div>
-        <div class="in">${entry.kind === 'poll' ? this.choicesHtml(true) : this.typedHtml(true)}<div class="acts"><button type="button" class="cm-btn" disabled>Send my answer</button></div></div></section>`;
+        <div class="in">${entry.kind === 'poll' ? this.choicesHtml(true) : this.typedHtml(true)}${visibilityHtml(false, { disabled: true })}<div class="acts"><button type="button" class="cm-btn" disabled>Send my answer</button></div></div></section>`;
     }
     const locked = state === 'closed' || (state === 'answered' && !this._changing);
     const block = entry.kind === 'poll' ? this.choicesHtml(locked) : this.typedHtml(locked);
@@ -313,7 +319,9 @@ class GbtiCommunityEntry extends GbtiElement {
     } else {
       acts = `<button type="button" class="cm-btn" data-send${this.ready() ? '' : ' disabled'}>Send my answer</button><span class="msg">${esc(answeredLine(entry))}</span>`;
     }
-    return `<section class="cm-card cm-raised ans" aria-label="Your answer">${block}<div class="acts">${acts}</div><div data-msg></div></section>`;
+    // sow-499: the Anonymous or Public choice while answering; afterwards, which one it is (switchable until close).
+    const vis = locked ? savedVisibilityHtml(mine, { canSwitch: state === 'answered' }) : visibilityHtml(this.selectedPublic());
+    return `<section class="cm-card cm-raised ans" aria-label="Your answer">${block}${locked ? '' : vis}<div class="acts">${acts}</div>${locked ? vis : ''}<div data-msg></div></section>`;
   }
 
   ready() {
@@ -345,14 +353,15 @@ class GbtiCommunityEntry extends GbtiElement {
   resultsHtml(results, mine) {
     const { entry } = this._d;
     const rows = barRows(results);
+    const byKey = new Map((results?.groups || []).map((g) => [g.key, g]));
     const marker = entry.kind === 'typed' ? 'Includes yours' : 'Your answer';
     const bars = rows.map((r) => `<div class="cm-bar${r.lead ? ' lead' : ''}">
         <span class="lbl">${esc(r.label)}${r.mine ? `<span class="cm-yours">${marker}</span>` : ''}</span>
         <span class="num">${r.count} · ${r.pct}%</span>
-        <span class="trk"><span class="fill" style="width:${r.pct}%"></span></span></div>`).join('');
+        <span class="trk"><span class="fill" style="width:${r.pct}%"></span></span>${peopleHtml(byKey.get(r.key), this._known)}</div>`).join('');
     const every = entry.kind === 'typed' && (results?.every || []).length
       ? `<p class="sub">Every answer, as typed</p><div class="every">${results.every.map((a) => `<span>${esc(a)}</span>`).join('')}</div>
-         <p class="cm-mute" style="margin:0;font-size:13px">Answers that match are counted together. Names are never shown.</p>`
+         <p class="cm-mute" style="margin:0;font-size:13px">Answers that match are counted together. Only public answers show who gave them.</p>`
       : '';
     return `<section class="cm-card cm-raised ans" aria-label="Results">
         <p class="ask" style="margin:0">${esc(plural(results?.total || 0, 'answer'))}${mine ? '. Yours is marked.' : '.'}</p>
@@ -368,8 +377,9 @@ class GbtiCommunityEntry extends GbtiElement {
     if (!isPollKind(entry.kind) || !results || !['live', 'closed'].includes(entry.status)) return '';
     const live = entry.status === 'live';
     const rows = barRows(results);
+    const byKey = new Map((results.groups || []).map((g) => [g.key, g]));
     const body = entry.kind === 'poll'
-      ? `<div class="cm-bars">${rows.map((r) => `<div class="cm-bar${r.lead ? ' lead' : ''}"><span class="lbl">${esc(r.label)}</span><span class="num">${r.count} · ${r.pct}%</span><span class="trk"><span class="fill" style="width:${r.pct}%"></span></span></div>`).join('')}</div>`
+      ? `<div class="cm-bars">${rows.map((r) => `<div class="cm-bar${r.lead ? ' lead' : ''}"><span class="lbl">${esc(r.label)}</span><span class="num">${r.count} · ${r.pct}%</span><span class="trk"><span class="fill" style="width:${r.pct}%"></span></span>${peopleHtml(byKey.get(r.key), this._known)}</div>`).join('')}</div>`
       : this.tidyHtml(results);
     const word = results.total === 1 ? 'answer' : 'answers';
     return `<section class="cm-card tally" aria-label="Answers so far">
@@ -390,6 +400,7 @@ class GbtiCommunityEntry extends GbtiElement {
           <button type="button" class="cm-btn2 sm" data-hide="${i}">Hide</button>
         </span>
         ${(g.spellings || []).length > 1 ? `<span class="sp">Typed as: ${g.spellings.map((s) => esc(s)).join(', ')}</span>` : ''}
+        ${peopleHtml(g, this._known)}
       </div>`).join('');
     const hidden = (results.hidden || []).length
       ? `<p class="sub">Hidden from the results</p><div class="every">${results.hidden.map((h, i) => `<span>${esc(h)} <button type="button" class="cm-quiet" data-unhide="${i}">Show</button></span>`).join('')}</div>`
@@ -410,6 +421,8 @@ class GbtiCommunityEntry extends GbtiElement {
     }
     this.on('[data-send]', 'click', () => this.send());
     this.on('[data-change]', 'click', () => { this._changing = true; this.refresh(); this.$('[data-text]')?.focus(); });
+    for (const r of this.$$('input[data-vis]')) r.addEventListener('change', () => { this._public = r.value === 'public'; this.refresh(); });
+    for (const b of this.$$('[data-vis-switch]')) b.addEventListener('click', () => this.switchVisibility(b.dataset.visSwitch === 'public', b));
     for (const b of this.$$('[data-op]')) b.addEventListener('click', () => this.hostOp(b.dataset.op, b));
     this.on('[data-copy]', 'click', () => this.copyLink());
     this.on('[data-edit]', 'click', () => this.openEditor('edit'));
@@ -428,7 +441,7 @@ class GbtiCommunityEntry extends GbtiElement {
 
   async send() {
     const { entry } = this._d;
-    const answer = entry.kind === 'poll' ? { choice: this._choice ?? this._d.mine?.choice } : { text: this.$('[data-text]')?.value || '' };
+    const answer = { ...(entry.kind === 'poll' ? { choice: this._choice ?? this._d.mine?.choice } : { text: this.$('[data-text]')?.value || '' }), public: this.selectedPublic() };
     const b = this.$('[data-send]');
     if (b) { b.disabled = true; b.textContent = 'Sending'; }
     try {
@@ -441,6 +454,23 @@ class GbtiCommunityEntry extends GbtiElement {
     } catch (e) {
       if (b) { b.disabled = false; b.textContent = 'Send my answer'; }
       this.say('[data-msg]', e?.message || 'Your answer was not saved. Try again.', true);
+    }
+  }
+
+  /** Make a saved answer anonymous or public: the same answer, sent again with the other choice. */
+  async switchVisibility(toPublic, btn) {
+    const { entry, mine } = this._d;
+    if (!mine) return;
+    if (btn) btn.disabled = true;
+    const answer = entry.kind === 'poll' ? { choice: mine.choice } : { text: mine.text };
+    try {
+      const r = await this.client.communityAnswer(entry.id, { ...answer, public: toPublic });
+      this._d.mine = r?.mine || { ...mine, public: toPublic };
+      this.refresh();
+      await this.pull();
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      this.say('[data-msg]', e?.message || 'That did not save. Try again.', true);
     }
   }
 

@@ -285,3 +285,22 @@ export function nextShoptalk(now = new Date()) {
   const today = m.date === ymd;
   return { date: m.date, today, day: today ? 'Today' : `Saturday, ${meetingDate(m.date)}` };
 }
+
+/**
+ * sow-499: under a result bar, after the public names: how many answered anonymously. "All 3 anonymous" when nobody
+ * on that bar is public, "2 anonymous" beside names, nothing when everyone is public or nobody answered.
+ */
+export function peopleLine(group) {
+  const count = Number(group?.count) || 0;
+  const shown = Array.isArray(group?.people) ? group.people.length : 0;
+  const anon = count - shown;
+  if (anon <= 0) return '';
+  return !shown && count > 1 ? `All ${count} anonymous` : `${anon} anonymous`;
+}
+
+/** A public answerer's profile address, only when their GBTI name has a public profile page (`known`). */
+export function profileHref(folder, known) {
+  const f = String(folder || '').trim().toLowerCase();
+  if (!f || !known || typeof known.has !== 'function' || !known.has(f)) return '';
+  return `/members/${encodeURIComponent(f)}/`;
+}

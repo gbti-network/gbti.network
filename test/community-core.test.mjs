@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
+  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, peopleLine, profileHref, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
   pollDelay, formatBytes, uploadProblem, imageSrc, sharedLine, threadCounts, answeredLine, shoptalkMeetings, plural,
 } from '../client-ui/src/community-core.mjs';
 
@@ -206,4 +206,36 @@ test('the next Shop Talk is the coming Saturday on the viewer\'s calendar, and T
   assert.deepEqual(nextShoptalk(new Date(2026, 10, 21, 9)), { date: '2026-11-21', today: true, day: 'Today' });
   assert.equal(nextShoptalk(new Date(2026, 10, 22, 9)).day, 'Saturday, November 28');
   assert.equal(nextShoptalk(new Date(2026, 11, 31, 9)).day, 'Saturday, January 2', 'across the year');
+});
+
+// ---- sow-499: anonymous or public answers ------------------------------------------------------------------------
+
+test('under each bar: the anonymous count beside the public names', () => {
+  const p = (n) => Array.from({ length: n }, (_, i) => ({ githubId: String(i), login: `m${i}` }));
+  assert.equal(peopleLine({ count: 5, people: p(2) }), '3 anonymous');
+  assert.equal(peopleLine({ count: 3, people: [] }), 'All 3 anonymous');
+  assert.equal(peopleLine({ count: 1, people: [] }), '1 anonymous');
+  assert.equal(peopleLine({ count: 2, people: p(2) }), '', 'everyone public: no line');
+  assert.equal(peopleLine({ count: 0 }), '');
+  for (const g of [{ count: 5, people: p(2) }, { count: 3, people: [] }]) clean(peopleLine(g));
+});
+
+test('a public answer links to a profile only when that GBTI name has a profile page', () => {
+  const known = new Set(['priya-dev']);
+  assert.equal(profileHref('priya-dev', known), '/members/priya-dev/');
+  assert.equal(profileHref('Priya-Dev', known), '/members/priya-dev/', 'folders are lowercase');
+  assert.equal(profileHref('ben', known), '', 'no profile page: no link');
+  assert.equal(profileHref('', known), '');
+  assert.equal(profileHref('priya-dev', null), '', 'the profile list did not load: no link');
+});
+
+test('the anonymous-or-public copy says Anonymous and Public, and never mentions a face (owner ruling)', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../client-ui/src/elements/community-entry-answer.mjs', import.meta.url), 'utf8');
+  for (const s of ['Anonymous', 'Public', 'Counted. Nobody sees it was you.', 'Members see it was you once the results are published.', 'Make it anonymous', 'Make it public']) {
+    assert.ok(src.includes(s), `copy present: ${s}`);
+    clean(s);
+  }
+  const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n').replace(/faceHtml/g, '');
+  assert.doesNotMatch(code, /face/i, 'no face in the shipped strings');
 });
