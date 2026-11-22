@@ -30,6 +30,7 @@ const forbidden = (message) => new CommunityError(403, 'forbidden', message);
 
 // 2 (sow-499): answers carry `public` and the answerer's login. 3 (sow-500): entries carry a join code.
 const SCHEMA_VERSION = 3;
+const CARD_FACES = 8; // sow-501: the most faces a list card is sent (it draws 6, then "+N")
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`,
   `CREATE TABLE IF NOT EXISTS entries (
@@ -163,6 +164,27 @@ export class CommunityStore {
 
   // ---- reading -------------------------------------------------------------------------------------------------
 
+  /**
+   * sow-501: the faces on a list card (owner, 2026-11-21). An entry shared with chosen members shows those members. An
+   * entry open to all members shows who took part: everyone with a visible post, and everyone who answered publicly.
+   * An anonymous answer is never a face. Up to CARD_FACES people, with the full count.
+   */
+  cardPeople(row) {
+    if (row.access_mode === 'chosen') {
+      const list = this.q('SELECT github_id, login FROM entry_members WHERE entry_id = ? ORDER BY login, github_id LIMIT ?', row.id, CARD_FACES)
+        .map((m) => ({ githubId: m.github_id, login: m.login }));
+      const count = this.one('SELECT COUNT(*) AS n FROM entry_members WHERE entry_id = ?', row.id).n;
+      return { mode: 'shared', count, list };
+    }
+    const took = `SELECT github_id, login, at FROM posts WHERE entry_id = ? AND deleted = 0 AND hidden = 0 AND github_id <> 'erased'
+                  UNION ALL SELECT github_id, login, at FROM answers WHERE entry_id = ? AND public = 1`;
+    const list = this.q(`SELECT github_id, MAX(at) AS last, (SELECT login FROM (${took}) t2 WHERE t2.github_id = t.github_id ORDER BY at DESC LIMIT 1) AS login
+                         FROM (${took}) t GROUP BY github_id ORDER BY last DESC, github_id LIMIT ?`, row.id, row.id, row.id, row.id, CARD_FACES)
+      .map((m) => ({ githubId: m.github_id, login: m.login || '' }));
+    const count = this.one(`SELECT COUNT(DISTINCT github_id) AS n FROM (${took})`, row.id, row.id).n;
+    return { mode: 'took-part', count, list };
+  }
+
   summary(row, v) {
     const answers = isPollKind(row.kind) ? this.one('SELECT COUNT(*) AS n FROM answers WHERE entry_id = ?', row.id).n : 0;
     const posts = this.one('SELECT COUNT(*) AS n FROM posts WHERE entry_id = ? AND deleted = 0' + (v.superadmin ? '' : ' AND hidden = 0'), row.id).n;
@@ -181,6 +203,7 @@ export class CommunityStore {
       counts: { answers, posts, withImages, options: options.length },
       lead: row.status === 'published' || v.superadmin ? lead : null,
       lastPost: row.last_post_at ? { at: row.last_post_at, login: row.last_post_login, githubId: row.last_post_by || null } : null, // sow-498: the face
+      people: this.cardPeople(row), // sow-501: the faces on the list card
       createdAt: row.created_at, activityAt: row.activity_at, version: row.version,
     };
   }
