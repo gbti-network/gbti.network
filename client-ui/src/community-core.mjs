@@ -63,8 +63,21 @@ export function statusPill(entry) {
  */
 export function rowMeta(entry) {
   const parts = [meetingText(entry?.meeting)];
-  if (entry?.access?.mode === 'chosen') parts.push(`Shared with ${plural(entry.access.count ?? 0, 'member')}`);
+  // sow-501: a row that carries its faces says "Shared with N members" on the faces line instead (cardPeopleLine).
+  if (entry?.access?.mode === 'chosen' && !entry?.people) parts.push(`Shared with ${plural(entry.access.count ?? 0, 'member')}`);
   return parts.join(' · ');
+}
+
+/**
+ * sow-501: the words beside the faces on a list card. Shared with chosen members: "Shared with 6 members". Open to all
+ * members: "4 members took part", or nothing (and no faces line) while nobody has.
+ */
+export function cardPeopleLine(entry) {
+  const p = entry?.people;
+  if (!p) return '';
+  const n = Number(p.count) || 0;
+  if (p.mode === 'shared') return `Shared with ${plural(n, 'member')}`;
+  return n ? `${plural(n, 'member')} took part` : '';
 }
 
 /**

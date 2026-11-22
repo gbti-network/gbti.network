@@ -14,7 +14,7 @@ import { relTime, absTime } from '../time-core.mjs';
 import { COMMUNITY_CSS, KIND_ICON } from './community-css.mjs';
 import { LIST_SIDE_CSS, listSideHtml } from './community-list-side.mjs';
 import {
-  KIND_LABEL, faceHtml, meetingText, rowMeta, discussionCell, resultLine, entryHref, statusPill, isPollKind, plural,
+  KIND_LABEL, faceHtml, meetingText, rowMeta, cardPeopleLine, discussionCell, resultLine, entryHref, statusPill, isPollKind, plural,
 } from '../community-core.mjs';
 
 const PAGE = 20;
@@ -50,6 +50,13 @@ const CSS = `
   .ent > a:hover { color: var(--green-700); text-decoration: underline; text-underline-offset: 3px; }
   .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--fg-mute); }
   .res { font-size: 13px; color: var(--fg-soft); }
+  .ppl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--fg-mute); }
+  .ppl .stack { display: inline-flex; align-items: center; }
+  .ppl .f { display: inline-flex; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ring, var(--paper)); }
+  .ppl .f:first-child { margin-left: 0; }
+  .ppl .cm-av { width: 22px; height: 22px; }
+  .ppl .plus { margin-left: 4px; font-size: 12px; font-weight: 600; color: var(--fg-soft); }
+  .row.live { --ring: var(--green-tint); }
   .disc { text-align: right; font-size: 13px; font-weight: 700; align-self: center; }
   .disc small { display: block; font-size: 12px; font-weight: 500; color: var(--fg-mute); }
   .disc.quiet { font-weight: 500; color: var(--fg-mute); }
@@ -131,6 +138,16 @@ class GbtiCommunityList extends GbtiElement {
     </div>`;
   }
 
+  /** sow-501: up to six overlapping faces, "+N" for the rest, then who they are. No links: the title is the row's link. */
+  facesHtml(e) {
+    const line = cardPeopleLine(e);
+    if (!line) return '';
+    const list = (e.people.list || []).slice(0, 6);
+    const more = (Number(e.people.count) || 0) - list.length;
+    const faces = list.map((p) => `<span class="f" title="${esc(p.login || '')}">${faceHtml(p)}</span>`).join('');
+    return `<span class="ppl">${faces ? `<span class="stack">${faces}${more > 0 ? `<span class="plus">+${more}</span>` : ''}</span>` : ''}<span>${esc(line)}</span></span>`;
+  }
+
   rowHtml(e) {
     const kind = e.kind;
     const pill = statusPill(e);
@@ -143,6 +160,7 @@ class GbtiCommunityList extends GbtiElement {
         <span class="tags"><span class="cm-badge k-${esc(kind)}">${KIND_ICON[kind] || ''}${esc(KIND_LABEL[kind] || kind)}</span>${pill ? `<span class="cm-pill ${pill.tone}">${esc(pill.text)}</span>` : ''}</span>
         <a href="${esc(entryHref(e.id))}">${esc(e.title)}</a>
         <span class="meta">${esc(rowMeta(e))}</span>
+        ${this.facesHtml(e)}
         ${result ? `<span class="res">${esc(result)}</span>` : ''}
       </div>
       <span class="disc${disc.quiet ? ' quiet' : ''}" role="cell">${esc(disc.primary)}${disc.secondary ? `<small>${esc(disc.secondary)}</small>` : ''}</span>

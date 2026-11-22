@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, peopleLine, profileHref, joinHref, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
+  faceSrc, faceHtml, runSheet, memberStatusLine, listOverview, liveCountLine, nextShoptalk, peopleLine, profileHref, joinHref, cardPeopleLine, meetingDate, meetingText, statusPill, rowMeta, discussionCell, resultLine, entryHref, barRows, answerState,
   pollDelay, formatBytes, uploadProblem, imageSrc, sharedLine, threadCounts, answeredLine, shoptalkMeetings, plural,
 } from '../client-ui/src/community-core.mjs';
 
@@ -260,4 +260,19 @@ test('step 2 says who the link lets in, in every state, with the join link on an
   const all = runSheet({ kind: 'topic', status: 'live', access: { mode: 'all' } }).steps[1];
   assert.equal(all.joinLink, undefined, 'an all-members entry has no join link controls');
   for (const s of ['live', 'draft', 'closed']) for (const c of ['c', null]) clean(step(s, c).detail);
+});
+
+// ---- sow-501: faces on the list cards ------------------------------------------------------------------------------
+
+test('the card line: who it is shared with, or who took part; the meta drops "Shared with" once the faces carry it', () => {
+  const base = { meeting: { label: 'Shop Talk', date: '2026-11-21' } };
+  const shared = { ...base, access: { mode: 'chosen', count: 6 }, people: { mode: 'shared', count: 6, list: [] } };
+  assert.equal(cardPeopleLine(shared), 'Shared with 6 members');
+  assert.equal(rowMeta(shared), 'Shop Talk, November 21', 'said once, on the faces line');
+  assert.equal(rowMeta({ ...base, access: { mode: 'chosen', count: 6 } }), 'Shop Talk, November 21 · Shared with 6 members', 'a row without faces keeps it');
+  assert.equal(cardPeopleLine({ people: { mode: 'took-part', count: 4, list: [] } }), '4 members took part');
+  assert.equal(cardPeopleLine({ people: { mode: 'took-part', count: 1, list: [] } }), '1 member took part');
+  assert.equal(cardPeopleLine({ people: { mode: 'took-part', count: 0, list: [] } }), '', 'nobody yet: no faces line');
+  assert.equal(cardPeopleLine({}), '');
+  for (const t of ['Shared with 6 members', '4 members took part', '1 member took part']) clean(t);
 });
