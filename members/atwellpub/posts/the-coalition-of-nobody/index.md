@@ -27,11 +27,11 @@ The Coalition of Nobody seeks to locate and unite every Nobody in the world. Any
 
 Mind you, as more people adopt Nobody as a name, Nobody becomes an increasingly influential entity: there is great potential in being a Nobody.
 
-Membership is fiercely guarded. Only participant Nobodies know which Nobody belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone.
+Membership is fiercely guarded. Only participant Nobodys know which Nobody belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone.
 
 Perhaps one day a Nobody will change the world. Perhaps they already have.
 
-**Notable Nobodies in literary history**
+**Notable Nobodys in literary history**
 
 **Odysseus (c. 8th century BC):** Identifies himself as Nobody in Homer's *The Odyssey*, deceiving the Cyclops Polyphemus.
 
@@ -43,8 +43,10 @@ Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Nobody Owens (2008):** The protagonist of Neil Gaiman's *The Graveyard Book*, a boy raised by the inhabitants of a cemetery.
 
-***Disclaimer:** The Coalition of Nobody is a fictional organization that occasionally visits the mind of a man, perhaps as an invitation to change his name, or perhaps to establish a new branch of this timeless organization. We suspect only a Nobody truly knows given the hush-hush nature of it all.*
+***Disclaimer:** The Coalition of Nobody is a fictional[^assumed] organization that occasionally visits the mind of a man, perhaps as an invitation to change his name, or perhaps to establish a new branch of this timeless organization. We suspect only a Nobody truly knows given the hush-hush nature of it all.*
 
 *As this author's first name is not Nobody, no invitation is extended by this publication.*[^cover]
+
+[^assumed]: Assumed.
 
 [^cover]: Cover photo: "Man Wearing Black Notched Lapel Suit Jacket" by Deepak Verma on [Pexels](https://www.pexels.com/photo/man-wearing-black-notched-lapel-suit-jacket-1096849/), with the name badge and the button added.
