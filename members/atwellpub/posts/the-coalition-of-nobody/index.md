@@ -35,7 +35,7 @@ Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Odysseus (c. 8th century BC):** Identifies himself as Nobody in Homer's *The Odyssey*, deceiving the Cyclops Polyphemus.
 
-**Nemo (1510):** Ulrich von Hutten's literary personification of Nobody. Nemo is Latin for "no one."
+**Nemo (1510):** Ulrich von Hutten's literary personification of Nobody. Nemo is Latin for "no one".
 
 **Captain Nemo (1870):** Jules Verne's mysterious captain in *Twenty Thousand Leagues Under the Seas*, who adopts Nobody as his identity.
 
