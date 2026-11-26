@@ -41,7 +41,7 @@ Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Nobody Owens (2008):** The protagonist of Neil Gaiman's *The Graveyard Book*, a boy raised by the inhabitants of a cemetery.
 
-***Disclaimer:** The Coalition of Nobody is a fictional organization that occasionally visits the mind of a man, perhaps as an invitation to change his name, or perhaps to establish a new branch, perchance that man is already a Nobody. We suspect only a Nobody truly knows given the hush-hush nature of it all.*
+***Disclaimer:** The Coalition of Nobody is a fictional organization that occasionally visits the mind of a man, perhaps as an invitation to change his name, or perhaps to establish a new branch of this timeless organization. We suspect only a Nobody truly knows given the hush-hush nature of it all.*
 
 *As this author's first name is not Nobody, no invitation is extended by this publication.*[^cover]
 
