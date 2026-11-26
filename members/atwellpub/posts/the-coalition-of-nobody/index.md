@@ -39,7 +39,7 @@ Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Captain Nemo (1870):** Jules Verne's mysterious captain in *Twenty Thousand Leagues Under the Seas*, who adopts Nobody as his identity.
 
-**The Faceless Men (1998):** A secretive order introduced in George R. R. Martin's *A Clash of Kings*, whose members relinquish their individual identities to become No One. Unlike the Coalition of Nobody, they seek to abandon their names rather than adopt a common one.
+**The Faceless Men (1998):** A secretive order of assassins introduced in George R. R. Martin's *A Clash of Kings*, whose members relinquish their individual identities to become No One. Unlike the Coalition of Nobody, they seek to abandon their names rather than adopt a common one.
 
 **Nobody Owens (2008):** The protagonist of Neil Gaiman's *The Graveyard Book*, a boy raised by the inhabitants of a cemetery.
 
