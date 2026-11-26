@@ -29,7 +29,7 @@ Mind you, as more people become Nobody, Nobody becomes an increasingly influenti
 
 Membership is fiercely guarded. Only Nobody knows who belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone.
 
-Perhaps one day Nobody will change the world.
+Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Notable Nobodies in literary history**
 
