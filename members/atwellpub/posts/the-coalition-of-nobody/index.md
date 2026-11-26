@@ -21,11 +21,11 @@ type: post
 author: atwellpub
 ---
 
-A literary idea: an international coalition whose sole condition for membership is that one's legal first name be Nobody.
+To the attention of, Nobody.
 
 The coalition seeks to locate and unite every Nobody in the world. Anybody may join, provided they legally become Nobody.
 
-An interesting paradox emerges. As more people become Nobody, Nobody becomes increasingly influential. An otherwise insignificant name becomes the foundation of an exclusive yet universally accessible collective identity.
+An interesting paradox emerges. As more people become Nobody, Nobody becomes increasingly influential.
 
 Membership is fiercely guarded. Only Nobody knows who belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone.
 
