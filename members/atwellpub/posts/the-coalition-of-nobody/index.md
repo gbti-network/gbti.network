@@ -23,7 +23,7 @@ author: atwellpub
 
 To the attention of, Nobody.
 
-The coalition seeks to locate and unite every Nobody in the world. Anybody may join, provided they legally become Nobody.
+The Coalition of Nobody seeks to locate and unite every Nobody in the world. Anybody may join, provided they bear the legally registered first name of "Nobody."
 
 An interesting paradox emerges. As more people become Nobody, Nobody becomes increasingly influential.
 
