@@ -25,7 +25,7 @@ To the attention of, Nobody.
 
 The Coalition of Nobody seeks to locate and unite every Nobody in the world. Anybody may join, provided they bear the legally registered first name of "Nobody."
 
-Mind you, as more people become Nobody, Nobody becomes an increasingly influential entity: there is great potential in being a Nobody.
+Mind you, as more people adopt Nobody as a name, Nobody becomes an increasingly influential entity: there is great potential in being a Nobody.
 
 Membership is fiercely guarded. Only participant Nobodies know which Nobody belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone, perchance awareness of our exclusive organization.
 
