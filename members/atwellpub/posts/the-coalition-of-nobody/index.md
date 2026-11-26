@@ -33,15 +33,25 @@ Perhaps one day a Nobody will change the world. Perhaps they already have.
 
 **Notable Nobodys in literary history**
 
-**Odysseus (c. 8th century BC):** Identifies himself as Nobody in Homer's *The Odyssey*, deceiving the Cyclops Polyphemus.
+```callout info
+**Odysseus (c. 8th century BC):** Identifies himself as Nobody in Homer’s *The Odyssey*, deceiving the Cyclops Polyphemus.
+```
 
-**Nemo (1510):** Ulrich von Hutten's literary personification of Nobody. Nemo is Latin for "no one".
+```callout info
+**Nemo (1510):** Ulrich von Hutten’s literary personification of Nobody. Nemo is Latin for “no one”.
+```
 
-**Captain Nemo (1870):** Jules Verne's mysterious captain in *Twenty Thousand Leagues Under the Seas*, who adopts Nobody as his identity.
+```callout info
+**Captain Nemo (1870):** Jules Verne’s mysterious captain in *Twenty Thousand Leagues Under the Seas*, who adopts Nobody as his identity.
+```
 
-**The Faceless Men (1998):** A secretive order of assassins introduced in George R. R. Martin's *A Clash of Kings*, whose members relinquish their individual identities to become No One. Unlike the Coalition of Nobody, they seek to abandon their names rather than adopt a common one.
+```callout info
+**The Faceless Men (1998):** A secretive order of assassins introduced in George R. R. Martin’s *A Clash of Kings*, whose members relinquish their individual identities to become No One. Unlike the Coalition of Nobody, they seek to abandon their names rather than adopt a common one.
+```
 
-**Nobody Owens (2008):** The protagonist of Neil Gaiman's *The Graveyard Book*, a boy raised by the inhabitants of a cemetery.
+```callout info
+**Nobody Owens (2008):** The protagonist of Neil Gaiman’s *The Graveyard Book*, a boy raised by the inhabitants of a cemetery.
+```
 
 ***Disclaimer:** The Coalition of Nobody is a fictional[^assumed] organization that occasionally visits the mind of a man, perhaps as an invitation to change his name, or perhaps to establish a new branch of this timeless organization. We suspect only a Nobody truly knows given the hush-hush nature of it all.*
 
