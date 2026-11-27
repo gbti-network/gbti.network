@@ -29,9 +29,9 @@ Mind you, as more people adopt Nobody as a name, Nobody becomes an increasingly 
 
 Membership is fiercely guarded. Only participant Nobodys know which Nobody belongs to the coalition, though one might reasonably suspect Nobody's affiliation by his first name alone.
 
-Perhaps one day a Nobody will change the world. Perhaps they already have.
+Perhaps one day a Nobody will change the world. Perhaps they already have. Perhaps this Nobody could be you.
 
-**Notable Nobodys in literary history**
+**Notable Nobodys in literary history:**
 
 ```callout info
 **Odysseus (c. 8th century BC):** Identifies himself as Nobody in Homer’s *The Odyssey*, deceiving the Cyclops Polyphemus.
